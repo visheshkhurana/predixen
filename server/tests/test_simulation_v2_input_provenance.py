@@ -496,7 +496,8 @@ def test_default_request_state_matches_historical_fallbacks():
     assert state.arr == 50000 * 12
     assert state.burn_rate == 80000
     assert state.cash == 500000
-    assert state.runway_months == 500000 / 80000
+    # monthly_burn is gross spend: runway is cash / (burn - revenue).
+    assert state.runway_months == 500000 / (80000 - 50000)
     assert state.customers == 50
     assert state.churn_rate == 0.03
     assert state.team_size == 10

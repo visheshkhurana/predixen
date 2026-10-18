@@ -416,6 +416,134 @@ def get_decision_memory(db: Session, company_id: int, limit: int = 20) -> list:
     return [d.to_dict() for d in decisions]
 
 
+TWIN_ITERATIONS = 500
+TWIN_HORIZON_MONTHS = 24
+SUSTAINABLE_SENTINEL = 900  # enhanced MC emits 999 for "never ran out of cash"
+
+
+def _engine_margin_clamp(gm_pct: float) -> float:
+    """The margin the enhanced engine will actually use after its own clamp."""
+    try:
+        from server.core.units import clamp_gross_margin_pct  # type: ignore
+        return float(clamp_gross_margin_pct(gm_pct))
+    except Exception:
+        return max(10.0, min(95.0, float(gm_pct)))
+
+
+def _latest_gross_margin_pct(record) -> Optional[float]:
+    """Gross margin (percent) from the latest P&L record, or None if unknown."""
+    if record is None:
+        return None
+    gm = getattr(record, "gross_margin", None)
+    if gm is not None:
+        try:
+            v = float(gm)
+            if v == v:
+                return v * 100.0 if abs(v) <= 1.0 else v
+        except (TypeError, ValueError):
+            pass
+    revenue = getattr(record, "revenue", None) or 0
+    cogs = getattr(record, "cogs", None)
+    if revenue and revenue > 0 and cogs is not None and cogs > 0:
+        return (revenue - cogs) / revenue * 100.0
+    return None
+
+
+def build_twin_engine_inputs(cs, latest_record) -> dict:
+    """Enhanced Monte Carlo inputs from the company state, on the canonical burn.
+
+    CompanyState.monthly_burn is NET burn (total costs incl. COGS - revenue) and
+    expenses_monthly is total costs incl. COGS. The engine computes
+    ``revenue * gross_margin - (opex + payroll + other)``, so its cost lines
+    must EXCLUDE COGS. The old code passed total expenses as opex/payroll/other
+    AND applied a hardcoded 70% margin, counting COGS twice.
+
+    Cost lines are sized from the margin the engine will really use (after its
+    clamp) so month one burns exactly the dashboard's net burn. With no known
+    margin the engine's top margin is used and COGS is treated as a fixed cost;
+    ``gross_margin_known`` says so.
+    """
+    revenue = float(cs.revenue_monthly or 0)
+    net_burn = float(cs.monthly_burn or 0)
+    expenses = float(cs.expenses_monthly or 0)
+    cash = float(cs.cash_balance or 0)
+    try:
+        growth = float(cs.revenue_growth_rate or 0)
+    except (TypeError, ValueError):
+        growth = 0.0
+
+    if net_burn > 0:
+        total_costs = net_burn + revenue
+    elif expenses > 0:
+        total_costs = expenses
+    else:
+        total_costs = revenue
+
+    gm_known = _latest_gross_margin_pct(latest_record)
+    gm_engine = _engine_margin_clamp(gm_known if gm_known is not None else 100.0)
+    costs_ex_cogs = max(0.0, total_costs - revenue * (1 - gm_engine / 100.0))
+
+    # Split by the latest P&L's real shares; with none, everything is opex
+    # (no invented 30/50/20 split).
+    shares = (0.0, 0.0, 0.0)
+    if latest_record is not None:
+        parts = [max(0.0, float(getattr(latest_record, k, 0) or 0)) for k in ("opex", "payroll", "other_costs")]
+        tot = sum(parts)
+        if tot > 0:
+            shares = tuple(x / tot for x in parts)
+    if sum(shares) <= 0:
+        shares = (1.0, 0.0, 0.0)
+
+    # Monthly revenue churn (percent) only when the company has one on file;
+    # the engine's default would otherwise apply an invented 5%.
+    churn_pct = 0.0
+    try:
+        state = json.loads(cs.state_json) if getattr(cs, "state_json", None) else {}
+    except (TypeError, ValueError):
+        state = {}
+    for key in ("churn_rate", "churnRate"):
+        raw = state.get(key) if isinstance(state, dict) else None
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw >= 0:
+            churn_pct = raw * 100.0 if raw <= 1 else float(raw)
+            break
+
+    return {
+        "churn_rate": churn_pct,
+        "baseline_revenue": revenue,
+        "baseline_growth_rate": growth,
+        "gross_margin": gm_engine,
+        "opex": costs_ex_cogs * shares[0],
+        "payroll": costs_ex_cogs * shares[1],
+        "other_costs": costs_ex_cogs * shares[2],
+        "cash_balance": cash,
+        "gross_margin_known": gm_known is not None,
+        "net_burn": max(0.0, total_costs - revenue),
+    }
+
+
+def summarize_twin_results(results: dict) -> dict:
+    """Flat P10/P50/P90 + 24m survival from the enhanced engine's nested output."""
+    runway = results.get("runway") or {}
+    survival = results.get("survivalProbability") or {}
+    cfg = results.get("config") or {}
+
+    def runway_value(key):
+        v = runway.get(key)
+        return float(v) if isinstance(v, (int, float)) else None
+
+    s24 = survival.get("24m")
+    return {
+        "p10_runway": runway_value("p10"),
+        "p50_runway": runway_value("p50"),
+        "p90_runway": runway_value("p90"),
+        # Fraction (0-1) of runs with cash left after 24 months.
+        "survival_probability": (float(s24) / 100.0) if isinstance(s24, (int, float)) else None,
+        "sustainable_rate": runway.get("sustainableRate"),
+        "iterations": cfg.get("iterations"),
+        "horizon_months": cfg.get("horizonMonths"),
+    }
+
+
 def run_twin_simulation(
     db: Session, company_id: int, scenario_config: dict
 ) -> dict:
@@ -427,84 +555,83 @@ def run_twin_simulation(
         from server.simulate.enhanced_monte_carlo import (
             run_enhanced_monte_carlo, EnhancedSimulationInputs, SimulationConfig
         )
+        import dataclasses
 
-        revenue = cs.revenue_monthly or 0
-        growth_rate = float(cs.revenue_growth_rate or 0)
-        expenses = cs.expenses_monthly or 0
-        cash = cs.cash_balance or 0
+        latest_record = (
+            db.query(FinancialRecord)
+            .filter(FinancialRecord.company_id == company_id)
+            .order_by(desc(FinancialRecord.period_start))
+            .first()
+        )
+        base = build_twin_engine_inputs(cs, latest_record)
 
-        burn = cs.monthly_burn or 0
-        if expenses == 0 and burn > 0:
-            expenses = burn
-
-        opex = expenses * 0.3
-        payroll = expenses * 0.5
-        other_costs = expenses * 0.2
-
-        inputs = EnhancedSimulationInputs(
-            baseline_revenue=revenue,
-            baseline_growth_rate=growth_rate,
-            gross_margin=70,
-            opex=opex,
-            payroll=payroll,
-            other_costs=other_costs,
-            cash_balance=cash,
-            pricing_change_pct=scenario_config.get("pricing_change_pct", 0),
-            growth_uplift_pct=scenario_config.get("growth_uplift_pct", 0),
-            burn_reduction_pct=scenario_config.get("burn_reduction_pct", 0),
+        kwargs = dict(
+            baseline_revenue=base["baseline_revenue"],
+            baseline_growth_rate=base["baseline_growth_rate"],
+            gross_margin=base["gross_margin"],
+            opex=base["opex"],
+            payroll=base["payroll"],
+            other_costs=base["other_costs"],
+            cash_balance=base["cash_balance"],
+            churn_rate=base["churn_rate"],
+            pricing_change_pct=scenario_config.get("pricing_change_pct", 0) or 0,
+            growth_uplift_pct=scenario_config.get("growth_uplift_pct", 0) or 0,
+            burn_reduction_pct=scenario_config.get("burn_reduction_pct", 0) or 0,
             fundraise_month=scenario_config.get("fundraise_month"),
-            fundraise_amount=scenario_config.get("fundraise_amount", 0),
+            fundraise_amount=scenario_config.get("fundraise_amount", 0) or 0,
         )
 
-        config = SimulationConfig(iterations=500, horizon_months=24, seed=42)
+        hiring_plan = [h for h in (scenario_config.get("hiring_plan") or []) if isinstance(h, dict)]
+        hiring_mode = "none"
+        if hiring_plan:
+            field_names = {f.name for f in dataclasses.fields(EnhancedSimulationInputs)}
+            if "hiring_plan" in field_names:
+                kwargs["hiring_plan"] = hiring_plan
+                hiring_mode = "by_start_month"
+            else:
+                # Engine without per-month hires: add every planned hire's cost
+                # from month one (conservative) rather than dropping them.
+                added = 0.0
+                for h in hiring_plan:
+                    try:
+                        added += max(0.0, float(h.get("count", 1) or 0)) * max(0.0, float(h.get("monthly_cost", 0) or 0))
+                    except (TypeError, ValueError):
+                        continue
+                kwargs["payroll"] = kwargs["payroll"] + added
+                hiring_mode = "from_month_1"
+
+        inputs = EnhancedSimulationInputs(**kwargs)
+        config = SimulationConfig(
+            iterations=TWIN_ITERATIONS, horizon_months=TWIN_HORIZON_MONTHS, seed=42
+        )
         results = run_enhanced_monte_carlo(inputs, config)
+        summary = summarize_twin_results(results)
 
         emit_twin_event(db, company_id, "simulation_run", "digital_twin", {
             "scenario": scenario_config,
-            "p50_runway": results.get("p50_runway"),
-            "survival_probability": results.get("survival_probability"),
+            "p50_runway": summary["p50_runway"],
+            "survival_probability": summary["survival_probability"],
         })
 
         return {
             "company_id": company_id,
             "snapshot_id": cs.snapshot_id,
             "scenario": scenario_config,
+            "summary": summary,
+            "inputs": {
+                "gross_margin_pct": base["gross_margin"],
+                "gross_margin_known": base["gross_margin_known"],
+                "net_burn": base["net_burn"],
+                "hiring_plan_mode": hiring_mode,
+            },
             "results": results,
         }
 
     except Exception as e:
+        # No invented fallback: the old path fabricated P10 = 0.7x and
+        # P90 = 1.4x of a naive runway and presented them as a distribution.
         logger.error(f"Twin simulation failed for company {company_id}: {e}")
-
-        cash = cs.cash_balance or 0
-        burn = cs.monthly_burn or 0
-        base_runway = cash / burn if burn > 0 else 24
-
-        adj = 1.0
-        adj -= scenario_config.get("burn_reduction_pct", 0) / 100
-        adj += len(scenario_config.get("hiring_plan", [])) * 0.05
-
-        p50 = round(base_runway / adj, 1)
-        p10 = round(p50 * 0.7, 1)
-        p90 = round(p50 * 1.4, 1)
-
-        survival = min(0.95, p50 / 24) if p50 > 0 else 0
-
-        emit_twin_event(db, company_id, "simulation_run", "digital_twin_fallback", {
-            "scenario": scenario_config,
-            "p50_runway": p50,
-            "fallback": True,
-        })
-
         return {
-            "company_id": company_id,
-            "snapshot_id": cs.snapshot_id,
-            "scenario": scenario_config,
-            "fallback": True,
-            "results": {
-                "p10_runway": p10,
-                "p50_runway": p50,
-                "p90_runway": p90,
-                "survival_probability": round(survival, 3),
-                "months_projected": 24,
-            },
+            "error": "The simulation engine failed; no results were produced.",
+            "error_code": "simulation_failed",
         }

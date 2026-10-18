@@ -87,6 +87,19 @@ class ActionRecommendation:
     alternative_actions: List[str]
 
 
+def _metric_number(value) -> Optional[float]:
+    """A truth-scan / CKB metric as a float: raw number, numeric string, or {value: ...}."""
+    if isinstance(value, dict):
+        value = value.get("value")
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v if v == v else None
+
+
 class DecisionAdvisorAgent(BaseAgent):
     """
     Decision Advisor Agent that provides decision-first, probability-driven advice.
@@ -182,6 +195,7 @@ class DecisionAdvisorAgent(BaseAgent):
     def __init__(self, llm_router=None):
         super().__init__(AgentType.CFO, llm_router)
         self.logger = logging.getLogger("copilot.decision_advisor")
+        self.simulation_status: Dict[str, Any] = {"ran": False, "reason": None}
     
     async def process(
         self,
@@ -352,22 +366,56 @@ class DecisionAdvisorAgent(BaseAgent):
         ckb: CompanyKnowledgeBase,
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Get current financial snapshot from CKB and context."""
+        """Current financials from the CKB, then the latest truth scan.
+
+        context["truth_scan"] is the scan's whole outputs_json; its numbers live
+        under ["metrics"] with the truth-scan keys (monthly_revenue, net_burn,
+        cash_balance, runway_p50, gross_margin, revenue_growth_mom, ...). The
+        old reader looked at the top level with other names (revenue,
+        monthly_burn, gross_margin_pct, revenue_growth_pct, ...), never matched,
+        and filled in invented defaults ($50k burn, $500k cash, 12 months,
+        70% margin, 10% growth, 5% churn). Unknown values are now None.
+
+        monthly_burn is the canonical NET burn (total costs incl. COGS minus
+        revenue); negative means profitable.
+        """
         fin = ckb.financials or {}
-        truth = context.get("truth_scan", {})
-        
+        truth = context.get("truth_scan") or {}
+        metrics = truth.get("metrics") if isinstance(truth.get("metrics"), dict) else {}
+        # Tolerate a flat legacy payload as a last resort.
+        sources = [fin, metrics, truth]
+
+        def pick(*keys):
+            for src in sources:
+                for k in keys:
+                    v = _metric_number(src.get(k)) if isinstance(src, dict) else None
+                    if v is not None:
+                        return v
+            return None
+
+        revenue = pick("revenue", "monthly_revenue", "mrr")
+        net_burn = pick("monthly_burn", "net_burn")
+        cash = pick("cash_balance")
+        runway = pick("runway_months", "runway_p50")
+        if runway is None and cash is not None and net_burn is not None and net_burn > 0:
+            runway = cash / net_burn
+        gross_margin = pick("gross_margin")
+        if gross_margin is not None and abs(gross_margin) <= 1:
+            gross_margin *= 100
+
         return {
-            "revenue": fin.get("revenue", truth.get("revenue", 0)),
-            "monthly_burn": fin.get("monthly_burn", truth.get("monthly_burn", 50000)),
-            "cash_balance": fin.get("cash_balance", truth.get("cash_balance", 500000)),
-            "runway_months": fin.get("runway_months", truth.get("runway_months", 12)),
-            "gross_margin": fin.get("gross_margin", truth.get("gross_margin_pct", 70)),
-            "growth_rate": fin.get("growth_rate", truth.get("revenue_growth_pct", 10)),
-            "headcount": fin.get("headcount", truth.get("headcount", 10)),
-            "payroll": fin.get("payroll", truth.get("payroll_expense", 30000)),
-            "opex": fin.get("opex", truth.get("operating_expenses", 20000)),
-            "arpu": fin.get("arpu", truth.get("arpu", 0)),
-            "churn_rate": fin.get("churn_rate", truth.get("churn_rate_pct", 5)),
+            "revenue": revenue,
+            "monthly_burn": net_burn,
+            "cash_balance": cash,
+            "runway_months": runway,
+            "gross_margin": gross_margin,
+            "growth_rate": pick("growth_rate", "revenue_growth_mom"),
+            "headcount": pick("headcount"),
+            "payroll": pick("payroll"),
+            "opex": pick("opex"),
+            "other_costs": pick("other_costs"),
+            "arpu": pick("arpu"),
+            "churn_rate": pick("churn_rate", "gross_churn_rate"),
         }
     
     def map_decision_to_levers(
@@ -405,11 +453,22 @@ class DecisionAdvisorAgent(BaseAgent):
     ) -> Optional[FinancialLever]:
         """Calculate the impact of a specific lever."""
         
-        burn = financials.get("monthly_burn", 50000)
-        runway = financials.get("runway_months", 12)
-        revenue = financials.get("revenue", 0)
-        payroll = financials.get("payroll", 30000)
-        
+        burn = financials.get("monthly_burn")
+        runway = financials.get("runway_months")
+        revenue = financials.get("revenue") or 0
+        payroll = financials.get("payroll")
+
+        # No invented baselines: a lever whose input is unknown is not offered.
+        needs = {
+            "burn_reduction": burn is not None and burn > 0 and runway is not None,
+            "hiring_freeze": payroll is not None and payroll > 0,
+            "pricing_increase": revenue > 0,
+            "revenue_acceleration": financials.get("growth_rate") is not None,
+            "margin_improvement": financials.get("gross_margin") is not None,
+        }
+        if lever_key in needs and not needs[lever_key]:
+            return None
+
         if lever_key == "burn_reduction":
             current = burn
             reduction_pct = 20
@@ -430,14 +489,14 @@ class DecisionAdvisorAgent(BaseAgent):
             reduction_pct = increase_pct
             
         elif lever_key == "revenue_acceleration":
-            current = financials.get("growth_rate", 10)
+            current = financials.get("growth_rate")
             boost_pct = 20
             adjusted = current * (1 + boost_pct / 100)
             impact = f"Accelerates growth from {current:.0f}% to {adjusted:.0f}%, compounds over time"
             reduction_pct = boost_pct
             
         elif lever_key == "margin_improvement":
-            current = financials.get("gross_margin", 70)
+            current = financials.get("gross_margin")
             improvement = 5
             adjusted = min(current + improvement, 95)
             impact = f"Improves gross margin from {current:.0f}% to {adjusted:.0f}%"
@@ -463,6 +522,72 @@ class DecisionAdvisorAgent(BaseAgent):
             time_to_implement_months=lever_def["implementation_time"]
         )
     
+    # Lever -> real engine parameter. Levers with no engine mapping (hiring
+    # freeze without a hiring plan, fundraise timing without an amount) are
+    # not simulated.
+    LEVER_ENGINE_PARAMS = {
+        "Burn Rate Reduction": lambda lever, fin: {"burn_reduction_pct": 20.0},
+        "Price Increase": lambda lever, fin: {"pricing_change_pct": 15.0},
+        "Revenue Acceleration": lambda lever, fin: {"growth_uplift_pct": (fin.get("growth_rate") or 0) * 0.2},
+        "Gross Margin Improvement": lambda lever, fin: {"gross_margin_delta_pct": 5.0},
+    }
+
+    def simulation_inputs_missing(self, financials: Dict[str, Any]) -> List[str]:
+        missing = []
+        if financials.get("cash_balance") is None or financials.get("cash_balance") <= 0:
+            missing.append("cash balance")
+        if financials.get("monthly_burn") is None:
+            missing.append("net burn")
+        return missing
+
+    def _engine_outcome(self, financials: Dict[str, Any], params: Dict[str, float], label: List[str], risks: List[str]):
+        """One Monte Carlo run of the basic engine (server/simulate/simulation_engine)."""
+        from server.api.simulations import resolve_baseline_financials
+        from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
+
+        metrics = {
+            "monthly_revenue": financials.get("revenue") or 0,
+            "cash_balance": financials.get("cash_balance") or 0,
+            "gross_margin": financials.get("gross_margin") or 0,
+            "revenue_growth_mom": financials.get("growth_rate") or 0,
+            "opex": financials.get("opex") or 0,
+            "payroll": financials.get("payroll") or 0,
+            "other_costs": financials.get("other_costs") or 0,
+            "net_burn": financials.get("monthly_burn") or 0,
+        }
+        base = resolve_baseline_financials(metrics, None)
+        inputs = SimulationInputs(
+            baseline_revenue=base["revenue"],
+            baseline_growth_rate=base["growth"],
+            gross_margin=base["gross_margin"],
+            opex=base["opex"],
+            payroll=base["payroll"],
+            other_costs=base["other_costs"],
+            cash_balance=base["cash"],
+            n_simulations=self.SIMULATION_RUNS,
+            horizon_months=24,
+            **params,
+        )
+        out = run_monte_carlo(inputs, seed=42)
+        cash_p50 = out.get("bands", {}).get("cash", {}).get("p50") or []
+
+        def cash_at(month):
+            return float(cash_p50[month - 1]) if len(cash_p50) >= month else 0.0
+
+        return SimulationOutcome(
+            lever_combination=label,
+            runway_p10=float(out["runway"]["p10"]),
+            runway_p50=float(out["runway"]["p50"]),
+            runway_p90=float(out["runway"]["p90"]),
+            survival_12m=float(out["survival"]["12m"]),
+            survival_18m=float(out["survival"]["18m"]),
+            survival_24m=float(out["survival"]["24m"]),
+            cash_at_horizon={"12m": cash_at(12), "18m": cash_at(18), "24m": cash_at(24)},
+            risk_factors=risks,
+        )
+
+    SIMULATION_RUNS = 500
+
     async def _run_decision_simulations(
         self,
         decision: DecisionContext,
@@ -470,80 +595,51 @@ class DecisionAdvisorAgent(BaseAgent):
         financials: Dict[str, Any],
         context: Dict[str, Any]
     ) -> List[SimulationOutcome]:
-        """Run Monte Carlo simulations for the decision scenarios."""
-        outcomes = []
-        
-        baseline_outcome = SimulationOutcome(
-            lever_combination=["Baseline (no changes)"],
-            runway_p10=financials.get("runway_months", 12) * 0.7,
-            runway_p50=financials.get("runway_months", 12),
-            runway_p90=financials.get("runway_months", 12) * 1.3,
-            survival_12m=70,
-            survival_18m=50,
-            survival_24m=30,
-            cash_at_horizon={"12m": 100000, "18m": 0, "24m": 0},
-            risk_factors=["Current trajectory", "No buffer for downside"]
-        )
-        outcomes.append(baseline_outcome)
-        
-        for lever in levers[:3]:
-            runway_boost = 0
-            survival_boost = 0
-            
-            if "reduction" in lever.name.lower() or "freeze" in lever.name.lower():
-                runway_boost = lever.change_percent / 5
-                survival_boost = lever.change_percent / 2
-            elif "revenue" in lever.name.lower() or "price" in lever.name.lower():
-                runway_boost = lever.change_percent / 8
-                survival_boost = lever.change_percent / 3
-            else:
-                runway_boost = lever.change_percent / 10
-                survival_boost = lever.change_percent / 4
-            
-            outcome = SimulationOutcome(
-                lever_combination=[lever.name],
-                runway_p10=(baseline_outcome.runway_p10 + runway_boost) * 0.9,
-                runway_p50=baseline_outcome.runway_p50 + runway_boost,
-                runway_p90=(baseline_outcome.runway_p90 + runway_boost) * 1.1,
-                survival_12m=min(95, baseline_outcome.survival_12m + survival_boost),
-                survival_18m=min(90, baseline_outcome.survival_18m + survival_boost * 0.8),
-                survival_24m=min(85, baseline_outcome.survival_24m + survival_boost * 0.6),
-                cash_at_horizon={
-                    "12m": baseline_outcome.cash_at_horizon["12m"] * (1 + lever.change_percent / 50),
-                    "18m": max(0, baseline_outcome.cash_at_horizon["18m"] * (1 + lever.change_percent / 30)),
-                    "24m": max(0, baseline_outcome.cash_at_horizon["24m"] * (1 + lever.change_percent / 20))
-                },
-                risk_factors=[f"Assumes {lever.feasibility} implementation of {lever.name}"]
-            )
-            outcomes.append(outcome)
-        
-        if len(levers) >= 2:
-            combined_runway_boost = sum(
-                l.change_percent / 5 if "reduction" in l.name.lower() else l.change_percent / 10
-                for l in levers[:2]
-            )
-            combined_survival_boost = sum(
-                l.change_percent / 2 if "reduction" in l.name.lower() else l.change_percent / 4
-                for l in levers[:2]
-            )
-            
-            combined_outcome = SimulationOutcome(
-                lever_combination=[l.name for l in levers[:2]],
-                runway_p10=(baseline_outcome.runway_p10 + combined_runway_boost) * 0.85,
-                runway_p50=baseline_outcome.runway_p50 + combined_runway_boost,
-                runway_p90=(baseline_outcome.runway_p90 + combined_runway_boost) * 1.15,
-                survival_12m=min(98, baseline_outcome.survival_12m + combined_survival_boost),
-                survival_18m=min(95, baseline_outcome.survival_18m + combined_survival_boost * 0.8),
-                survival_24m=min(90, baseline_outcome.survival_24m + combined_survival_boost * 0.6),
-                cash_at_horizon={
-                    "12m": baseline_outcome.cash_at_horizon["12m"] * 1.5,
-                    "18m": baseline_outcome.cash_at_horizon["18m"] * 1.3 + 50000,
-                    "24m": baseline_outcome.cash_at_horizon["24m"] + 100000
-                },
-                risk_factors=["Execution complexity of multiple initiatives", "May impact growth trajectory"]
-            )
-            outcomes.append(combined_outcome)
-        
+        """Run the real Monte Carlo engine for baseline and each mapped lever.
+
+        The old version fabricated every number: baseline survival 70/50/30%,
+        P10/P90 as 0.7x/1.3x of a runway, "boosts" of change_percent / 5. With
+        the inputs missing, or the engine failing, it now returns no outcomes
+        and the response says no simulation was run.
+        """
+        import asyncio
+
+        self.simulation_status = {"ran": False, "reason": None, "engine": "simulation_engine.run_monte_carlo"}
+        missing = self.simulation_inputs_missing(financials)
+        if missing:
+            self.simulation_status["reason"] = "Missing " + " and ".join(missing)
+            return []
+
+        plans = [(["Baseline (no changes)"], {}, ["Current trajectory"])]
+        mapped = [l for l in levers if l.name in self.LEVER_ENGINE_PARAMS]
+        for lever in mapped[:3]:
+            plans.append((
+                [lever.name],
+                self.LEVER_ENGINE_PARAMS[lever.name](lever, financials),
+                [f"Assumes {lever.feasibility} implementation of {lever.name}"],
+            ))
+        if len(mapped) >= 2:
+            combined: Dict[str, float] = {}
+            for lever in mapped[:2]:
+                combined.update(self.LEVER_ENGINE_PARAMS[lever.name](lever, financials))
+            plans.append((
+                [l.name for l in mapped[:2]],
+                combined,
+                ["Execution complexity of multiple initiatives"],
+            ))
+
+        def run_all():
+            return [self._engine_outcome(financials, params, label, risks) for label, params, risks in plans]
+
+        try:
+            outcomes = await asyncio.to_thread(run_all)
+        except Exception as e:  # never fall back to invented numbers
+            self.logger.warning(f"Decision simulation failed: {e}")
+            self.simulation_status["reason"] = "The simulation engine failed"
+            return []
+
+        self.simulation_status["ran"] = True
+        self.simulation_status["runs_per_scenario"] = self.SIMULATION_RUNS
         return outcomes
     
     def identify_risks(
@@ -551,69 +647,83 @@ class DecisionAdvisorAgent(BaseAgent):
         simulation_results: List[SimulationOutcome],
         financials: Dict[str, Any]
     ) -> RiskAnalysis:
-        """Identify risks and perform sensitivity analysis."""
-        
+        """Identify risks; sensitivity is computed from the real numbers or omitted."""
+
         riskiest = []
-        
-        gross_margin = financials.get("gross_margin", 70)
-        if gross_margin > 75:
+        cash = financials.get("cash_balance")
+        net = financials.get("monthly_burn")
+        revenue = financials.get("revenue") or 0
+        gross_margin = financials.get("gross_margin")
+        growth = financials.get("growth_rate")
+        churn = financials.get("churn_rate")
+
+        def runway_for(net_burn):
+            if cash is None or cash <= 0 or net_burn is None:
+                return None
+            return cash / net_burn if net_burn > 0 else None
+
+        base_runway = runway_for(net)
+
+        def runway_delta(new_net):
+            new = runway_for(new_net)
+            if base_runway is None or new is None:
+                return "not available"
+            return f"{new - base_runway:+.1f} months"
+
+        margin_drop_net = (net + revenue * 0.05) if net is not None else None
+
+        if gross_margin is not None and gross_margin > 75:
             riskiest.append({
                 "assumption": f"Gross margin of {gross_margin:.1f}%",
                 "risk_level": "High" if gross_margin > 80 else "Medium",
-                "impact": "If margin drops 5%, runway decreases by ~2 months",
+                "impact": f"A 5-point margin drop changes runway by {runway_delta(margin_drop_net)}",
                 "mitigation": "Diversify revenue streams, negotiate supplier costs"
             })
-        
-        growth = financials.get("growth_rate", 10)
-        if growth > 20:
+
+        if growth is not None and growth > 20:
             riskiest.append({
                 "assumption": f"Growth rate of {growth:.0f}%",
                 "risk_level": "Medium",
-                "impact": "Growth slowdown to 10% cuts survival probability by 15%",
+                "impact": "Growth above 20%/mo rarely persists; re-run the simulation at a lower rate",
                 "mitigation": "Build sales pipeline, diversify channels"
             })
-        
-        churn = financials.get("churn_rate", 5)
-        if churn > 3:
+
+        if churn is not None and churn > 3:
             riskiest.append({
                 "assumption": f"Churn rate of {churn:.1f}%",
                 "risk_level": "Medium",
-                "impact": "2% increase in churn reduces LTV by 25%",
+                "impact": "Each point of monthly churn compounds into lost revenue",
                 "mitigation": "Customer success investment, NPS monitoring"
             })
-        
-        sensitivity = [
-            {
+
+        sensitivity = []
+        if gross_margin is not None and net is not None:
+            sensitivity.append({
                 "variable": "Gross Margin",
                 "current": gross_margin,
-                "sensitivity": "-5%",
-                "runway_impact": "-2.1 months",
-                "survival_impact": "-12% at 18m"
-            },
-            {
-                "variable": "Growth Rate",
-                "current": growth,
-                "sensitivity": "-10%",
-                "runway_impact": "-1.5 months",
-                "survival_impact": "-8% at 18m"
-            },
-            {
-                "variable": "Burn Rate",
-                "current": financials.get("monthly_burn", 50000),
+                "sensitivity": "-5 pts",
+                "runway_impact": runway_delta(margin_drop_net),
+                "survival_impact": "not simulated",
+            })
+        if net is not None and net > 0:
+            sensitivity.append({
+                "variable": "Net Burn",
+                "current": net,
                 "sensitivity": "+15%",
-                "runway_impact": "-2.3 months",
-                "survival_impact": "-15% at 18m"
-            }
-        ]
-        
+                "runway_impact": runway_delta(net * 1.15),
+                "survival_impact": "not simulated",
+            })
+
         cascade = self._generate_failure_cascade(financials)
-        
+
         blockers = []
-        if financials.get("revenue", 0) <= 0:
+        if not revenue:
             blockers.append("No revenue data - projections are estimates only")
-        if financials.get("cash_balance", 0) <= 0:
+        if cash is None or cash <= 0:
             blockers.append("Missing cash balance - runway calculations uncertain")
-        
+        if net is None:
+            blockers.append("Missing net burn - no simulation was run")
+
         return RiskAnalysis(
             riskiest_assumptions=riskiest,
             sensitivity_analysis=sensitivity,
@@ -623,9 +733,11 @@ class DecisionAdvisorAgent(BaseAgent):
     
     def _generate_failure_cascade(self, financials: Dict[str, Any]) -> str:
         """Generate a failure cascade narrative."""
-        runway = financials.get("runway_months", 12)
-        burn = financials.get("monthly_burn", 50000)
-        
+        runway = financials.get("runway_months")
+        burn = financials.get("monthly_burn")
+        if runway is None or burn is None or burn <= 0:
+            return ""
+
         return (
             f"If revenue growth lags by 20%, monthly burn stays at ${burn:,.0f}, "
             f"runway compresses from {runway:.0f} to {runway * 0.7:.0f} months. "
@@ -643,9 +755,15 @@ class DecisionAdvisorAgent(BaseAgent):
         """Generate the primary recommendation with confidence level."""
         
         if len(simulation_results) <= 1:
+            status = getattr(self, "simulation_status", None) or {}
+            reason = status.get("reason")
+            if status.get("ran"):
+                details = "Only the baseline could be simulated; none of the levers map to the simulation engine."
+            else:
+                details = "No simulation was run" + (f": {reason}." if reason else ".")
             return ActionRecommendation(
                 primary_action="Gather more data",
-                action_details="Insufficient data to run meaningful simulations",
+                action_details=details,
                 expected_impact="N/A",
                 confidence=ConfidenceLevel.LOW,
                 confidence_reasoning="Missing critical financial inputs",
@@ -694,8 +812,8 @@ class DecisionAdvisorAgent(BaseAgent):
             primary_action=f"Implement {primary_lever}",
             action_details=f"This lever provides the best risk-adjusted improvement for your situation. "
                           f"Start implementation immediately for maximum impact.",
-            expected_impact=f"+{survival_improvement:.0f}% survival at 18 months, "
-                          f"+{runway_improvement:.1f} months runway (P50)",
+            expected_impact=f"{survival_improvement:+.0f} pts simulated survival at 18 months, "
+                          f"{runway_improvement:+.1f} months runway (P50)",
             confidence=confidence,
             confidence_reasoning="; ".join(confidence_reasons),
             what_would_change_recommendation=what_changes,
@@ -726,6 +844,14 @@ class DecisionAdvisorAgent(BaseAgent):
                 f"With {best.lever_combination[0]}: {best.survival_18m:.0f}%"
             )
         
+        else:
+            status = getattr(self, "simulation_status", None) or {}
+            if not status.get("ran"):
+                findings.append(
+                    "No simulation was run"
+                    + (f" ({status['reason']})" if status.get("reason") else "")
+                )
+
         findings.append(f"Recommendation: {recommendation.primary_action}")
         findings.append(f"Confidence: {recommendation.confidence.value.upper()}")
         
@@ -784,6 +910,7 @@ class DecisionAdvisorAgent(BaseAgent):
                 }
                 for i, sim in enumerate(simulations)
             ],
+            "simulation_status": getattr(self, "simulation_status", None) or {"ran": False, "reason": None},
             "risk_analysis": {
                 "riskiest_assumptions": risks.riskiest_assumptions,
                 "sensitivity": risks.sensitivity_analysis,
