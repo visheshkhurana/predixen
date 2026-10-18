@@ -8,27 +8,17 @@ from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
 from server.models.financial import FinancialRecord, FinancialMetricPoint
+from server.core.burn import burn_summary
 
 
 def _serialize_financial_record(rec: FinancialRecord) -> Dict[str, Any]:
-    # Compute net burn / runway from the full expense breakdown INCLUDING COGS —
-    # the same "Computed" figure the dashboard shows — rather than trusting the
-    # stored net_burn/runway_months scalars, which can be stale and COGS-omitted
-    # (e.g. 39.2mo instead of 21.3mo). Keeps the copilot consistent with the UI.
-    _rev = float(rec.revenue or 0)
-    _total_costs = (
-        float(rec.opex or 0) + float(rec.payroll or 0)
-        + float(rec.cogs or 0) + float(rec.other_costs or 0)
-        + float(rec.marketing_expense or 0)
-    )
-    _computed_net_burn = _total_costs - _rev
-    if _computed_net_burn > 0:
-        _net_burn = _computed_net_burn
-        _runway = float(rec.cash_balance or 0) / _computed_net_burn
-    else:
-        # Profitable, or no breakdown available — fall back to stored values.
-        _net_burn = float(rec.net_burn) if rec.net_burn is not None else _computed_net_burn
-        _runway = float(rec.runway_months) if rec.runway_months is not None else None
+    # Burn/runway via the shared rule (server/core/burn.py): full breakdown
+    # incl. COGS + marketing, SIGNED (negative = profitable). The old fallback
+    # quoted stale stored scalars for profitable companies, so the copilot said
+    # "net burn of USD 6,000 ... runway 57.5 months" for a company making money.
+    _burn = burn_summary(rec)
+    _net_burn = _burn["net_burn"]
+    _runway = _burn["runway_months"]
     return {
         "period": rec.period_end.isoformat() if rec.period_end else None,
         "revenue": float(rec.revenue or 0),
@@ -36,12 +26,14 @@ def _serialize_financial_record(rec: FinancialRecord) -> Dict[str, Any]:
         "opex": float(rec.opex or 0),
         "payroll": float(rec.payroll or 0),
         "other_costs": float(rec.other_costs or 0),
-        "cash_balance": float(rec.cash_balance or 0),
+        "cash_balance": float(rec.cash_balance) if rec.cash_balance is not None else None,
         "mrr": float(rec.mrr) if rec.mrr is not None else None,
         "arr": float(rec.arr) if rec.arr is not None else None,
         "gross_margin": float(rec.gross_margin) if rec.gross_margin is not None else None,
         "net_burn": _net_burn,
+        "is_profitable": _burn["is_profitable"],
         "runway_months": _runway,
+        "runway_status": _burn["runway_status"],
         "headcount": int(rec.headcount) if rec.headcount else None,
         "customers": int(rec.customers) if rec.customers else None,
         "ltv": float(rec.ltv) if rec.ltv is not None else None,
@@ -120,21 +112,18 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
         }
     
     if financial_records:
+        context["burn_status"] = burn_summary(financial_records[0])
         context["financial_history"] = [
             _serialize_financial_record(rec) for rec in financial_records
         ]
         latest_financial = financial_records[0]
         if not truth_scan:
-            cash = float(latest_financial.cash_balance or 0)
             revenue = float(latest_financial.revenue or 0)
-            total_costs = (
-                float(latest_financial.opex or 0) + 
-                float(latest_financial.payroll or 0) + 
-                float(latest_financial.cogs or 0) + 
-                float(latest_financial.other_costs or 0)
-            )
-            net_burn = total_costs - revenue
-            runway = cash / max(net_burn, 1) if net_burn > 0 else None
+            burn = burn_summary(latest_financial)
+            cash = burn["cash_balance"]
+            total_costs = burn["gross_burn"]
+            net_burn = burn["net_burn"]
+            runway = burn["runway_months"]
             gross_margin = (revenue - float(latest_financial.cogs or 0)) / max(revenue, 1) if revenue > 0 else None
             
             context["financial_baseline"] = {
@@ -144,7 +133,9 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
                     "cash_balance": cash,
                     "total_expenses": total_costs,
                     "net_burn": net_burn,
+                    "is_profitable": burn["is_profitable"],
                     "runway_months": runway,
+                    "runway_status": burn["runway_status"],
                     "gross_margin": gross_margin,
                     "payroll": float(latest_financial.payroll or 0),
                     "opex": float(latest_financial.opex or 0),

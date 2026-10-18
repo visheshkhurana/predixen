@@ -282,9 +282,10 @@ interface HistoryRecord {
   arr: number;
   cash_balance: number;
   net_burn: number;
-  runway_months: number;
+  runway_months: number | null;
+  is_profitable?: boolean;
   gross_margin: number;
-  churn_rate: number;
+  churn_rate: number | null;
   cac: number;
   ltv: number;
   ltv_cac_ratio: number;
@@ -466,8 +467,14 @@ export default function KPIBoardPage() {
       return val;
     };
 
-    const runwayFallback = sharedMetrics.runway === Infinity ? 60 : sharedMetrics.runway;
-    const rawChurn = pick(latestSnapshot?.churn_rate, latestHistory?.churn_rate, sharedMetrics.churnRate);
+    // Profitable = runway is not a month count. It used to be clamped to 60 and
+    // shown as "60.0 mo" (the ">= 120 -> Profitable" branch could never fire).
+    const runwayProfitable = sharedMetrics.runway === Infinity || latestSnapshot?.is_profitable === true;
+    const sharedRunway = Number.isFinite(sharedMetrics.runway) && sharedMetrics.runway > 0 ? sharedMetrics.runway : 0;
+    const runwayMonths = runwayProfitable
+      ? null
+      : Math.max(0, Math.min(sharedRunway || pick(latestSnapshot?.runway_months ?? undefined, latestHistory?.runway_months ?? undefined, 0), 120));
+    const rawChurn = pick(latestSnapshot?.churn_rate ?? undefined, latestHistory?.churn_rate ?? undefined, sharedMetrics.churnRate);
 
     return {
       monthly_revenue: pick(latestSnapshot?.monthly_revenue, latestHistory?.monthly_revenue, sharedMetrics.mrr),
@@ -475,7 +482,7 @@ export default function KPIBoardPage() {
       arr: pick(latestSnapshot?.arr, latestHistory?.arr, sharedMetrics.arr),
       cash_balance: pick(latestSnapshot?.cash_balance, latestHistory?.cash_balance, sharedMetrics.cashOnHand),
       net_burn: sharedMetrics.netBurn || latestSnapshot?.net_burn || latestHistory?.net_burn || 0,
-      runway_months: Math.max(0, Math.min(sharedMetrics.runway === Infinity ? 60 : (sharedMetrics.runway || pick(latestSnapshot?.runway_months, latestHistory?.runway_months, runwayFallback)), 60)),
+      runway_months: runwayMonths,
       gross_margin: pick(latestSnapshot?.gross_margin, latestHistory?.gross_margin, sharedMetrics.grossMargin),
       churn_rate: normalizeChurn(rawChurn),
       cac: pick(latestSnapshot?.cac, latestHistory?.cac, sharedMetrics.cac),
@@ -622,13 +629,13 @@ export default function KPIBoardPage() {
         <StaggerItem>
         <EnhancedKPICard
           title="Runway"
-          value={isLoading ? '—' : (metrics.runway_months >= 120) ? '\u221E' : `${metrics.runway_months.toFixed(1)} mo`}
+          value={isLoading ? '—' : metrics.runway_months == null ? 'Profitable' : `${metrics.runway_months.toFixed(1)} mo`}
           icon={<Clock className="h-4 w-4" />}
-          trend={metrics.runway_months < 6 ? 'down' : 'neutral'}
-          subtitle={metrics.runway_months >= 120 ? 'Profitable' : metrics.runway_months < 6 ? 'Low runway' : ''}
+          trend={metrics.runway_months != null && metrics.runway_months < 6 ? 'down' : 'neutral'}
+          subtitle={metrics.runway_months == null ? 'Cash-flow positive' : metrics.runway_months < 6 ? 'Low runway' : ''}
           isLive={isConnected}
           isLoading={isLoading}
-          hoverDetail={metrics.runway_months >= 120 ? 'Company is profitable or cash-flow positive.' : `At current burn rate, cash lasts approximately ${metrics.runway_months.toFixed(1)} months.`}
+          hoverDetail={metrics.runway_months == null ? 'Company is profitable or cash-flow positive.' : `At current burn rate, cash lasts approximately ${metrics.runway_months.toFixed(1)} months.`}
           testId="kpi-card-runway"
         />
         </StaggerItem>
@@ -645,7 +652,7 @@ export default function KPIBoardPage() {
           sparklineData={burnSparkline}
           isLive={isConnected}
           isLoading={isLoading}
-          hoverDetail={`Monthly net cash outflow: ${formatCurrency(metrics.net_burn)}.`}
+          hoverDetail={metrics.net_burn < 0 ? `Net cash inflow: ${formatCurrency(Math.abs(metrics.net_burn))}/month (profitable).` : `Monthly net cash outflow: ${formatCurrency(metrics.net_burn)}.`}
           testId="kpi-card-burn"
         />
         <EnhancedKPICard

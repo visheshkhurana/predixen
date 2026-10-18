@@ -13,6 +13,7 @@ from server.core.security import get_current_user
 from server.models import User, Company
 from server.models.truth_scan import TruthScan
 from server.models.financial import FinancialRecord
+from server.core.burn import burn_summary, gross_burn
 
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -147,11 +148,11 @@ def generate_recommendations(kpis: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Generate context-aware recommendations based on KPIs."""
     recommendations = []
     
-    runway = kpis.get("runway", {}).get("currentValue", 18)
-    gross_margin = kpis.get("grossMargin", {}).get("currentValue", 70)
-    burn_multiple = kpis.get("burnMultiple", {}).get("currentValue", 1.5)
+    runway = kpis.get("runway", {}).get("currentValue")
+    gross_margin = kpis.get("grossMargin", {}).get("currentValue")
+    burn_multiple = kpis.get("burnMultiple", {}).get("currentValue")
     
-    if runway < 12:
+    if runway is not None and runway < 12:
         recommendations.append({
             "id": "extend-runway",
             "title": "Extend Your Runway",
@@ -160,7 +161,7 @@ def generate_recommendations(kpis: Dict[str, Any]) -> List[Dict[str, Any]]:
             "action": "Run burn reduction scenario"
         })
     
-    if gross_margin < 60:
+    if gross_margin is not None and gross_margin < 60:
         recommendations.append({
             "id": "improve-margins",
             "title": "Optimize Gross Margins",
@@ -169,7 +170,7 @@ def generate_recommendations(kpis: Dict[str, Any]) -> List[Dict[str, Any]]:
             "action": "Analyze margin breakdown"
         })
     
-    if burn_multiple > 2:
+    if burn_multiple is not None and burn_multiple > 2:
         recommendations.append({
             "id": "improve-efficiency",
             "title": "Improve Capital Efficiency",
@@ -200,8 +201,7 @@ def get_real_history(financials: List[FinancialRecord], metric_name: str, months
         elif metric_name == "cash_balance":
             value = record.cash_balance or 0
         elif metric_name == "net_burn":
-            total_costs = (record.cogs or 0) + (record.opex or 0) + (record.payroll or 0) + (record.other_costs or 0)
-            value = total_costs - (record.revenue or 0)
+            value = gross_burn(record) - (record.revenue or 0)
         elif metric_name == "gross_margin":
             revenue = record.revenue or 0
             cogs = record.cogs or 0
@@ -280,22 +280,22 @@ async def get_dashboard_kpis(
         outputs = truth_scan.outputs_json
         metrics = outputs.get("metrics", {})
         
-        runway_value = metrics.get("runway_p50") if isinstance(metrics.get("runway_p50"), (int, float)) else (metrics.get("runway_months", {}).get("value") if isinstance(metrics.get("runway_months"), dict) else 16.5)
-        net_burn_value = metrics.get("net_burn") if isinstance(metrics.get("net_burn"), (int, float)) else (metrics.get("net_burn", {}).get("value") if isinstance(metrics.get("net_burn"), dict) else 45000)
+        runway_value = metrics.get("runway_p50") if isinstance(metrics.get("runway_p50"), (int, float)) else (metrics.get("runway_months", {}).get("value") if isinstance(metrics.get("runway_months"), dict) else None)
+        net_burn_value = metrics.get("net_burn") if isinstance(metrics.get("net_burn"), (int, float)) else (metrics.get("net_burn", {}).get("value") if isinstance(metrics.get("net_burn"), dict) else None)
         raw_gm = metrics.get("gross_margin")
         if isinstance(raw_gm, (int, float)):
             gross_margin_value = raw_gm
         elif isinstance(raw_gm, dict):
             gross_margin_value = raw_gm.get("value")
         else:
-            gross_margin_value = 72
+            gross_margin_value = None
         if gross_margin_value is not None and 0 < gross_margin_value <= 1:
             gross_margin_value = gross_margin_value * 100
-        revenue_growth_value = metrics.get("revenue_growth_yoy") if isinstance(metrics.get("revenue_growth_yoy"), (int, float)) else (metrics.get("revenue_growth_yoy", {}).get("value") if isinstance(metrics.get("revenue_growth_yoy"), dict) else 85)
-        burn_multiple_value = metrics.get("burn_multiple") if isinstance(metrics.get("burn_multiple"), (int, float)) else (metrics.get("burn_multiple", {}).get("value") if isinstance(metrics.get("burn_multiple"), dict) else 1.8)
-        mrr_value = metrics.get("monthly_revenue") if isinstance(metrics.get("monthly_revenue"), (int, float)) else (metrics.get("mrr", {}).get("value") if isinstance(metrics.get("mrr"), dict) else 125000)
-        cash_value = metrics.get("cash_balance") if isinstance(metrics.get("cash_balance"), (int, float)) else (metrics.get("cash_balance", {}).get("value") if isinstance(metrics.get("cash_balance"), dict) else 1500000)
-        concentration_value = metrics.get("concentration_top5") if isinstance(metrics.get("concentration_top5"), (int, float)) else 35
+        revenue_growth_value = metrics.get("revenue_growth_yoy") if isinstance(metrics.get("revenue_growth_yoy"), (int, float)) else (metrics.get("revenue_growth_yoy", {}).get("value") if isinstance(metrics.get("revenue_growth_yoy"), dict) else None)
+        burn_multiple_value = metrics.get("burn_multiple") if isinstance(metrics.get("burn_multiple"), (int, float)) else (metrics.get("burn_multiple", {}).get("value") if isinstance(metrics.get("burn_multiple"), dict) else None)
+        mrr_value = metrics.get("monthly_revenue") if isinstance(metrics.get("monthly_revenue"), (int, float)) else (metrics.get("mrr", {}).get("value") if isinstance(metrics.get("mrr"), dict) else None)
+        cash_value = metrics.get("cash_balance") if isinstance(metrics.get("cash_balance"), (int, float)) else (metrics.get("cash_balance", {}).get("value") if isinstance(metrics.get("cash_balance"), dict) else None)
+        concentration_value = metrics.get("concentration_top5") if isinstance(metrics.get("concentration_top5"), (int, float)) else None
         
         data_confidence = outputs.get("data_confidence_score") or outputs.get("overall_score") or 0
         validation = metrics.get("data_validation", {})
@@ -317,6 +317,21 @@ async def get_dashboard_kpis(
         data_confidence = 0
         missing_data = [{"field": "all", "message": "No financial data uploaded. Please upload your P&L or financial statements."}]
     
+    # Burn/runway from the latest record via the shared rule, so this page agrees
+    # with alerts, KPI board and copilot. Profitable -> runway null + status.
+    runway_status = None
+    if financials:
+        burn = burn_summary(financials[0])
+        if burn["net_burn"] is not None:
+            net_burn_value = burn["net_burn"]
+            runway_value = burn["runway_months"]
+            runway_status = burn["runway_status"]
+            if burn["is_profitable"]:
+                burn_multiple_value = None
+    elif net_burn_value is not None and net_burn_value <= 0:
+        runway_value = None
+        runway_status = "profitable"
+
     if financials:
         revenue_history = get_real_history(financials, "revenue", 12)
         cash_history = get_real_history(financials, "cash_balance", 12)
@@ -346,7 +361,9 @@ async def get_dashboard_kpis(
             "history": runway_history,
             "benchmark": 18,
             "benchmarkLabel": "Target runway",
-            "status": determine_status("runway", runway_value)
+            "status": determine_status("runway", runway_value),
+            "runwayStatus": runway_status,
+            "isProfitable": runway_status == "profitable",
         },
         "netBurn": {
             "metricName": "netBurn",

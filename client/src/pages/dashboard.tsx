@@ -1056,10 +1056,10 @@ export default function Dashboard() {
             />
             <KPITile
               title="Runway"
-              value={formatRunway(liveMetrics.runway_months)}
+              value={liveMetrics.is_profitable ? 'Profitable' : liveMetrics.runway_months == null ? 'N/A' : formatRunway(liveMetrics.runway_months)}
               icon={<Clock className="h-4 w-4" />}
-              trend={liveMetrics.runway_months < 6 ? 'down' : 'neutral'}
-              subtitle={liveMetrics.runway_months < 6 ? 'Low runway' : ''}
+              trend={liveMetrics.runway_months != null && liveMetrics.runway_months < 6 ? 'down' : 'neutral'}
+              subtitle={liveMetrics.runway_months == null && !liveMetrics.is_profitable ? 'Cash not provided' : liveMetrics.runway_months != null && liveMetrics.runway_months < 6 ? 'Low runway' : ''}
               isLive={isConnected}
             />
           </div>
@@ -1081,9 +1081,9 @@ export default function Dashboard() {
             />
             <KPITile
               title="Churn Rate"
-              value={financialMetrics.sources['churnRate'] === 'estimated' || (!financialMetrics.sources['churnRate'] && financialMetrics.churnRatePct === 0) ? 'N/A' : formatPercent(liveMetrics.churn_rate)}
+              value={financialMetrics.sources['churnRate'] === 'estimated' || (!financialMetrics.sources['churnRate'] && financialMetrics.churnRatePct === 0) || liveMetrics.churn_rate == null ? 'N/A' : formatPercent(liveMetrics.churn_rate)}
               icon={<Activity className="h-4 w-4" />}
-              trend={financialMetrics.sources['churnRate'] === 'estimated' ? 'neutral' : (liveMetrics.churn_rate <= 0.03 ? 'up' : 'down')}
+              trend={financialMetrics.sources['churnRate'] === 'estimated' || liveMetrics.churn_rate == null ? 'neutral' : (liveMetrics.churn_rate <= 0.03 ? 'up' : 'down')}
               isLive={isConnected}
             />
             <KPITile
