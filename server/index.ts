@@ -7,7 +7,7 @@ import { spawn, execSync, spawnSync, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupWebSocketServer } from "./websocket";
 import { registerTwilioRoutes } from "./twilio/routes";
-import { requireAuth } from "./middleware/requireAuth";
+import { requireAuth, requirePlatformAdmin } from "./middleware/requireAuth";
 import { existsSync } from "fs";
 import path from "path";
 import compression from "compression";
@@ -538,8 +538,8 @@ const FASTAPI_URL = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPor
 const messagingRouter = express.Router();
 messagingRouter.use(express.json());
 registerTwilioRoutes(messagingRouter);
-// Auth-gate all messaging routes: unauthenticated SMS/WhatsApp send is toll-fraud/PII risk.
-app.use("/api/messaging", requireAuth, messagingRouter);
+// Messaging sends SMS/WhatsApp from the platform account: platform owner only.
+app.use("/api/messaging", requirePlatformAdmin, messagingRouter);
 
 // Register Notion routes before the API proxy (handled by Express, not FastAPI)
 import { getNotionClient, listPages, listDatabases } from "./notion/client";

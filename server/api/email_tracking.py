@@ -317,20 +317,14 @@ def _verify_admin_jwt(token_str: str) -> bool:
         # Master admin token (issued only to the configured master admin)
         if user_id == "master" and payload.get("is_master"):
             return True
-        admin_email = (os.getenv("ADMIN_MASTER_EMAIL") or "").lower().strip()
         db = next(get_db())
         try:
             from server.models.user import User
+            from server.api.admin import is_platform_admin
             user = db.query(User).filter(User.id == int(user_id)).first()
-            if not user:
-                return False
-            if user.role == "owner":
-                return True
-            if admin_email and user.email.lower().strip() == admin_email:
-                return True
+            return bool(user) and is_platform_admin(user)
         finally:
             db.close()
-        return False
     except Exception:
         return False
 
