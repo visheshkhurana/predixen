@@ -204,6 +204,12 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
                 metrics["runway_p50"] = round(runway_months, 1)
                 metrics["runway_p10"] = round(runway_months * 0.7, 1)
                 metrics["runway_p90"] = round(runway_months * 1.4, 1)
+            elif latest.cash_balance is None:
+                # Cash was never provided: runway is unknown, not zero.
+                metrics["runway_p50"] = None
+                metrics["runway_p10"] = None
+                metrics["runway_p90"] = None
+                metrics["cash_not_provided"] = True
             else:
                 metrics["runway_p50"] = 0
                 metrics["runway_p10"] = 0

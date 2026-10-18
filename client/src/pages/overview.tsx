@@ -472,6 +472,13 @@ const COPILOT_PROMPTS = [
   "What if fundraise slips 3 months?",
 ];
 
+// "+343.7%" -- one decimal, explicit sign; raw floats printed as
+// "+343.69933294924897%" before.
+const formatSignedPct = (value: number | null | undefined): string => {
+  if (value == null || !Number.isFinite(value)) return 'N/A';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+};
+
 const getKpiStatus = (value: number | null, metric: string): 'green' | 'yellow' | 'red' => {
   if (value === null || value === undefined) return 'yellow';
   
@@ -617,6 +624,13 @@ export default function OverviewPage() {
       profitabilityDate: sharedMetrics.isProfitable ? 'Now' : 'TBD',
     };
   }, [sharedMetrics]);
+
+  // Profitable (net burn <= 0) means runway is not a month count. baseData.runway
+  // keeps the 60 used by the projection math, but it must never be *shown* as
+  // "60.0 mo" -- every display goes through runwayText.
+  const isRunwayProfitable = sharedMetrics.runway === Infinity;
+  const runwayText = (months: number, maxDisplay?: number) =>
+    isRunwayProfitable ? 'Profitable' : formatRunway(months, maxDisplay);
 
   const projectedMetrics = useMemo(() => {
     return computeProjectedMetrics(baseData, assumptions);
@@ -876,7 +890,10 @@ export default function OverviewPage() {
     const churnBenchmark = getDynamicBenchmark('churn_rate') || { p25: INDUSTRY_BENCHMARKS.churnRate.p25, p50: INDUSTRY_BENCHMARKS.churnRate.p50, p75: INDUSTRY_BENCHMARKS.churnRate.p75, direction: 'lower_is_better' };
     const burnBenchmark = getDynamicBenchmark('burn_multiple') || { p25: INDUSTRY_BENCHMARKS.burnMultiple.p25, p50: INDUSTRY_BENCHMARKS.burnMultiple.p50, p75: INDUSTRY_BENCHMARKS.burnMultiple.p75, direction: 'lower_is_better' };
     
-    return [
+    const rows: Array<{
+      metric: string; value: number; display?: string; p25: number; p50: number; p75: number;
+      unit: string; direction: string; status: 'above' | 'median' | 'below';
+    }> = [
       { 
         metric: 'Growth Rate', 
         value: assumptions.growthRate, 
@@ -910,12 +927,13 @@ export default function OverviewPage() {
       { 
         metric: 'Runway', 
         value: baseData.runway, 
+        display: isRunwayProfitable ? 'Profitable' : undefined,
         p25: runwayBenchmark.p25, 
         p50: runwayBenchmark.p50, 
         p75: runwayBenchmark.p75,
         unit: 'mo',
         direction: runwayBenchmark.direction,
-        status: getBenchmarkStatus(baseData.runway, runwayBenchmark),
+        status: isRunwayProfitable ? 'above' : getBenchmarkStatus(baseData.runway, runwayBenchmark),
       },
       // Churn is only benchmarked when it is a real number. The server has no
       // churn signal to derive it from, so it comes through as estimated/0 — and
@@ -937,7 +955,9 @@ export default function OverviewPage() {
         : []),
       { 
         metric: 'Burn Multiple', 
+        // Not burning: burn multiple is undefined, not "0x".
         value: baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, 
+        display: baseData.burnRate > 0 ? undefined : 'Profitable',
         p25: burnBenchmark.p25, 
         p50: burnBenchmark.p50, 
         p75: burnBenchmark.p75,
@@ -946,7 +966,8 @@ export default function OverviewPage() {
         status: getBenchmarkStatus(baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, burnBenchmark),
       },
     ];
-  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources]);
+    return rows;
+  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources, isRunwayProfitable]);
 
   const exportToCSV = useCallback(() => {
     const timestamp = new Date().toISOString();
@@ -964,7 +985,7 @@ export default function OverviewPage() {
       ['ARR', baseData.arr.toFixed(0), currentCompany?.currency || 'USD'],
       ['Cash on Hand', baseData.cash.toFixed(0), currentCompany?.currency || 'USD'],
       ['Burn Rate', baseData.burnRate.toFixed(0), `${currentCompany?.currency || 'USD'}/month`],
-      ['Runway', formatRunway(baseData.runway), ''],
+      ['Runway', runwayText(baseData.runway), ''],
       ['CAC', baseData.cac.toFixed(0), currentCompany?.currency || 'USD'],
       ['LTV', baseData.ltv.toFixed(0), currentCompany?.currency || 'USD'],
       ['LTV:CAC Ratio', baseData.ltvCacRatio.toFixed(2), 'x'],
@@ -1349,7 +1370,7 @@ export default function OverviewPage() {
                 Burn is {briefingBurnStatus} at{' '}
                 <span className="font-medium text-foreground">{formatCurrency(baseData.burnRate)}/mo</span>.
                 Runway is {briefingRunwayShift} at{' '}
-                <span className="font-medium text-foreground">{formatRunway(baseData.runway)}</span>.
+                <span className="font-medium text-foreground">{runwayText(baseData.runway)}</span>.
                 {briefingCriticalCount > 0 && (
                   <span className="text-red-400 font-medium"> {briefingCriticalCount} critical alert{briefingCriticalCount > 1 ? 's' : ''} detected.</span>
                 )}
@@ -1427,7 +1448,7 @@ export default function OverviewPage() {
                   value={formatCurrency(baseData.mrr)}
                   subtitle="Monthly Recurring Revenue"
                   trend="up"
-                  trendValue={`+${assumptions.growthRate}%`}
+                  trendValue={formatSignedPct(assumptions.growthRate)}
                   metricSource={sharedMetrics.sources['mrr']}
                   lastUpdated={truthScan?.computed_at}
                   testId="metric-mrr"
@@ -1442,7 +1463,7 @@ export default function OverviewPage() {
                 <StaggerItem><MetricCard
                   title="Cash on Hand"
                   value={formatCurrency(baseData.cash)}
-                  subtitle={`Runway: ${formatRunway(baseData.runway)}`}
+                  subtitle={`Runway: ${runwayText(baseData.runway)}`}
                   variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
                   metricSource={sharedMetrics.sources['cashOnHand']}
                   lastUpdated={truthScan?.computed_at}
@@ -1639,7 +1660,7 @@ export default function OverviewPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="growth-rate">Monthly Growth Rate</Label>
-                      <span className="text-sm font-mono text-muted-foreground">{assumptions.growthRate}%</span>
+                      <span className="text-sm font-mono text-muted-foreground">{safeToFixed(assumptions.growthRate, 1)}%</span>
                     </div>
                     <Slider
                       id="growth-rate"
@@ -1837,7 +1858,7 @@ export default function OverviewPage() {
             </div>
             <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-1" data-testid="progress-goal-runway" />
             <div className="flex items-center justify-between gap-2 mt-2 text-[11px] text-muted-foreground/60 font-mono">
-              <span data-testid="text-goal-runway-progress">{formatRunway(baseData.runway, 36)} / 36.0 mo</span>
+              <span data-testid="text-goal-runway-progress">{runwayText(baseData.runway, 36)} / 36.0 mo</span>
               <span data-testid="text-goal-runway-pct">{Math.min(Math.round((baseData.runway / 36) * 100), 100)}%</span>
             </div>
           </div>
@@ -2018,7 +2039,9 @@ export default function OverviewPage() {
                   </div>
                   <div className="flex items-baseline space-x-2">
                     <span className="text-2xl font-bold">
-                      {item.metric === 'runway' || item.metric === 'paybackPeriod'
+                      {item.metric === 'runway' && isRunwayProfitable
+                        ? 'Profitable'
+                        : item.metric === 'runway' || item.metric === 'paybackPeriod'
                         ? `${safeToFixed(item.value)} mo`
                         : item.metric === 'ltv_cac' || item.metric === 'burnMultiple'
                         ? safeToFixed(item.value, 1, 'x')
@@ -2220,7 +2243,7 @@ export default function OverviewPage() {
                       <span className="text-sm font-medium">{item.metric}</span>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm font-semibold">
-                          {safeToFixed(item.value)}{item.unit}
+                          {item.display ?? `${safeToFixed(item.value)}${item.unit}`}
                         </span>
                         <Badge 
                           variant={item.status === 'above' ? 'secondary' : item.status === 'median' ? 'secondary' : 'destructive'}
