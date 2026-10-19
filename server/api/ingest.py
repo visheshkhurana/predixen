@@ -766,10 +766,18 @@ async def get_computed_metrics(
         net_burn = fr_val('net_burn') or ts_val('net_burn', 0)
         total_expenses = net_burn + mrr if net_burn > 0 else 0
 
+    # Cash that was never provided (null on the record, absent from the truth
+    # scan) makes runway unknown -- not 0 months, and never an invented figure.
+    cash_provided = (
+        (latest_record is not None and latest_record.cash_balance is not None)
+        or ts_val('cash_balance') is not None
+    )
     if net_burn > 0 and cash > 0:
         runway = min(cash / net_burn, 120)
     elif net_burn <= 0:
         runway = 999
+    elif not cash_provided:
+        runway = None
     else:
         runway = 0
 
@@ -808,6 +816,7 @@ async def get_computed_metrics(
         'mrr': mrr,
         'arr': arr,
         'cashOnHand': cash,
+        'cashProvided': cash_provided,
         'netBurn': net_burn,
         'totalExpenses': total_expenses,
         'runway': runway,
@@ -868,14 +877,11 @@ async def save_financial_baseline(
     
     revenue = float(baseline.monthlyRevenue) if baseline.monthlyRevenue is not None else 0.0
     
-    if cogs_entered is not None and cogs_entered > 0:
-        cogs = float(cogs_entered)
-    else:
-        gm_for_cogs = baseline.grossMargin
-        if gm_for_cogs is not None and 0 < gm_for_cogs <= 1:
-            gm_for_cogs = gm_for_cogs * 100
-        estimated_gross_margin_dec = (gm_for_cogs / 100) if gm_for_cogs is not None else 0.65
-        cogs = revenue * (1 - estimated_gross_margin_dec) if revenue > 0 else 0.0
+    # COGS is what the founder entered -- never invented. The old fallback put
+    # COGS at 35% of revenue whenever grossMargin was absent (the client never
+    # sends it), silently adding burn the founder never reported.
+    cogs = float(cogs_entered) if cogs_entered is not None and cogs_entered > 0 else 0.0
+    cogs_known = cogs_entered is not None and cogs_entered > 0
     
     opex = float(operating) if operating is not None else 0.0
     payroll_val = float(payroll) if payroll is not None else 0.0
@@ -883,17 +889,31 @@ async def save_financial_baseline(
     other_costs = float(other_opex) if other_opex is not None else 0.0
     
     breakdown_total = cogs + payroll_val + marketing_val + opex + other_costs
+    entered_total = (
+        float(baseline.totalMonthlyExpenses)
+        if baseline.totalMonthlyExpenses is not None and baseline.totalMonthlyExpenses > 0
+        else 0.0
+    )
     
     if breakdown_total > 0:
         total_exp = breakdown_total
-    elif baseline.totalMonthlyExpenses is not None and baseline.totalMonthlyExpenses > 0:
-        total_exp = float(baseline.totalMonthlyExpenses)
+        # A total above the itemised buckets: the unexplained part is still
+        # spend, so keep it (as other costs) rather than dropping it.
+        if entered_total > breakdown_total:
+            other_costs += entered_total - breakdown_total
+            total_exp = entered_total
+    elif entered_total > 0:
+        # Only a total was given: use it. Stored as other costs so every reader
+        # that sums the breakdown (all of them, see server/core/burn.py) sees it.
+        total_exp = entered_total
+        other_costs = entered_total
     else:
         total_exp = 0.0
     
-    net_burn = max(0.0, total_exp - revenue)
-    cash_val = float(baseline.cashOnHand) if baseline.cashOnHand is not None else 0.0
-    runway = cash_val / net_burn if net_burn > 0 else 0.0
+    # Signed: negative = cash-flow positive. Never clamp profit into "0 burn".
+    net_burn = total_exp - revenue
+    cash_val = float(baseline.cashOnHand) if baseline.cashOnHand is not None else None
+    runway = (cash_val / net_burn) if (cash_val is not None and net_burn > 0) else None
     
     mom_growth = baseline.monthlyGrowthRate
     headcount = baseline.numberOfEmployees
@@ -910,12 +930,12 @@ async def save_financial_baseline(
     gross_margin_pct = baseline.grossMargin
     if gross_margin_pct is not None and 0 < gross_margin_pct <= 1:
         gross_margin_pct = gross_margin_pct * 100
-    if gross_margin_pct is None and revenue > 0:
+    if gross_margin_pct is None and revenue > 0 and cogs_known:
         gross_margin_pct = ((revenue - cogs) / revenue) * 100
-    elif gross_margin_pct is None:
-        gross_margin_pct = 65.0
+    # Without COGS (or an entered margin) gross margin is unknown -- leave it
+    # null instead of a fabricated 65% / 100%.
 
-    gross_profit = revenue - cogs
+    gross_profit = (revenue - cogs) if cogs_known else None
 
     computed = dict(
         mrr=revenue,
@@ -925,7 +945,7 @@ async def save_financial_baseline(
         operating_income=revenue - total_exp if total_exp else None,
         operating_margin=((revenue - total_exp) / revenue * 100) if revenue > 0 and total_exp else None,
         net_burn=net_burn,
-        runway_months=round(runway, 1) if runway > 0 else None,
+        runway_months=round(runway, 1) if runway is not None else None,
     )
 
     if existing_record:
@@ -1041,8 +1061,10 @@ async def save_financial_baseline(
             updated = True
         
         ts_total_expenses = cogs + opex + payroll_val + marketing_val + other_costs
-        net_burn_val = max(0, ts_total_expenses - revenue)
-        if net_burn_val > 0:
+        # Signed, and written for profitable saves too: skipping it left a stale
+        # positive burn in the scan that the copilot then quoted.
+        net_burn_val = ts_total_expenses - revenue
+        if ts_total_expenses > 0:
             existing_burn = ts_metrics.get("net_burn")
             if isinstance(existing_burn, dict):
                 existing_burn["value"] = float(net_burn_val)
@@ -1059,8 +1081,8 @@ async def save_financial_baseline(
             db.commit()
     
     final_total = cogs + opex + payroll_val + marketing_val + other_costs
-    final_burn = max(0.0, final_total - revenue)
-    final_runway = (cash_val / final_burn) if final_burn > 0 and cash_val > 0 else None
+    final_burn = final_total - revenue
+    final_runway = (cash_val / final_burn) if final_burn > 0 and cash_val is not None and cash_val > 0 else None
     
     logger.info(f"[SAVE] Return: totalExpenses={final_total}, netBurn={final_burn}, runway={final_runway}")
     
@@ -1071,6 +1093,7 @@ async def save_financial_baseline(
         'is_sample': bool(company.is_sample),
         'calculatedMetrics': {
             'netBurnRate': final_burn,
+            'isProfitable': final_total > 0 and final_burn < 0,
             'runwayMonths': round(final_runway, 1) if final_runway else None,
             'totalExpenses': final_total,
             'mrr': revenue,

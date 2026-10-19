@@ -385,6 +385,12 @@ export const api = {
       request<any>(`/companies/${companyId}/metrics/computed`),
   },
 
+  dashboard: {
+    // Real per-period KPI history built from FinancialRecord rows (no mock data).
+    kpis: (companyId: number) =>
+      request<any>(`/dashboard/companies/${companyId}/kpis`),
+  },
+
   truth: {
     run: (companyId: number) =>
       request<any>(`/companies/${companyId}/truth/run`, { method: 'POST' }),

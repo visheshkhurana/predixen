@@ -6,9 +6,13 @@ export interface KPIMetrics {
   arr: number;
   cash_balance: number;
   net_burn: number;
-  runway_months: number;
+  /** null = profitable (see is_profitable) or cash not provided */
+  runway_months: number | null;
+  runway_status?: 'profitable' | 'finite' | 'unknown';
+  is_profitable?: boolean;
   gross_margin: number;
-  churn_rate: number;
+  /** null = no churn data */
+  churn_rate: number | null;
   cac: number;
   ltv: number;
   ltv_cac_ratio: number;

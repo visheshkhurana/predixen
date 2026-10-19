@@ -356,11 +356,39 @@ a product and then ask "what about pricing?", analyze pricing for that specific 
 """
 
 
+def _format_burn_status(burn: Optional[Dict[str, Any]], currency: str = "USD") -> str:
+    """Authoritative burn/runway line for the LLM, with the sign spelled out.
+
+    The model used to see a bare "net_burn" number and, for a profitable
+    company, report it as a positive burn with a finite runway. State the sign
+    and an explicit profitable flag so it cannot flip either.
+    """
+    if not burn or burn.get("net_burn") is None:
+        return ""
+    nb = float(burn["net_burn"])
+    lines = ["\n--- Burn & Runway (AUTHORITATIVE -- quote these, do not recompute) ---"]
+    lines.append(f"  net_burn_monthly: {nb:+,.0f} {currency} (negative = net cash INFLOW)")
+    if burn.get("is_profitable"):
+        lines.append(f"  is_profitable: TRUE -- the company generates {abs(nb):,.0f} {currency}/month net cash.")
+        lines.append("  runway: NOT APPLICABLE (cash-flow positive). Never state a burn amount or a runway in months.")
+    else:
+        lines.append(f"  is_profitable: FALSE -- the company burns {nb:,.0f} {currency}/month net.")
+        if burn.get("runway_months") is not None:
+            lines.append(f"  runway_months: {burn['runway_months']:.1f}")
+        else:
+            lines.append("  runway_months: UNKNOWN (cash balance not provided). Do not estimate it.")
+    return "\n".join(lines)
+
+
 def _build_data_summary(context: Dict[str, Any]) -> str:
     """Build a compact data summary string for the LLM from context pack."""
     parts = []
     company = context.get("company", {})
     parts.append(f"Company: {company.get('name', 'Unknown')} | Industry: {company.get('industry', 'N/A')} | Stage: {company.get('stage', 'N/A')} | Currency: {company.get('currency', 'USD')}")
+
+    burn_line = _format_burn_status(context.get("burn_status"), company.get("currency", "USD"))
+    if burn_line:
+        parts.append(burn_line)
 
     ts = context.get("truth_scan")
     if ts:
@@ -375,11 +403,15 @@ def _build_data_summary(context: Dict[str, Any]) -> str:
         parts.append(f"\n--- Financial History ({len(history)} months, newest first) ---")
         for rec in history:
             period = rec.get("period", "?")
-            line = f"  {period}: rev=${rec.get('revenue', 0):,.0f} payroll=${rec.get('payroll', 0):,.0f} opex=${rec.get('opex', 0):,.0f} cogs=${rec.get('cogs', 0):,.0f} other=${rec.get('other_costs', 0):,.0f} cash=${rec.get('cash_balance', 0):,.0f}"
+            cash_txt = f"${rec['cash_balance']:,.0f}" if rec.get("cash_balance") is not None else "not provided"
+            line = f"  {period}: rev=${rec.get('revenue', 0):,.0f} payroll=${rec.get('payroll', 0):,.0f} marketing=${rec.get('marketing_expense') or 0:,.0f} opex=${rec.get('opex', 0):,.0f} cogs=${rec.get('cogs', 0):,.0f} other=${rec.get('other_costs', 0):,.0f} cash={cash_txt}"
             if rec.get("mrr") is not None:
                 line += f" mrr=${rec['mrr']:,.0f}"
             if rec.get("net_burn") is not None:
-                line += f" net_burn=${rec['net_burn']:,.0f}"
+                # Signed on purpose: negative = cash-flow positive.
+                line += f" net_burn={rec['net_burn']:+,.0f}"
+                if rec.get("is_profitable"):
+                    line += " (PROFITABLE: net cash inflow, no runway limit)"
             if rec.get("runway_months") is not None:
                 line += f" runway={rec['runway_months']:.1f}mo"
             if rec.get("headcount") is not None:
@@ -940,9 +972,12 @@ async def copilot_chat(
                     financial_snapshot.append(f"MRR: ${outputs['mrr']:,.0f}")
                 if outputs.get("cash_balance"):
                     financial_snapshot.append(f"Cash Balance: ${outputs['cash_balance']:,.0f}")
-                if outputs.get("net_burn"):
-                    financial_snapshot.append(f"Net Burn: ${outputs['net_burn']:,.0f}/mo")
-                if outputs.get("runway_months"):
+                _nb = outputs.get("net_burn")
+                if isinstance(_nb, (int, float)) and _nb < 0:
+                    financial_snapshot.append(f"Profitable: net cash inflow ${abs(_nb):,.0f}/mo (no runway limit)")
+                elif _nb:
+                    financial_snapshot.append(f"Net Burn: ${_nb:,.0f}/mo")
+                if outputs.get("runway_months") and not (isinstance(_nb, (int, float)) and _nb < 0):
                     financial_snapshot.append(f"Runway: {outputs['runway_months']:.1f} months")
                 if outputs.get("gross_margin"):
                     financial_snapshot.append(f"Gross Margin: {outputs['gross_margin']:.1f}%")
