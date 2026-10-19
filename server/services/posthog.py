@@ -162,6 +162,11 @@ def sanitize_distinct_id(value: object) -> Optional[str]:
         return None
     if "@" in cleaned:
         return None
+    # optin: is minted here for a lead with no browser id. A client who sends
+    # that prefix did not receive it from us, and it must not be treated as
+    # their browser distinct_id or later aliased onto an account.
+    if cleaned.lower().startswith("optin:"):
+        return None
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in cleaned):
         return None
     user_id = _numeric_user_id(cleaned)
@@ -235,6 +240,10 @@ def alias(*, previous_id: str, distinct_id: str) -> bool:
     properties.alias becomes the canonical id (the one browser identify uses).
     Person processing stays on so the merge is applied.
     """
+    # A client-supplied optin: id is rejected before sanitize, so a later
+    # change to the sanitizer cannot start merging those ids into accounts.
+    if isinstance(previous_id, str) and previous_id.strip().lower().startswith("optin:"):
+        return False
     previous = sanitize_distinct_id(previous_id)
     # The canonical id is the account, which is numeric. The anonymous-only
     # sanitizer would reject it.

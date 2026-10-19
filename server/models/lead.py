@@ -60,5 +60,12 @@ class Lead(Base):
     tags = Column(JSONB, nullable=False, default=list)
     notes = Column(Text, nullable=True)
 
+    # Calculator opt-in. consent is explicit; consent_status stays "pending"
+    # until a double opt-in exists. Monthly tips must not send before that.
+    consent = Column(Boolean, nullable=False, default=False)
+    consent_at = Column(DateTime, nullable=True)
+    source_page = Column(String(200), nullable=True)
+    consent_status = Column(String(20), nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -5,6 +5,25 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from server.api.leads import LeadCreate, _emit_lead_captured, _lead_distinct_id, create_lead
+
+
+class _Headers(dict):
+    def get(self, key, default=None):
+        return super().get(key, default)
+
+
+_request_seq = 0
+
+
+class _Request:
+    def __init__(self, host="founderconsole.ai"):
+        global _request_seq
+        _request_seq += 1
+        self.headers = _Headers({"host": host})
+        self.url = type("U", (), {"hostname": host.split(":")[0]})()
+        self.client = type("C", (), {"host": f"203.0.113.{_request_seq}"})()
+
+
 from server.services import posthog as posthog_svc
 
 
@@ -42,12 +61,14 @@ def test_emit_mirrors_location_source_and_runway():
         capture.assert_called_once()
         event, distinct_id, properties = capture.call_args.args
         assert event == "lead_captured"
-        assert distinct_id == _lead_distinct_id("founder@example.com")
+        assert distinct_id.startswith("optin:")
+        assert distinct_id != _lead_distinct_id("founder@example.com")
+        assert "founder@example.com" not in distinct_id
         assert properties["location"] == "runway-calculator"
         assert properties["source"] == "runway-calculator"
         assert properties["runway_months"] == "4"
         assert properties["created"] is True
-        assert properties["distinct_id_source"] == "email_hash"
+        assert properties["distinct_id_source"] == "anonymous"
 
 
 def test_emit_uses_browser_distinct_id_when_the_client_sends_one():
@@ -65,7 +86,7 @@ def test_emit_uses_browser_distinct_id_when_the_client_sends_one():
         assert properties["distinct_id_source"] == "browser"
 
 
-def test_emit_falls_back_to_hash_for_email_or_overlong_distinct_id():
+def test_emit_uses_anonymous_id_for_email_or_overlong_distinct_id():
     emailed = LeadCreate(email="founder@example.com", distinct_id="founder@example.com")
     too_long = LeadCreate(email="founder@example.com", distinct_id="x" * 201)
     blank = LeadCreate(email="founder@example.com", distinct_id="   ")
@@ -74,8 +95,10 @@ def test_emit_falls_back_to_hash_for_email_or_overlong_distinct_id():
     assert blank.distinct_id is None
     with patch("server.api.leads.posthog_capture") as capture:
         _emit_lead_captured(emailed, created=True)
-        assert capture.call_args.args[1] == _lead_distinct_id("founder@example.com")
-        assert capture.call_args.args[2]["distinct_id_source"] == "email_hash"
+        distinct_id = capture.call_args.args[1]
+        assert distinct_id.startswith("optin:")
+        assert distinct_id != _lead_distinct_id("founder@example.com")
+        assert capture.call_args.args[2]["distinct_id_source"] == "anonymous"
 
 
 def test_emit_omits_runway_when_absent():
@@ -129,17 +152,18 @@ def test_create_lead_queues_capture_after_commit():
     data = LeadCreate(
         email="founder@example.com",
         source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
         runway_months="6",
-        runway_date="March 2027",
+        runway_date="2027-03-01",
     )
     background = MagicMock()
     db = MagicMock()
     db.query.return_value.filter.return_value.one_or_none.return_value = None
 
-    result = create_lead(data, background, db)
+    result = create_lead(data, background, _Request(), db)
 
-    assert result["status"] == "ok"
-    assert result["created"] is True
+    assert result == {"status": "ok"}
     db.commit.assert_called_once()
     queued = [call.args[0] for call in background.add_task.call_args_list]
     assert _emit_lead_captured in queued
@@ -149,13 +173,15 @@ def test_create_lead_keeps_browser_distinct_id_for_the_queued_emit():
     data = LeadCreate(
         email="founder@example.com",
         source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
         distinct_id="anon-browser",
     )
     background = MagicMock()
     db = MagicMock()
     db.query.return_value.filter.return_value.one_or_none.return_value = None
 
-    create_lead(data, background, db)
+    create_lead(data, background, _Request(), db)
 
     emit_call = next(
         call for call in background.add_task.call_args_list if call.args[0] is _emit_lead_captured
@@ -165,14 +191,20 @@ def test_create_lead_keeps_browser_distinct_id_for_the_queued_emit():
 
 def test_create_lead_emits_on_repeat_submission():
     existing = MagicMock()
-    data = LeadCreate(email="founder@example.com", source="runway-calculator")
+    existing.consent_status = None
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
+    )
     background = MagicMock()
     db = MagicMock()
     db.query.return_value.filter.return_value.one_or_none.return_value = existing
 
-    result = create_lead(data, background, db)
+    result = create_lead(data, background, _Request(), db)
 
-    assert result["created"] is False
+    assert result == {"status": "ok"}
     queued = [call.args[0] for call in background.add_task.call_args_list]
     assert _emit_lead_captured in queued
 
@@ -182,14 +214,19 @@ def test_create_lead_does_not_emit_when_commit_fails():
     from sqlalchemy.exc import SQLAlchemyError
     import pytest
 
-    data = LeadCreate(email="founder@example.com", source="runway-calculator")
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
+    )
     background = MagicMock()
     db = MagicMock()
     db.query.return_value.filter.return_value.one_or_none.return_value = None
     db.commit.side_effect = SQLAlchemyError("down")
 
     with pytest.raises(HTTPException) as exc:
-        create_lead(data, background, db)
+        create_lead(data, background, _Request(), db)
 
     assert exc.value.status_code == 503
     background.add_task.assert_not_called()
