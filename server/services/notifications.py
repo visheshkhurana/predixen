@@ -999,7 +999,7 @@ AI COPILOT: CONSULTANT-GRADE UPGRADE
 
 - Real-Time Web Research: Ask about competitors, market benchmarks, or industry trends and the Copilot automatically pulls live market data via Perplexity. 8 specialized search types: competitor analysis, benchmark lookup, market sizing, COGS research, market entry, pricing research, trend analysis, and general research.
 
-- Business Context Engine: The Copilot now pulls data from ALL your sources - Truth Scan, financial records, uploaded metrics, simulations, and all 37+ connected services (Stripe, Shopify, QuickBooks, HubSpot, etc.). It sees your complete business picture.
+- Business Context Engine: The Copilot now pulls data from ALL your sources - Truth Scan, financial records, uploaded metrics, simulations, and all 34+ connected services (Stripe, Shopify, QuickBooks, HubSpot, etc.). It sees your complete business picture.
 
 - Data Gap Detection: The Copilot identifies what data is missing and suggests which connectors to link. Orange badges in the UI show exactly what would improve your analysis quality.
 
@@ -1086,7 +1086,7 @@ Visit: https://founderconsole.ai
                     
                     <div style="margin-bottom: 18px; padding-left: 16px; border-left: 3px solid #22c55e;">
                         <h4 style="color: #e2e8f0; font-size: 15px; margin: 0 0 6px; font-weight: 600;">Business Context Engine</h4>
-                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">Pulls from ALL your data sources - Truth Scan, financials, metrics, simulations, and all 37+ connectors (Stripe, Shopify, QuickBooks, HubSpot, etc.).</p>
+                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">Pulls from ALL your data sources - Truth Scan, financials, metrics, simulations, and all 34+ connectors (Stripe, Shopify, QuickBooks, HubSpot, etc.).</p>
                     </div>
                     
                     <div style="padding-left: 16px; border-left: 3px solid #f59e0b;">

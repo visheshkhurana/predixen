@@ -31,9 +31,9 @@ interface PageMeta {
 
 const landingFaqs = [
   { q: "What is FounderConsole?", a: "FounderConsole is an AI-powered financial intelligence platform for startups. It connects your financial data, builds a digital twin of your company, runs Monte Carlo simulations, and provides AI-powered strategic recommendations." },
-  { q: "Is FounderConsole free?", a: "Yes. All features are free during the public beta, including Monte Carlo simulations, AI copilot, cap table management, 37 data connectors, and board deck generation. No credit card is required." },
+  { q: "Is FounderConsole free?", a: "Yes. All features are free during the public beta, including Monte Carlo simulations, AI copilot, cap table management, 34 data connectors, and board deck generation. No credit card is required." },
   { q: "How does FounderConsole help with fundraising?", a: "FounderConsole includes a Fundraising OS with cap table management, dilution modeling, investor CRM, SAFE conversion modeling, and exit waterfall analysis." },
-  { q: "What data sources can I connect?", a: "FounderConsole supports 37 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more." },
+  { q: "What data sources can I connect?", a: "FounderConsole supports 34 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more." },
   { q: "What is a Monte Carlo simulation?", a: "Monte Carlo simulation runs your financial model thousands of times with slightly different inputs each time, producing a probability distribution instead of a single forecast." },
   { q: "How is this different from a spreadsheet?", a: "Spreadsheets give you one forecast. FounderConsole runs thousands of scenarios, accounts for uncertainty, connects to live data, and uses AI to generate insights." },
   { q: "What is a startup digital twin?", a: "A digital twin is a continuously updated virtual representation of your company that reflects your current financial reality without manual updates." },
@@ -314,7 +314,7 @@ function buildPricingBodyContent(): string {
 <h1>Pricing</h1>
 <p>Every FounderConsole feature is free during the public beta. No credit card is required to start, and there is no trial clock running in the background.</p>
 <h2>What is included</h2>
-<p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, cap table and dilution modelling, the fundraising CRM, board deck generation, and all 37 data connectors. See the full list on <a href="/features">features</a>.</p>
+<p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, cap table and dilution modelling, the fundraising CRM, board deck generation, and all 34 data connectors. See the full list on <a href="/features">features</a>.</p>
 <h2>What happens after the beta</h2>
 <p>Paid tiers will be introduced once the beta ends. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
 <h2>Free tools that need no account at all</h2>
@@ -396,9 +396,9 @@ function buildFeaturesBodyContent(): string {
 </ul>
 
 <h2>Data Connectors</h2>
-<p><strong>Connect everything. Auto-sync.</strong> 37 real OAuth2 integrations with the tools founders already use. QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and more. No CSV imports or screen scraping required.</p>
+<p><strong>Connect everything. Auto-sync.</strong> 34 real OAuth2 integrations with the tools founders already use. QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and more. No CSV imports or screen scraping required.</p>
 <ul>
-<li>37 integrations with one-click OAuth connections</li>
+<li>34 integrations with one-click OAuth connections</li>
 <li>QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid supported</li>
 <li>Auto-sync keeps your data fresh without manual intervention</li>
 <li>Multi-currency handling across all connected sources</li>
@@ -429,7 +429,7 @@ function buildProductBodyContent(): string {
 <ul>
 <li><strong>Monte Carlo P10/P50/P90</strong> — thousands of runs produce a runway distribution instead of one forecast.</li>
 <li><strong>AI copilot</strong> — strategic questions in plain English, grounded in your connected financials.</li>
-<li><strong>Connectors</strong> — 37 data connectors for the tools founders already use, or upload a CSV so the model stays current.</li>
+<li><strong>Connectors</strong> — 34 data connectors for the tools founders already use, or upload a CSV so the model stays current.</li>
 <li><strong>Fundraising OS</strong> — cap table, dilution modeling, and investor-ready materials in one place.</li>
 </ul>
 <h2>Free during early access</h2>
@@ -444,7 +444,7 @@ function buildHowItWorksBodyContent(): string {
 <h1>How FounderConsole works</h1>
 <p>FounderConsole turns connected financial data into a range you can defend. This page walks through the product in the order it actually runs: connect or upload data, validate with Truth Scan, simulate with Monte Carlo P10/P50/P90, ask the AI copilot, then use fundraising tools. It is a capability walkthrough — not a timeline, a success rate, or a customer story.</p>
 <h2>1. Connect or upload data</h2>
-<p>Link the tools founders already use, or upload a CSV. FounderConsole has 37 data connectors, including QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid. You can also start without connecting anything: try the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a> with no account.</p>
+<p>Link the tools founders already use, or upload a CSV. FounderConsole has 34 data connectors, including QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid. You can also start without connecting anything: try the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a> with no account.</p>
 <h2>2. Truth Scan validation</h2>
 <p>Truth Scan is multi-stage data validation. It catches errors, inconsistencies, and anomalies before numbers reach a board deck. Z-score anomaly detection flags outliers, and confidence scoring quantifies how reliable each metric is. Automated reconciliation between accounting and bank feeds is part of the same validation path.</p>
 <h2>3. Monte Carlo simulation (P10/P50/P90)</h2>
@@ -532,7 +532,7 @@ function buildAlternativesBodyContent(): string {
 <ul>
 <li><strong>Monte Carlo with P10/P50/P90</strong> — thousands of runs produce a runway distribution instead of one cash-out date.</li>
 <li><strong>AI copilot</strong> — strategic questions in plain English, grounded in your connected financials.</li>
-<li><strong>37 data connectors</strong> — or a CSV of monthly actuals so you can reconstruct a model after an acquired tool goes away.</li>
+<li><strong>34 data connectors</strong> — or a CSV of monthly actuals so you can reconstruct a model after an acquired tool goes away.</li>
 </ul>
 <p>The product overview is on <a href="/product">product</a>. The deeper catalog is on <a href="/features">features</a>. Every feature is free during early access — see <a href="/pricing">pricing</a>.</p>
 <h2>Try a free tool first</h2>
@@ -595,7 +595,7 @@ const faqSections = [
   {
     title: "Getting Started",
     items: [
-      { q: "What is FounderConsole?", a: "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 37 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions." },
+      { q: "What is FounderConsole?", a: "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 34 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions." },
       { q: "How does FounderConsole help founders?", a: "FounderConsole helps founders by transforming financial uncertainty into measurable probability. Instead of relying on gut feelings, you get Monte Carlo simulations that show the range of possible outcomes, an AI copilot that answers financial questions using your real data, automated data validation (Truth Scan) that catches errors before they reach your board, and strategic briefings that explain your risks and opportunities in plain English." },
       { q: "What metrics does FounderConsole track?", a: "FounderConsole tracks over 24 financial health metrics including MRR, ARR, runway, burn rate, CAC, LTV, LTV:CAC ratio, churn rate, gross margin, NRR, ARPU, active customers, and headcount. Each metric includes a confidence score showing how reliable the data is." },
       { q: "Is FounderConsole free?", a: "Yes — FounderConsole is completely free while we're in early access. Every feature is unlocked and no credit card is required. Planned pricing after early access is shown on the pricing page; we'll give plenty of notice before anything changes." },
@@ -841,7 +841,7 @@ function getPageMeta(path: string): PageMeta | null {
   if (path === "/" || path === "") {
     return {
       title: "FounderConsole — AI Decision Simulator for Founders",
-      description: "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 37 data connectors — replace spreadsheets with simulations.",
+      description: "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 34 data connectors — replace spreadsheets with simulations.",
       canonical: SITE_URL + "/",
       bodyContent: buildLandingBodyContent(),
       jsonLd: [
@@ -852,7 +852,7 @@ function getPageMeta(path: string): PageMeta | null {
           url: SITE_URL,
           logo: OG_IMAGE,
           description: "AI-powered financial intelligence platform for startups.",
-          sameAs: ["https://twitter.com/founderconsole", "https://linkedin.com/company/founderconsole", "https://github.com/founderconsole"],
+          sameAs: ["https://twitter.com/founderconsole", "https://linkedin.com/company/founderconsole"],
         },
         {
           "@context": "https://schema.org",
@@ -862,7 +862,7 @@ function getPageMeta(path: string): PageMeta | null {
           operatingSystem: "Web",
           url: SITE_URL,
           offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-          featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin",
+          featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 34 Data Connectors, Digital Twin",
         },
         {
           "@context": "https://schema.org",
@@ -880,14 +880,14 @@ function getPageMeta(path: string): PageMeta | null {
   if (path === "/features") {
     return {
       title: "Features — Simulation, AI Copilot, Fundraising CRM & More | FounderConsole",
-      description: "Monte Carlo simulation engine, multi-LLM AI copilot, Truth Scan data validation, Fundraising OS with CRM, 37 data connectors, and AI strategic briefings.",
+      description: "Monte Carlo simulation engine, multi-LLM AI copilot, Truth Scan data validation, Fundraising OS with CRM, 34 data connectors, and AI strategic briefings.",
       canonical: SITE_URL + "/features",
       bodyContent: buildFeaturesBodyContent(),
       jsonLd: [{
         "@context": "https://schema.org",
         "@type": "WebPage",
         name: "FounderConsole Features",
-        description: "Complete feature overview of FounderConsole: Monte Carlo simulations, AI copilot, data validation, fundraising tools, and 37 data connectors.",
+        description: "Complete feature overview of FounderConsole: Monte Carlo simulations, AI copilot, data validation, fundraising tools, and 34 data connectors.",
         url: SITE_URL + "/features",
         isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
       }],

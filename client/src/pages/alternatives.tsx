@@ -88,7 +88,7 @@ export default function AlternativesPage() {
             <strong className="text-foreground">AI copilot</strong> — strategic questions in plain English, grounded in your connected financials.
           </li>
           <li>
-            <strong className="text-foreground">37 data connectors</strong> — or a CSV of monthly actuals so you can reconstruct a model after an acquired tool goes away.
+            <strong className="text-foreground">34 data connectors</strong> — or a CSV of monthly actuals so you can reconstruct a model after an acquired tool goes away.
           </li>
         </ul>
         <p className="mt-3 text-muted-foreground">
