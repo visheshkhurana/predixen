@@ -162,32 +162,6 @@ def _runway_email_html(data: LeadCreate) -> str:
     """
 
 
-# Burn multiple, dilution, LTV/CAC, and default-alive say "check your inbox"
-# but they have no runway fields. Their result is the notes string. The page
-# URL is fixed here so the message cannot carry a caller-supplied link.
-_NOTES_RESULT_EMAILS = {
-    "burn-multiple": ("Your burn multiple", "https://founderconsole.ai/tools/burn-multiple"),
-    "dilution": ("Your dilution", "https://founderconsole.ai/tools/dilution"),
-    "ltv-cac": ("Your LTV to CAC", "https://founderconsole.ai/tools/ltv-cac"),
-    "default-alive": ("Your default-alive result", "https://founderconsole.ai/default-alive"),
-}
-
-
-def _notes_result_html(data: LeadCreate) -> str:
-    title, page = _NOTES_RESULT_EMAILS.get(
-        data.source or "",
-        ("Your result", "https://founderconsole.ai"),
-    )
-    return f"""
-    <div style="font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#1a1d24;max-width:520px">
-      <h2 style="margin:0 0 4px;font-size:20px">{_esc(title)}</h2>
-      <p style="margin:0 0 16px">{_esc(data.notes)}</p>
-      <p style="margin:0 0 8px"><a href="{_esc(page)}" style="color:#2563eb">Open the calculator</a></p>
-      {_result_email_footer()}
-    </div>
-    """
-
-
 def consent_is_recorded(email: str) -> bool:
     """True only when the committed row has consent and a server timestamp.
 
@@ -220,27 +194,15 @@ async def _send_runway_email(data: LeadCreate) -> None:
     try:
         from server.email.service import send_email
 
-        if data.runway_months and data.runway_date:
-            subject = f"Your runway: {data.runway_months} months"
-            html_content = _runway_email_html(data)
-            campaign = "runway-calculator"
-        else:
-            title, _page = _NOTES_RESULT_EMAILS.get(
-                data.source or "",
-                ("Your calculator result", ""),
-            )
-            subject = title
-            html_content = _notes_result_html(data)
-            campaign = data.source if data.source in _NOTES_RESULT_EMAILS else "calculator"
-        subject = subject.replace("\r", "").replace("\n", "")
+        subject = f"Your runway: {data.runway_months} months".replace("\r", "").replace("\n", "")
         await send_email(
             to=str(data.email),
             subject=subject,
-            html_content=html_content,
-            campaign=campaign,
+            html_content=_runway_email_html(data),
+            campaign="runway-calculator",
         )
     except Exception:
-        logger.exception("[leads] could not email the calculator result")
+        logger.exception("[leads] could not email the runway result")
 
 
 def _lead_distinct_id(email: str) -> str:
@@ -422,10 +384,10 @@ def create_lead(
     Consent has to be true and name the page. The row is stored
     consent_status=pending. No double opt-in email is sent: see
     MARKETING_OPT_IN_PENDING. The result email is the result they asked for,
-    not the monthly tips. Runway fields queue the runway message. Burn
-    multiple, dilution, LTV/CAC, and default-alive queue the notes shown on
-    the page. Either way it is queued only after the consent row commits, and
-    the sender checks that row again before Resend. The public body is always
+    not the monthly tips. It is queued only when runway_months and runway_date
+    are present, only after the consent row commits, and the sender checks
+    that row again before Resend. Burn multiple, dilution, LTV/CAC, and
+    default-alive do not queue a message. The public body is always
     {"status": "ok"}. The address is not sent to an LLM.
     """
     if lead_rate_limited(lead_client_key(request)):
@@ -479,8 +441,6 @@ def create_lead(
     # visible failure.
     background.add_task(_emit_lead_captured, data, created, host)
     if data.runway_months and data.runway_date:
-        background.add_task(_send_runway_email, data)
-    elif (data.source or "") in _NOTES_RESULT_EMAILS and (data.notes or "").strip():
         background.add_task(_send_runway_email, data)
 
     # One body for a new row, a pending row, and a confirmed row. created and

@@ -370,6 +370,7 @@ export default function LtvCacPage() {
                 source="ltv-cac"
                 sourcePage="/tools/ltv-cac"
                 plan="ltv-cac"
+                resultByEmail={false}
                 visible={result.outcome !== "invalid" && result.ltv !== null}
                 notes={`LTV ${result.ltv === null ? "n/a" : formatCurrency(result.ltv)}, CAC ${result.cac === null ? "n/a" : formatCurrency(result.cac)}, ratio ${result.ratio === null ? "n/a" : `${result.ratio.toFixed(2)}x`}.`}
               />

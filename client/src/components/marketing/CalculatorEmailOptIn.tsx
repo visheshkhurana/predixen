@@ -30,6 +30,12 @@ export type CalculatorEmailOptInProps = {
   trackExtra?: Record<string, TrackValue>;
   /** False until the calculator is showing a result. */
   visible?: boolean;
+  /**
+   * True when this page queues a result email. Burn multiple, dilution,
+   * LTV/CAC, and default-alive do not, so their success line must not
+   * promise an inbox.
+   */
+  resultByEmail?: boolean;
   className?: string;
   inputClassName?: string;
 };
@@ -52,6 +58,7 @@ export function CalculatorEmailOptIn({
   monthlyBurn,
   trackExtra,
   visible = true,
+  resultByEmail = true,
   className,
   inputClassName,
 }: CalculatorEmailOptInProps) {
@@ -108,8 +115,9 @@ export function CalculatorEmailOptIn({
         <div className="flex items-start gap-3 py-2" data-testid="text-email-sent">
           <Check className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
           <p className="text-sm text-foreground">
-            Check your inbox for this result. Monthly founder finance tips are
-            pending and are not sent until you confirm. Unsubscribe any time.
+            {resultByEmail
+              ? "Check your inbox for this result. Monthly founder finance tips are pending and are not sent until you confirm. Unsubscribe any time."
+              : "We'll keep you posted. Monthly founder finance tips are pending and are not sent until you confirm. Unsubscribe any time."}
           </p>
         </div>
       ) : (

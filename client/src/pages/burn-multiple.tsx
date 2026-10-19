@@ -409,6 +409,7 @@ export default function BurnMultiplePage() {
                 source="burn-multiple"
                 sourcePage="/tools/burn-multiple"
                 plan="burn-multiple"
+                resultByEmail={false}
                 visible={result.outcome !== "invalid"}
                 notes={`Burn multiple ${result.multiple === null ? "n/a" : `${result.multiple.toFixed(2)}x`}. Net new ARR ${formatCurrency(result.netNewArr)}, net burn ${formatCurrency(result.netBurn)}. ${result.reason ?? ""}`.trim()}
               />

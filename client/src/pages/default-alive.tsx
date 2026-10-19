@@ -348,6 +348,7 @@ export default function DefaultAlivePage() {
                 source="default-alive"
                 sourcePage="/default-alive"
                 plan="default-alive"
+                resultByEmail={false}
                 notes={`Verdict ${alive ? "default alive" : "default dead"}. Cash ${cash}, monthly revenue ${revenue}, monthly expenses ${expenses}, growth ${growthRate}%/mo${includeExpenseGrowth ? `, expense growth ${expenseGrowth}%/mo` : ""}.`}
               />
 

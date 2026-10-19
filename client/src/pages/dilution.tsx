@@ -370,6 +370,7 @@ export default function DilutionPage() {
                 source="dilution"
                 sourcePage="/tools/dilution"
                 plan="dilution"
+                resultByEmail={false}
                 visible={result.outcome !== "invalid"}
                 notes={`Dilution ${result.outcome}. Founder ${result.founderPct === null ? "n/a" : formatPct(result.founderPct)}, investor ${result.investorPct === null ? "n/a" : formatPct(result.investorPct)}.`}
               />

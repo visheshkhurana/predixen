@@ -7,7 +7,6 @@ only a transactional sender here, with no lead double opt-in to reuse.
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from pathlib import Path
 
@@ -23,7 +22,6 @@ from server.api.leads import (
     MARKETING_OPT_IN_PENDING,
     LeadCreate,
     _emit_lead_captured,
-    _notes_result_html,
     _runway_email_html,
     _send_runway_email,
     create_lead,
@@ -327,40 +325,42 @@ def test_response_body_is_identical_for_new_pending_and_confirmed():
     assert "consent_status" not in new
 
 
-def test_four_calculators_queue_an_escaped_result_email():
+def test_four_calculators_do_not_queue_a_result_email():
     pages = {
-        "burn-multiple": "/tools/burn-multiple",
-        "dilution": "/tools/dilution",
-        "ltv-cac": "/tools/ltv-cac",
-        "default-alive": "/default-alive",
+        "burn-multiple": REPO / "client/src/pages/burn-multiple.tsx",
+        "dilution": REPO / "client/src/pages/dilution.tsx",
+        "ltv-cac": REPO / "client/src/pages/ltv-cac.tsx",
+        "default-alive": REPO / "client/src/pages/default-alive.tsx",
     }
-    for source, page in pages.items():
+    leads_src = (REPO / "server/api/leads.py").read_text()
+    assert "_notes_result_html" not in leads_src
+    assert "_NOTES_RESULT_EMAILS" not in leads_src
+    assert leads_src.count("add_task(_send_runway_email") == 1
+    opt_in = OPT_IN.read_text()
+    assert "We'll keep you posted" in opt_in
+    assert "Check your inbox for this result" in opt_in
+    for source, path in pages.items():
+        src = path.read_text()
+        assert "resultByEmail={false}" in src
+        assert "Check your inbox" not in src
+        assert "send_email" not in src
         background = MagicMock()
-        db = _db_for_new_lead()
-        notes = f"{source} result 2 < 3 <img src=x onerror=alert(1)>"
         result = create_lead(
             _consented(
                 email=f"{source}@example.com",
                 source=source,
-                source_page=page,
+                source_page=f"/{source}",
                 plan=source,
-                notes=notes,
+                notes=f"{source} result 2.5x",
             ),
             background,
             _Request(),
-            db,
+            _db_for_new_lead(),
         )
         assert result == {"status": "ok"}
         queued = [call.args[0] for call in background.add_task.call_args_list]
-        assert queued.count(_send_runway_email) == 1
-        html = _notes_result_html(
-            _consented(source=source, source_page=page, notes=notes)
-        )
-        assert "<img" not in html
-        assert "&lt;img src=x onerror=alert(1)&gt;" in html
-        assert "pending" in html
-        assert "hello@founderconsole.ai" in html
-        assert "?" not in "".join(re.findall(r'href="([^"]*)"', html))
+        assert _send_runway_email not in queued
+        assert _emit_lead_captured in queued
 
 
 def test_commit_failure_still_hides_the_database_error():
