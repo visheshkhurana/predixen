@@ -23,8 +23,10 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // One stored switch: email_enabled is the opt-out every non-account email
-  // checks (and the unsubscribe link sets). Nothing reads per-type toggles yet.
+  // email_enabled is the opt-out every non-account email checks, and the
+  // unsubscribe link sets. The monthly digest is not gated by it: it has its
+  // own switch on the dashboard (server/api/digest.py reads monthly_digest),
+  // though an unsubscribe clears that flag too.
   const { data: notificationPrefs, isLoading: prefsLoading } = useNotificationPreferences();
   const updateNotificationPrefs = useUpdateNotificationPreferences();
   const productEmailsOn = notificationPrefs?.email_enabled ?? true;
@@ -172,8 +174,9 @@ export default function SettingsPage() {
             <div className="space-y-0.5">
               <p className="text-sm font-medium">Product emails</p>
               <p className="text-xs text-muted-foreground">
-                Onboarding tips, activity summaries, the monthly digest and product updates.
-                Password, verification and receipt emails are always sent.
+                Onboarding tips, activity summaries and product updates. The monthly
+                digest has its own switch on the dashboard. Password, verification and
+                receipt emails are always sent.
               </p>
             </div>
             <Switch
