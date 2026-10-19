@@ -430,7 +430,7 @@ export default function DilutionPage() {
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
               <Link
-                href="/auth?tab=register"
+                href="/signup"
                 onClick={() => trackFunnel("cta_click", { location: "dilution" })}
               >
                 Connect Your Real Data

@@ -32,7 +32,7 @@ const REQUIRED_HREFS = [
   "/tools/runway-calculator",
   "/survival-simulator",
   "/default-alive",
-  "/auth",
+  "/signup",
 ];
 
 test("/customers SSR body is non-empty and links evaluation destinations", () => {

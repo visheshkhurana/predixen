@@ -37,13 +37,18 @@ silently meaningless:
    is more dangerous than no monitor: it converts an untested system into a
    reassuring one.
 
-Spoofing the client IP works because the app runs behind a proxy with
-`trust proxy` on, and its clientIp() takes the left-most public address in
-X-Forwarded-For — the value we send. The edge appends its own hop to the right,
-so ours stays left-most and wins.
+Tier 2 works by claiming the disallowed-country address in X-Forwarded-For.
+That only holds where no edge is in front: the Railway edge appends the address
+it saw to the RIGHT of whatever the caller sent, and the app now reads the
+right-most entry (the edge's) — a forged header at the public URL is ignored,
+by design. So the control and tier-2 probes talk to the app directly on
+loopback, where the socket is the trusted hop and the header is the client
+address. Same middleware, same gate, same dataset; tier 1 still probes the
+public URL through the edge.
 
 Env:
-  APP_BASE_URL          site to probe (default https://founderconsole.ai)
+  APP_BASE_URL          site to probe for tier 1 (default https://founderconsole.ai)
+  GEO_PROBE_BASE_URL    direct app address for tier 2 (default http://127.0.0.1:$PORT)
   GEO_PROBE_IP          disallowed-country IP for tier 2 (default 46.4.36.44, DE)
   CRAWLER_ALERT_EMAIL   where failures are emailed
   CRAWLER_HEALTH_ENABLED=false   disable the loop entirely
@@ -62,6 +67,18 @@ import httpx
 logger = logging.getLogger(__name__)
 
 SITE = os.environ.get("APP_BASE_URL", "https://founderconsole.ai").rstrip("/")
+
+
+def direct_base() -> str:
+    """The app's own address, for probes that must not pass through the edge.
+
+    Read at call time, not import time: Express rewrites PORT if the request
+    port is taken (`server/index.ts` retries up to PORT_RETRY_ATTEMPTS) and
+    this loop starts a minute after boot.
+    """
+    return os.environ.get(
+        "GEO_PROBE_BASE_URL", f"http://127.0.0.1:{os.environ.get('PORT', '5000')}"
+    ).rstrip("/")
 
 # Hetzner, Germany. Any stable address outside GEO_ALLOWED_COUNTRIES works; the
 # control probe re-verifies the choice on every run rather than trusting it, so
@@ -138,21 +155,25 @@ class HealthReport:
         }
 
 
-def _get(path: str, ua: str, xff: str | None = None, timeout: float = 15.0) -> tuple[int, str | None]:
+def _get(
+    path: str, ua: str, xff: str | None = None, base: str | None = None, timeout: float = 15.0
+) -> tuple[int, str | None]:
     headers = {"User-Agent": ua}
     if xff:
         headers["X-Forwarded-For"] = xff
     try:
-        resp = httpx.get(f"{SITE}{path}", headers=headers, timeout=timeout, follow_redirects=True)
+        resp = httpx.get(f"{base or SITE}{path}", headers=headers, timeout=timeout, follow_redirects=True)
         return resp.status_code, None
     except Exception as exc:  # noqa: BLE001 — a failed probe is a finding, not a crash
         return 0, str(exc)
 
 
-def _run_tier(probes: Iterable[tuple[str, str, str]], tier: str, xff: str | None) -> list[ProbeResult]:
+def _run_tier(
+    probes: Iterable[tuple[str, str, str]], tier: str, xff: str | None, base: str | None = None
+) -> list[ProbeResult]:
     results: list[ProbeResult] = []
     for label, ua, path in probes:
-        status, error = _get(path, ua, xff)
+        status, error = _get(path, ua, xff, base=base)
         results.append(ProbeResult(label, path, status, status == 200, tier, error))
     return results
 
@@ -161,13 +182,15 @@ def check_crawler_health() -> HealthReport:
     """Run both tiers once. Blocking; call via asyncio.to_thread."""
     results = _run_tier(PROBES, "availability", None)
 
-    # Control first — it decides whether tier 2 means anything.
-    control_status, control_error = _get("/", BROWSER_UA, GEO_PROBE_IP)
+    # Control first — it decides whether tier 2 means anything. It goes to the
+    # app directly (see direct_base): the forged header is only the client
+    # address when no edge appends to it.
+    control_status, control_error = _get("/", BROWSER_UA, GEO_PROBE_IP, base=direct_base())
     gate_active = control_status == 403
 
     note = ""
     if gate_active:
-        results += _run_tier(PROBES, "geo-exemption", GEO_PROBE_IP)
+        results += _run_tier(PROBES, "geo-exemption", GEO_PROBE_IP, base=direct_base())
     else:
         note = (
             f"Geo-exemption tier SKIPPED: control probe (browser UA from {GEO_PROBE_IP}) "

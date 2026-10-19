@@ -31,9 +31,13 @@ const footerProduct = [
   { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "/faq" },
   { label: "Demo", href: "/demo" },
-  // HAG-236: /signup has no form and no SSO, so the footer's "Get started" was a
-  // dead end. Point it at the real registration form, like every other signup CTA.
-  { label: "Get started", href: "/auth?tab=register" },
+  // HAG-236 pointed this at the real registration form; HAG-449 points it at
+  // /signup, which renders that same form (register tab) from a prerendered page
+  // that reaches first paint in 2.8 s against 8.4 s for the /auth shell.
+  { label: "Get started", href: "/signup" },
+  // HAG-449: the hub page exists but nothing linked to it, so a visitor could
+  // reach one calculator and never discover the other six free tools.
+  { label: "Free Tools", href: "/tools" },
   { label: "Runway Calculator", href: "/tools/runway-calculator" },
   { label: "Survival Simulator", href: "/survival-simulator" },
   // HAG-236: signup.tsx was the only inbound link to /default-alive in the repo.
@@ -104,11 +108,15 @@ function Header() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
+          {/* HAG-449 follow-up: /demo has no video, so "Watch Demo" was a promise
+              the page could not keep and the click cost a second hop through a
+              page that explained itself. The route below opens the sample
+              workspace directly. */}
           <Button variant="outline" size="sm" asChild data-testid="button-watch-demo">
-            <Link href="/demo">See the Demo</Link>
+            <Link href="/demo/enter">Live Demo</Link>
           </Button>
           <Button size="sm" asChild data-testid="button-get-started">
-            <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "navbar" })}>Get Started Free</Link>
+            <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "navbar" })}>Get Started Free</Link>
           </Button>
         </div>
 
@@ -145,10 +153,10 @@ function Header() {
               </nav>
               <div className="mt-8 flex flex-col gap-2">
                 <Button variant="outline" asChild data-testid="button-mobile-watch-demo">
-                  <Link href="/demo" onClick={() => setOpen(false)}>See the Demo</Link>
+                  <Link href="/demo/enter" onClick={() => setOpen(false)}>Live Demo</Link>
                 </Button>
                 <Button asChild data-testid="button-mobile-get-started">
-                  <Link href="/auth?tab=register" onClick={() => { setOpen(false); trackFunnel("cta_click", { location: "mobile-menu" }); }}>Get Started Free</Link>
+                  <Link href="/signup" onClick={() => { setOpen(false); trackFunnel("cta_click", { location: "mobile-menu" }); }}>Get Started Free</Link>
                 </Button>
               </div>
             </SheetContent>
@@ -266,7 +274,7 @@ function MobileStickyCTA() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[9998] border-t bg-background/95 backdrop-blur-md p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden" data-testid="mobile-sticky-cta">
       <Button className="w-full" size="lg" asChild>
-        <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "mobile-sticky" })}>Get Started Free</Link>
+        <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "mobile-sticky" })}>Get Started Free</Link>
       </Button>
     </div>
   );

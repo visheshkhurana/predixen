@@ -87,7 +87,7 @@ test("every /runway/<slug> page links the other 7 industries and keeps E10.1", (
         `${industry.slug} must keep free-tool href ${tool.href}`,
       );
     }
-    assert.ok(body.includes('href="/auth"'), `${industry.slug} must keep /auth`);
+    assert.ok(body.includes('href="/signup"'), ` must keep /signup`);
 
     const siblings = RUNWAY_INDUSTRIES.filter((i) => i.slug !== industry.slug);
     assert.equal(siblings.length, 7);
