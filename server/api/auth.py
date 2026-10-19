@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Optional
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import timedelta, datetime
 from server.core.db import get_db
@@ -102,10 +104,40 @@ def _issue_tokens(response: Response, db: Session, user_id: int):
     return access_token
 
 
+def _check_password_strength(v: str) -> str:
+    """Same rule for register, reset and change: 8+ chars with a number."""
+    if len(v) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    if not any(c.isdigit() for c in v):
+        raise ValueError("Password must contain at least one number")
+    return v
+
+
+def normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def find_user_by_email(db: Session, email: str):
+    """Case-insensitive lookup. Register stores lowercase, but rows created
+    before that (or by other paths) may not be, so compare on lower()."""
+    return db.query(User).filter(func.lower(User.email) == normalize_email(email)).first()
+
+
+def _password_ok(user, password: str) -> bool:
+    # OAuth-only accounts have no password hash; never 500 on them.
+    if not user or not user.password_hash:
+        return False
+    try:
+        return verify_password(password, user.password_hash)
+    except (ValueError, TypeError):
+        return False
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     name: str = ""
+    invite: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -125,6 +157,17 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    invite: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v):
+        return _check_password_strength(v)
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -154,8 +197,8 @@ class ResetPasswordRequest(BaseModel):
 @router.post("/register", response_model=TokenResponse)
 async def register(req: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     # Normalize email to lowercase
-    normalized_email = req.email.lower().strip()
-    existing = db.query(User).filter(User.email == normalized_email).first()
+    normalized_email = normalize_email(req.email)
+    existing = find_user_by_email(db, normalized_email)
     if existing:
         log_login_attempt(db, req.email, success=False, 
                          failure_reason="Email already registered", request=request)
@@ -177,6 +220,10 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
     db.refresh(user)
     
     log_login_attempt(db, user.email, user.id, success=True, request=request)
+
+    # /auth?invite=<token>: join the inviting workspace / take the invited role.
+    from server.core.invites import accept_invite_quietly
+    accept_invite_quietly(db, user, req.invite)
     
     try:
         token = str(uuid.uuid4())
@@ -231,8 +278,8 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
 
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user or not verify_password(req.password, user.password_hash):
+    user = find_user_by_email(db, req.email)
+    if not user or not _password_ok(user, req.password):
         log_login_attempt(db, req.email, user.id if user else None, success=False,
                          failure_reason="Invalid credentials", request=request)
         raise HTTPException(
@@ -249,6 +296,9 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
         )
     
     log_login_attempt(db, user.email, user.id, success=True, request=request)
+
+    from server.core.invites import accept_invite_quietly
+    accept_invite_quietly(db, user, req.invite)
     
     if user.email == "demo@founderconsole.ai" and settings.should_seed_demo_data:
         try:
@@ -307,8 +357,8 @@ def admin_login(req: LoginRequest, request: Request, response: Response, db: Ses
             is_platform_admin=True
         )
     
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user or not verify_password(req.password, user.password_hash):
+    user = find_user_by_email(db, req.email)
+    if not user or not _password_ok(user, req.password):
         log_login_attempt(db, req.email, user.id if user else None, success=False,
                          failure_reason="Invalid admin credentials", request=request)
         raise HTTPException(
@@ -415,7 +465,7 @@ def refresh_token(request: Request, response: Response, db: Session = Depends(ge
 
 @router.post("/forgot-password")
 async def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email.lower().strip()).first()
+    user = find_user_by_email(db, req.email)
     if not user:
         return {"message": "If an account with that email exists, a reset link has been sent."}
     
@@ -478,6 +528,36 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Password has been reset successfully. You can now log in with your new password."}
+
+
+@router.post("/change-password")
+def change_password(
+    req: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Change the signed-in user's password after checking the current one.
+
+    TODO(#134): once session revocation lands, end the user's other sessions
+    here the same way reset-password does.
+    """
+    if getattr(current_user, "id", -1) == -1:
+        raise HTTPException(status_code=400, detail="The master admin password is managed by configuration.")
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.password_hash:
+        raise HTTPException(
+            status_code=400,
+            detail="This account signs in with Google and has no password. Use 'Forgot password' to set one.",
+        )
+    if not _password_ok(user, req.current_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if req.current_password == req.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from the current one")
+    user.password_hash = get_password_hash(req.new_password)
+    db.commit()
+    return {"message": "Password updated"}
 
 
 @router.post("/send-verification")
