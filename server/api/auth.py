@@ -12,6 +12,7 @@ from server.models.login_history import LoginHistory
 import re
 import bcrypt
 import uuid
+import os
 import asyncio
 import logging
 
@@ -177,6 +178,7 @@ class TokenResponse(BaseModel):
     role: str = "viewer"
     is_platform_admin: bool = False
     is_email_verified: bool = True
+    is_demo: bool = False
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
@@ -198,6 +200,10 @@ class ResetPasswordRequest(BaseModel):
 async def register(req: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     # Normalize email to lowercase
     normalized_email = normalize_email(req.email)
+    from server.core.demo_workspace import is_ephemeral_demo_email
+    if is_ephemeral_demo_email(normalized_email):
+        # That domain marks throwaway demo users; nobody may register on it.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email address")
     existing = find_user_by_email(db, normalized_email)
     if existing:
         log_login_attempt(db, req.email, success=False, 
@@ -275,6 +281,41 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
         is_platform_admin=is_platform_admin,
         is_email_verified=False
     )
+
+@router.post("/demo", response_model=TokenResponse)
+def start_demo(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Open a private demo workspace: a throwaway user with its own fresh copy
+    of the sample company, signed in by cookie. Nothing a visitor does here is
+    visible to any other visitor. See server/core/demo_workspace.py."""
+    from server.core.demo_workspace import (
+        DemoLimitError, cleanup_expired_demo_users, client_ip, create_demo_user,
+    )
+    if (os.getenv("DEMO_ENABLED", "true").strip().lower() in ("0", "false", "no", "off")):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The demo is not available right now.")
+    try:
+        cleanup_expired_demo_users(db, limit=20)
+    except Exception as e:
+        db.rollback()
+        auth_logger.warning(f"Demo cleanup skipped: {e}")
+    try:
+        user, _company = create_demo_user(db, ip=client_ip(request), user_agent=request.headers.get("user-agent"))
+    except DemoLimitError as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e))
+    except Exception as e:
+        auth_logger.error(f"Demo workspace creation failed: {e}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Unable to open the demo right now. Please try again.")
+
+    access_token = _issue_tokens(response, db, user.id)
+    return TokenResponse(
+        access_token=access_token,
+        user_id=user.id,
+        email=user.email,
+        role=user.role or "viewer",
+        is_platform_admin=False,
+        is_email_verified=False,
+        is_demo=True,
+    )
+
 
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):

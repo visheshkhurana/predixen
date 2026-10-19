@@ -59,7 +59,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     - Health check endpoints (no limit)
     """
 
-    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password"}
+    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password", "/auth/demo"}
     ADMIN_AUTH_PATHS = {"/auth/admin/login"}
     UPLOAD_PATHS = {"/csv-import", "/api/upload"}
     HEALTH_PATHS = {"/health", "/"}

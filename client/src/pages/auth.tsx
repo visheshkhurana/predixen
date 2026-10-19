@@ -282,7 +282,7 @@ export default function AuthPage({
   const handleDemoLogin = async () => {
     setIsDemoLoading(true);
     try {
-      const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
+      const result = await api.auth.demo();
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
       

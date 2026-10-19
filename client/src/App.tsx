@@ -21,6 +21,7 @@ import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
+import { isDemoEmail } from "@/lib/demo";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
 import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
@@ -347,8 +348,8 @@ function Router() {
         <Route path="/tools/burn-multiple">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BurnMultiplePage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
         <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
-        {/* HAG-449: the entry point the hero's "View Demo" uses. It logs into the
-            shared sample account and drops the visitor straight into /overview in
+        {/* HAG-449: the entry point the hero's "View Demo" uses. It opens a private
+            demo workspace (own copy of the sample company) and drops the visitor straight into /overview in
             Demo Mode — no login form, no "Welcome back". /demo stays as the page
             that explains what the demo is. */}
         <Route path="/demo/enter">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoRedirectPage /></Suspense>}</Route>
@@ -929,7 +930,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative z-[1]">
           <BackendStatusBanner />
           <TrialBanner />
-          {user?.email === 'demo@founderconsole.ai' && (
+          {isDemoEmail(user?.email) && (
             <div className="no-print flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-400" data-testid="banner-demo-mode">
               <FlaskConical className="h-3.5 w-3.5 shrink-0" />
               {/*
@@ -961,7 +962,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </span>
             </div>
           )}
-          {currentCompany?.is_sample && user?.email !== 'demo@founderconsole.ai' && (
+          {currentCompany?.is_sample && !isDemoEmail(user?.email) && (
             <SampleDataBanner />
           )}
           <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b border-white/[0.06] bg-background/60 backdrop-blur-xl sticky top-0 z-50">

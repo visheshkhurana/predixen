@@ -27,6 +27,7 @@ from server.models.company_state import CompanyState, compute_snapshot_id
 logger = logging.getLogger(__name__)
 
 DEMO_SEED_VERSION = 3
+DEMO_COMPANY_NAME = "TechFlow Analytics"
 
 
 def _ensure_company_state(db: Session, company):
@@ -170,25 +171,35 @@ def seed_demo_data(db: Session):
     existing = db.query(User).filter(User.email == "demo@founderconsole.ai").first()
     if existing:
         demo_user = existing
-        if demo_user.role != "owner":
-            demo_user.role = "owner"
+        # The demo account is shared; it must never hold an elevated role.
+        if demo_user.role != "viewer":
+            demo_user.role = "viewer"
             db.commit()
-        all_companies = db.query(Company).filter(Company.user_id == demo_user.id).order_by(Company.id).all()
-        if len(all_companies) > 1:
-            primary = all_companies[0]
-            for dup in all_companies[1:]:
-                try:
-                    logger.info(f"Removing duplicate demo company id={dup.id} name={dup.name}")
-                    db.delete(dup)
-                    db.flush()
-                except Exception:
-                    db.rollback()
-                    logger.warning(f"Could not remove duplicate company id={dup.id}, has references")
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
-        company = db.query(Company).filter(Company.user_id == demo_user.id).first()
+        # The primary is the oldest company named TechFlow Analytics. This used
+        # to be `.first()` over every company the account owns, unordered; the
+        # account also owns the Intelligence Graph peer companies, so a peer was
+        # sometimes picked and renamed to TechFlow, and the twin seed recreated
+        # the peer by name on the next boot. That is how the account ended up
+        # with seventeen TechFlows. Nothing is renamed or deleted here any more;
+        # the one-time cleanup (DEMO_LEGACY_CLEANUP) removes the duplicates.
+        company = (
+            db.query(Company)
+            .filter(Company.user_id == demo_user.id, Company.name == DEMO_COMPANY_NAME)
+            .order_by(Company.id)
+            .first()
+        )
+        try:
+            from server.core.demo_workspace import cleanup_legacy_demo_account
+            if cleanup_legacy_demo_account(db, demo_user):
+                company = (
+                    db.query(Company)
+                    .filter(Company.user_id == demo_user.id, Company.name == DEMO_COMPANY_NAME)
+                    .order_by(Company.id)
+                    .first()
+                )
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Legacy demo cleanup failed: {e}")
         if company:
             demo_company = company
             # Normalize industry to a valid dropdown id ("saas"); older seeds used
@@ -196,12 +207,6 @@ def seed_demo_data(db: Session):
             if demo_company.industry in (None, "", "general_saas"):
                 demo_company.industry = "saas"
                 db.commit()
-            if demo_company.name != "TechFlow Analytics":
-                demo_company.name = "TechFlow Analytics"
-                demo_company.industry = "saas"
-                demo_company.stage = "series_a"
-                db.commit()
-                logger.info("Reset demo company name to TechFlow Analytics")
             fin_count = db.query(FinancialRecord).filter(FinancialRecord.company_id == demo_company.id).count()
             if fin_count == 0:
                 logger.info("Demo company missing financial records, re-creating...")
@@ -246,7 +251,7 @@ def seed_demo_data(db: Session):
         demo_user = User(
             email="demo@founderconsole.ai",
             password_hash=get_password_hash("demo123"),
-            role="owner"
+            role="viewer"
         )
         db.add(demo_user)
         db.commit()
@@ -264,12 +269,53 @@ def seed_demo_data(db: Session):
         db.commit()
         db.refresh(demo_company)
         _ensure_company_state(db, demo_company)
+
+    _seed_company_body(db, demo_company, demo_user)
+    seed_team_members(db)
+    _seed_twin_intelligence_data(db, demo_company)
+
+    logger.info("Demo data seeding completed successfully")
+    return demo_user
+
+
+def seed_demo_company(db: Session, user) -> Company:
+    """A fresh, complete copy of the sample company owned by `user`.
+
+    Used for per-visitor demo workspaces: every call builds new rows, so two
+    visitors never share a company. Touches nothing outside the new company
+    (no peer companies, no other account's data).
+    """
+    company = Company(
+        user_id=user.id,
+        name=DEMO_COMPANY_NAME,
+        website="https://techflow.ai",
+        industry="saas",
+        stage="seed",
+        currency="USD",
+    )
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    _ensure_company_state(db, company)
+    _ensure_connector_metadata(db, company)
+    _seed_company_body(db, company, user)
+    try:
+        from server.seed.seed_twin_intelligence import seed_twin_for_company
+        seed_twin_for_company(db, company.id)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Twin seed for demo company {company.id} skipped: {e}")
+    return company
+
+
+def _seed_company_body(db: Session, demo_company, demo_user):
     
     base_date = datetime.now() - timedelta(days=365)
     revenue = 15000
     expenses = 45000
     cash = 800000
-    
+
     for i in range(12):
         month_date = base_date + timedelta(days=30 * i)
         growth_rate = 1.08 + (0.03 * (i / 12))
@@ -533,12 +579,6 @@ def seed_demo_data(db: Session):
     db.commit()
 
     _seed_extended_demo_data(db, demo_company, demo_user)
-    
-    seed_team_members(db)
-    _seed_twin_intelligence_data(db, demo_company)
-
-    logger.info("Demo data seeding completed successfully")
-    return demo_user
 
 
 def _seed_shareholders(db: Session, demo_company):

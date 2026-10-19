@@ -190,6 +190,13 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
       }),
+    // Opens a private demo workspace: a throwaway account with its own copy of
+    // the sample company. No credentials involved.
+    demo: () =>
+      request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean; is_demo: boolean }>('/auth/demo', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
     adminLogin: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/admin/login', {
         method: 'POST',
