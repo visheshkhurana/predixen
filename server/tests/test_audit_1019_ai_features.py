@@ -22,6 +22,8 @@ from server.core.db import Base
 from server.models.company import Company
 from server.models.company_decision import CompanyDecision
 from server.models.financial import FinancialRecord
+from server.models.scenario import Scenario
+from server.models.truth_scan import TruthScan
 from server.models.workspace import WorkspaceMember
 
 
@@ -38,6 +40,8 @@ def db():
             Company.__table__,
             FinancialRecord.__table__,
             CompanyDecision.__table__,
+            Scenario.__table__,
+            TruthScan.__table__,
             WorkspaceMember.__table__,
         ],
     )
@@ -114,6 +118,31 @@ def test_prompt_marks_unknowns_and_forbids_invention():
     assert "2026-09-01" in prompt and "revenue $20,000" in prompt
     assert "Never invent" in prompt
     assert "Use specific numbers" not in prompt
+
+
+def test_sample_records_never_reach_the_document_prompt(db):
+    """Seeded demo numbers are not the founder's history and must not be
+    presented as monthly records in a board or investor document."""
+    company = _company(db, name="Sample SaaS Co.", metadata_json={"is_sample": True})
+    _record(db, company.id, revenue=111.0, period=date(2026, 1, 1))
+    db.query(FinancialRecord).filter(FinancialRecord.revenue == 111.0).update(
+        {FinancialRecord.source_type: "sample"}, synchronize_session=False
+    )
+    _record(db, company.id, revenue=222.0, period=date(2026, 2, 1))
+    db.add(FinancialRecord(company_id=company.id, period_start=date(2026, 3, 1),
+                           period_end=date(2026, 3, 1), revenue=333.0))  # NULL = entered by hand
+    db.commit()
+
+    context = dg._gather_company_context(db, company)
+    revenues = [r["revenue"] for r in context["financial_records"]]
+    assert revenues == [333.0, 222.0]  # sample row dropped, newest first
+    assert context["is_sample"] is True
+
+    prompt = dg._build_section_prompt("board-memo", "Financial Highlights", context)
+    assert "$111" not in prompt
+    assert "$222" in prompt and "$333" in prompt
+    assert "Sample data notice" in prompt
+    assert "not reported by the founder" in prompt
 
 
 def _run_generate(llm_side_effect):

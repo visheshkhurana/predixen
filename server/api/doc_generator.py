@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -15,6 +16,7 @@ from server.models.truth_scan import TruthScan
 from server.models.financial import FinancialRecord
 from server.models.scenario import Scenario
 from server.api.simulations import extract_metric_value
+from server.services.sample_data import SAMPLE_SOURCE_TYPE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["doc-generator"])
@@ -179,9 +181,18 @@ def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
         except (ValueError, TypeError):
             confidence = 50
 
+    # Sample rows are seeded demo numbers, not the founder's history: a board or
+    # investor prompt that lists them as monthly records claims history the
+    # company never reported. NULL source_type is a manually entered real row.
     financial_records = (
         db.query(FinancialRecord)
-        .filter(FinancialRecord.company_id == company.id)
+        .filter(
+            FinancialRecord.company_id == company.id,
+            or_(
+                FinancialRecord.source_type.is_(None),
+                FinancialRecord.source_type != SAMPLE_SOURCE_TYPE,
+            ),
+        )
         .order_by(FinancialRecord.period_start.desc())
         .limit(12)
         .all()
@@ -244,6 +255,9 @@ def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
         },
         "metrics": extracted_metrics,
         "confidence": confidence,
+        # The truth-scan metrics for a demo company are derived from the same
+        # seeded rows the record query excludes, so the prompt has to say so.
+        "is_sample": bool(getattr(company, "is_sample", False)),
         "financial_records": fin_records_data,
         "scenarios": scenario_data,
     }
@@ -316,6 +330,12 @@ def _build_section_prompt(doc_type: str, section: str, context: Dict, custom_ins
     if unknown_labels:
         data_block += "Not available (no reported data): " + ", ".join(unknown_labels) + "\n"
     data_block += f"Data Confidence: {context.get('confidence', 50)}%\n"
+    if context.get("is_sample"):
+        data_block += (
+            "Sample data notice: this company's figures are seeded demo data, "
+            "not reported by the founder. Do not present them as the company's "
+            "actual history or as reported results.\n"
+        )
 
     records_text = _format_financial_records(context.get("financial_records") or [])
 
