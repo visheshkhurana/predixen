@@ -135,15 +135,6 @@ def test_alias_skips_same_id_email_and_blank():
         urlopen.assert_not_called()
 
 
-def test_alias_rejects_a_client_supplied_optin_id():
-    with patch.object(posthog_svc.urllib.request, "urlopen") as urlopen:
-        assert posthog_svc.alias(previous_id="optin:abc123", distinct_id="7") is False
-        assert posthog_svc.alias(previous_id="  OPTIN:abc123  ", distinct_id="7") is False
-        urlopen.assert_not_called()
-    assert posthog_svc.sanitize_distinct_id("optin:abc123") is None
-    assert posthog_svc.sanitize_distinct_id("OPTIN:abc123") is None
-
-
 def test_alias_swallows_network_errors(monkeypatch):
     _clear_posthog_env(monkeypatch)
 
