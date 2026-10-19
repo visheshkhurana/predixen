@@ -35,7 +35,7 @@ export default function HowItWorksPage() {
           1. Connect or upload data
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Link the tools founders already use, or upload a CSV. FounderConsole has 37 data connectors, including QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid. You can also start without connecting anything: try the{" "}
+          Link the tools founders already use, or upload a CSV. FounderConsole has 34 data connectors, including QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid. You can also start without connecting anything: try the{" "}
           <Link href="/tools/runway-calculator" className="text-primary hover:underline" data-testid="link-hiw-runway">
             startup runway calculator
           </Link>

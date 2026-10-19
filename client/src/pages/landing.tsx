@@ -73,8 +73,8 @@ const landingFaqs = [
     a: "FounderConsole is an AI-powered financial intelligence platform for startups. It connects your financial data, builds a digital twin of your company, runs Monte Carlo simulations, and provides AI-powered strategic recommendations — replacing spreadsheets with simulations.",
   },
   {
-    q: "Is there a free trial?",
-    a: "Yes. Every new account starts with a free 30-day trial with full access to every feature — no credit card required. After the trial you can continue on the Free plan or subscribe to Starter ($29), Growth ($49), or Scale ($99) per month.",
+    q: "Is FounderConsole free?",
+    a: "Yes. Every feature is free during early access. No credit card is required, and no plan is charged yet. Paid tiers come later.",
   },
   {
     q: "How does FounderConsole help with fundraising?",
@@ -82,7 +82,7 @@ const landingFaqs = [
   },
   {
     q: "What data sources can I connect?",
-    a: "FounderConsole supports 37 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more. You can also upload CSV files or enter data manually.",
+    a: "FounderConsole supports 34 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more. You can also upload CSV files or enter data manually.",
   },
   {
     q: "What is a Monte Carlo simulation?",
@@ -119,7 +119,7 @@ const pricingTiers = [
     description: "For early-stage founders finding their footing.",
     features: ["50 simulations / month", "100 copilot messages / month", "2 data connectors", "Truth Scan & Stress Tests", "Industry benchmarks"],
     highlighted: false,
-    cta: "Start Free Trial",
+    cta: "Get Started Free",
   },
   {
     name: "Growth",
@@ -128,7 +128,7 @@ const pricingTiers = [
     description: "For scaling startups that decide weekly.",
     features: ["Up to 3 companies", "Unlimited simulations & copilot", "10 data connectors", "Fundraising OS & cap table", "Board deck export"],
     highlighted: true,
-    cta: "Start Free Trial",
+    cta: "Get Started Free",
   },
   {
     name: "Scale",
@@ -137,12 +137,12 @@ const pricingTiers = [
     description: "Full power for serious founders.",
     features: ["Unlimited companies & connectors", "Flight Simulator (AI agents)", "Digital Twin & Investor Room", "Hiring Planner", "Cross-company intelligence"],
     highlighted: false,
-    cta: "Start Free Trial",
+    cta: "Get Started Free",
   },
 ];
 
 const stats = [
-  { value: 37, suffix: "+", label: "Data Connectors" },
+  { value: 34, suffix: "+", label: "Data Connectors" },
   { value: 24, suffix: "+", label: "Metrics Tracked" },
   { value: 3, suffix: " bands", label: "P10 / P50 / P90" },
   { value: 10, suffix: "K runs", label: "Per Simulation" },
@@ -283,7 +283,7 @@ function Hero() {
           transition={{ delay: 0.9 }}
           className="mt-4 text-xs text-muted-foreground"
         >
-          Free 30-day trial · No credit card required
+          Free during early access · No credit card required
         </motion.p>
       </motion.div>
 
@@ -637,8 +637,7 @@ function PricingPreview() {
             Simple, transparent pricing
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Start with a free 30-day trial of everything — no credit card required. Founding accounts keep their
-            complimentary access.
+            Every feature is free during early access — no credit card required. The prices below are planned for later.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
@@ -753,7 +752,7 @@ export default function LandingPage() {
   useSEO({
     title: "FounderConsole — AI Decision Simulator for Founders",
     description:
-      "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 37 data connectors — replace spreadsheets with simulations.",
+      "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 34 data connectors — replace spreadsheets with simulations.",
     path: "/",
     jsonLd: [
       {
@@ -767,7 +766,6 @@ export default function LandingPage() {
         sameAs: [
           "https://twitter.com/founderconsole",
           "https://linkedin.com/company/founderconsole",
-          "https://github.com/founderconsole",
         ],
       },
       {
@@ -778,15 +776,15 @@ export default function LandingPage() {
         operatingSystem: "Web",
         url: "https://founderconsole.ai",
         description:
-          "AI-powered financial intelligence platform for startups with Monte Carlo simulations, fundraising CRM, and 37 data connectors.",
+          "AI-powered financial intelligence platform for startups with Monte Carlo simulations, fundraising CRM, and 34 data connectors.",
         offers: {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Free 30-day trial with full access — no credit card required. Paid plans from $29/month.",
+          description: "Free during early access. No credit card is required, and no plan is charged yet.",
         },
         featureList:
-          "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
+          "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 34 Data Connectors, Digital Twin, Strategic Briefings",
         screenshot: "https://founderconsole.ai/og-image.png",
       },
       {
@@ -808,7 +806,7 @@ export default function LandingPage() {
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10" data-testid="section-logo-cloud">
           <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-            Connect your financial stack — 37 connectors
+            Connect your financial stack — 34 connectors
           </p>
           <Marquee>
             {integrations.map((name) => (
@@ -863,7 +861,7 @@ export default function LandingPage() {
                 </Button>
               </Magnetic>
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">Free 30-day trial · No credit card required.</p>
+            <p className="mt-4 text-xs text-muted-foreground">Free during early access · No credit card required.</p>
           </motion.div>
         </div>
       </section>

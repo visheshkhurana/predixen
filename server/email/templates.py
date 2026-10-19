@@ -631,7 +631,7 @@ def render_app_overview_template(
     also_html += get_check_item("Smart alerts for anomalies and runway warnings")
     also_html += get_check_item("Cap table management with dilution modeling")
     also_html += get_check_item("Board deck generation and export")
-    also_html += get_check_item("37 data integrations (QuickBooks, Stripe, Gusto, and more)")
+    also_html += get_check_item("34 data integrations (QuickBooks, Stripe, Gusto, and more)")
 
     content = f"""
     {get_header_html()}

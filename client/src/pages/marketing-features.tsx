@@ -80,9 +80,9 @@ const features = [
     screenshot: "/images/features/data-connectors.png",
     headline: "Connect everything. Auto-sync.",
     description:
-      "37 real OAuth2 integrations with the tools founders already use. QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and more. No CSV imports or screen scraping required.",
+      "34 real OAuth2 integrations with the tools founders already use. QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and more. No CSV imports or screen scraping required.",
     bullets: [
-      "37 integrations with one-click OAuth connections",
+      "34 integrations with one-click OAuth connections",
       "QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid supported",
       "Auto-sync keeps your data fresh without manual intervention",
       "Multi-currency handling across all connected sources",
@@ -138,13 +138,13 @@ export default function MarketingFeaturesPage() {
   useSEO({
     title: "Features — Simulation, AI Copilot, Fundraising CRM & More | FounderConsole",
     description:
-      "Monte Carlo simulation engine, multi-LLM AI copilot, Truth Scan data validation, Fundraising OS with CRM, 37 data connectors, and AI strategic briefings — built for startup founders.",
+      "Monte Carlo simulation engine, multi-LLM AI copilot, Truth Scan data validation, Fundraising OS with CRM, 34 data connectors, and AI strategic briefings — built for startup founders.",
     path: "/features",
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "WebPage",
       name: "FounderConsole Features",
-      description: "Complete feature overview of FounderConsole: Monte Carlo simulations, AI copilot, data validation, fundraising tools, and 37 data connectors.",
+      description: "Complete feature overview of FounderConsole: Monte Carlo simulations, AI copilot, data validation, fundraising tools, and 34 data connectors.",
       url: "https://founderconsole.ai/features",
       isPartOf: {
         "@type": "WebSite",

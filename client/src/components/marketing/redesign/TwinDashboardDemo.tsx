@@ -77,7 +77,7 @@ export function TwinDashboardDemo() {
         </div>
 
         <div className="mt-3 rounded-xl border bg-card/60 p-3 flex items-center justify-between" style={{ transform: "translateZ(20px)" }}>
-          <span className="text-xs text-muted-foreground">Last sync — 2 min ago · 37 connectors available</span>
+          <span className="text-xs text-muted-foreground">Last sync — 2 min ago · 34 connectors available</span>
           <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />

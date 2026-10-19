@@ -53,7 +53,7 @@ export default function ProductPage() {
             <strong className="text-foreground">AI copilot</strong> — strategic questions in plain English, grounded in your connected financials.
           </li>
           <li>
-            <strong className="text-foreground">Connectors</strong> — 37 data connectors for the tools founders already use, or upload a CSV so the model stays current.
+            <strong className="text-foreground">Connectors</strong> — 34 data connectors for the tools founders already use, or upload a CSV so the model stays current.
           </li>
           <li>
             <strong className="text-foreground">Fundraising OS</strong> — cap table, dilution modeling, and investor-ready materials in one place.
