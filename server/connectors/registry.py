@@ -17,6 +17,8 @@ class ConnectorRegistry:
     """
     
     _connectors: Dict[str, Type[BaseConnector]] = {}
+    # Legacy storage keys that must keep resolving after a provider id rename.
+    _aliases: Dict[str, str] = {}
     
     @classmethod
     def register(cls, connector_class: Type[BaseConnector]) -> Type[BaseConnector]:
@@ -31,13 +33,44 @@ class ConnectorRegistry:
         if provider_id in cls._connectors:
             logger.warning(f"Overwriting existing connector: {provider_id}")
         cls._connectors[provider_id] = connector_class
+        for alias in getattr(connector_class, "PROVIDER_ALIASES", ()) or ():
+            if not alias or alias == provider_id:
+                continue
+            current = cls._aliases.get(alias)
+            if current and current != provider_id:
+                logger.warning(
+                    f"Alias {alias} already points at {current}; not retargeting to {provider_id}"
+                )
+                continue
+            if alias in cls._connectors and cls._connectors[alias] is not connector_class:
+                logger.warning(f"Alias {alias} collides with a registered provider; skipping")
+                continue
+            cls._aliases[alias] = provider_id
         logger.info(f"Registered connector: {provider_id}")
         return connector_class
+
+    @classmethod
+    def canonical_provider_id(cls, provider_id: str) -> str:
+        """Return the registered id for a provider, following aliases."""
+        return cls._aliases.get(provider_id, provider_id)
+
+    @classmethod
+    def provider_ids_for(cls, provider_id: str) -> List[str]:
+        """Canonical id plus aliases. Unknown ids are returned unchanged."""
+        canonical = cls.canonical_provider_id(provider_id)
+        connector_class = cls._connectors.get(canonical)
+        if connector_class is None:
+            return [provider_id]
+        ids = [connector_class.PROVIDER_ID]
+        for alias in getattr(connector_class, "PROVIDER_ALIASES", ()) or ():
+            if alias and alias not in ids:
+                ids.append(alias)
+        return ids
     
     @classmethod
     def get_connector_class(cls, provider_id: str) -> Optional[Type[BaseConnector]]:
-        """Get a connector class by provider ID."""
-        return cls._connectors.get(provider_id)
+        """Get a connector class by provider ID or a registered alias."""
+        return cls._connectors.get(cls.canonical_provider_id(provider_id))
     
     @classmethod
     def create_connector(cls, config: ConnectorConfig) -> Optional[BaseConnector]:
