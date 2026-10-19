@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { founderFaqs } from "@/data/founder-faqs";
 import { trackFunnel } from "@/lib/funnel";
 import { getBrowserDistinctId } from "@/lib/posthog";
@@ -183,9 +184,7 @@ export default function RunwayCalculatorPage() {
   }
 
   useSEO({
-    title: "Free Startup Runway Calculator — How Long Until You Run Out of Cash | FounderConsole",
-    description:
-      "Calculate your startup runway in seconds. Enter cash on hand, monthly revenue, expenses, and growth rate to see how many months until you need to raise. Free interactive tool with chart.",
+    ...TOOL_PAGE_META["/tools/runway-calculator"],
     path: "/tools/runway-calculator",
     jsonLd: [
       {

@@ -2,6 +2,7 @@ import { isSustainableRunway } from "@/lib/simulation/runwayFormat";
 import { useState, useEffect, type FormEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
+import { useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -892,6 +893,7 @@ export default function SurvivalSimulatorPage() {
     if (sharedResults) setResults(sharedResults);
   }, [sharedResults]);
 
+  const calculatorUsedTracked = useRef(false);
   const simulation = useMutation({
     mutationFn: async (inputs: SimInputs) => {
       const res = await fetch("/api/survival-sim/run", {
@@ -907,6 +909,12 @@ export default function SurvivalSimulatorPage() {
     },
     onSuccess: (data) => {
       setResults(data);
+      // Every completed run, plus the shared once-per-view calculator step.
+      trackFunnel("survival_simulation_run", { calculator: "survival-simulator" });
+      if (!calculatorUsedTracked.current) {
+        calculatorUsedTracked.current = true;
+        trackFunnel("calculator_used", { calculator: "survival-simulator" });
+      }
       const count = incrementSimCount();
       if (count >= 2) setGated(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
