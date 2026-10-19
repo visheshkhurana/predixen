@@ -138,3 +138,30 @@ def test_suspended_user_is_rejected_immediately(env):
 def test_admin_suspend_routes_end_sessions():
     src = open("server/api/admin.py").read()
     assert src.count("user.is_active = False\n    revoke_all_sessions(db, user.id)") == 2
+
+
+def test_a_missing_revocation_table_is_revocation_off_not_a_500(env):
+    """HAG-456: the tables are created in _run_deferred_startup, so a deploy serves
+    authenticated requests before they exist.
+
+    Before this test's fix, get_current_user queried revoked_access_tokens
+    unguarded and every authenticated request 500'd for the length of the deploy
+    window. A missing revocation table must mean "revocation is off", never an
+    error: the alternative trades a hardening gap measured in seconds for a total
+    outage of every authenticated route.
+    """
+    client, Session, uid = env
+    token = _token(uid)
+
+    db = Session()
+    engine = db.get_bind()
+    db.close()
+    with engine.begin() as conn:
+        RevokedAccessToken.__table__.drop(conn)
+        UserSessionCutoff.__table__.drop(conn)
+
+    security._revoked_tokens.clear()  # nothing cached from this process
+
+    resp = client.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"id": uid}

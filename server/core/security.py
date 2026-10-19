@@ -5,6 +5,7 @@ import bcrypt
 import uuid
 from fastapi import Depends, HTTPException, status, Request, Response, Cookie
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from server.core.config import settings
 from server.core.db import get_db
@@ -44,6 +45,41 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+# Warnings already emitted, so a deploy window does not log one line per request.
+_revocation_warned: Set[str] = set()
+
+
+def _guarded_revocation(db: Session, fn, default=None):
+    """Run a statement against a revocation table, degrading to ``default`` when
+    the table is missing or unreadable.
+
+    The revocation tables are created in ``_run_deferred_startup`` (server/main.py),
+    which runs *after* the app starts answering requests, so every deploy has a
+    window where authenticated requests arrive before the tables exist. Ending a
+    session is a hardening feature; losing it for a few seconds is much better
+    than every authenticated request returning 500. With the tables present this
+    is a plain query.
+
+    The statement runs inside a SAVEPOINT, because on PostgreSQL a failed
+    statement aborts the surrounding transaction and the request's own commit
+    would then fail with a second, unrelated error. Pending work is flushed
+    first so that rolling back to the savepoint cannot discard it.
+    """
+    try:
+        db.flush()
+        with db.begin_nested():
+            return fn()
+    except SQLAlchemyError as exc:
+        name = exc.__class__.__name__
+        if name not in _revocation_warned:
+            _revocation_warned.add(name)
+            logger.warning(
+                "Session revocation unavailable (%s); treating revocation as off for now: %s",
+                name, exc,
+            )
+        return default
+
+
 def _utcnow_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -65,12 +101,17 @@ def revoke_token(jti: str, db: Optional[Session] = None, user_id: Optional[int] 
         return
     from server.models.session_revocation import RevokedAccessToken
 
-    if db.query(RevokedAccessToken).filter(RevokedAccessToken.jti == jti).first() is None:
-        db.add(RevokedAccessToken(
-            jti=jti,
-            user_id=user_id,
-            expires_at=expires_at or (_utcnow_naive() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
-        ))
+    def _persist():
+        if db.query(RevokedAccessToken).filter(RevokedAccessToken.jti == jti).first() is None:
+            db.add(RevokedAccessToken(
+                jti=jti,
+                user_id=user_id,
+                expires_at=expires_at or (_utcnow_naive() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
+            ))
+
+    # The in-process set above already revoked it; a missing table must not turn
+    # logout into a 500.
+    _guarded_revocation(db, _persist)
 
 
 def revoke_token_string(token: Optional[str], db: Session) -> None:
@@ -96,11 +137,18 @@ def revoke_all_sessions(db: Session, user_id: int) -> None:
     from server.models.user import RefreshToken
 
     cutoff = _utcnow_naive().replace(microsecond=0)
-    row = db.query(UserSessionCutoff).filter(UserSessionCutoff.user_id == user_id).first()
-    if row is None:
-        db.add(UserSessionCutoff(user_id=user_id, revoked_before=cutoff))
-    else:
-        row.revoked_before = cutoff
+
+    def _write_cutoff():
+        row = db.query(UserSessionCutoff).filter(UserSessionCutoff.user_id == user_id).first()
+        if row is None:
+            db.add(UserSessionCutoff(user_id=user_id, revoked_before=cutoff))
+        else:
+            row.revoked_before = cutoff
+
+    _guarded_revocation(db, _write_cutoff)
+
+    # Refresh tokens live in their own table, which predates this feature; the
+    # reset or suspension must still end them even if the cutoff is unavailable.
     db.query(RefreshToken).filter(
         RefreshToken.user_id == user_id,
         RefreshToken.revoked == False,  # noqa: E712
@@ -117,16 +165,24 @@ def is_token_revoked(jti: str, db: Optional[Session] = None) -> bool:
         return False
     from server.models.session_revocation import RevokedAccessToken
 
-    if db.query(RevokedAccessToken).filter(RevokedAccessToken.jti == jti).first() is not None:
+    found = _guarded_revocation(
+        db,
+        lambda: db.query(RevokedAccessToken).filter(RevokedAccessToken.jti == jti).first() is not None,
+        False,
+    )
+    if found:
         _revoked_tokens.add(jti)
-        return True
-    return False
+    return found
 
 
 def _issued_before_cutoff(db: Session, user_id: int, iat) -> bool:
     from server.models.session_revocation import UserSessionCutoff
 
-    row = db.query(UserSessionCutoff).filter(UserSessionCutoff.user_id == user_id).first()
+    row = _guarded_revocation(
+        db,
+        lambda: db.query(UserSessionCutoff).filter(UserSessionCutoff.user_id == user_id).first(),
+        None,
+    )
     if row is None:
         return False
     issued = _from_epoch(iat)
