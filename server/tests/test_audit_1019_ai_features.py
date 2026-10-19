@@ -435,6 +435,44 @@ def test_removing_another_member_leaves_the_link_alone(db):
     db.refresh(c)
     assert (c.metadata_json or {})[sb.SLACK_META_KEY]["team_id"] == "T-KEEP"
 
+def test_slack_command_rejects_a_forged_signature(db, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from server.core.db import get_db
+
+    monkeypatch.setenv("SLACK_SIGNING_SECRET", "test-secret")
+    app = FastAPI()
+    app.include_router(sb.router)
+    app.dependency_overrides[get_db] = lambda: db
+    client = TestClient(app)
+
+    body = urllib.parse.urlencode({
+        "command": "/fc-runway", "text": "", "team_id": "TX", "channel_id": "CX", "user_id": "UX",
+    })
+    ts = str(int(time.time()))
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Slack-Request-Timestamp": ts,
+    }
+    forged = "v0=" + hmac.new(
+        b"not-the-secret", f"v0:{ts}:{body}".encode(), hashlib.sha256
+    ).hexdigest()
+
+    assert client.post(
+        "/slack/commands", content=body, headers={**headers, "X-Slack-Signature": forged}
+    ).status_code == 401
+    assert client.post("/slack/commands", content=body, headers=headers).status_code == 401
+
+    stale = str(int(time.time()) - 600)
+    stale_sig = "v0=" + hmac.new(
+        b"test-secret", f"v0:{stale}:{body}".encode(), hashlib.sha256
+    ).hexdigest()
+    assert client.post("/slack/commands", content=body, headers={
+        **headers,
+        "X-Slack-Request-Timestamp": stale,
+        "X-Slack-Signature": stale_sig,
+    }).status_code == 401
+
 def test_simulate_reads_engine_shape():
     from server.utils.survival import survival_pct
     out = {"runway": {"p10": 9.0, "p50": 14.5, "p90": 20.0}, "survival": {"12m": 90.0, "18m": 71.3}}
