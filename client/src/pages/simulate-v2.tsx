@@ -28,7 +28,8 @@ import {
 interface SimulationResult {
   simulationId: number;
   companyName: string;
-  shareToken: string;
+  // Set only after the owner creates a public link (POST .../share).
+  shareToken?: string;
   summary: {
     /** Share of months with cash > 0 in this ONE simulated run (not a probability). */
     monthsSolventPct?: number;
@@ -181,11 +182,46 @@ export default function SimulateV2Page() {
     setResult(null);
   };
 
-  const handleShare = () => {
-    if (!result?.shareToken) return;
-    const url = `${window.location.origin}/simulate-v2/shared/${result.shareToken}`;
-    navigator.clipboard.writeText(url);
-    toast({ title: 'Link copied', description: 'Share this link with your team or investors' });
+  const [isSharing, setIsSharing] = useState(false);
+
+  // The run does not get a public link automatically; sharing creates one.
+  const handleShare = async () => {
+    if (!result?.simulationId || !currentCompany) return;
+    setIsSharing(true);
+    try {
+      let token = result.shareToken;
+      if (!token) {
+        const res = await apiRequest(
+          'POST',
+          `/api/companies/${currentCompany.id}/simulation/agent-run/${result.simulationId}/share`,
+          {}
+        );
+        const data: { shareToken: string } = await res.json();
+        token = data.shareToken;
+        setResult(prev => (prev ? { ...prev, shareToken: token } : prev));
+      }
+      const url = `${window.location.origin}/simulate-v2/shared/${token}`;
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copied', description: 'Anyone with this link can view this run until you revoke it.' });
+    } catch (err) {
+      toast({ title: 'Could not create a share link', description: (err as Error).message, variant: 'destructive' });
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleRevokeShare = async () => {
+    if (!result?.simulationId || !result.shareToken || !currentCompany) return;
+    try {
+      await apiRequest(
+        'DELETE',
+        `/api/companies/${currentCompany.id}/simulation/agent-run/${result.simulationId}/share`
+      );
+      setResult(prev => (prev ? { ...prev, shareToken: undefined } : prev));
+      toast({ title: 'Link revoked', description: 'The shared link no longer works.' });
+    } catch (err) {
+      toast({ title: 'Could not revoke the link', description: (err as Error).message, variant: 'destructive' });
+    }
   };
 
   const filteredEvents = selectedMonth
@@ -226,8 +262,13 @@ export default function SimulateV2Page() {
             <RotateCcw className="h-4 w-4 mr-1" /> Reset
           </Button>
           {result && (
-            <Button variant="outline" size="sm" onClick={handleShare} data-testid="button-share">
-              <Share2 className="h-4 w-4 mr-1" /> Share
+            <Button variant="outline" size="sm" onClick={handleShare} disabled={isSharing} data-testid="button-share">
+              <Share2 className="h-4 w-4 mr-1" /> {result.shareToken ? 'Copy link' : 'Share'}
+            </Button>
+          )}
+          {result?.shareToken && (
+            <Button variant="ghost" size="sm" onClick={handleRevokeShare} data-testid="button-revoke-share">
+              Revoke link
             </Button>
           )}
           <Button

@@ -11,6 +11,7 @@ import random
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from server.email.service import send_email, is_email_configured
+from server.email.lifecycle_guard import prepare_bulk_send
 from server.email.templates import render_platform_update_template, render_text_only_update_template
 from server.core.db import SessionLocal
 from sqlalchemy import text
@@ -166,6 +167,12 @@ async def send_update_to_specified_users(
                     app_url=app_url
                 )
             
+            prepared = prepare_bulk_send(db, email, html_content)
+            if prepared is None:
+                print(f"[{i+1}/{len(emails)}] Skipping {email}: opted out")
+                continue
+            html_content = prepared.html
+
             db.execute(text("""
                 INSERT INTO email_events (email_id, to_email, subject, created_at, updated_at)
                 VALUES (:email_id, :to_email, :subject, :created_at, :updated_at)
@@ -184,7 +191,8 @@ async def send_update_to_specified_users(
                     to=email,
                     subject=subject,
                     html_content=html_content,
-                    from_email=current_from
+                    from_email=current_from,
+                    headers=prepared.headers or None,
                 )
                 if result.get("success"):
                     print(f"  Sent successfully")
@@ -218,12 +226,17 @@ async def send_update_to_specified_users(
                         app_url=app_url
                     )
                 
+                retry_prepared = prepare_bulk_send(db, email, html_content)
+                if retry_prepared is None:
+                    continue
+                html_content = retry_prepared.html
                 try:
                     result = await send_email(
                         to=email,
                         subject=subject,
                         html_content=html_content,
-                        from_email=retry_from
+                        from_email=retry_from,
+                        headers=retry_prepared.headers or None,
                     )
                     if result.get("success"):
                         print(f"  Sent successfully")
@@ -515,6 +528,12 @@ async def send_pitch_emails(
                 tracking_id=tracking_id
             )
             
+            prepared = prepare_bulk_send(db, email, html_content)
+            if prepared is None:
+                print(f"[{i+1}/{len(emails)}] Skipping {email}: opted out")
+                continue
+            html_content = prepared.html
+
             db.execute(text("""
                 INSERT INTO email_events (email_id, to_email, subject, created_at, updated_at)
                 VALUES (:email_id, :to_email, :subject, :created_at, :updated_at)
@@ -533,7 +552,8 @@ async def send_pitch_emails(
                     to=email,
                     subject=subject,
                     html_content=html_content,
-                    from_email=current_from
+                    from_email=current_from,
+                    headers=prepared.headers or None,
                 )
                 if result.get("success"):
                     print(f"  Sent successfully")

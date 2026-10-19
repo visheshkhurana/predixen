@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFounderStore } from '@/store/founderStore';
 import { apiRequest } from '@/lib/queryClient';
+import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/api/workspace';
 import { Settings, Lock, Mail, Bell, LogOut, Loader2, User, Shield, Check } from 'lucide-react';
 import { FadeIn } from '@/components/ui/motion-primitives';
 
@@ -23,10 +23,21 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  const [emailSimulations, setEmailSimulations] = useState(true);
-  const [emailDocuments, setEmailDocuments] = useState(true);
-  const [emailDecisions, setEmailDecisions] = useState(true);
-  const [emailAlerts, setEmailAlerts] = useState(true);
+  // One stored switch: email_enabled is the opt-out every non-account email
+  // checks (and the unsubscribe link sets). Nothing reads per-type toggles yet.
+  const { data: notificationPrefs, isLoading: prefsLoading } = useNotificationPreferences();
+  const updateNotificationPrefs = useUpdateNotificationPreferences();
+  const productEmailsOn = notificationPrefs?.email_enabled ?? true;
+
+  const handleProductEmailsChange = async (checked: boolean) => {
+    if (!notificationPrefs) return;
+    try {
+      await updateNotificationPrefs.mutateAsync({ ...notificationPrefs, email_enabled: checked });
+      toast({ title: checked ? 'Product emails on' : 'Product emails off' });
+    } catch {
+      toast({ title: 'Could not save your email preference', variant: 'destructive' });
+    }
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,34 +177,18 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium">Simulation Reports</p>
-              <p className="text-xs text-muted-foreground">Get emailed when Monte Carlo simulations complete</p>
+              <p className="text-sm font-medium">Product emails</p>
+              <p className="text-xs text-muted-foreground">
+                Onboarding tips, activity summaries, the monthly digest and product updates.
+                Password, verification and receipt emails are always sent.
+              </p>
             </div>
-            <Switch checked={emailSimulations} onCheckedChange={setEmailSimulations} data-testid="switch-email-simulations" />
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium">Document Generation</p>
-              <p className="text-xs text-muted-foreground">Receive generated board decks and investor memos</p>
-            </div>
-            <Switch checked={emailDocuments} onCheckedChange={setEmailDocuments} data-testid="switch-email-documents" />
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium">Decision Recommendations</p>
-              <p className="text-xs text-muted-foreground">Get notified about new strategic recommendations</p>
-            </div>
-            <Switch checked={emailDecisions} onCheckedChange={setEmailDecisions} data-testid="switch-email-decisions" />
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium">Alert Notifications</p>
-              <p className="text-xs text-muted-foreground">Email alerts when critical thresholds are breached</p>
-            </div>
-            <Switch checked={emailAlerts} onCheckedChange={setEmailAlerts} data-testid="switch-email-alerts" />
+            <Switch
+              checked={productEmailsOn}
+              disabled={prefsLoading || !notificationPrefs || updateNotificationPrefs.isPending}
+              onCheckedChange={handleProductEmailsChange}
+              data-testid="switch-email-product"
+            />
           </div>
         </CardContent>
       </Card>
