@@ -16,7 +16,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import {
   formatRunway,
   projectRunway,
@@ -168,17 +168,47 @@ test("no page promises a 30-day trial or a Start Free Trial button", () => {
   assert.match(read("client/src/pages/landing.tsx"), /free while in early access/);
 });
 
-test("connector copy matches the catalog: 37 connectors, 16 via OAuth", () => {
-  const catalog = read("server/api/connector_catalog.py");
-  const total = (catalog.match(/^\s+id="/gm) || []).length;
-  const oauth = (catalog.match(/auth_type="oauth"/g) || []).length;
-  assert.equal(total, 37);
-  assert.equal(oauth, 16);
-  for (const f of ["client/src/pages/marketing-features.tsx", "server/seo-prerender.ts", "client/src/pages/landing.tsx"]) {
-    const src = read(f);
-    assert.doesNotMatch(src, /37 (real OAuth2 integrations|integrations with one-click OAuth)/, f);
+test("connector copy counts the OAuth connectors the server actually implements", () => {
+  // This used to count entries in server/api/connector_catalog.py. Main deleted
+  // that file (#160, "unreachable connector_catalog router"), so the copy was
+  // left citing numbers whose only source no longer existed - and the 16 was
+  // wrong even at the merge base, because most of those entries had no OAuth
+  // flow behind them.
+  //
+  // The surviving source is the connector modules themselves. One-click OAuth
+  // is a module that carries the OAuth flow; every module without one takes an
+  // API key, a database connection or a file upload. Infrastructure modules are
+  // not connectors and are excluded by name.
+  const INFRA = new Set(["__init__.py", "base.py", "registry.py", "queue_manager.py"]);
+  const modules = readdirSync("server/connectors")
+    .filter((f) => f.endsWith(".py") && !INFRA.has(f));
+  const oauthModules = modules
+    .filter((f) => /oauth/i.test(read(`server/connectors/${f}`)))
+    .sort();
+  assert.deepEqual(oauthModules, [
+    "google_sheets.py",
+    "gusto.py",
+    "netsuite.py",
+    "quickbooks.py",
+    "xero.py",
+    "zoho_books.py",
+  ]);
+
+  // The copy names exactly those six, and claims no count the code cannot show.
+  const features = read("client/src/pages/marketing-features.tsx");
+  assert.match(features, /6 with one-click OAuth/);
+  assert.doesNotMatch(features, /\b16\b[^.]*one-click OAuth/);
+  for (const name of ["QuickBooks", "Xero", "Gusto", "NetSuite", "Zoho Books", "Google Sheets"]) {
+    assert.match(features, new RegExp(name), `marketing-features must name ${name}`);
   }
-  assert.match(read("client/src/pages/marketing-features.tsx"), /16 with one-click OAuth/);
+  for (const f of ["client/src/pages/marketing-features.tsx", "server/seo-prerender.ts", "client/src/pages/faq.tsx"]) {
+    assert.doesNotMatch(read(f), /16 (of them )?with one-click OAuth/, f);
+  }
+
+  // The claim this PR exists to kill: calling API-key connectors "OAuth2".
+  for (const f of ["client/src/pages/marketing-features.tsx", "server/seo-prerender.ts", "client/src/pages/landing.tsx"]) {
+    assert.doesNotMatch(read(f), /37 (real OAuth2 integrations|integrations with one-click OAuth)/, f);
+  }
 });
 
 test("security copy names the cipher the code uses (Fernet), not envelope encryption", () => {

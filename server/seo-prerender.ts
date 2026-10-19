@@ -33,7 +33,7 @@ const landingFaqs = [
   { q: "What is FounderConsole?", a: "FounderConsole is an AI-powered financial intelligence platform for startups. It connects your financial data, builds a digital twin of your company, runs Monte Carlo simulations, and provides AI-powered strategic recommendations." },
   { q: "Is FounderConsole free?", a: "Yes. All features are free during the public beta, including Monte Carlo simulations, AI copilot, cap table management, 37 data connectors, and board deck generation. No credit card is required." },
   { q: "How does FounderConsole help with fundraising?", a: "FounderConsole includes a Fundraising OS with cap table management, dilution modeling, investor CRM, SAFE conversion modeling, and exit waterfall analysis." },
-  { q: "What data sources can I connect?", a: "FounderConsole supports 37 data connectors, 16 of them with one-click OAuth, including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more." },
+  { q: "What data sources can I connect?", a: "FounderConsole supports 37 data connectors, six of them with one-click OAuth (QuickBooks, Xero, Gusto, NetSuite, Zoho Books and Google Sheets); the rest, including Stripe and Mercury, use an API key, a database connection or a file upload." },
   { q: "What is a Monte Carlo simulation?", a: "Monte Carlo simulation runs your financial model thousands of times with slightly different inputs each time, producing a probability distribution instead of a single forecast." },
   { q: "How is this different from a spreadsheet?", a: "Spreadsheets give you one forecast. FounderConsole runs thousands of scenarios, accounts for uncertainty, connects to live data, and uses AI to generate insights." },
   { q: "What is a startup digital twin?", a: "A digital twin is a continuously updated virtual representation of your company that reflects your current financial reality without manual updates." },
@@ -396,9 +396,9 @@ function buildFeaturesBodyContent(): string {
 </ul>
 
 <h2>Data Connectors</h2>
-<p><strong>Connect everything. Auto-sync.</strong> 37 data connectors for the tools founders already use. 16 connect with one-click OAuth (QuickBooks, Xero, Gusto, Brex, Plaid, HubSpot and more); the rest, including Stripe and Mercury, use an API key, a database connection or a file upload. No screen scraping.</p>
+<p><strong>Connect everything. Auto-sync.</strong> 37 data connectors for the tools founders already use. Six connect with one-click OAuth (QuickBooks, Xero, Gusto, NetSuite, Zoho Books and Google Sheets); the rest, including Stripe and Mercury, use an API key, a database connection or a file upload. No screen scraping.</p>
 <ul>
-<li>37 data connectors, 16 with one-click OAuth</li>
+<li>37 data connectors, 6 with one-click OAuth</li>
 <li>QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid supported</li>
 <li>Auto-sync keeps your data fresh without manual intervention</li>
 <li>Multi-currency handling across all connected sources</li>

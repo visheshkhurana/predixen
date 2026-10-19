@@ -757,8 +757,8 @@ export default function IntegrationsPage() {
         .filter(([, v]: [string, any]) => v.stored !== null && v.stored !== undefined)
         .map(([k]: [string, any]) => k);
       toast({
-        title: "Sample Data Synced",
-        description: `${data.provider_name}: ${metrics.length} metrics stored (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""})`,
+        title: "Sample Preview",
+        description: `${data.provider_name}: ${metrics.length} metrics would sync (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""}). Nothing was saved.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });

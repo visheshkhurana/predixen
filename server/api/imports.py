@@ -22,7 +22,7 @@ from server.ingest.classifier import classify_all_rows, SignConvention
 from server.ingest.calculations import (
     compute_baseline_metrics, calculate_total_revenue, calculate_total_expenses,
     aggregate_expense_breakdown, format_burn_display, format_runway_display,
-    estimate_cash_on_hand, calculate_net_burn
+    calculate_net_burn
 )
 from server.ingest.benchmarks import get_benchmarks, inject_benchmark_defaults
 
@@ -76,7 +76,7 @@ class SaveRequest(BaseModel):
 
 
 class SavedBaselineData(BaseModel):
-    cashOnHand: float
+    cashOnHand: Optional[float] = None  # None = cash not provided (never estimated)
     monthlyRevenue: float
     totalMonthlyExpenses: float
     monthlyGrowthRate: Optional[float] = None
@@ -509,15 +509,10 @@ async def save_import(
     else:
         expense_breakdown = aggregate_expense_breakdown(rows, selected_period)
     
-    # Calculate net burn to determine cash estimation
-    net_burn = abs(total_expenses) - abs(total_revenue)
-    
-    # Estimate cash on hand if not provided
-    if request.cash_on_hand is not None:
-        cash_on_hand = request.cash_on_hand
-    else:
-        estimated_cash, _ = estimate_cash_on_hand(net_burn, None)
-        cash_on_hand = estimated_cash or 0
+    # Cash is never invented. A blank cash field used to become burn x 12 (or
+    # $2M when profitable), which fabricated a 12-month runway. Store null and
+    # let readers report runway as unknown / "cash not provided".
+    cash_on_hand = request.cash_on_hand
     
     try:
         period_date = datetime.strptime(selected_period, "%Y-%m-%d").date()
@@ -526,23 +521,49 @@ async def save_import(
     
     period_end = period_date.replace(day=28)
     
-    marketing_and_other = (
-        abs(expense_breakdown.get('marketing', 0)) + 
-        abs(expense_breakdown.get('other', 0))
-    )
+    cogs_amt_abs = abs(expense_breakdown.get('cogs', 0) or 0)
+    opex_amt_abs = abs(expense_breakdown.get('operating', 0) or 0)
+    payroll_amt_abs = abs(expense_breakdown.get('payroll', 0) or 0)
+    marketing_amt_abs = abs(expense_breakdown.get('marketing', 0) or 0)
+    other_amt_abs = abs(expense_breakdown.get('other', 0) or 0)
+    
+    # other_costs holds "other" only: marketing has its own column and every
+    # reader adds marketing_expense + other_costs, so folding marketing into
+    # other_costs counted it twice. Any part of the total (expense override,
+    # canonical total, or row total) that the buckets do not explain goes into
+    # other_costs so readers that sum the breakdown honour the total.
+    known_buckets = cogs_amt_abs + opex_amt_abs + payroll_amt_abs + marketing_amt_abs
+    other_costs_amt = max(other_amt_abs, abs(total_expenses) - known_buckets)
+    stored_total = known_buckets + other_costs_amt
+    if request.expense_override is not None and stored_total > abs(total_expenses) + 0.5:
+        # The user typed a total below what the buckets add up to. Their total
+        # wins: scale the buckets so the stored breakdown sums to it (readers
+        # derive burn from the breakdown, so a stored scalar alone is ignored).
+        scale = abs(total_expenses) / stored_total if stored_total else 0.0
+        logger.info(
+            f"[SAVE] expense_override ${abs(total_expenses):,.0f} below bucket sum "
+            f"${stored_total:,.0f}; scaling buckets by {scale:.4f}"
+        )
+        cogs_amt_abs *= scale
+        opex_amt_abs *= scale
+        payroll_amt_abs *= scale
+        marketing_amt_abs *= scale
+        other_costs_amt *= scale
+    signed_net_burn = abs(total_expenses) - abs(total_revenue)
     
     record = FinancialRecord(
         company_id=session.company_id,
         period_start=period_date,
         period_end=period_end,
         revenue=abs(total_revenue),
-        cogs=abs(expense_breakdown.get('cogs', 0)),
-        opex=abs(expense_breakdown.get('operating', 0)),
-        payroll=abs(expense_breakdown.get('payroll', 0)),
-        other_costs=marketing_and_other,
-        cash_balance=abs(cash_on_hand),
+        cogs=cogs_amt_abs,
+        opex=opex_amt_abs,
+        payroll=payroll_amt_abs,
+        other_costs=other_costs_amt,
+        cash_balance=abs(cash_on_hand) if cash_on_hand is not None else None,
         import_session_id=session.id,
-        marketing_expense=abs(expense_breakdown.get('marketing', 0))
+        marketing_expense=marketing_amt_abs,
+        net_burn=signed_net_burn,
     )
     
     db.add(record)
@@ -562,21 +583,18 @@ async def save_import(
     company = db.query(Company).filter(Company.id == session.company_id).first()
     currency = str(company.currency) if company and company.currency else "USD"
     
-    net_burn = abs(total_expenses) - abs(total_revenue) if abs(total_expenses) > abs(total_revenue) else 0
-    runway_months = cash_on_hand / net_burn if net_burn > 0 and cash_on_hand > 0 else None
     
     growth_rate = None
     
-    payroll_amt = expense_breakdown.get('payroll', 0) or 0
-    marketing_amt = expense_breakdown.get('marketing', 0) or 0
-    operating_amt = expense_breakdown.get('operating', 0) or 0
-    cogs_amt = expense_breakdown.get('cogs', 0) or 0
-    
-    known_expenses = payroll_amt + marketing_amt + operating_amt + cogs_amt
-    other_opex = max(0, abs(total_expenses) - known_expenses) if abs(total_expenses) > known_expenses else 0
+    # Echo exactly what was stored so the client baseline matches the record.
+    payroll_amt = payroll_amt_abs
+    marketing_amt = marketing_amt_abs
+    operating_amt = opex_amt_abs
+    cogs_amt = cogs_amt_abs
+    other_opex = other_costs_amt
     
     baseline_data = SavedBaselineData(
-        cashOnHand=abs(cash_on_hand),
+        cashOnHand=abs(cash_on_hand) if cash_on_hand is not None else None,
         monthlyRevenue=abs(total_revenue),
         totalMonthlyExpenses=abs(total_expenses),
         monthlyGrowthRate=growth_rate,

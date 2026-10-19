@@ -125,14 +125,33 @@ const METRIC_DISPLAY_NAMES: Record<string, string> = {
   growth_rate: "Growth Rate",
 };
 
+// Mirrors server/api/smart_alerts.py _default_rules(): same ids, types and
+// thresholds, so a save before the server list loads still hits a real rule.
 const DEFAULT_ALERT_RULES: AlertRule[] = [
-  { id: "burn-spike", type: "burn_spike", enabled: true, threshold: 15, label: "Burn Spike", description: "Alert when monthly burn increases by more than threshold %" },
-  { id: "mrr-drop", type: "mrr_drop", enabled: true, threshold: 5, label: "MRR Drop", description: "Alert when MRR drops by more than threshold %" },
-  { id: "churn-spike", type: "churn_spike", enabled: true, threshold: 10, label: "Churn Spike", description: "Alert when churn increases by more than threshold %" },
-  { id: "runway-warning", type: "runway_warning", enabled: true, threshold: 12, label: "Runway Warning", description: "Alert when runway drops below threshold months" },
-  { id: "runway-caution", type: "runway_caution", enabled: true, threshold: 18, label: "Runway Caution", description: "Alert when runway drops below threshold months" },
-  { id: "growth-slowdown", type: "growth_slowdown", enabled: true, threshold: 30, label: "Growth Slowdown", description: "Alert when growth rate drops by more than threshold %" },
+  { id: "default-burn-spike", type: "burn_spike", enabled: true, threshold: 15, label: "Burn Spike", description: "Alert when monthly burn increases by more than threshold %" },
+  { id: "default-mrr-drop", type: "mrr_drop", enabled: true, threshold: 5, label: "MRR Drop", description: "Alert when MRR drops by more than threshold %" },
+  { id: "default-churn-spike", type: "churn_spike", enabled: true, threshold: 50, label: "Churn Spike", description: "Alert when churn increases by more than threshold %" },
+  { id: "default-runway-warning", type: "runway_warning", enabled: true, threshold: 12, label: "Runway Warning", description: "Alert when runway drops below threshold months" },
+  { id: "default-runway-caution", type: "runway_caution", enabled: true, threshold: 18, label: "Runway Caution", description: "Alert when runway drops below threshold months" },
+  { id: "default-growth-slowdown", type: "growth_slowdown", enabled: true, threshold: 30, label: "Growth Slowdown", description: "Alert when growth rate drops by more than threshold %" },
 ];
+
+const RULE_DESCRIPTIONS: Record<string, string> = Object.fromEntries(
+  DEFAULT_ALERT_RULES.map((r) => [r.type, r.description]),
+);
+
+/** Server rule shape ({id, name, alert_type, threshold, enabled}) -> UI rule. */
+function toAlertRule(r: any): AlertRule {
+  const type = r.alert_type ?? r.type ?? "";
+  return {
+    id: String(r.id),
+    type,
+    enabled: r.enabled !== false,
+    threshold: Number(r.threshold),
+    label: r.name ?? r.label ?? type,
+    description: RULE_DESCRIPTIONS[type] ?? r.description ?? "",
+  };
+}
 
 function Sparkline({ data, color = "currentColor", height = 24 }: { data: number[]; color?: string; height?: number }) {
   if (!data || data.length < 2) return null;
@@ -417,16 +436,27 @@ function AlertSettingsSection({ companyId }: { companyId: number }) {
   const [localRules, setLocalRules] = useState<AlertRule[]>(DEFAULT_ALERT_RULES);
   const { toast } = useToast();
 
-  const { data: rules } = useQuery<AlertRule[]>({
+  // The API returns { rules: [...] } in the server's shape.
+  const { data: rulesResponse } = useQuery<{ rules: any[] }>({
     queryKey: ["/api/companies", companyId, "smart-alerts", "rules"],
     enabled: !!companyId,
   });
 
-  const displayRules = rules && rules.length > 0 ? rules : localRules;
+  useEffect(() => {
+    const serverRules = rulesResponse?.rules;
+    if (Array.isArray(serverRules) && serverRules.length > 0) {
+      setLocalRules(serverRules.map(toAlertRule));
+    }
+  }, [rulesResponse]);
+
+  const displayRules = localRules;
 
   const saveRulesMutation = useMutation({
     mutationFn: async (updatedRule: AlertRule) => {
-      const res = await apiRequest("PUT", `/api/companies/${companyId}/smart-alerts/rules/${updatedRule.id}`, updatedRule);
+      const res = await apiRequest("PUT", `/api/companies/${companyId}/smart-alerts/rules/${updatedRule.id}`, {
+        threshold: updatedRule.threshold,
+        enabled: updatedRule.enabled,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -434,7 +464,7 @@ function AlertSettingsSection({ companyId }: { companyId: number }) {
       toast({ title: "Rule Updated", description: "Alert rule has been saved." });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to save rule. Changes saved locally.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to save rule.", variant: "destructive" });
     },
   });
 
