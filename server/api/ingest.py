@@ -1175,17 +1175,33 @@ class OnboardingExtractionResponse(BaseModel):
     raw_data_preview: Optional[Dict[str, Any]] = None  # For cross-check UI with Excel/CSV
 
 
+def _resolve_onboarding_openai() -> tuple[Optional[str], Optional[str]]:
+    """Return ``(api_key, base_url)`` for the onboarding extractors.
+
+    The Replit AI Integrations key only works against its own proxy, so its base
+    URL is returned with it. A plain ``OPENAI_API_KEY`` talks to OpenAI directly
+    and must not inherit the integration base URL.
+    """
+    integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+    if integration_key:
+        return integration_key, os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+
+    plain_key = os.environ.get("OPENAI_API_KEY")
+    return (plain_key, None) if plain_key else (None, None)
+
+
 def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
     """Use OpenAI to extract company info and financials from document text."""
     from openai import OpenAI
-    
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+
+    api_key, base_url = _resolve_onboarding_openai()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key, base_url=base_url)
+        raise ValueError(
+            "OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY."
+        )
+
+    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
     
     try:
         response = client.chat.completions.create(
@@ -1222,14 +1238,15 @@ def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
 def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
     """Use OpenAI Vision to extract company info and financials from images."""
     from openai import OpenAI
-    
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+
+    api_key, base_url = _resolve_onboarding_openai()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key, base_url=base_url)
+        raise ValueError(
+            "OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY."
+        )
+
+    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
     
     content = [{"type": "text", "text": ONBOARDING_VISION_PROMPT}]
     
