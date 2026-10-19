@@ -274,7 +274,10 @@ def _perform_health_analysis(
         total_costs = gross_burn(r)
         nb = total_costs - rev
         burn_values.append(nb)
-        if nb > 0 and float(r.cash_balance or 0) > 0:
+        # Same split as the single-record branch above: known-ness is
+        # `is not None`, and a real 0.0 (cash exhausted) is a runway of zero,
+        # not a missing one.
+        if nb > 0 and r.cash_balance is not None:
             runway_values.append(float(r.cash_balance) / nb)
         else:
             runway_values.append(None)

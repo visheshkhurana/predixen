@@ -516,7 +516,7 @@ async def send_weekly_briefing(
             "burn_rate": total_costs,
             "net_burn": net_burn,
             "cash_balance": cash,
-            "runway_months": round(runway, 1) if runway else None,
+            "runway_months": round(runway, 1) if runway is not None else None,
         }
 
     unacknowledged = [a for a in alerts if not a.get("acknowledged")]
