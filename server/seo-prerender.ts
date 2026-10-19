@@ -192,7 +192,7 @@ function buildToolsIndexBodyContent(): string {
 <p>Every calculator here holds your inputs steady and returns a single answer. Real revenue is lumpy, and the month that decides the outcome is rarely the average month. FounderConsole connects to your actual financial data and runs the same question thousands of times, so runway comes back as a distribution with P10/P50/P90 bands instead of one date.</p>
 <h2>Where these formulas come from</h2>
 <p>Each calculator states its formula and its benchmark on the page, records whether the formula is textbook or a stated choice, and pins a worked example in a test. Where a common shortcut is wrong — monthly churn multiplied by twelve instead of compounded, for instance — the page shows the size of the error rather than hiding it.</p>
-<p>When you are ready for live data and ongoing forecasts, the <a href="/ai-cfo">AI CFO</a> answers a financial question from your own connected numbers, and you can <a href="/auth">get started free</a>. See <a href="/pricing">pricing</a> for what is included during early access.</p>
+<p>When you are ready for live data and ongoing forecasts, the <a href="/ai-cfo">AI CFO</a> answers a financial question from your own connected numbers, and you can <a href="/signup">get started free</a>. See <a href="/pricing">pricing</a> for what is included during early access.</p>
 </article>`;
 }
 

@@ -32,7 +32,12 @@ const SIGNUP_CTA_FILES = [
   "client/src/pages/landing.tsx",
   "client/src/pages/pricing.tsx",
   "client/src/pages/product.tsx",
+  "client/src/pages/tools-index.tsx",
   "client/src/pages/use-cases.tsx",
+  // HAG-455: the prerendered body is what a crawler and a no-JS visitor get —
+  // createRoot() replaces it only once JS runs. A bare /auth here is the
+  // original bug for the audience that cannot click twice.
+  "server/seo-prerender.ts",
 ];
 
 for (const file of SIGNUP_CTA_FILES) {

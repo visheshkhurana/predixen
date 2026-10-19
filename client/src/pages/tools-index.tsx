@@ -197,7 +197,7 @@ export default function ToolsIndexPage() {
               is the next step.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/auth?tab=register">
+              <Link href="/signup">
                 <Button data-testid="button-tools-signup">
                   Get started free
                   <ArrowRight className="ml-2 h-4 w-4" />
