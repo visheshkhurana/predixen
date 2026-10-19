@@ -16,7 +16,11 @@ without also restoring the lock would have turned a dead endpoint into a live
 disclosure of every address collected.
 """
 
+import hashlib
 import logging
+import threading
+import time
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -93,12 +97,35 @@ def _runway_email_html(data: LeadCreate) -> str:
     """
 
 
+def consent_is_recorded(email: str) -> bool:
+    """True only when the committed row has consent and a server timestamp.
+
+    The result email calls this before Resend. A missing row, a false consent
+    flag, or a database error all refuse the send.
+    """
+    from server.core.db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        lead = db.query(Lead).filter(Lead.email == email.lower().strip()).one_or_none()
+        return bool(lead and lead.consent is True and lead.consent_at)
+    except Exception:
+        logger.exception("[leads] could not confirm consent before email")
+        return False
+    finally:
+        db.close()
+
+
 async def _send_runway_email(data: LeadCreate) -> None:
     """Best-effort. A failure here must never surface to the visitor.
 
-    The lead is already committed by the time this runs, so a bounced send costs
-    us the email, not the contact.
+    Consent has to be on the committed row before this talks to Resend. The
+    message is the calculator result, not an LLM prompt, and its links do not
+    carry the address.
     """
+    if not consent_is_recorded(str(data.email)):
+        logger.warning("[leads] not sending the result email; consent is not recorded")
+        return
     try:
         from server.email.service import send_email
 
@@ -116,12 +143,89 @@ def _lead_distinct_id(email: str) -> str:
     return lead_distinct_id(email)
 
 
+# Fixed window for POST /leads. Hardcoded so this does not add an env var.
+# The middleware applies the same cap; this one does not fail open when the
+# database is down, and it never keys the bucket on the address.
+LEAD_RATE_LIMIT = 8
+LEAD_RATE_WINDOW_SECONDS = 60
+_LEAD_HITS: dict[str, list[float]] = {}
+_LEAD_LOCK = threading.Lock()
+
+
+def lead_client_key(request: Optional[Request]) -> str:
+    """Last trusted forwarded hop, else the socket host. Never an email."""
+    raw = ""
+    headers = getattr(request, "headers", None) if request is not None else None
+    if headers is not None:
+        getter = getattr(headers, "get", None)
+        if getter is not None:
+            raw = getter("x-forwarded-for") or getter("X-Forwarded-For") or ""
+    parts = [part.strip() for part in str(raw).split(",") if part.strip() and "@" not in part]
+    key = parts[-1] if parts else ""
+    if not key:
+        client = getattr(request, "client", None)
+        key = str(getattr(client, "host", "") or "")
+    if not key or "@" in key:
+        return "unknown"
+    return key[:200]
+
+
+def lead_rate_limited(
+    key: str,
+    *,
+    now: Optional[float] = None,
+    limit: int = LEAD_RATE_LIMIT,
+    window: float = LEAD_RATE_WINDOW_SECONDS,
+    store: Optional[dict[str, list[float]]] = None,
+) -> bool:
+    """True when this key is over the window. A blocked call does not count."""
+    bucket = _LEAD_HITS if store is None else store
+    stamp = time.monotonic() if now is None else now
+    with _LEAD_LOCK:
+        hits = [seen for seen in bucket.get(key, []) if stamp - seen < window]
+        if len(hits) >= limit:
+            bucket[key] = hits
+            return True
+        hits.append(stamp)
+        bucket[key] = hits
+        return False
+
+
+def _email_markers(email: str) -> tuple[str, ...]:
+    """The address and every hash form we must not send to PostHog or a URL."""
+    raw = (email or "").lower().strip()
+    if not raw:
+        return ()
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    short = digest[:32]
+    return (raw, digest, short, f"lead:{short}")
+
+
+def _mentions_email(value: object, markers: tuple[str, ...]) -> bool:
+    if value is None or not markers:
+        return False
+    text = str(value).lower()
+    return any(marker and marker in text for marker in markers)
+
+
 def _event_distinct_id(data: LeadCreate) -> tuple[str, str]:
-    """Browser id when the client sent one, otherwise the email hash."""
+    """Browser id when it is safe. Never the address and never a hash of it.
+
+    A missing or rejected browser id becomes a random opt-in id. That id is
+    not derived from the email, so PostHog cannot be joined back to the address.
+    """
+    markers = _email_markers(str(data.email))
     client_id = sanitize_distinct_id(data.distinct_id)
-    if client_id:
+    if client_id and not _mentions_email(client_id, markers):
         return client_id, "browser"
-    return _lead_distinct_id(str(data.email)), "email_hash"
+    return f"optin:{uuid.uuid4().hex}", "anonymous"
+
+
+def _scrub_email(value: object, markers: tuple[str, ...], fallback: str = "") -> str:
+    text = "" if value is None else str(value)
+    if _mentions_email(text, markers):
+        return fallback
+    return text
 
 
 # Resend here is a transactional sender (send_email). There is no
@@ -162,27 +266,32 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
     zero lead_captured over 90d, even though the calculator chunk still calls
     trackFunnel("lead_captured") after a 2xx. Fire here after the row is
     committed so a successful POST always emits, independent of the browser.
-    The distinct_id is the browser one when the page sent it, so the event
-    joins that visitor. Otherwise it is the email hash, which signup aliases
-    onto the account. Does not call identify or reset anyone.
+    The distinct_id is the browser one when the page sent a safe id. Otherwise
+    it is a random opt-in id. The address and any hash of it are stripped from
+    the id and from every property. Does not call identify or reset anyone.
     """
     try:
-        location = (data.source or "website").strip() or "website"
+        markers = _email_markers(str(data.email))
+        location = _scrub_email((data.source or "website").strip() or "website", markers, "website") or "website"
         distinct_id, distinct_id_source = _event_distinct_id(data)
+        if _mentions_email(distinct_id, markers):
+            distinct_id, distinct_id_source = f"optin:{uuid.uuid4().hex}", "anonymous"
         properties = {
             "location": location,
             "source": location,
             "created": created,
             "distinct_id_source": distinct_id_source,
-            "host": host,
+            "host": _scrub_email(host, markers),
         }
-        page = (data.source_page or "").strip()
+        page = _scrub_email((data.source_page or "").strip(), markers)
         if page:
             properties["source_page"] = page
-        if data.runway_months:
-            properties["runway_months"] = data.runway_months
-        if data.plan:
-            properties["plan"] = data.plan
+        runway = _scrub_email(data.runway_months, markers)
+        if runway:
+            properties["runway_months"] = runway
+        plan = _scrub_email(data.plan, markers)
+        if plan:
+            properties["plan"] = plan
         posthog_capture(
             "lead_captured",
             distinct_id,
@@ -210,8 +319,12 @@ def create_lead(
     Consent has to be true and name the page. The row is stored
     consent_status=pending. No double opt-in email is sent: see
     MARKETING_OPT_IN_PENDING. The result email, when the runway fields are
-    present, is the result they asked for, not the monthly tips.
+    present, is the result they asked for, not the monthly tips. It is queued
+    only after the consent row commits, and the sender checks that row again
+    before Resend. The address is not sent to an LLM.
     """
+    if lead_rate_limited(lead_client_key(request)):
+        raise HTTPException(status_code=429, detail="Too many requests")
     if data.consent is not True:
         raise HTTPException(status_code=400, detail="Consent is required")
     source_page = (data.source_page or "").strip()

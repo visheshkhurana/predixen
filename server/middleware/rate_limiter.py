@@ -57,6 +57,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     - Simulation endpoints (expensive Monte Carlo)
     - General API endpoints
     - Health check endpoints (no limit)
+    - Public lead capture (POST /leads), tighter than the general API cap
     """
 
     AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password"}
@@ -64,6 +65,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     UPLOAD_PATHS = {"/csv-import", "/api/upload"}
     HEALTH_PATHS = {"/health", "/"}
     SIMULATION_PATHS = {"/api/simulations"}
+    # Express strips the /api prefix before FastAPI sees the request. Both
+    # forms are listed so a direct hit and a proxied hit share this cap.
+    # The number is a class constant. Lead capture does not read an environment variable.
+    LEAD_PATHS = {"/leads", "/api/leads"}
+    LEAD_RATE_LIMIT = 8
 
     WINDOW_SECONDS = 60
 
@@ -108,16 +114,25 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         # per request by injecting their own X-Forwarded-For header.
         xff = request.headers.get("X-Forwarded-For")
         if xff:
-            parts = [p.strip() for p in xff.split(",") if p.strip()]
+            # An address is not a client IP. Dropping those hops keeps the
+            # email out of the rate_limits table and stops one address per bucket.
+            parts = [p.strip() for p in xff.split(",") if p.strip() and "@" not in p]
             if parts:
                 return parts[-1]
-        return request.client.host if request.client else "unknown"
+        client = request.client.host if request.client else ""
+        if client and "@" not in client:
+            return client
+        return "unknown"
 
     def _get_category(self, request: Request) -> Tuple[str, int]:
         path = request.url.path
 
         if path in self.HEALTH_PATHS:
             return ("health", float('inf'))
+
+        lead_path = path.rstrip("/") or path
+        if request.method == "POST" and lead_path in self.LEAD_PATHS:
+            return ("leads", self.LEAD_RATE_LIMIT)
 
         if path in self.ADMIN_AUTH_PATHS:
             return ("admin_auth", self.rate_limit_admin_login)

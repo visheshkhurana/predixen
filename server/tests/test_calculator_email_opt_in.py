@@ -41,13 +41,19 @@ class _Headers(dict):
         return super().get(key, default)
 
 
+_request_seq = 0
+
+
 class _Request:
     def __init__(self, host="founderconsole.ai", forwarded=None):
+        global _request_seq
+        _request_seq += 1
         headers = {"host": host}
         if forwarded:
             headers["x-forwarded-host"] = forwarded
         self.headers = _Headers(headers)
         self.url = type("U", (), {"hostname": host.split(":")[0]})()
+        self.client = type("C", (), {"host": f"198.51.100.{_request_seq}"})()
 
 
 def _consented(**overrides) -> LeadCreate:

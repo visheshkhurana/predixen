@@ -209,7 +209,11 @@ test("successful lead creates emit lead_captured on the server", () => {
   assert.match(leads, /background\.add_task\(_emit_lead_captured,/);
   assert.match(leads, /posthog_capture\(\s*"lead_captured"/);
   assert.match(leads, /"browser"/);
-  assert.match(leads, /"email_hash"/);
+  assert.match(leads, /"anonymous"/);
+  assert.match(leads, /optin:/);
+  // The address and a hash of it must not be the PostHog distinct_id.
+  assert.doesNotMatch(leads, /"email_hash"/);
+  assert.doesNotMatch(leads, /return _lead_distinct_id\(/);
   assert.match(posthog, /\/capture\//);
   assert.match(posthog, /refusing/);
   assert.doesNotMatch(posthog, /\.identify\(/);
