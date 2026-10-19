@@ -96,6 +96,12 @@ export function runwayVerdict(r: RunwayResult): RunwayVerdict {
  * the box empty instead of snapping to "0" (the Number(e.target.value) bug).
  */
 export function toNumber(text: string): number {
-  const n = parseFloat(text);
+  // People type money the way their bank statement prints it: "$500,000".
+  // parseFloat reads that as NaN (-> 0) and "1,000" as 1, which silently
+  // changes the runway and the lead email sent to sales. Strip the currency
+  // and grouping characters first; anything still unparseable is 0.
+  const cleaned = text.replace(/[$,\s]/g, "");
+  if (cleaned === "") return 0;
+  const n = parseFloat(cleaned);
   return Number.isFinite(n) ? n : 0;
 }

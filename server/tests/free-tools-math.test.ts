@@ -22,6 +22,7 @@ import {
   projectRunway,
   runwayVerdict,
   simpleRunway,
+  toNumber,
 } from "../../client/src/lib/tools/runway.ts";
 import { computeVerdict } from "../../client/src/lib/tools/defaultAlive.ts";
 import { simulatorPrefillFromSearch } from "../../client/src/lib/tools/simulatorPrefill.ts";
@@ -193,4 +194,12 @@ test("/demo lists tour stops, not timestamps for a video that does not exist", (
   const src = read("client/src/pages/demo.tsx");
   assert.doesNotMatch(src, /time: "\d+:\d\d"/);
   assert.match(src, /What the demo covers/);
+});
+
+test("money typed the way a bank statement prints it parses to the amount shown", () => {
+  assert.equal(toNumber("1,000"), 1000);
+  assert.equal(toNumber("$500,000"), 500000);
+  assert.equal(toNumber(" 250000 "), 250000);
+  assert.equal(toNumber(""), 0);
+  assert.equal(toNumber("abc"), 0);
 });
