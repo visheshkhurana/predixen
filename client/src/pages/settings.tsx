@@ -34,8 +34,9 @@ export default function SettingsPage() {
       toast({ title: 'Passwords do not match', variant: 'destructive' });
       return;
     }
-    if (newPassword.length < 8) {
-      toast({ title: 'Password must be at least 8 characters', variant: 'destructive' });
+    // Same rule the server enforces (and register uses).
+    if (newPassword.length < 8 || !/\d/.test(newPassword)) {
+      toast({ title: 'Password must be at least 8 characters and contain a number', variant: 'destructive' });
       return;
     }
     setIsChangingPassword(true);
@@ -48,8 +49,14 @@ export default function SettingsPage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch {
-      toast({ title: 'Failed to update password', description: 'Check your current password and try again.', variant: 'destructive' });
+    } catch (err) {
+      const detail = (err as { detail?: unknown })?.detail;
+      const description = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail) && typeof detail[0]?.msg === 'string'
+          ? String(detail[0].msg).replace(/^Value error, /, '')
+          : 'Check your current password and try again.';
+      toast({ title: 'Failed to update password', description, variant: 'destructive' });
     } finally {
       setIsChangingPassword(false);
     }

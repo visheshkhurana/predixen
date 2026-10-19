@@ -178,7 +178,13 @@ export default function BillingPage() {
         onSuccess: (data) => {
           if (data.checkout_url) {
             window.location.href = data.checkout_url;
+          } else if (data.portal_url) {
+            // Already subscribed: downgrade/cancel or payment fix happens in the portal.
+            window.location.href = data.portal_url;
           } else if (data.message) {
+            if (data.changed) {
+              queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+            }
             toast({ title: data.message });
           }
         },

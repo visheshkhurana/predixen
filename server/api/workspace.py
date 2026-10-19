@@ -1,15 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
 import secrets
+import logging
 
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
 from server.models.company import Company
 from server.models.workspace import WorkspaceMember, WorkspaceInvite, NotificationPreference
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspace", tags=["workspace"])
 
@@ -169,17 +173,21 @@ def list_invites(
 
 
 @router.post("/companies/{company_id}/invite")
-def invite_member(
+async def invite_member(
     company_id: int,
     request: InviteMemberRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Invite a new member to the workspace"""
+    """Invite a new member to the workspace and email them the join link."""
     require_workspace_access(company_id, current_user, db, min_role="admin")
-    
+
+    if request.role not in ["admin", "editor", "viewer"]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    email = request.email.strip().lower()
+
     # Check if already a member
-    existing_user = db.query(User).filter(User.email == request.email).first()
+    existing_user = db.query(User).filter(func.lower(User.email) == email).first()
     if existing_user:
         existing_member = db.query(WorkspaceMember).filter(
             WorkspaceMember.company_id == company_id,
@@ -191,7 +199,7 @@ def invite_member(
     # Check for pending invite
     existing_invite = db.query(WorkspaceInvite).filter(
         WorkspaceInvite.company_id == company_id,
-        WorkspaceInvite.email == request.email,
+        func.lower(WorkspaceInvite.email) == email,
         WorkspaceInvite.status == "pending"
     ).first()
     if existing_invite:
@@ -200,7 +208,7 @@ def invite_member(
     # Create invite
     invite = WorkspaceInvite(
         company_id=company_id,
-        email=request.email,
+        email=email,
         role=request.role,
         invited_by=current_user.id,
         token=secrets.token_urlsafe(32),
@@ -208,10 +216,50 @@ def invite_member(
     )
     db.add(invite)
     db.commit()
-    
-    # TODO: Send email notification
-    
-    return {"status": "invited", "invite_id": invite.id}
+
+    # The link is /auth?invite=<token>; signing in or registering with the
+    # invited address accepts it (server/core/invites.py).
+    email_sent = False
+    try:
+        from server.email.service import send_invite_email, is_email_configured
+        if is_email_configured():
+            result = await send_invite_email(
+                to_email=email,
+                invite_token=invite.token,
+                role=request.role,
+                invited_by_email=current_user.email,
+                expires_at=invite.expires_at,
+                early_access=False,
+            )
+            email_sent = bool(result and result.get("success"))
+    except Exception as e:
+        logger.warning(f"Workspace invite email failed for invite {invite.id}: {e}")
+
+    return {"status": "invited", "invite_id": invite.id, "email_sent": email_sent}
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+
+
+@router.post("/invites/accept")
+def accept_workspace_invite(
+    request: AcceptInviteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Accept an invite as the signed-in user (must be the invited address)."""
+    from server.core.invites import accept_invite, InviteError
+
+    if getattr(current_user, "id", -1) == -1:
+        raise HTTPException(status_code=400, detail="Sign in as the invited user to accept")
+    try:
+        result = accept_invite(db, current_user, request.token)
+    except InviteError as e:
+        db.commit()
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {"status": "accepted", **result}
 
 
 @router.patch("/members/{member_id}/role")

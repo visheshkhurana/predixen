@@ -137,6 +137,64 @@ def get_or_create_customer(db, user) -> str:
     return customer.id
 
 
+# Subscriptions in these states are still billing the customer; starting a
+# second Checkout for them would charge twice.
+LIVE_SUBSCRIPTION_STATUSES = ("active", "trialing", "past_due", "unpaid")
+
+
+def existing_customer_id(db, user) -> Optional[str]:
+    """The user's Stripe customer id if one is on file (never creates one)."""
+    from sqlalchemy import text
+
+    row = db.execute(
+        text("SELECT stripe_customer_id FROM subscriptions WHERE user_id = :uid AND stripe_customer_id IS NOT NULL ORDER BY created_at DESC LIMIT 1"),
+        {"uid": user.id},
+    ).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def find_live_subscription(db, user) -> Optional[dict]:
+    """The customer's current billing subscription in Stripe, if any.
+
+    Stripe is the source of truth here: the local row can lag a webhook.
+    """
+    customer_id = existing_customer_id(db, user)
+    if not customer_id:
+        return None
+    _init()
+    subs = stripe.Subscription.list(customer=customer_id, status="all", limit=20)
+    live = [to_plain(s) for s in (getattr(subs, "data", None) or subs.get("data", []))]
+    live = [s for s in live if s and s.get("status") in LIVE_SUBSCRIPTION_STATUSES]
+    if not live:
+        return None
+    live.sort(key=lambda s: s.get("created") or 0, reverse=True)
+    return live[0]
+
+
+def change_subscription_plan(sub: dict, user_id: int, plan: str, interval: str = "monthly") -> dict:
+    """Move an existing subscription to plan+interval with proration.
+
+    Returns the updated subscription as a plain dict. A no-op when it is
+    already on that price.
+    """
+    _init()
+    price_id = ensure_price(plan, interval)
+    items = (sub.get("items") or {}).get("data") or []
+    if not items:
+        raise ValueError(f"Subscription {sub.get('id')} has no items")
+    item = items[0]
+    if (item.get("price") or {}).get("id") == price_id and not sub.get("cancel_at_period_end"):
+        return sub
+    updated = stripe.Subscription.modify(
+        sub["id"],
+        items=[{"id": item["id"], "price": price_id}],
+        proration_behavior="create_prorations",
+        cancel_at_period_end=False,
+        metadata={"fc_user_id": str(user_id), "fc_plan": plan},
+    )
+    return to_plain(updated)
+
+
 def create_checkout_session(db, user, plan: str, interval: str = "monthly") -> str:
     """Create a Stripe Checkout session for a subscription. Returns the URL."""
     _init()
