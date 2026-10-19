@@ -212,8 +212,16 @@ test("an unknown tool slug is still a real 404, and now points at the hub", () =
 test("production HTML catch-alls use renderHtmlPage for the status", () => {
   const staticSrc = readFileSync("server/static.ts", "utf8");
   const viteSrc = readFileSync("server/vite.ts", "utf8");
-  assert.match(staticSrc, /renderHtmlPage\(indexHtml, pathname\)/);
-  assert.match(staticSrc, /res\.status\(page\.status\)/);
+  // static.ts no longer sends the prerenderer's status directly: HAG-162 put
+  // decideShellResponse in front of it, because a path the client router does
+  // not declare must 404 even though getPageMeta has no entry for it. The
+  // intent of this assertion is unchanged -- the status sent is still the one
+  // the prerenderer computed, never a literal 200 -- so it is retargeted to the
+  // decision rather than dropped.
+  assert.match(staticSrc, /decideShellResponse\(indexHtml, normalisePathname\(pathname\)\)/);
+  assert.match(staticSrc, /const page = renderHtmlPage\(indexHtml, pathname\);/);
+  assert.match(staticSrc, /if \(page\.status === 404\)/);
+  assert.match(staticSrc, /res\.status\(decision\.status\)\.send\(decision\.html\)/);
   assert.match(viteSrc, /renderHtmlPage\(page, cleanPath\)/);
   assert.match(viteSrc, /res\.status\(rendered\.status\)/);
   assert.doesNotMatch(staticSrc, /res\.status\(200\)/);
