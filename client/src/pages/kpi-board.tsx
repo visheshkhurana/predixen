@@ -471,9 +471,17 @@ export default function KPIBoardPage() {
     // shown as "60.0 mo" (the ">= 120 -> Profitable" branch could never fire).
     const runwayProfitable = sharedMetrics.runway === Infinity || latestSnapshot?.is_profitable === true;
     const sharedRunway = Number.isFinite(sharedMetrics.runway) && sharedMetrics.runway > 0 ? sharedMetrics.runway : 0;
+    // The server sends runway_months null for two different states: profitable,
+    // and cash never entered. Only the first is "Profitable"; the second is
+    // unknown, and coalescing it to 0 printed "0.0 mo / Low runway" for a
+    // founder who simply left cash blank. dashboard.tsx renders N/A for it.
+    const reportedRunway = latestSnapshot ? latestSnapshot.runway_months : undefined;
+    const historyRunway = latestHistory ? latestHistory.runway_months : undefined;
+    const runwayValue = reportedRunway !== undefined ? reportedRunway : historyRunway;
+    const runwayUnknown = !runwayProfitable && sharedRunway === 0 && runwayValue == null;
     const runwayMonths = runwayProfitable
       ? null
-      : Math.max(0, Math.min(sharedRunway || pick(latestSnapshot?.runway_months ?? undefined, latestHistory?.runway_months ?? undefined, 0), 120));
+      : Math.max(0, Math.min(sharedRunway || runwayValue || 0, 120));
     const rawChurn = pick(latestSnapshot?.churn_rate ?? undefined, latestHistory?.churn_rate ?? undefined, sharedMetrics.churnRate);
 
     return {
@@ -483,6 +491,7 @@ export default function KPIBoardPage() {
       cash_balance: pick(latestSnapshot?.cash_balance, latestHistory?.cash_balance, sharedMetrics.cashOnHand),
       net_burn: sharedMetrics.netBurn || latestSnapshot?.net_burn || latestHistory?.net_burn || 0,
       runway_months: runwayMonths,
+      runway_unknown: runwayUnknown,
       gross_margin: pick(latestSnapshot?.gross_margin, latestHistory?.gross_margin, sharedMetrics.grossMargin),
       churn_rate: normalizeChurn(rawChurn),
       cac: pick(latestSnapshot?.cac, latestHistory?.cac, sharedMetrics.cac),
@@ -629,13 +638,13 @@ export default function KPIBoardPage() {
         <StaggerItem>
         <EnhancedKPICard
           title="Runway"
-          value={isLoading ? '—' : metrics.runway_months == null ? 'Profitable' : `${metrics.runway_months.toFixed(1)} mo`}
+          value={isLoading ? '—' : metrics.runway_unknown ? 'N/A' : metrics.runway_months == null ? 'Profitable' : `${metrics.runway_months.toFixed(1)} mo`}
           icon={<Clock className="h-4 w-4" />}
-          trend={metrics.runway_months != null && metrics.runway_months < 6 ? 'down' : 'neutral'}
-          subtitle={metrics.runway_months == null ? 'Cash-flow positive' : metrics.runway_months < 6 ? 'Low runway' : ''}
+          trend={!metrics.runway_unknown && metrics.runway_months != null && metrics.runway_months < 6 ? 'down' : 'neutral'}
+          subtitle={metrics.runway_unknown ? 'Cash not provided' : metrics.runway_months == null ? 'Cash-flow positive' : metrics.runway_months < 6 ? 'Low runway' : ''}
           isLive={isConnected}
           isLoading={isLoading}
-          hoverDetail={metrics.runway_months == null ? 'Company is profitable or cash-flow positive.' : `At current burn rate, cash lasts approximately ${metrics.runway_months.toFixed(1)} months.`}
+          hoverDetail={metrics.runway_unknown ? 'Cash balance was not provided, so runway cannot be computed.' : metrics.runway_months == null ? 'Company is profitable or cash-flow positive.' : `At current burn rate, cash lasts approximately ${metrics.runway_months.toFixed(1)} months.`}
           testId="kpi-card-runway"
         />
         </StaggerItem>
@@ -668,13 +677,13 @@ export default function KPIBoardPage() {
         />
         <EnhancedKPICard
           title="Churn Rate"
-          value={isLoading ? '—' : formatPercent(metrics.churn_rate)}
+          value={isLoading ? '—' : metrics.churn_rate == null || isNaN(metrics.churn_rate) ? 'N/A' : formatPercent(metrics.churn_rate)}
           icon={<Activity className="h-4 w-4" />}
           trend={metrics.churn_rate <= 0.03 ? 'up' : metrics.churn_rate > 0.05 ? 'down' : 'neutral'}
-          subtitle={metrics.churn_rate <= 0.03 ? 'Low churn' : metrics.churn_rate > 0.05 ? 'High churn' : 'Moderate'}
+          subtitle={metrics.churn_rate == null || isNaN(metrics.churn_rate) ? 'Unknown' : metrics.churn_rate <= 0.03 ? 'Low churn' : metrics.churn_rate > 0.05 ? 'High churn' : 'Moderate'}
           isLive={isConnected}
           isLoading={isLoading}
-          hoverDetail={`Monthly churn: ${formatPercent(metrics.churn_rate)}. Target: <3% monthly.`}
+          hoverDetail={metrics.churn_rate == null || isNaN(metrics.churn_rate) ? 'Churn rate was not reported.' : `Monthly churn: ${formatPercent(metrics.churn_rate)}. Target: <3% monthly.`}
           testId="kpi-card-churn"
         />
         <EnhancedKPICard

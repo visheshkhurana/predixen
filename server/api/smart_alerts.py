@@ -19,7 +19,7 @@ from server.models.company import Company
 from server.models.truth_scan import TruthScan
 from server.models.financial import FinancialRecord
 from server.api.simulations import extract_metric_value
-from server.core.burn import gross_burn
+from server.core.burn import burn_summary, gross_burn
 
 logger = logging.getLogger(__name__)
 
@@ -501,13 +501,15 @@ async def send_weekly_briefing(
     key_metrics = {}
     if latest:
         revenue = float(latest.revenue or 0)
-        total_costs = (
-            float(latest.opex or 0) + float(latest.payroll or 0) +
-            float(latest.cogs or 0) + float(latest.other_costs or 0)
-        )
+        # The shared rule, not a local sum: the local sum omitted marketing and
+        # told the model a burning company was taking money in. Cash and runway
+        # come from the same summary, so an unentered balance stays unknown
+        # instead of arriving as a fabricated 0.
+        summary = burn_summary(latest)
+        total_costs = summary["gross_burn"] or 0.0
         net_burn = total_costs - revenue
-        cash = float(latest.cash_balance or 0)
-        runway = cash / net_burn if net_burn > 0 else None
+        cash = summary["cash_balance"]
+        runway = summary["runway_months"]
 
         key_metrics = {
             "mrr": revenue,
