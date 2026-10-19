@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -50,8 +49,6 @@ import {
   X,
   FlaskConical,
   Search,
-  Plus,
-  Flag,
   Upload,
   Database,
   Rocket,
@@ -120,7 +117,8 @@ interface Comment {
 }
 
 const DEFAULT_ASSUMPTIONS: ScenarioAssumptions = {
-  growthRate: 10,
+  // 0 = no growth assumed until real MoM growth is known or the user sets one.
+  growthRate: 0,
   pricingChange: 0,
   hiringRate: 5,
   churnRate: 5,
@@ -472,6 +470,13 @@ const COPILOT_PROMPTS = [
   "What if fundraise slips 3 months?",
 ];
 
+// "+343.7%" -- one decimal, explicit sign; raw floats printed as
+// "+343.69933294924897%" before.
+const formatSignedPct = (value: number | null | undefined): string => {
+  if (value == null || !Number.isFinite(value)) return 'N/A';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+};
+
 const getKpiStatus = (value: number | null, metric: string): 'green' | 'yellow' | 'red' => {
   if (value === null || value === undefined) return 'yellow';
   
@@ -559,7 +564,7 @@ export default function OverviewPage() {
 
   useEffect(() => {
     const updates: Partial<ScenarioAssumptions> = {};
-    if (sharedMetrics.monthlyGrowthRate > 0) {
+    if (sharedMetrics.monthlyGrowthRate !== 0 && Number.isFinite(sharedMetrics.monthlyGrowthRate)) {
       updates.growthRate = sharedMetrics.monthlyGrowthRate;
     } else if (financialBaseline?.monthlyGrowthRate != null) {
       updates.growthRate = Number(financialBaseline.monthlyGrowthRate);
@@ -618,41 +623,29 @@ export default function OverviewPage() {
     };
   }, [sharedMetrics]);
 
+  // Profitable (net burn <= 0) means runway is not a month count. baseData.runway
+  // keeps the 60 used by the projection math, but it must never be *shown* as
+  // "60.0 mo" -- every display goes through runwayText.
+  const isRunwayProfitable = sharedMetrics.runway === Infinity;
+  const runwayText = (months: number, maxDisplay?: number) =>
+    isRunwayProfitable ? 'Profitable' : formatRunway(months, maxDisplay);
+
   const projectedMetrics = useMemo(() => {
     return computeProjectedMetrics(baseData, assumptions);
   }, [baseData, assumptions]);
 
-  const monthlyProjections = useMemo(() => {
-    const projections = computeMonthlyProjections(baseData, assumptions, 12);
-    return projections.map((p, i) => ({
-      month: new Date(2026, i, 1).toLocaleDateString('en-US', { month: 'short' }),
-      ...p,
-    }));
-  }, [baseData, assumptions]);
-
-  const chartData = useMemo(() => {
-    const projections = computeMonthlyProjections(baseData, assumptions, 12);
-    
-    const data = [];
-    data.push({
-      month: new Date(2026, 0, 1).toLocaleDateString('en-US', { month: 'short' }),
-      revenue: Math.round(baseData.mrr),
-      projected: null,
-      baseline: baseData.mrr,
-    });
-    
-    for (let month = 1; month <= 12; month++) {
-      const monthName = new Date(2026, month, 1).toLocaleDateString('en-US', { month: 'short' });
-      const projectedMrr = projections[month - 1].mrr;
-      data.push({
-        month: monthName,
-        revenue: Math.round(projectedMrr),
-        projected: Math.round(projectedMrr),
-        baseline: baseData.mrr * Math.pow(1.05, month),
-      });
-    }
-    return data;
-  }, [baseData, assumptions]);
+  // Projection axis starts at the latest financial record's month (falls back
+  // to the current month when the scan does not report one), never a fixed year.
+  const projectionStart = useMemo(() => {
+    const raw = (truthScan as any)?.latest_period_end;
+    const d = raw ? new Date(raw) : new Date();
+    const valid = !Number.isNaN(d.getTime()) ? d : new Date();
+    return new Date(valid.getUTCFullYear(), valid.getUTCMonth(), 1);
+  }, [truthScan]);
+  const monthLabel = useCallback((offset: number) => {
+    const d = new Date(projectionStart.getFullYear(), projectionStart.getMonth() + offset, 1);
+    return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  }, [projectionStart]);
 
   const getDrillDownData = useCallback((metricKey: string) => {
     const metricTitles: Record<string, string> = {
@@ -686,13 +679,8 @@ export default function OverviewPage() {
     };
     const currentValue = baseMetricMap[metricKey] || 0;
     
-    const historicalGrowthFactors = [0.82, 0.86, 0.90, 0.94, 0.97, 1.0];
-    const history = historicalGrowthFactors.map(factor => {
-      if (metricKey === 'cac' || metricKey === 'burnRate') {
-        return currentValue * (2 - factor);
-      }
-      return currentValue * factor;
-    });
+    // Only the real current value -- no invented back-history.
+    const history = [currentValue];
     
     const monthlyProjections = computeMonthlyProjections(baseData, assumptions, 12);
     const projections = monthlyProjections.map(m => getMetricValue(m, metricKey));
@@ -704,27 +692,28 @@ export default function OverviewPage() {
       projections,
       format: (v: number) => formatCurrency(v),
     };
-  }, [assumptions]);
+  }, [assumptions, baseData]);
 
   const drillDownChartData = useMemo(() => {
     if (!selectedDrillDownMetric) return [];
     const metricData = getDrillDownData(selectedDrillDownMetric);
     if (!metricData) return [];
     
-    const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const history = metricData.history;
     const projections = metricData.projections;
-    
-    return months.map((month, i) => {
+    const total = history.length + projections.length;
+
+    return Array.from({ length: total }, (_, i) => {
       const isHistorical = i < history.length;
       return {
-        month,
+        month: monthLabel(i - (history.length - 1)),
         historical: isHistorical ? history[i] : null,
-        projected: !isHistorical ? projections[i - history.length] : null,
+        // Join the dashed projection to the current point.
+        projected: !isHistorical ? projections[i - history.length] : (i === history.length - 1 ? history[i] : null),
         isProjection: !isHistorical,
       };
     });
-  }, [selectedDrillDownMetric, getDrillDownData]);
+  }, [selectedDrillDownMetric, getDrillDownData, monthLabel]);
 
   const saveScenario = useCallback(() => {
     if (!newScenarioName.trim() || !currentCompany?.id) return;
@@ -876,7 +865,10 @@ export default function OverviewPage() {
     const churnBenchmark = getDynamicBenchmark('churn_rate') || { p25: INDUSTRY_BENCHMARKS.churnRate.p25, p50: INDUSTRY_BENCHMARKS.churnRate.p50, p75: INDUSTRY_BENCHMARKS.churnRate.p75, direction: 'lower_is_better' };
     const burnBenchmark = getDynamicBenchmark('burn_multiple') || { p25: INDUSTRY_BENCHMARKS.burnMultiple.p25, p50: INDUSTRY_BENCHMARKS.burnMultiple.p50, p75: INDUSTRY_BENCHMARKS.burnMultiple.p75, direction: 'lower_is_better' };
     
-    return [
+    const rows: Array<{
+      metric: string; value: number; display?: string; p25: number; p50: number; p75: number;
+      unit: string; direction: string; status: 'above' | 'median' | 'below';
+    }> = [
       { 
         metric: 'Growth Rate', 
         value: assumptions.growthRate, 
@@ -910,12 +902,13 @@ export default function OverviewPage() {
       { 
         metric: 'Runway', 
         value: baseData.runway, 
+        display: isRunwayProfitable ? 'Profitable' : undefined,
         p25: runwayBenchmark.p25, 
         p50: runwayBenchmark.p50, 
         p75: runwayBenchmark.p75,
         unit: 'mo',
         direction: runwayBenchmark.direction,
-        status: getBenchmarkStatus(baseData.runway, runwayBenchmark),
+        status: isRunwayProfitable ? 'above' : getBenchmarkStatus(baseData.runway, runwayBenchmark),
       },
       // Churn is only benchmarked when it is a real number. The server has no
       // churn signal to derive it from, so it comes through as estimated/0 — and
@@ -937,7 +930,9 @@ export default function OverviewPage() {
         : []),
       { 
         metric: 'Burn Multiple', 
+        // Not burning: burn multiple is undefined, not "0x".
         value: baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, 
+        display: baseData.burnRate > 0 ? undefined : 'Profitable',
         p25: burnBenchmark.p25, 
         p50: burnBenchmark.p50, 
         p75: burnBenchmark.p75,
@@ -946,7 +941,8 @@ export default function OverviewPage() {
         status: getBenchmarkStatus(baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, burnBenchmark),
       },
     ];
-  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources]);
+    return rows;
+  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources, isRunwayProfitable]);
 
   const exportToCSV = useCallback(() => {
     const timestamp = new Date().toISOString();
@@ -964,7 +960,7 @@ export default function OverviewPage() {
       ['ARR', baseData.arr.toFixed(0), currentCompany?.currency || 'USD'],
       ['Cash on Hand', baseData.cash.toFixed(0), currentCompany?.currency || 'USD'],
       ['Burn Rate', baseData.burnRate.toFixed(0), `${currentCompany?.currency || 'USD'}/month`],
-      ['Runway', formatRunway(baseData.runway), ''],
+      ['Runway', runwayText(baseData.runway), ''],
       ['CAC', baseData.cac.toFixed(0), currentCompany?.currency || 'USD'],
       ['LTV', baseData.ltv.toFixed(0), currentCompany?.currency || 'USD'],
       ['LTV:CAC Ratio', baseData.ltvCacRatio.toFixed(2), 'x'],
@@ -1349,7 +1345,7 @@ export default function OverviewPage() {
                 Burn is {briefingBurnStatus} at{' '}
                 <span className="font-medium text-foreground">{formatCurrency(baseData.burnRate)}/mo</span>.
                 Runway is {briefingRunwayShift} at{' '}
-                <span className="font-medium text-foreground">{formatRunway(baseData.runway)}</span>.
+                <span className="font-medium text-foreground">{runwayText(baseData.runway)}</span>.
                 {briefingCriticalCount > 0 && (
                   <span className="text-red-400 font-medium"> {briefingCriticalCount} critical alert{briefingCriticalCount > 1 ? 's' : ''} detected.</span>
                 )}
@@ -1427,7 +1423,7 @@ export default function OverviewPage() {
                   value={formatCurrency(baseData.mrr)}
                   subtitle="Monthly Recurring Revenue"
                   trend="up"
-                  trendValue={`+${assumptions.growthRate}%`}
+                  trendValue={formatSignedPct(assumptions.growthRate)}
                   metricSource={sharedMetrics.sources['mrr']}
                   lastUpdated={truthScan?.computed_at}
                   testId="metric-mrr"
@@ -1442,7 +1438,7 @@ export default function OverviewPage() {
                 <StaggerItem><MetricCard
                   title="Cash on Hand"
                   value={formatCurrency(baseData.cash)}
-                  subtitle={`Runway: ${formatRunway(baseData.runway)}`}
+                  subtitle={`Runway: ${runwayText(baseData.runway)}`}
                   variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
                   metricSource={sharedMetrics.sources['cashOnHand']}
                   lastUpdated={truthScan?.computed_at}
@@ -1639,7 +1635,7 @@ export default function OverviewPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="growth-rate">Monthly Growth Rate</Label>
-                      <span className="text-sm font-mono text-muted-foreground">{assumptions.growthRate}%</span>
+                      <span className="text-sm font-mono text-muted-foreground">{safeToFixed(assumptions.growthRate, 1)}%</span>
                     </div>
                     <Slider
                       id="growth-rate"
@@ -1805,57 +1801,7 @@ export default function OverviewPage() {
         </FadeIn>
       )}
 
-      <FadeIn delay={0.15}>
-      <div data-testid="section-goal-tracker" className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 backdrop-blur-sm">
-        <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
-          <div className="flex items-center gap-2">
-            <Flag className="h-3.5 w-3.5 text-muted-foreground/60" />
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider" data-testid="text-goal-tracker-title">Goals</span>
-          </div>
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLocation('/goals')} data-testid="button-add-goal">
-            <Plus className="h-3 w-3 mr-1" />
-            Add Goal
-          </Button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="rounded-lg border border-white/[0.06] p-4 cursor-pointer hover:border-white/[0.12] transition-all" onClick={() => setLocation('/goals')} data-testid="card-goal-mrr">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')} MRR</p>
-              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${baseData.mrr >= 100000 ? 'bg-emerald-500/10 text-emerald-400' : baseData.mrr >= 50000 ? 'bg-primary/10 text-primary' : 'bg-red-500/10 text-red-400'}`} data-testid="badge-goal-mrr-status">{baseData.mrr >= 100000 ? 'Complete' : baseData.mrr >= 50000 ? 'On Track' : 'Off Track'}</span>
-            </div>
-            <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className="h-1" data-testid="progress-goal-mrr" />
-            <div className="flex items-center justify-between gap-2 mt-2 text-[11px] text-muted-foreground/60 font-mono">
-              <span data-testid="text-goal-mrr-progress">{formatCurrencyAbbrev(baseData.mrr, currentCompany?.currency || 'USD')} / {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')}</span>
-              <span data-testid="text-goal-mrr-target">Q4 2026</span>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-white/[0.06] p-4 cursor-pointer hover:border-white/[0.12] transition-all" onClick={() => setLocation('/goals')} data-testid="card-goal-runway">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-sm font-medium" data-testid="text-goal-runway-title">Extend Runway to 36 mo</p>
-              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${baseData.runway >= 36 ? 'bg-emerald-500/10 text-emerald-400' : baseData.runway >= 18 ? 'bg-primary/10 text-primary' : 'bg-red-500/10 text-red-400'}`} data-testid="badge-goal-runway-status">{baseData.runway >= 36 ? 'Complete' : baseData.runway >= 18 ? 'In Progress' : 'Off Track'}</span>
-            </div>
-            <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-1" data-testid="progress-goal-runway" />
-            <div className="flex items-center justify-between gap-2 mt-2 text-[11px] text-muted-foreground/60 font-mono">
-              <span data-testid="text-goal-runway-progress">{formatRunway(baseData.runway, 36)} / 36.0 mo</span>
-              <span data-testid="text-goal-runway-pct">{Math.min(Math.round((baseData.runway / 36) * 100), 100)}%</span>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-white/[0.06] p-4 cursor-pointer hover:border-white/[0.12] transition-all" onClick={() => setLocation('/goals')} data-testid="card-goal-churn">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-sm font-medium" data-testid="text-goal-churn-title">Churn Below 2%</p>
-              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${sharedMetrics.sources['churnRate'] === 'estimated' ? 'bg-white/[0.06] text-muted-foreground' : (baseData.churnRate <= 2 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400')}`} data-testid="badge-goal-churn-status">{sharedMetrics.sources['churnRate'] === 'estimated' ? 'No Data' : (baseData.churnRate <= 2 ? 'On Track' : 'Off Track')}</span>
-            </div>
-            <Progress value={sharedMetrics.sources['churnRate'] === 'estimated' ? 0 : Math.min(((2 / Math.max(baseData.churnRate, 0.01)) * 100), 100)} className="h-1" data-testid="progress-goal-churn" />
-            <div className="flex items-center justify-between gap-2 mt-2 text-[11px] text-muted-foreground/60 font-mono">
-              <span data-testid="text-goal-churn-progress">{sharedMetrics.sources['churnRate'] === 'estimated' ? 'N/A' : `${baseData.churnRate.toFixed(1)}%`}</span>
-              <span data-testid="text-goal-churn-target">Target: 2.0%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      </FadeIn>
+      {/* Goals widget removed: it showed hardcoded targets and there is no goals backend. */}
 
       <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm" data-testid="segment-analysis-section">
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
@@ -2018,7 +1964,9 @@ export default function OverviewPage() {
                   </div>
                   <div className="flex items-baseline space-x-2">
                     <span className="text-2xl font-bold">
-                      {item.metric === 'runway' || item.metric === 'paybackPeriod'
+                      {item.metric === 'runway' && isRunwayProfitable
+                        ? 'Profitable'
+                        : item.metric === 'runway' || item.metric === 'paybackPeriod'
                         ? `${safeToFixed(item.value)} mo`
                         : item.metric === 'ltv_cac' || item.metric === 'burnMultiple'
                         ? safeToFixed(item.value, 1, 'x')
@@ -2147,6 +2095,11 @@ export default function OverviewPage() {
               {dynamicBenchmarks?.is_cached && (
                 <Badge variant="outline" className="text-xs">Cached</Badge>
               )}
+              {dynamicBenchmarks?.is_fallback && (
+                <Badge variant="outline" className="text-xs" title={dynamicBenchmarks.note ?? undefined} data-testid="badge-benchmarks-generic">
+                  Generic defaults
+                </Badge>
+              )}
             </div>
             <CardDescription>
               Real-time benchmarks from industry reports
@@ -2220,7 +2173,7 @@ export default function OverviewPage() {
                       <span className="text-sm font-medium">{item.metric}</span>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm font-semibold">
-                          {safeToFixed(item.value)}{item.unit}
+                          {item.display ?? `${safeToFixed(item.value)}${item.unit}`}
                         </span>
                         <Badge 
                           variant={item.status === 'above' ? 'secondary' : item.status === 'median' ? 'secondary' : 'destructive'}
@@ -2413,7 +2366,7 @@ export default function OverviewPage() {
               {selectedDrillDownMetric && getDrillDownData(selectedDrillDownMetric)?.title}
             </DialogTitle>
             <DialogDescription>
-              Illustrative trend (last 6 months) and 12-month projections based on current assumptions
+              Current value and 12-month projection based on the assumptions panel (growth defaults to your actual MoM growth, or 0% when unknown)
             </DialogDescription>
           </DialogHeader>
           
@@ -2477,7 +2430,7 @@ export default function OverviewPage() {
               <div className="flex items-center justify-center gap-6 text-sm">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-0.5 bg-primary" />
-                  <span className="text-muted-foreground">Illustrative Trend</span>
+                  <span className="text-muted-foreground">Current</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-0.5 border-t-2 border-dashed" style={{ borderColor: 'hsl(var(--chart-2))' }} />

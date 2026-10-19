@@ -5,7 +5,7 @@ Agent Simulation API — endpoints for running and retrieving agent-based simula
 import json
 import secrets
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from server.core.db import get_db
 from server.core.security import get_current_user
-from server.core.company_access import get_user_company
+from server.core.company_access import get_user_company, get_user_company_role
 from server.models import User
 from server.models.agent_simulation import AgentSimulationRun
 from server.simulation_agents.simulation_orchestrator import run_agent_simulation
@@ -65,29 +65,27 @@ async def run_simulation(
         report = generate_report(result)
         result["report"] = report
 
-        share_token = secrets.token_urlsafe(32)
-
         sim_run = AgentSimulationRun(
             company_id=company_id,
             scenario_json=json.dumps(scenario_inputs),
             num_rounds=request.num_rounds,
             seed=request.seed,
             survival_probability=result["summary"]["survivalProbability"],
-            funding_probability=result["summary"]["fundingProbability"],
+            funding_probability=result["summary"]["investorInterestPct"],
             final_cash=result["summary"]["finalCash"],
             final_runway=result["summary"]["finalRunway"],
             results_json=json.dumps(result),
             events_json=json.dumps(result.get("events", [])),
             status="completed",
             completed_at=datetime.utcnow(),
-            share_token=share_token,
+            # No public link until the owner asks for one (POST .../share).
+            share_token=None,
         )
         db.add(sim_run)
         db.commit()
         db.refresh(sim_run)
 
         result["simulationId"] = sim_run.id
-        result["shareToken"] = share_token
 
         return result
 
@@ -138,11 +136,90 @@ async def get_simulation(
     return {**run.to_dict(), "results": results}
 
 
+SHARE_ROLES = ("owner", "admin")
+MAX_SHARE_DAYS = 365
+
+
+class ShareRequest(BaseModel):
+    # Optional: the link stops working after this many days. None = until revoked.
+    expires_in_days: Optional[int] = Field(default=None, ge=1, le=MAX_SHARE_DAYS)
+
+
+def _share_expired(results: dict, now: Optional[datetime] = None) -> bool:
+    raw = (results or {}).get("shareExpiresAt")
+    if not raw:
+        return False
+    try:
+        expires_at = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return True
+    return (now or datetime.utcnow()) >= expires_at
+
+
+def _owned_run(db: Session, company_id: int, run_id: int, user: User) -> AgentSimulationRun:
+    role = get_user_company_role(db, company_id, user)
+    if role not in SHARE_ROLES:
+        raise HTTPException(status_code=403, detail="Only the company owner or an admin can manage share links")
+    run = (
+        db.query(AgentSimulationRun)
+        .filter(AgentSimulationRun.id == run_id, AgentSimulationRun.company_id == company_id)
+        .first()
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    return run
+
+
+@router.post("/companies/{company_id}/simulation/agent-run/{run_id}/share")
+async def share_simulation(
+    company_id: int,
+    run_id: int,
+    request: Optional[ShareRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create (or rotate) the public read-only link for one run."""
+    run = _owned_run(db, company_id, run_id, current_user)
+    try:
+        results = json.loads(run.results_json) if run.results_json else {}
+    except (json.JSONDecodeError, TypeError):
+        results = {}
+
+    days = request.expires_in_days if request else None
+    expires_at = datetime.utcnow() + timedelta(days=days) if days else None
+    results["shareExpiresAt"] = expires_at.isoformat() if expires_at else None
+
+    run.share_token = secrets.token_urlsafe(32)
+    run.results_json = json.dumps(results)
+    db.commit()
+    return {
+        "shareToken": run.share_token,
+        "url": f"/simulate-v2/shared/{run.share_token}",
+        "expiresAt": results["shareExpiresAt"],
+    }
+
+
+@router.delete("/companies/{company_id}/simulation/agent-run/{run_id}/share")
+async def revoke_simulation_share(
+    company_id: int,
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Revoke the public link. The old URL returns 404 from now on."""
+    run = _owned_run(db, company_id, run_id, current_user)
+    run.share_token = None
+    db.commit()
+    return {"revoked": True}
+
+
 @router.get("/simulation/shared/{share_token}")
 async def get_shared_simulation(
     share_token: str,
     db: Session = Depends(get_db),
 ):
+    if not share_token:
+        raise HTTPException(status_code=404, detail="Shared simulation not found")
     run = db.query(AgentSimulationRun).filter(AgentSimulationRun.share_token == share_token).first()
     if not run:
         raise HTTPException(status_code=404, detail="Shared simulation not found")
@@ -151,6 +228,9 @@ async def get_shared_simulation(
         results = json.loads(run.results_json) if run.results_json else {}
     except (json.JSONDecodeError, TypeError):
         results = {}
+
+    if _share_expired(results):
+        raise HTTPException(status_code=404, detail="Shared simulation not found")
 
     report = results.get("report", {})
     return {

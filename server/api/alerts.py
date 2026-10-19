@@ -18,6 +18,7 @@ from server.alerts import (
     AlertConfig,
 )
 from server.alerts.models import AlertThreshold
+from server.core.burn import gross_burn
 from server.alerts.detector import check_runway_warning, check_covenant_violations
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -75,10 +76,7 @@ def get_company_alerts(
     # Extract metrics - calculate burn from available fields
     revenue_values = [float(r.revenue or 0) for r in records]
     # Calculate net burn as total costs minus revenue (negative means burn)
-    burn_values = [
-        float(r.opex or 0) + float(r.payroll or 0) + float(r.cogs or 0) + float(r.other_costs or 0) - float(r.revenue or 0)
-        for r in records
-    ]
+    burn_values = [gross_burn(r) - float(r.revenue or 0) for r in records]
     cash_values = [float(r.cash_balance or 0) for r in records]
     
     # Detect anomalies
@@ -95,13 +93,12 @@ def get_company_alerts(
     # Check runway
     if len(records) > 0:
         latest = records[-1]
-        cash = float(latest.cash_balance) if latest.cash_balance else 0.0
-        # Calculate burn from components
-        total_costs = float(latest.opex or 0) + float(latest.payroll or 0) + float(latest.cogs or 0) + float(latest.other_costs or 0)
-        burn = total_costs - float(latest.revenue or 0)
-        runway_alert = check_runway_warning(cash, max(burn, 0.0), company_id)
-        if runway_alert:
-            all_alerts.append(runway_alert)
+        burn = gross_burn(latest) - float(latest.revenue or 0)
+        # No runway alert when profitable or when cash was never provided.
+        if burn > 0 and latest.cash_balance is not None:
+            runway_alert = check_runway_warning(float(latest.cash_balance), burn, company_id)
+            if runway_alert:
+                all_alerts.append(runway_alert)
     
     return {
         "alerts": [a.to_dict() for a in all_alerts],
@@ -174,7 +171,7 @@ def _perform_health_analysis(
         record = records[0]
         cash = float(record.cash_balance or 0)
         revenue = float(record.revenue or 0)
-        total_costs = float(record.opex or 0) + float(record.payroll or 0) + float(record.cogs or 0) + float(record.other_costs or 0)
+        total_costs = gross_burn(record)
         net_burn = total_costs - revenue
         runway = cash / max(net_burn, 1) if net_burn > 0 else None
         gross_margin = (revenue - float(record.cogs or 0)) / max(revenue, 1) if revenue > 0 else 0
@@ -266,7 +263,7 @@ def _perform_health_analysis(
     churn_values = []
     for r in records:
         rev = float(r.revenue or 0)
-        total_costs = float(r.opex or 0) + float(r.payroll or 0) + float(r.cogs or 0) + float(r.other_costs or 0)
+        total_costs = gross_burn(r)
         nb = total_costs - rev
         burn_values.append(nb)
         if nb > 0 and float(r.cash_balance or 0) > 0:

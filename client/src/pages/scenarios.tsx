@@ -55,7 +55,7 @@ import {
 } from 'lucide-react';
 import { EmptyState, EmptyStateCard } from '@/components/ui/empty-state';
 import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
-import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
+import { calculateSensitivity, calculateWhatIfImpact, sensitivityBarsFromResults, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -751,9 +751,17 @@ export default function ScenariosPage() {
       matched = true;
     }
 
+    const churnTargetMatch = q.match(/churn\s+(?:hits|reaches|goes\s+to|rises\s+to|climbs\s+to|is|at)\s+(\d+(?:\.\d+)?)\s*%/i);
     const churnMatch = q.match(/churn\s+.*?(\d+)\s*%/i);
     const churnDecreaseMatch = q.match(/churn\s+(?:drop|decrease|fall|decline|reduce|lower)s?\s+(?:by\s+|to\s+)?(\d+)\s*%/i);
-    if (churnDecreaseMatch) {
+    if (churnTargetMatch) {
+      // A target level: change = target - the company's current churn (points).
+      const target = parseFloat(churnTargetMatch[1]);
+      const current = baseMetrics?.churnRate && baseMetrics.churnRate > 0 ? baseMetrics.churnRate : 0;
+      params.churn_change_pct = Math.round((target - current) * 10) / 10;
+      tags.push(params.churn_change_pct > 0 ? 'pessimistic' : 'optimistic');
+      matched = true;
+    } else if (churnDecreaseMatch) {
       params.churn_change_pct = -parseInt(churnDecreaseMatch[1]);
       tags.push('optimistic');
       matched = true;
@@ -761,11 +769,8 @@ export default function ScenariosPage() {
       params.churn_change_pct = parseInt(churnMatch[1]);
       tags.push('pessimistic');
       matched = true;
-    } else if (q.includes('churn')) {
-      params.churn_change_pct = 5;
-      tags.push('pessimistic');
-      matched = true;
     }
+    // A bare "churn" with no number no longer invents a +5% change.
 
     const cacMatch = q.match(/cac\s+(?:increase|rise|go(?:es)?\s+up|jump|spike)s?\s+(?:by\s+)?(\d+)\s*%/i);
     const cacDecreaseMatch = q.match(/cac\s+(?:decrease|drop|fall|decline|reduce|lower)s?\s+(?:by\s+)?(\d+)\s*%/i);
@@ -1072,15 +1077,8 @@ export default function ScenariosPage() {
         survival: (() => { const v = getSurvivalPct('18m'); return v != null ? Math.min(100, v).toFixed(0) : '?'; })(),
       };
     }
-    if (!baseMetrics) return null;
-    const runway = baseMetrics.currentRunway * 1.3;
-    return {
-      runway: formatRunway(runway),
-      revenue18m: projectedRevenue(18, 1.5),
-      cash12m: projectedCash(12, 1.5),
-      breakeven: '18+',
-      survival: Math.min(100, 65 * 1.15).toFixed(0),
-    };
+    // No simulation -> no P90 band; never derive one from a fixed multiplier.
+    return null;
   }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
   const scenarioP50 = useMemo(() => {
@@ -1098,8 +1096,9 @@ export default function ScenariosPage() {
       runway: formatRunway(Number(baseMetrics.currentRunway)),
       revenue18m: projectedRevenue(18, 1.0),
       cash12m: projectedCash(12, 1.0),
-      breakeven: '24+',
-      survival: '65',
+      breakeven: '?',
+      // No simulation has run, so there is no survival estimate to show.
+      survival: '?',
     };
   }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
@@ -1115,45 +1114,59 @@ export default function ScenariosPage() {
         survival: p10Survival,
       };
     }
-    if (!baseMetrics) return null;
-    const runway = baseMetrics.currentRunway * 0.7;
-    return {
-      runway: formatRunway(runway),
-      revenue18m: projectedRevenue(18, 0.5),
-      cash12m: projectedCash(12, 0.5),
-      breakeven: '24+',
-      survival: Math.max(0, 65 * 0.7).toFixed(0),
-    };
+    // No simulation -> no P10 band; never derive one from a fixed multiplier.
+    return null;
   }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
-  const sensitivityBars = useMemo(() => {
-    if (!baseMetrics) return [];
-    const bars = [
-      { label: 'Churn Rate', impact: 85, level: 'high' as const },
-      { label: 'Net Burn', impact: 78, level: 'high' as const },
-      { label: 'Revenue Growth', impact: 52, level: 'med' as const },
-      { label: 'CAC', impact: 30, level: 'low' as const },
-    ];
-    return bars;
-  }, [baseMetrics]);
+  // Cost lines come from the company's real expense breakdown (baseline API).
+  // COGS is excluded here because it enters via grossMargin. With no breakdown
+  // the stress/what-if tools show "not available" instead of an invented split.
+  const stressTestCostBreakdown = useMemo(() => {
+    const eb = financialBaseline?.expenseBreakdown;
+    if (!eb) return null;
+    const payroll = eb.payroll ?? null;
+    const operating = eb.operating ?? null;
+    const marketing = eb.marketing ?? null;
+    const other = eb.otherOpex ?? null;
+    if ([payroll, operating, marketing, other].every((x) => x == null || x === 0)) return null;
+    return {
+      payroll: payroll ?? 0,
+      opex: (operating ?? 0) + (marketing ?? 0),
+      otherCosts: other ?? 0,
+    };
+  }, [financialBaseline]);
 
   const stressTestFinancialState: FinancialState = useMemo(() => {
-    const totalExpenses = baseMetrics?.monthlyExpenses || 80000;
-    return baseMetrics ? {
+    return baseMetrics && stressTestCostBreakdown ? {
       monthlyRevenue: baseMetrics.monthlyRevenue, grossMargin: baseMetrics.grossMargin,
-      opex: totalExpenses * 0.3, payroll: totalExpenses * 0.6, otherCosts: totalExpenses * 0.1,
+      opex: stressTestCostBreakdown.opex, payroll: stressTestCostBreakdown.payroll, otherCosts: stressTestCostBreakdown.otherCosts,
       cashBalance: baseMetrics.cashOnHand, churnRate: baseMetrics.churnRate, growthRate: baseMetrics.growthRate,
-      cac: baseMetrics.monthlyRevenue * 0.3, ltv: baseMetrics.churnRate > 0 ? (baseMetrics.monthlyRevenue / baseMetrics.churnRate) * 100 : baseMetrics.monthlyRevenue * 24,
+      cac: sharedMetrics.cac || 0, ltv: sharedMetrics.ltv || 0,
     } : { monthlyRevenue: 0, grossMargin: 0, opex: 0, payroll: 0, otherCosts: 0, cashBalance: 0, churnRate: 0, growthRate: 0, cac: 0, ltv: 0 };
-  }, [baseMetrics]);
+  }, [baseMetrics, stressTestCostBreakdown, sharedMetrics.cac, sharedMetrics.ltv]);
+
+  const stressTestAvailable = !!(baseMetrics && stressTestCostBreakdown);
+
+  // Ranked from the real runway sensitivity of this company's inputs (+/-20%).
+  // Empty when not computable -> the list is hidden, never filled with
+  // placeholder numbers.
+  const sensitivityBars = useMemo(
+    () => (stressTestAvailable ? sensitivityBarsFromResults(calculateSensitivity(stressTestFinancialState)) : []),
+    [stressTestAvailable, stressTestFinancialState],
+  );
 
   const stressTestCurrentRunway = useMemo(() => baseMetrics?.currentRunway || 0, [baseMetrics]);
 
-  const stressTestBaselineResults = useMemo(() => ({
-    runway: stressTestCurrentRunway,
-    survival18m: simulation?.survival_18m ?? (simulation?.survival_12m ? Math.max(0, simulation.survival_12m * 0.85) : 65),
-    cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - ((baseMetrics?.monthlyExpenses || 80000) - stressTestFinancialState.monthlyRevenue) * 18),
-  }), [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
+  const stressTestBaselineResults = useMemo(() => {
+    const netBurn = baseMetrics ? baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue : 0;
+    return {
+      runway: stressTestCurrentRunway,
+      // No simulation -> the same runway-based estimate the what-if tool uses
+      // for adjusted states, so baseline and adjusted are comparable.
+      survival18m: simulation?.survival_18m ?? Math.min(100, Math.max(0, (stressTestCurrentRunway / 18) * 100)),
+      cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - netBurn * 18),
+    };
+  }, [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
 
   const handleGeneratePDF = useCallback(async () => {
     if (!simulation) return;
@@ -2295,10 +2308,12 @@ export default function ScenariosPage() {
                 />
               )}
 
+              {sensitivityBars.length > 0 && (
               <div className="space-y-2.5 mb-5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Key Sensitivity Levers</p>
+                <p className="text-[11px] text-muted-foreground">Runway change from a ±20% move in each input, relative to the biggest lever.</p>
                 {sensitivityBars.map((bar) => (
-                  <div key={bar.label} className="flex items-center gap-3" data-testid={`sensitivity-bar-${bar.label.toLowerCase().replace(/\s/g, '-')}`}>
+                  <div key={bar.label} className="flex items-center gap-3" title={`±20% moves runway by up to ${bar.swingMonths} months`} data-testid={`sensitivity-bar-${bar.label.toLowerCase().replace(/\s/g, '-')}`}>
                     <span className="text-xs w-28 shrink-0">{bar.label}</span>
                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                       <div
@@ -2315,18 +2330,28 @@ export default function ScenariosPage() {
                   </div>
                 ))}
               </div>
+              )}
 
+              {!stressTestAvailable && (
+                <div className="rounded-lg border border-dashed p-4 mb-6 text-sm text-muted-foreground" data-testid="stress-test-unavailable">
+                  Sensitivity, what-if and stress tests are not available: no expense breakdown (payroll / operating / marketing / other) has been provided for this company.
+                </div>
+              )}
+              {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
                 <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
               </div>
+              )}
 
               <SensitivityAnalysisPanel data={sensitivityResults} isLoading={sensitivityMutation.isPending} onRunAnalysis={handleRunSensitivityAnalysis} />
 
+              {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <StressTestPanel currentState={stressTestFinancialState} currentRunway={stressTestCurrentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
                 <ReverseStressTest currentState={stressTestFinancialState} />
               </div>
+              )}
 
               <CounterMoveCards
                 counterMoves={simulation?.counter_moves || null}
@@ -2367,7 +2392,7 @@ export default function ScenariosPage() {
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-p90-survival">{scenarioP90?.survival != null ? `${scenarioP90.survival}%` : 'N/A'}</span>
+                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-p90-survival">{scenarioP90?.survival != null && scenarioP90.survival !== '?' ? `${scenarioP90.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div
@@ -2406,7 +2431,7 @@ export default function ScenariosPage() {
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-primary" data-testid="text-p50-survival">{scenarioP50?.survival != null ? `${scenarioP50.survival}%` : 'N/A'}</span>
+                          <span className="text-sm font-bold text-primary" data-testid="text-p50-survival">{scenarioP50?.survival != null && scenarioP50.survival !== '?' ? `${scenarioP50.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div
@@ -2445,7 +2470,7 @@ export default function ScenariosPage() {
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-p10-survival">{scenarioP10?.survival != null ? `${scenarioP10.survival}%` : 'N/A'}</span>
+                          <span className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-p10-survival">{scenarioP10?.survival != null && scenarioP10.survival !== '?' ? `${scenarioP10.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div

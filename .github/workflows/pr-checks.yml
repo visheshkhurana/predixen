@@ -67,6 +67,9 @@ jobs:
       - name: simulation v2 client payload tests
         run: npx tsx server/tests/simulation-v2-client-payload.test.ts
 
+      - name: simulator audit (runway, twin, hiring, what-if) tests
+        run: npx tsx server/tests/simulator-audit-1018.test.ts
+
       - name: session-401-redirect tests
         run: npx tsx --test server/tests/session-401-redirect.test.ts
 
@@ -126,6 +129,15 @@ jobs:
 
       - name: legacy redirect tests
         run: npx tsx --test server/tests/legacy-redirects.test.ts
+
+      - name: share-page noindex, shared tool titles, calculator_used
+        run: npx tsx --test server/tests/seo-analytics-audit-1019.test.ts
+
+      - name: unknown /survival/:id answers 404
+        run: npx tsx --test server/tests/survival-share-404.test.ts
+
+      - name: audit 10-19 leftovers (sensitivity bars, agent-sim labels, Slack card)
+        run: npx tsx --test server/tests/audit-1019-leftovers.test.ts
 
       - name: signup CTAs open the register tab
         run: npx tsx server/tests/signup-cta-register-tab.test.ts

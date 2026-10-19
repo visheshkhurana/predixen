@@ -260,6 +260,7 @@ interface CopilotApiResponse {
       feasibility: string;
       time_to_implement: number;
     }>;
+    simulation_status?: { ran: boolean; reason?: string | null };
     simulations: Array<{
       scenario: string;
       runway: { p10: number; p50: number; p90: number };
@@ -693,7 +694,7 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const { decision_context, levers, simulations, risk_analysis, recommendation } = advisor;
+  const { decision_context, levers, simulations, risk_analysis, recommendation, simulation_status } = advisor;
 
   return (
     <div className="space-y-4 mt-4" data-testid="decision-advisor-panel">
@@ -764,6 +765,12 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
             <p className="text-xs text-muted-foreground italic">{recommendation.what_changes}</p>
           </CardContent>
         </Card>
+      )}
+
+      {(!simulations || simulations.length === 0) && simulation_status && !simulation_status.ran && (
+        <p className="text-xs text-muted-foreground italic" data-testid="text-no-simulation">
+          No simulation was run{simulation_status.reason ? ` (${simulation_status.reason})` : ''}.
+        </p>
       )}
 
       {simulations && simulations.length > 0 && (
@@ -1563,17 +1570,10 @@ Type **help** for a full list of what I can do.`,
           conversation_history: recentHistory
         };
 
-        let res: Response;
-        try {
-          res = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
-        } catch (firstErr: any) {
-          if (firstErr?.status === 500 || firstErr?.message?.includes('500')) {
-            await new Promise(r => setTimeout(r, 2000));
-            res = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
-          } else {
-            throw firstErr;
-          }
-        }
+        // No client-side retry: the server already retries a failed chat once
+        // and then returns a data fallback. Retrying a 5xx here re-ran the
+        // whole multi-agent pipeline up to 4 times per message.
+        const res: Response = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
         
         const response = await res.json() as CopilotApiResponse;
         

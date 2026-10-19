@@ -82,7 +82,6 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import export as export_api
     from server.api import company_lookup as company_lookup_api
     from server.api import benchmark_search as benchmark_search_api
-    from server.api import connector_catalog as connector_catalog_api
     from server.api import dashboards as dashboards_api
     from server.api import metrics as metrics_api
     from server.api import suggestions as suggestions_api
@@ -157,7 +156,6 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(export_api.router)
     app.include_router(company_lookup_api.router)
     app.include_router(benchmark_search_api.router)
-    app.include_router(connector_catalog_api.router)
     app.include_router(dashboards_api.router)
     app.include_router(metrics_api.router)
     app.include_router(suggestions_api.router)
@@ -183,6 +181,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(llm_usage_api.router)
     app.include_router(doc_generator_api.router)
     app.include_router(slack_bot_api.router)
+    app.include_router(slack_bot_api.link_router)
     app.include_router(digital_twin_api.router)
     app.include_router(intelligence_graph_api.router)
     app.include_router(agent_simulation_api.router)
@@ -303,6 +302,14 @@ async def _run_deferred_startup():
             logger.info("AI governance permissions initialized")
         except Exception as e:
             logger.warning(f"AI governance init skipped: {e}")
+
+        try:
+            # One-off, opt-in: revoke agent-sim share links auto-created before
+            # #161 (REVOKE_LEGACY_AGENT_SIM_SHARES=true). Safe to leave on.
+            from server.core.migrations import revoke_legacy_agent_sim_shares
+            revoke_legacy_agent_sim_shares(engine)
+        except Exception as e:
+            logger.warning(f"Legacy agent-sim share revocation skipped: {e}")
 
         try:
             from server.core.migrations import ensure_lifecycle_email_tables

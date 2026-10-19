@@ -303,6 +303,15 @@ class BaseAgent(ABC):
             )
             return None
     
+    async def _acall_llm(self, *args, **kwargs) -> Optional[str]:
+        """Async wrapper for `_call_llm`: runs the blocking provider call in a
+        worker thread so the event loop stays free. Without this, agents
+        launched via asyncio.gather ran one after another and blocked every
+        other request on the worker, and asyncio.wait_for timeouts could not
+        fire until the call returned."""
+        import asyncio
+        return await asyncio.to_thread(self._call_llm, *args, **kwargs)
+
     def _smart_call(
         self,
         query: str,

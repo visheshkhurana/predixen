@@ -92,13 +92,3 @@ export function Sparkline({
     </svg>
   );
 }
-
-export function generateMockTrendData(baseValue: number, months: number = 6, volatility: number = 0.1): number[] {
-  const data: number[] = [baseValue];
-  for (let i = 1; i < months; i++) {
-    const change = (Math.random() - 0.5) * 2 * volatility * baseValue;
-    const trend = (Math.random() - 0.4) * 0.05 * baseValue;
-    data.push(Math.max(0, data[i - 1] + change + trend));
-  }
-  return data;
-}

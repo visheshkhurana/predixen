@@ -625,8 +625,14 @@ async def compute_metric(
         if request.end_date:
             end_date = datetime.fromisoformat(request.end_date)
     
+    from server.metrics.engine import MetricNoData, MetricComputeError
     try:
         result = engine.compute_metric(metric, start_date, end_date)
+    except MetricNoData as e:
+        return {"success": False, "status": "no_data", "metric_key": metric_key, "value": None, "detail": str(e)}
+    except MetricComputeError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    try:
         return {
             "success": True,
             "metric_key": metric_key,

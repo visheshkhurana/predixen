@@ -86,10 +86,11 @@ def subscribe(
         raise HTTPException(status_code=404, detail="Plan not found")
 
     plan_info = PLAN_DETAILS[plan_id]
-    if plan_info["price_monthly"] == 0:
-        return {"message": "Free plan activated", "plan": plan_id}
+    is_free = plan_info["price_monthly"] == 0
 
     if not stripe_billing.stripe_enabled():
+        if is_free:
+            return {"message": "Free plan activated", "plan": plan_id}
         raise HTTPException(
             status_code=503,
             detail="Payments are not configured yet. Please try again later.",
@@ -98,6 +99,43 @@ def subscribe(
     interval = (body.interval if body else "monthly")
     if interval not in ("monthly", "annual"):
         raise HTTPException(status_code=400, detail="interval must be 'monthly' or 'annual'")
+
+    # A user who already pays must not get a second subscription from a new
+    # Checkout: switch the existing one (prorated) or send them to the portal.
+    try:
+        live = stripe_billing.find_live_subscription(db, current_user)
+    except Exception as e:
+        logger.error(f"Stripe subscription lookup failed for user {current_user.id}: {e}")
+        raise HTTPException(status_code=502, detail="Could not check your current subscription. Please try again.")
+
+    if live:
+        needs_portal = is_free or live.get("status") in ("past_due", "unpaid")
+        if needs_portal:
+            # Downgrading to Free means cancelling; a failing payment has to
+            # be fixed first. Both happen in the Stripe portal.
+            try:
+                url = stripe_billing.create_portal_session(live.get("customer"))
+            except Exception as e:
+                logger.error(f"Stripe portal creation failed for user {current_user.id}: {e}")
+                raise HTTPException(status_code=502, detail="Could not open billing portal. Please try again.")
+            return {"portal_url": url, "plan": plan_id, "plan_name": plan_info["name"]}
+        try:
+            updated = stripe_billing.change_subscription_plan(live, current_user.id, plan_id, interval)
+        except Exception as e:
+            logger.error(f"Stripe plan change failed for user {current_user.id}: {e}")
+            raise HTTPException(status_code=502, detail="Could not change your plan. Please try again.")
+        # Same upsert the customer.subscription.updated webhook runs, so the
+        # app reflects the change before the webhook arrives.
+        _upsert_subscription_from_stripe(db, current_user.id, updated, plan_id)
+        return {
+            "message": f"Switched to {plan_info['name']}. Any difference is prorated on your next invoice.",
+            "plan": plan_id,
+            "plan_name": plan_info["name"],
+            "changed": True,
+        }
+
+    if is_free:
+        return {"message": "Free plan activated", "plan": plan_id}
 
     try:
         checkout_url = stripe_billing.create_checkout_session(db, current_user, plan_id, interval)

@@ -38,7 +38,8 @@ import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
-import { IntegrationCard, OAuthConnectModal, ApiKeyConnectModal, GoogleSheetsConfigModal, StripeConnectModal } from "@/components/integrations";
+import { IntegrationCard, OAuthConnectModal, ApiKeyConnectModal, GoogleSheetsConfigModal, StripeConnectModal, SlackLinkCard } from "@/components/integrations";
+import { useFounderStore } from "@/store/founderStore";
 import { 
   IntegrationConfig, 
   integrationRegistry, 
@@ -574,6 +575,8 @@ function getProviderType(providerId: string): "accounting" | "crm" | "payments" 
 
 export default function IntegrationsPage() {
   const { toast } = useToast();
+  // The Slack card always uses the signed-in user's current company.
+  const slackCompanyId = useFounderStore((s) => s.currentCompany?.id) ?? 0;
   const queryClient = useQueryClient();
   const [companyId] = useState(1);
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
@@ -757,8 +760,8 @@ export default function IntegrationsPage() {
         .filter(([, v]: [string, any]) => v.stored !== null && v.stored !== undefined)
         .map(([k]: [string, any]) => k);
       toast({
-        title: "Sample Data Synced",
-        description: `${data.provider_name}: ${metrics.length} metrics stored (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""})`,
+        title: "Sample Preview",
+        description: `${data.provider_name}: ${metrics.length} metrics would sync (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""}). Nothing was saved.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
@@ -983,6 +986,8 @@ export default function IntegrationsPage() {
           Connect your accounting, payroll, and ERP systems to import financial data automatically
         </p>
       </div>
+
+      <SlackLinkCard companyId={slackCompanyId} />
 
       {/* Quick Setup Banner */}
       {recommendedProviders.length > 0 && (

@@ -309,7 +309,8 @@ function GrowthBenchmarks({ companyId }: { companyId: number }) {
   const totalPoints = data?.total_data_points || 0;
 
   const yourStage = profile.stage || "unknown";
-  const stageData = benchmarks[yourStage];
+  const stageData = benchmarks[String(yourStage).toLowerCase()];
+  const minPeers = data?.min_peers || 5;
 
   return (
     <Card data-testid="growth-benchmarks">
@@ -342,12 +343,12 @@ function GrowthBenchmarks({ companyId }: { companyId: number }) {
                 <BenchmarkBar label="You" value={profile.mrr || 0} max={stageData.p75 * 1.2} isYou />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Based on {stageData.sample_size} data points from {yourStage}-stage companies
+                Based on {stageData.sample_size} {yourStage}-stage companies that share data
               </p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
-              No benchmark data available for {yourStage} stage yet
+              Not enough peers for a {yourStage}-stage benchmark yet (needs {minPeers} companies that share data)
             </p>
           )}
 

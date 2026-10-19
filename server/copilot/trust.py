@@ -638,6 +638,59 @@ def extract_available_metrics(raw: Any) -> Dict[str, Any]:
     return verified
 
 
+# Financial-record columns that may stand in for truth-scan metrics. Columns
+# with a 0 default (revenue, cash_balance) only count when non-zero, since a
+# 0 there usually means "not provided" rather than a verified zero.
+_RECORD_NULLABLE_FIELDS: Tuple[str, ...] = (
+    "mrr", "arr", "net_burn", "runway_months", "customers", "cac", "ltv",
+    "arpu", "ndr", "gross_margin", "headcount",
+)
+_RECORD_ZERO_DEFAULT_FIELDS: Dict[str, Tuple[str, ...]] = {
+    "revenue": ("revenue", "monthly_revenue"),
+    "cash_balance": ("cash_balance",),
+}
+
+
+def metrics_from_financial_record(record: Any) -> Dict[str, Any]:
+    """Verified metrics from the latest FinancialRecord (ORM object or dict)."""
+    if record is None:
+        return {}
+
+    def get(name: str) -> Any:
+        if isinstance(record, dict):
+            return record.get(name)
+        return getattr(record, name, None)
+
+    out: Dict[str, Any] = {}
+    for name in _RECORD_NULLABLE_FIELDS:
+        value = get(name)
+        if value is not None:
+            out[name] = value
+    if "ndr" in out:
+        out.setdefault("nrr", out["ndr"])
+    for column, keys in _RECORD_ZERO_DEFAULT_FIELDS.items():
+        value = get(column)
+        if isinstance(value, (int, float)) and value != 0:
+            for key in keys:
+                out[key] = value
+    return out
+
+
+def merge_available_metrics(
+    truth_scan_outputs: Any = None,
+    financial_record: Any = None,
+) -> Dict[str, Any]:
+    """Available metrics from every verified source: truth scan first, then
+    the latest financial record filling the gaps. Before this, only the truth
+    scan counted, so a company with imported records but no scan had correct
+    figures refused."""
+    merged = extract_available_metrics(truth_scan_outputs)
+    for key, value in metrics_from_financial_record(financial_record).items():
+        if not metric_is_present(merged, key):
+            merged[key] = value
+    return merged
+
+
 def metric_is_present(available_metrics: Optional[Dict[str, Any]], *keys: str) -> bool:
     """True when a verified metric key exists and is not an explicit null (0 is present)."""
     if not available_metrics:
@@ -672,25 +725,9 @@ def missing_requested_metrics(
 ) -> List[str]:
     """Metrics the user asked for that are absent from verified data."""
     missing: List[str] = []
-    combined: Dict[str, Any] = {}
-    if available_metrics:
-        combined.update(extract_available_metrics(available_metrics))
-    if run_outputs:
-        combined.update(run_outputs)
-        survival = run_outputs.get("survival_probability")
-        if isinstance(survival, dict):
-            combined["survival_18mo"] = survival.get("18mo", survival.get("18"))
-            combined["survival"] = combined.get("survival_18mo")
-        runway = run_outputs.get("runway_months") or run_outputs.get("runway")
-        if isinstance(runway, dict):
-            combined["runway_months"] = runway.get("p50")
-            combined["runway"] = runway.get("p50")
-        elif runway is not None:
-            combined["runway_months"] = runway
-            combined["runway"] = runway
+    combined = _combined_metrics(available_metrics, run_outputs)
     for metric in requested_metrics(user_message):
-        aliases = _METRIC_ALIASES.get(metric, (metric,))
-        if not metric_is_present(combined, *aliases):
+        if not _metric_available(metric, combined):
             missing.append(metric)
     return missing
 
@@ -790,6 +827,106 @@ def prose_states_metric_figure(text: str, metric: str) -> bool:
     return False
 
 
+def _combined_metrics(
+    available_metrics: Optional[Dict[str, Any]],
+    run_outputs: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    combined: Dict[str, Any] = {}
+    if available_metrics:
+        combined.update(extract_available_metrics(available_metrics))
+    if run_outputs:
+        combined.update(run_outputs)
+        survival = run_outputs.get("survival_probability")
+        if isinstance(survival, dict):
+            combined["survival_18mo"] = survival.get("18mo", survival.get("18"))
+            combined["survival"] = combined.get("survival_18mo")
+        runway = run_outputs.get("runway_months") or run_outputs.get("runway")
+        if isinstance(runway, dict):
+            combined["runway_months"] = runway.get("p50")
+            combined["runway"] = runway.get("p50")
+        elif runway is not None:
+            combined["runway_months"] = runway
+            combined["runway"] = runway
+    return combined
+
+
+def _metric_available(metric: str, combined: Dict[str, Any]) -> bool:
+    if metric_is_present(combined, *_METRIC_ALIASES.get(metric, (metric,))):
+        return True
+    # Runway is derivable from cash and burn, so a stated runway is grounded
+    # when both inputs are.
+    if metric == "runway":
+        return _metric_available("cash", combined) and _metric_available("burn", combined)
+    return False
+
+
+def _possessive_patterns(metric: str) -> Tuple[re.Pattern, ...]:
+    """"your churn", "your monthly burn", "your CAC" — the model asserting
+    the company's own figure, as opposed to a benchmark or a hypothetical."""
+    if metric in _INFLECTED_PROSE:
+        bodies = _INFLECTED_PROSE[metric]
+    else:
+        bodies = tuple(re.escape(a) for a in _METRIC_PROSE.get(metric, (metric,)))
+    return tuple(
+        re.compile(r"\byour\s+(?:current\s+|monthly\s+)?(?:" + body + r")\b", re.I)
+        for body in bodies
+    )
+
+
+_STATED_VALUE_GAP_RE = re.compile(
+    r"\s*(?:(?:rate|is|was|currently|stands|sits|remains|totals?|comes|at|of|to|"
+    r"around|about|approximately|roughly|nearly|almost|just|over|under|"
+    r"~|:|=|-|\(|[$₹€£]|rs\.?|inr|usd|eur|gbp)\s*)*",
+    re.I,
+)
+
+
+def unverified_volunteered_metrics(
+    text: str,
+    available_metrics: Optional[Dict[str, Any]],
+    run_outputs: Optional[Dict[str, Any]] = None,
+    exclude: Optional[List[str]] = None,
+) -> List[str]:
+    """Metrics the answer states as the company's own figure ("your churn is
+    4%") although no verified source has them. Conservative on purpose: only
+    possessive phrasing next to a number counts, so benchmarks and what-ifs
+    ("a typical CAC of $500", "cutting burn by 20%") pass."""
+    if not text:
+        return []
+    combined = _combined_metrics(available_metrics, run_outputs)
+    numbers = list(_NUMBER_RE.finditer(text))
+    if not numbers:
+        return []
+    flagged: List[str] = []
+    skip = set(exclude or [])
+    for metric in _METRIC_ALIASES:
+        if metric in skip or _metric_available(metric, combined):
+            continue
+        hit = False
+        for pattern in _possessive_patterns(metric):
+            for alias in pattern.finditer(text):
+                for number in numbers:
+                    if number.start() < alias.end():
+                        continue
+                    if number.start() - alias.end() > _FIGURE_WINDOW_AFTER:
+                        break
+                    if _number_is_window_exempt(text, number):
+                        continue
+                    # Only a stated value ("your churn is 4%", "your CAC of
+                    # $500"); "cutting your burn by 20%" is a what-if.
+                    if not _STATED_VALUE_GAP_RE.fullmatch(text[alias.end():number.start()]):
+                        continue
+                    hit = True
+                    break
+                if hit:
+                    break
+            if hit:
+                break
+        if hit:
+            flagged.append(metric)
+    return flagged
+
+
 def output_states_figures(
     output: Optional[Dict[str, Any]],
     asked: Optional[List[str]] = None,
@@ -846,6 +983,19 @@ def apply_not_available_guard(
     missing = missing_requested_metrics(user_message, available_metrics, run_outputs)
     if missing and states_numbers:
         reason = f"missing_metrics:{','.join(missing)}"
+        return FabricationGuardResult(
+            output=_not_available_output(reason),
+            grounding_status=GroundingStatus.NOT_AVAILABLE.value,
+            refused=True,
+            reason=reason,
+            text=NOT_AVAILABLE_MESSAGE,
+        )
+
+    volunteered = unverified_volunteered_metrics(
+        text, available_metrics, run_outputs, exclude=asked
+    )
+    if volunteered:
+        reason = f"unverified_figures:{','.join(volunteered)}"
         return FabricationGuardResult(
             output=_not_available_output(reason),
             grounding_status=GroundingStatus.NOT_AVAILABLE.value,

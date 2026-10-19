@@ -74,8 +74,10 @@ TEMPLATE_MAX_HOLD = {
 
 TOKEN_PURPOSE = "lifecycle-unsub-v1"
 _SKIP_DEDUPE = timedelta(hours=1)
+# Matches a tokenless "/unsubscribe" link and the "#unsubscribe" placeholder
+# the shared footer uses when no recipient is known yet.
 _UNSUB_HREF = re.compile(
-    r"""href=(['"])[^'"]*/unsubscribe(?:\?[^'"]*)?\1""",
+    r"""href=(['"])(?:[^'"]*/unsubscribe(?:\?[^'"]*)?|[^'"]*#unsubscribe)\1""",
     re.IGNORECASE,
 )
 
@@ -431,3 +433,36 @@ def apply_unsubscribe(db: Session, user_id: int) -> str:
     db.commit()
     logger.info("lifecycle unsubscribe recorded user_id=%s already=%s", user_id, already)
     return "already" if already else "ok"
+
+
+@dataclass(frozen=True)
+class BulkSend:
+    """Per-recipient content for an announcement (platform update) send."""
+    html: str
+    text: Optional[str]
+    headers: dict
+
+
+def prepare_bulk_send(
+    db: Session, email: str, html: str, text: Optional[str] = None
+) -> Optional[BulkSend]:
+    """Stamp a recipient's own unsubscribe link, or None when they opted out.
+
+    Announcements go to every account, so they honour the same opt-out as
+    lifecycle mail and carry a tokenized link plus RFC 8058 headers. An address
+    with no account (an internal list) gets the content unchanged.
+    """
+    user_id = user_id_for_email(db, email)
+    if user_id is None:
+        return BulkSend(html=html, text=text, headers={})
+    if user_opted_out(db, user_id):
+        return None
+    links = unsubscribe_links(user_id)
+    stamped_text = text
+    if text is not None:
+        stamped_text = f"{text.rstrip()}\n\nUnsubscribe: {links.page_url}\n"
+    return BulkSend(
+        html=stamp_unsubscribe_footer(html, links.page_url),
+        text=stamped_text,
+        headers=list_unsubscribe_headers(links),
+    )

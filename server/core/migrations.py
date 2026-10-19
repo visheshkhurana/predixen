@@ -1771,6 +1771,51 @@ def ensure_agent_simulation_runs_table(engine: Engine) -> None:
     logger.info("Agent simulation runs table migration complete")
 
 
+LEGACY_AGENT_SIM_SHARE_FLAG = "REVOKE_LEGACY_AGENT_SIM_SHARES"
+
+
+def revoke_legacy_agent_sim_shares(engine: Engine, force: bool = False) -> int:
+    """Revoke agent-simulation share links that were created automatically.
+
+    Before #161 every agent run got a public share_token at creation, whether
+    or not the owner shared it. Since #161 a token is only issued by
+    POST .../agent-run/{id}/share, which always writes a "shareExpiresAt" key
+    (null when the link does not expire) into results_json. So a token whose
+    results_json lacks that key was auto-created and is revoked here; links an
+    owner created deliberately are kept. Idempotent: a second run finds nothing.
+
+    Runs only when REVOKE_LEGACY_AGENT_SIM_SHARES=true (or force=True).
+    Returns the number of links revoked.
+    """
+    import json
+    import os
+
+    if not force and os.environ.get(LEGACY_AGENT_SIM_SHARE_FLAG, "").strip().lower() != "true":
+        return 0
+    revoked = 0
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT id, results_json FROM agent_simulation_runs WHERE share_token IS NOT NULL"
+        )).fetchall()
+        legacy_ids = []
+        for run_id, raw in rows:
+            try:
+                results = json.loads(raw) if raw else {}
+            except (TypeError, ValueError):
+                results = {}
+            if not isinstance(results, dict) or "shareExpiresAt" not in results:
+                legacy_ids.append(run_id)
+        for run_id in legacy_ids:
+            conn.execute(
+                text("UPDATE agent_simulation_runs SET share_token = NULL WHERE id = :id"),
+                {"id": run_id},
+            )
+        conn.commit()
+        revoked = len(legacy_ids)
+    logger.info("Revoked %d legacy auto-created agent-simulation share links", revoked)
+    return revoked
+
+
 def ensure_lifecycle_email_tables(engine: Engine) -> None:
     """Preference row for opt-out, plus the lifecycle send/skip ledger.
 

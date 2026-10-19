@@ -9,7 +9,10 @@
 
 export interface SimulationBaseMetrics {
   mrr?: number | null;
+  /** NET burn (total costs incl. COGS minus revenue), as on the dashboard. */
   burnRate?: number | null;
+  /** Total monthly costs incl. COGS (gross spend). */
+  totalMonthlyExpenses?: number | null;
   cashOnHand?: number | null;
   monthlyGrowthRate?: number | null;
   headcount?: number | null;
@@ -36,6 +39,30 @@ export function growthRateForRequest(monthlyGrowthRate: number): number {
   return Math.min(1.0, Math.max(-0.5, raw));
 }
 
+/**
+ * monthly_burn on /api/simulation/v2/run is GROSS monthly spend: the engine
+ * does `cash += mrr - burn_rate` (server/services/simulation/engine.py), so
+ * sending the dashboard's net burn counted revenue twice (AlphaKids demo:
+ * MRR 43,949 + net burn 24,109 showed cash GROWING instead of ~21 months).
+ *
+ * Gross = net burn + MRR whenever the company burns cash, which reproduces
+ * the dashboard's net burn exactly. Net burn is clamped at 0 for a profitable
+ * company, so there the reported total expenses are used instead. Without
+ * MRR there is no way to derive gross from net, so nothing is sent and the
+ * engine labels its default as assumed.
+ */
+export function grossMonthlySpendForRequest(
+  baseMetrics: SimulationBaseMetrics | null | undefined,
+): number | null {
+  const net = baseMetrics?.burnRate;
+  const mrr = baseMetrics?.mrr;
+  const total = baseMetrics?.totalMonthlyExpenses;
+  if (isFiniteNumber(net) && net > 0 && isFiniteNumber(mrr)) return net + Math.max(0, mrr);
+  if (isFiniteNumber(total) && total > 0) return total;
+  if (isFiniteNumber(net) && isFiniteNumber(mrr)) return net + Math.max(0, mrr);
+  return null;
+}
+
 export function buildSimulationV2Payload(
   baseMetrics: SimulationBaseMetrics | null | undefined,
   controls: SimulationControls,
@@ -48,7 +75,8 @@ export function buildSimulationV2Payload(
   };
 
   if (isFiniteNumber(baseMetrics?.mrr)) body.monthly_revenue = baseMetrics.mrr;
-  if (isFiniteNumber(baseMetrics?.burnRate)) body.monthly_burn = baseMetrics.burnRate;
+  const gross = grossMonthlySpendForRequest(baseMetrics);
+  if (gross !== null) body.monthly_burn = gross;
   if (isFiniteNumber(baseMetrics?.cashOnHand)) body.cash_balance = baseMetrics.cashOnHand;
   if (isFiniteNumber(baseMetrics?.monthlyGrowthRate)) {
     body.growth_rate = growthRateForRequest(baseMetrics.monthlyGrowthRate);

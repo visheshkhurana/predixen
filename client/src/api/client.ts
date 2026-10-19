@@ -178,15 +178,17 @@ async function request<T>(
 
 export const api = {
   auth: {
-    register: (email: string, password: string) =>
+    // `invite` is the token from /auth?invite=…; the server accepts it when
+    // it was sent to this email (workspace membership or platform role).
+    register: (email: string, password: string, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
       }),
-    login: (email: string, password: string) =>
+    login: (email: string, password: string, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
       }),
     adminLogin: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/admin/login', {
@@ -381,6 +383,12 @@ export const api = {
   metrics: {
     computed: (companyId: number) =>
       request<any>(`/companies/${companyId}/metrics/computed`),
+  },
+
+  dashboard: {
+    // Real per-period KPI history built from FinancialRecord rows (no mock data).
+    kpis: (companyId: number) =>
+      request<any>(`/dashboard/companies/${companyId}/kpis`),
   },
 
   truth: {
@@ -843,6 +851,8 @@ export const api = {
         sources: string[];
         last_updated: string;
         is_cached: boolean;
+        is_fallback?: boolean;
+        note?: string | null;
       }>('/benchmarks/search', {
         method: 'POST',
         body: JSON.stringify({ industry, stage }),

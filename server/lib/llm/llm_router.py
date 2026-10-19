@@ -37,6 +37,56 @@ from server.lib.llm.openrouter_client import OpenRouterClient, get_openrouter_cl
 logger = logging.getLogger(__name__)
 
 
+class LLMBudgetExceeded(RuntimeError):
+    """The company's configured AI budget (ai_agent_budgets) is used up."""
+
+
+class _ThreadSafeSession:
+    """Serializes access to a SQLAlchemy Session shared across worker threads.
+
+    Copilot agents now run their blocking LLM calls via asyncio.to_thread, so
+    several provider clients can write audit logs on the request's session at
+    once. A Session is not thread-safe; route every method call through one
+    lock. Attribute reads pass straight through.
+    """
+
+    def __init__(self, session):
+        import threading
+        object.__setattr__(self, "_session", session)
+        object.__setattr__(self, "_lock", threading.RLock())
+
+    def __getattr__(self, name):
+        attr = getattr(self._session, name)
+        if not callable(attr):
+            return attr
+        lock = self._lock
+
+        def locked(*args, **kwargs):
+            with lock:
+                return attr(*args, **kwargs)
+
+        return locked
+
+    def __setattr__(self, name, value):
+        setattr(self._session, name, value)
+
+
+def _estimate_cost_usd(model_id: Optional[str], result: Dict[str, Any]) -> float:
+    """Best-effort USD cost from a provider result's usage block."""
+    try:
+        config = MODELS.get(model_id or "") or MODELS.get(str(result.get("model") or ""))
+        usage = result.get("usage") or {}
+        if config is None or not isinstance(usage, dict):
+            return 0.0
+        tokens_in = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+        tokens_out = usage.get("completion_tokens") or usage.get("output_tokens") or 0
+        return (float(tokens_in) / 1000.0) * config.cost_per_1k_input + (
+            float(tokens_out) / 1000.0
+        ) * config.cost_per_1k_output
+    except Exception:
+        return 0.0
+
+
 class TaskType(str, Enum):
     """Task types for intelligent model routing."""
     FINANCIAL_ANALYSIS = "financial_analysis"
@@ -81,111 +131,152 @@ class ModelConfig:
     description: str = ""
 
 
+# Public list prices, USD per 1M tokens (input / output), standard tier,
+# prompts <= 200k tokens. Checked 2026-10-19 against:
+#   OpenAI:     https://developers.openai.com/api/docs/pricing
+#   Anthropic:  https://platform.claude.com/docs/en/about-claude/pricing
+#   Google:     https://ai.google.dev/gemini-api/docs/pricing
+#   Perplexity: https://docs.perplexity.ai/getting-started/pricing
+#   OpenRouter: https://openrouter.ai/api/v1/models
+# Lines marked "estimate" could not be confirmed and use the closest family
+# price. These feed ai_governance budgets via _estimate_cost_usd; a model with
+# no price would never trip a budget, so every entry must carry one
+# (enforced by server/tests/test_audit_1019_leftovers.py).
 MODELS = {
     "gpt-5": ModelConfig(
         provider=Provider.OPENAI,
         model_id="gpt-5",
         max_tokens=16384,
+        cost_per_1k_input=1.25/1000,  # $1.25 / $10.00 per 1M
+        cost_per_1k_output=10.0/1000,
         description="Best for structured data, financial analysis, vision tasks"
     ),
     "gpt-5-mini": ModelConfig(
         provider=Provider.OPENAI,
         model_id="gpt-5-mini",
         max_tokens=16384,
+        cost_per_1k_input=0.25/1000,  # $0.25 / $2.00 per 1M
+        cost_per_1k_output=2.0/1000,
         description="Cost-efficient OpenAI model for high-volume tasks (chat, agents)"
     ),
     "gpt-4o": ModelConfig(
         provider=Provider.OPENAI,
         model_id="gpt-4o",
         max_tokens=16384,
+        cost_per_1k_input=2.5/1000,  # $2.50 / $10.00 per 1M
+        cost_per_1k_output=10.0/1000,
         description="Proven-available OpenAI model; reliable fallback when gpt-5/Claude/Gemini are unavailable"
     ),
     "claude-opus-4-5": ModelConfig(
         provider=Provider.ANTHROPIC,
         model_id="claude-opus-4-5",
         max_tokens=8192,
+        cost_per_1k_input=5.0/1000,  # $5.00 / $25.00 per 1M
+        cost_per_1k_output=25.0/1000,
         description="Most capable, best for complex reasoning and coding"
     ),
     "claude-sonnet-4-5": ModelConfig(
         provider=Provider.ANTHROPIC,
         model_id="claude-sonnet-4-5",
         max_tokens=8192,
+        cost_per_1k_input=3.0/1000,  # $3.00 / $15.00 per 1M
+        cost_per_1k_output=15.0/1000,
         description="Balanced performance, recommended for most use cases"
     ),
     "claude-haiku-4-5": ModelConfig(
         provider=Provider.ANTHROPIC,
         model_id="claude-haiku-4-5",
         max_tokens=8192,
+        cost_per_1k_input=1.0/1000,  # $1.00 / $5.00 per 1M
+        cost_per_1k_output=5.0/1000,
         description="Fastest Anthropic model, ideal for simple tasks"
     ),
     "gemini-2.5-flash": ModelConfig(
         provider=Provider.GEMINI,
         model_id="gemini-2.5-flash",
         max_tokens=8192,
+        cost_per_1k_input=0.3/1000,  # $0.30 / $2.50 per 1M
+        cost_per_1k_output=2.5/1000,
         description="Fast and cost-effective, great for high-volume tasks"
     ),
     "gemini-2.5-pro": ModelConfig(
         provider=Provider.GEMINI,
         model_id="gemini-2.5-pro",
         max_tokens=8192,
+        cost_per_1k_input=1.25/1000,  # $1.25 / $10.00 per 1M
+        cost_per_1k_output=10.0/1000,
         description="Advanced reasoning and coding capabilities"
     ),
     "gemini-3-flash-preview": ModelConfig(
         provider=Provider.GEMINI,
         model_id="gemini-3-flash-preview",
         max_tokens=8192,
+        cost_per_1k_input=0.5/1000,  # $0.50 / $3.00 per 1M
+        cost_per_1k_output=3.0/1000,
         description="Latest hybrid reasoning model for daily use"
     ),
     "gemini-3-pro-preview": ModelConfig(
         provider=Provider.GEMINI,
         model_id="gemini-3-pro-preview",
         max_tokens=8192,
+        cost_per_1k_input=2.0/1000,  # $2.00 / $12.00 per 1M (estimate: not listed; gemini-3.1-pro-preview price)
+        cost_per_1k_output=12.0/1000,
         description="Most powerful Gemini for agentic workflows"
     ),
     "perplexity-sonar": ModelConfig(
         provider=Provider.PERPLEXITY,
         model_id="sonar",
         max_tokens=4096,
+        cost_per_1k_input=1.0/1000,  # $1.00 / $1.00 per 1M (plus per-request search fee)
+        cost_per_1k_output=1.0/1000,
         description="Fast web search with citations, cost-effective for general queries"
     ),
     "perplexity-sonar-pro": ModelConfig(
         provider=Provider.PERPLEXITY,
         model_id="sonar-pro",
         max_tokens=4096,
+        cost_per_1k_input=3.0/1000,  # $3.00 / $15.00 per 1M (plus per-request search fee)
+        cost_per_1k_output=15.0/1000,
         description="Detailed web search with citations for in-depth research"
     ),
     "perplexity-sonar-reasoning": ModelConfig(
         provider=Provider.PERPLEXITY,
         model_id="sonar-reasoning-pro",
         max_tokens=8192,
+        cost_per_1k_input=2.0/1000,  # $2.00 / $8.00 per 1M (plus per-request search fee)
+        cost_per_1k_output=8.0/1000,
         description="Step-by-step reasoning with web search — best for complex market research and analysis"
     ),
     "perplexity-sonar-deep-research": ModelConfig(
         provider=Provider.PERPLEXITY,
         model_id="sonar-deep-research",
         max_tokens=8192,
+        cost_per_1k_input=2.0/1000,  # $2.00 / $8.00 per 1M (plus citation/reasoning tokens and search fees)
+        cost_per_1k_output=8.0/1000,
         description="Multi-step deep research — most thorough for comprehensive industry analysis"
     ),
     "gpt-image-1": ModelConfig(
         provider=Provider.OPENAI,
         model_id="gpt-image-1",
         max_tokens=0,
+        cost_per_1k_input=5.0/1000,  # $5.00 / $40.00 per 1M (text input / image output tokens)
+        cost_per_1k_output=40.0/1000,
         description="OpenAI image generation — creates professional graphics from text prompts"
     ),
     "grok-4.1-fast": ModelConfig(
         provider=Provider.OPENROUTER,
         model_id="x-ai/grok-4.1-fast",
         max_tokens=8192,
-        cost_per_1k_input=0.0002,
-        cost_per_1k_output=0.0005,
+        cost_per_1k_input=0.2/1000,  # $0.20 / $0.50 per 1M (estimate: no longer listed on OpenRouter)
+        cost_per_1k_output=0.5/1000,
         description="Grok 4.1 Fast — excellent for news, trends, real-time analysis. 2M context, very cost-effective"
     ),
     "grok-3-mini": ModelConfig(
         provider=Provider.OPENROUTER,
         model_id="x-ai/grok-3-mini",
         max_tokens=4096,
-        cost_per_1k_input=0.0003,
-        cost_per_1k_output=0.0005,
+        cost_per_1k_input=0.3/1000,  # $0.30 / $0.50 per 1M (estimate: no longer listed on OpenRouter)
+        cost_per_1k_output=0.5/1000,
         description="Grok 3 Mini — fast, cheap reasoning for quick analysis tasks"
     ),
 }
@@ -277,8 +368,13 @@ class LLMRouter:
         default_provider: Provider = Provider.GEMINI,
         use_classifier: bool = True
     ):
+        # Agents call chat() from worker threads concurrently; see _ThreadSafeSession.
+        if db_session is not None and not isinstance(db_session, _ThreadSafeSession):
+            db_session = _ThreadSafeSession(db_session)
         self.db_session = db_session
         self.company_id = company_id
+        # Budget row (ai_agent_budgets.agent_name) this router's spend counts against.
+        self.budget_agent = "router"
         self.user_id = user_id
         self.pii_mode = pii_mode
         self.default_provider = default_provider
@@ -485,7 +581,8 @@ class LLMRouter:
             Dict with 'content', 'citations', 'usage', 'model', 'provider'
         """
         normalized_model = model.replace("perplexity-", "")
-        
+        self._check_budget()
+
         perplexity = self.perplexity_client
         if perplexity is None:
             logger.warning("Perplexity not available, falling back to GPT-4o")
@@ -506,6 +603,33 @@ class LLMRouter:
             **kwargs
         )
     
+    def _check_budget(self) -> Optional[Dict[str, Any]]:
+        """Refuse the call when a configured AI budget is used up.
+
+        A no-op (returns None) without a company or without a budget row for
+        it — budgets are opt-in via ai_agent_budgets.
+        """
+        if not self.company_id:
+            return None
+        from server.copilot.ai_governance import check_budget
+        status = check_budget(self.company_id, self.budget_agent)
+        if status.get("budget") is None:
+            return None
+        if not status.get("within_budget", True):
+            raise LLMBudgetExceeded(
+                "This workspace has reached its AI usage budget. "
+                "Raise the budget or wait for it to reset."
+            )
+        return status
+
+    def _record_spend(self, budget_status: Optional[Dict[str, Any]], model_id: str, result: Dict[str, Any]) -> None:
+        if budget_status is None:
+            return
+        cost = _estimate_cost_usd(model_id, result)
+        if cost > 0:
+            from server.copilot.ai_governance import record_budget_usage_if_configured
+            record_budget_usage_if_configured(self.company_id, self.budget_agent, cost)
+
     def get_model_info(self, model_id: str) -> Optional[ModelConfig]:
         """Get information about a model."""
         return MODELS.get(model_id)
@@ -531,6 +655,8 @@ class LLMRouter:
         JSON (response_format) calls only try OpenAI, since the other providers
         can't honor the requested schema.
         """
+        budget_status = self._check_budget()
+
         if model is None:
             model = self.get_model_for_task(task_type) if task_type else "gemini-2.5-flash"
         if model not in MODELS:
@@ -564,6 +690,7 @@ class LLMRouter:
                 )
                 if candidate != model:
                     logger.info(f"LLM fallback succeeded: {model} -> {candidate}")
+                self._record_spend(budget_status, candidate, result)
                 return result
             except Exception as e:
                 last_error = e
