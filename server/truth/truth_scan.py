@@ -202,8 +202,10 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
             if latest.cash_balance and latest.cash_balance > 0:
                 runway_months = latest.cash_balance / net_burn
                 metrics["runway_p50"] = round(runway_months, 1)
-                metrics["runway_p10"] = round(runway_months * 0.7, 1)
-                metrics["runway_p90"] = round(runway_months * 1.4, 1)
+                # A single cash/burn point gives no distribution. P10/P90 only
+                # come from a simulation; never invent them as multiples of P50.
+                metrics["runway_p10"] = None
+                metrics["runway_p90"] = None
             elif latest.cash_balance is None:
                 # Cash was never provided: runway is unknown, not zero.
                 metrics["runway_p50"] = None
@@ -252,8 +254,8 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["cash_balance"] = 0
         metrics["net_burn"] = 0
         metrics["runway_p50"] = 0
-        metrics["runway_p10"] = 0
-        metrics["runway_p90"] = 0
+        metrics["runway_p10"] = None
+        metrics["runway_p90"] = None
         flags.append({
             "severity": "high",
             "title": "No Financial Data",
@@ -548,7 +550,12 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         "data_confidence_score": data_confidence,
         "quality_of_growth_index": quality_of_growth,
         "benchmark_comparisons": benchmark_comparisons,
-        "computed_at": datetime.utcnow().isoformat()
+        "computed_at": datetime.utcnow().isoformat(),
+        # Month the numbers describe, so charts anchor to real data, not a fixed year.
+        "latest_period_end": (
+            financials[0].period_end.isoformat()
+            if financials and financials[0].period_end else None
+        ),
     }
 
 def compute_data_confidence(metrics: Dict, has_financials: bool, has_transactions: bool, has_customers: bool) -> int:

@@ -29,7 +29,6 @@ import {
   ArrowDownRight,
   RefreshCw,
   Calendar,
-  Filter,
   CheckCircle2,
   AlertCircle,
   Circle,
@@ -63,13 +62,10 @@ function formatPercent(value: number): string {
 }
 
 type DateRange = '7d' | '30d' | '90d' | '12m' | 'ytd';
-type DataSource = 'all' | 'stripe' | 'quickbooks' | 'manual';
 
 interface FilterBarProps {
   dateRange: DateRange;
   onDateRangeChange: (range: DateRange) => void;
-  dataSource: DataSource;
-  onDataSourceChange: (source: DataSource) => void;
   isConnected: boolean;
   lastUpdate: string | null;
   onRefresh: () => void;
@@ -79,8 +75,6 @@ interface FilterBarProps {
 function FilterBar({
   dateRange,
   onDateRangeChange,
-  dataSource,
-  onDataSourceChange,
   isConnected,
   lastUpdate,
   onRefresh,
@@ -105,20 +99,6 @@ function FilterBar({
           </Select>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={dataSource} onValueChange={(v) => onDataSourceChange(v as DataSource)}>
-            <SelectTrigger className="w-[140px]" data-testid="select-data-source">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Sources</SelectItem>
-              <SelectItem value="stripe">Stripe</SelectItem>
-              <SelectItem value="quickbooks">QuickBooks</SelectItem>
-              <SelectItem value="manual">Manual Entry</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -331,20 +311,14 @@ function DataSourcesPanel({ onAddIntegration }: { onAddIntegration: () => void }
   const sources: DataSourceInfo[] = useMemo(() => {
     const connectors = connectorsResponse?.connectors;
     const connected = connectors?.filter((c: any) => c.connected) ?? [];
-    const base: DataSourceInfo[] = [
-      { name: 'Manual Entry', icon: <BarChart3 className="h-4 w-4" />, status: 'connected' as const, lastSync: 'Just now', metrics: 8 },
-    ];
-    if (connected.length === 0) return base;
-    return [
-      ...base,
-      ...connected.map((c: any) => ({
+    // Only real connector rows -- no hardcoded "Manual Entry / Just now" row.
+    return connected.map((c: any) => ({
         name: c.provider_id?.charAt(0).toUpperCase() + c.provider_id?.slice(1) || 'Unknown',
         icon: <Zap className="h-4 w-4" />,
         status: (c.error ? 'error' : 'connected') as DataSourceInfo['status'],
         lastSync: c.last_sync ? new Date(c.last_sync).toLocaleString() : undefined,
         metrics: c.records_synced || 0,
-      })),
-    ];
+      }));
   }, [connectorsResponse]);
 
   const statusDotColor: Record<string, string> = {
@@ -393,7 +367,7 @@ function DataSourcesPanel({ onAddIntegration }: { onAddIntegration: () => void }
             </div>
             <div className="flex items-center gap-2">
               {src.metrics !== undefined && src.metrics > 0 && (
-                <Badge variant="secondary" className="text-[10px]">{src.metrics} metrics</Badge>
+                <Badge variant="secondary" className="text-[10px]">{src.metrics} records</Badge>
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -419,7 +393,6 @@ export default function KPIBoardPage() {
   const [, navigate] = useLocation();
 
   const [dateRange, setDateRange] = useState<DateRange>('12m');
-  const [dataSource, setDataSource] = useState<DataSource>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const rangeMonths = useMemo(() => {
@@ -561,8 +534,6 @@ export default function KPIBoardPage() {
       <FilterBar
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
-        dataSource={dataSource}
-        onDataSourceChange={setDataSource}
         isConnected={isConnected}
         lastUpdate={liveData?.timestamp ?? null}
         onRefresh={handleRefresh}
