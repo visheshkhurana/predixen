@@ -551,6 +551,11 @@ def test_rate_limit_wired_on_llm_routes(monkeypatch):
     dep = inspect.signature(ai_graphics.generate_image).parameters["current_user"].default
     assert dep.dependency is rl.llm_rate_limit
 
+    # The document generator is the most expensive route: five section calls per
+    # request, so it must be metered like the single-call ones.
+    doc_dep = inspect.signature(dg.generate_document).parameters["current_user"].default
+    assert doc_dep.dependency is rl.llm_rate_limit
+
     monkeypatch.setenv("RATE_LIMIT_LLM_PER_USER", "1")
     rl.check_llm_rate_limit(5)
 
