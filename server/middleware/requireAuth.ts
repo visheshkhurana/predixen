@@ -86,10 +86,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         return;
       }
     } catch (err) {
-      // Same window FastAPI documents: the revocation tables are created after
-      // the process starts answering. A missing table must not 500 every
-      // authenticated Express request. A present row still rejects the token.
+      // A query error means we could not prove the session is still valid.
+      // Letting it through would keep a logged-out token alive for the
+      // length of the outage. Fail closed.
       console.error("[requireAuth] revocation check failed:", err);
+      res.status(401).json({ error: "Session has ended. Please sign in again." });
+      return;
     }
   }
   next();
