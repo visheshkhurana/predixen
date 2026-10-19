@@ -268,6 +268,18 @@ def test_cache_is_bounded():
     assert len(bs.get_cache_key("x" * 5000, "seed")) < 200
 
 
+def test_cache_key_separates_inputs_a_slug_collapses():
+    # Two all-non-ASCII industries used to slug to "" and share the key "|seed".
+    assert bs.get_cache_key("Eコマース", "seed") != bs.get_cache_key("フィンテック", "seed")
+    # Two long names used to collide on their first _KEY_MAX_LEN characters.
+    assert bs.get_cache_key("a" * 200 + "x", "seed") != bs.get_cache_key("a" * 200 + "y", "seed")
+    # Case and whitespace still normalize to one entry.
+    assert bs.get_cache_key("  FinTech  ", "Seed") == bs.get_cache_key("fintech", "seed")
+    # Still bounded.
+    assert len(bs.get_cache_key("x" * 5000, "seed")) < 200
+    assert len(bs.get_cache_key("Eコマース", "シリーズA")) < 200
+
+
 def test_clear_cache_requires_platform_admin():
     from server.api.admin import require_platform_admin
     dep = inspect.signature(bs.clear_benchmark_cache).parameters["current_user"].default
