@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from server.core.db import get_db
 from server.core.security import get_current_user
-from server.core.company_access import get_user_company
+from server.core.company_access import get_user_company, get_user_company_role
 from server.core.company_metadata import save_metadata_value, delete_metadata_value
 from server.models.company import Company
 from server.models.user import User
@@ -565,6 +565,22 @@ async def slack_install_info():
 link_router = APIRouter(tags=["slack"])
 
 
+def _require_slack_manager(db: Session, company_id: int, user: User) -> Company:
+    """Slack linking decides who can read this company from an external workspace.
+
+    A link outlives the request that made it, so it needs more than ordinary
+    read access: only an owner or admin may issue, inspect or revoke it. A
+    viewer keeps the access they already had and gains no way to create one.
+    """
+    company = get_user_company(db, company_id, user)
+    if get_user_company_role(db, company_id, user) not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Requires owner or admin role to manage the Slack link",
+        )
+    return company
+
+
 @link_router.post("/companies/{company_id}/integrations/slack/link-code")
 def create_slack_link_code(
     company_id: int,
@@ -572,7 +588,7 @@ def create_slack_link_code(
     current_user: User = Depends(get_current_user),
 ):
     """Issue a one-time code; running `/fc-link <code>` in Slack links the workspace."""
-    company = get_user_company(db, company_id, current_user)
+    company = _require_slack_manager(db, company_id, current_user)
     code = "".join(secrets.choice(_LINK_CODE_ALPHABET) for _ in range(10))
     expires_at = time.time() + LINK_CODE_TTL_SECONDS
     save_metadata_value(db, company, LINK_CODE_META_KEY, {
@@ -593,7 +609,7 @@ def get_slack_link_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = get_user_company(db, company_id, current_user)
+    company = _require_slack_manager(db, company_id, current_user)
     link = (company.metadata_json or {}).get(SLACK_META_KEY) or {}
     return {
         "linked": bool(link.get("team_id")),
@@ -609,7 +625,7 @@ def unlink_slack(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = get_user_company(db, company_id, current_user)
+    company = _require_slack_manager(db, company_id, current_user)
     delete_metadata_value(db, company, SLACK_META_KEY)
     delete_metadata_value(db, company, LINK_CODE_META_KEY)
     return {"linked": False}

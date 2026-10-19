@@ -22,6 +22,7 @@ from server.core.db import Base
 from server.models.company import Company
 from server.models.company_decision import CompanyDecision
 from server.models.financial import FinancialRecord
+from server.models.workspace import WorkspaceMember
 
 
 @pytest.fixture
@@ -33,7 +34,12 @@ def db():
     )
     Base.metadata.create_all(
         engine,
-        tables=[Company.__table__, FinancialRecord.__table__, CompanyDecision.__table__],
+        tables=[
+            Company.__table__,
+            FinancialRecord.__table__,
+            CompanyDecision.__table__,
+            WorkspaceMember.__table__,
+        ],
     )
     session = sessionmaker(bind=engine)()
     yield session
@@ -286,7 +292,9 @@ def test_link_code_flow_links_company_beyond_first_100(db):
         _company(db, name=f"Other {i}")
     target = _company(db, name="Target")
     user = SimpleNamespace(id=9)
-    with patch.object(sb, "get_user_company", return_value=target):
+    # This test is about the company lookup, not authorization: stub the role gate.
+    with patch.object(sb, "get_user_company", return_value=target), \
+         patch.object(sb, "get_user_company_role", return_value="owner"):
         issued = sb.create_slack_link_code(target.id, db=db, current_user=user)
     code = issued["code"]
 
@@ -353,6 +361,79 @@ def test_fc_link_slash_command_end_to_end(db, monkeypatch):
     assert "Linked" in send("/fc-link", code).json()["text"]
     assert "Linked Co" in str(send("/fc-runway").json())
 
+
+def _member(db, company, user_id=2, role="viewer"):
+    member = WorkspaceMember(
+        company_id=company.id, user_id=user_id, role=role, status="active", invited_by=1,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return member
+
+
+def test_viewer_cannot_issue_inspect_or_revoke_a_slack_link(db):
+    c = _company(db, name="Shared Co")
+    _member(db, c, user_id=2, role="viewer")
+    viewer = SimpleNamespace(id=2)
+
+    for call in (
+        lambda: sb.create_slack_link_code(c.id, db=db, current_user=viewer),
+        lambda: sb.get_slack_link_status(c.id, db=db, current_user=viewer),
+        lambda: sb.unlink_slack(c.id, db=db, current_user=viewer),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            call()
+        assert exc.value.status_code == 403
+
+    db.refresh(c)
+    assert sb.LINK_CODE_META_KEY not in (c.metadata_json or {})
+
+
+def test_admin_can_issue_and_revoke_a_slack_link(db):
+    c = _company(db, name="Admin Co")
+    _member(db, c, user_id=3, role="admin")
+    admin = SimpleNamespace(id=3)
+
+    code = sb.create_slack_link_code(c.id, db=db, current_user=admin)["code"]
+    assert len(code) == 10
+    assert sb.get_slack_link_status(c.id, db=db, current_user=admin)["linked"] is False
+    assert sb.unlink_slack(c.id, db=db, current_user=admin) == {"linked": False}
+
+    db.refresh(c)
+    assert sb.LINK_CODE_META_KEY not in (c.metadata_json or {})
+
+
+def test_removing_the_linking_member_revokes_the_slack_link(db):
+    from server.api import workspace as ws
+
+    c = _company(db, name="Removal Co")
+    leaver = _member(db, c, user_id=2, role="admin")
+    code = sb.create_slack_link_code(c.id, db=db, current_user=SimpleNamespace(id=2))["code"]
+    assert sb._link_with_code(db, code, "T-REMOVE", "C1", "U1") is not None
+    db.refresh(c)
+    assert (c.metadata_json or {})[sb.SLACK_META_KEY]["linked_by_user_id"] == 2
+
+    result = ws.remove_member(leaver.id, db=db, current_user=SimpleNamespace(id=1))
+
+    assert result == {"status": "removed"}
+    db.refresh(c)
+    assert sb.SLACK_META_KEY not in (c.metadata_json or {})
+    assert sb._get_company_from_slack(db, "T-REMOVE", "") is None
+
+
+def test_removing_another_member_leaves_the_link_alone(db):
+    from server.api import workspace as ws
+
+    c = _company(db, name="Keep Co")
+    bystander = _member(db, c, user_id=2, role="viewer")
+    code = sb.create_slack_link_code(c.id, db=db, current_user=SimpleNamespace(id=1))["code"]
+    assert sb._link_with_code(db, code, "T-KEEP", "C1", "U1") is not None
+
+    ws.remove_member(bystander.id, db=db, current_user=SimpleNamespace(id=1))
+
+    db.refresh(c)
+    assert (c.metadata_json or {})[sb.SLACK_META_KEY]["team_id"] == "T-KEEP"
 
 def test_simulate_reads_engine_shape():
     from server.utils.survival import survival_pct
