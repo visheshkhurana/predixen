@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
-import { renderHtmlPage } from "./seo-prerender";
+import { renderHtmlPageWithLookups } from "./survival-share-status";
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(__dirname, "public");
@@ -36,7 +36,7 @@ export function serveStatic(app: Express) {
     },
   }));
 
-  app.use("*", (req, res) => {
+  app.use("*", async (req, res) => {
     const url = req.originalUrl;
     const pathname = url.split("?")[0].split("#")[0];
     if (pathname === "/robots.txt" || pathname === "/sitemap.xml") {
@@ -50,7 +50,7 @@ export function serveStatic(app: Express) {
       res.status(404).type("text/plain").send("Not Found");
       return;
     }
-    const page = renderHtmlPage(indexHtml, pathname);
+    const page = await renderHtmlPageWithLookups(indexHtml, pathname);
     res.status(page.status);
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Content-Type", "text/html");

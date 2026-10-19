@@ -209,6 +209,38 @@ export function calculateSensitivity(
   });
 }
 
+export interface SensitivityBar {
+  label: string;
+  /** 0-100, relative to the largest runway swing among the modelled inputs. */
+  impact: number;
+  level: 'high' | 'med' | 'low';
+  /** Largest runway change (months) from a +/-swing in this input. */
+  swingMonths: number;
+}
+
+/**
+ * Bars for the "Key Sensitivity Levers" list, from calculateSensitivity.
+ * Ranked by the larger absolute runway swing; scaled to the top lever.
+ * Returns [] when nothing is computable (no inputs, or every swing is zero),
+ * so the caller can hide the list instead of showing invented numbers.
+ */
+export function sensitivityBarsFromResults(results: SensitivityResult[]): SensitivityBar[] {
+  const rows = results
+    .map(r => ({
+      label: r.displayName,
+      swing: Math.max(Math.abs(r.lowImpact), Math.abs(r.highImpact)),
+    }))
+    .filter(r => Number.isFinite(r.swing) && r.swing > 0)
+    .sort((a, b) => b.swing - a.swing);
+  if (rows.length === 0) return [];
+  const top = rows[0].swing;
+  return rows.map(r => {
+    const impact = Math.max(1, Math.round((r.swing / top) * 100));
+    const level: SensitivityBar['level'] = impact >= 67 ? 'high' : impact >= 34 ? 'med' : 'low';
+    return { label: r.label, impact, level, swingMonths: Math.round(r.swing * 10) / 10 };
+  });
+}
+
 export interface WhatIfResults {
   runway: number;
   runwayChange: number;

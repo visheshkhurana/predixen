@@ -1557,6 +1557,20 @@ export function injectSEO(html: string, path: string): string {
   if (!meta) {
     return html;
   }
+  return applyMeta(html, meta);
+}
+
+/**
+ * A real 404 page for a path whose shape is valid but whose record does not
+ * exist (e.g. /survival/<unknown id>). The caller decides existence; this only
+ * renders the not-found shell.
+ */
+export function renderNotFoundPage(shell: string, path: string, description: string): { status: number; html: string } {
+  const meta = notFoundMeta(SITE_URL + stripTrailingSlash(path), description);
+  return { status: 404, html: applyMeta(shell, meta) };
+}
+
+function applyMeta(html: string, meta: PageMeta): string {
 
   const ogType = meta.ogType || "website";
   const robots = meta.robots || "index, follow";

@@ -212,9 +212,9 @@ test("an unknown tool slug is still a real 404, and now points at the hub", () =
 test("production HTML catch-alls use renderHtmlPage for the status", () => {
   const staticSrc = readFileSync("server/static.ts", "utf8");
   const viteSrc = readFileSync("server/vite.ts", "utf8");
-  assert.match(staticSrc, /renderHtmlPage\(indexHtml, pathname\)/);
+  assert.match(staticSrc, /renderHtmlPage(?:WithLookups)?\(indexHtml, pathname\)/);
   assert.match(staticSrc, /res\.status\(page\.status\)/);
-  assert.match(viteSrc, /renderHtmlPage\(page, cleanPath\)/);
+  assert.match(viteSrc, /renderHtmlPage(?:WithLookups)?\(page, cleanPath\)/);
   assert.match(viteSrc, /res\.status\(rendered\.status\)/);
   assert.doesNotMatch(staticSrc, /res\.status\(200\)/);
   assert.doesNotMatch(viteSrc, /res\.status\(200\)/);

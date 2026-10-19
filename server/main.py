@@ -304,6 +304,14 @@ async def _run_deferred_startup():
             logger.warning(f"AI governance init skipped: {e}")
 
         try:
+            # One-off, opt-in: revoke agent-sim share links auto-created before
+            # #161 (REVOKE_LEGACY_AGENT_SIM_SHARES=true). Safe to leave on.
+            from server.core.migrations import revoke_legacy_agent_sim_shares
+            revoke_legacy_agent_sim_shares(engine)
+        except Exception as e:
+            logger.warning(f"Legacy agent-sim share revocation skipped: {e}")
+
+        try:
             from server.core.migrations import ensure_lifecycle_email_tables
             ensure_lifecycle_email_tables(engine)
         except Exception as e:

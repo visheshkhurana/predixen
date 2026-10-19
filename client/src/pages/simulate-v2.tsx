@@ -36,6 +36,11 @@ interface SimulationResult {
     survivedHorizon?: boolean;
     /** Deprecated alias of monthsSolventPct, kept for stored runs. */
     survivalProbability: number;
+    /** Share of investor reads that were interested in this ONE run (not a probability). */
+    investorInterestPct?: number;
+    investorInterestEvents?: number;
+    investorEncounters?: number;
+    /** Deprecated alias of investorInterestPct, kept for stored runs. */
     fundingProbability: number;
     finalCash: number;
     finalRunway: number;
@@ -93,6 +98,8 @@ interface SimulationResult {
     ratingColor: string;
     headline: string;
     survivalProbability: number;
+    investorInterestPct?: number;
+    /** Deprecated alias of investorInterestPct. */
     fundingProbability: number;
     turningPoints: Array<{ month: number; type: string; description: string; severity: string }>;
     agentSummary: Record<string, { finalSentiment: string; averageConfidence: number; trend: string }>;
@@ -605,6 +612,10 @@ function monthsSolvent(summary: Partial<SimulationResult['summary']> | undefined
   return summary?.monthsSolventPct ?? summary?.survivalProbability ?? 0;
 }
 
+function investorInterest(summary: Partial<SimulationResult['summary']> | undefined | null): number {
+  return summary?.investorInterestPct ?? summary?.fundingProbability ?? 0;
+}
+
 function SummaryCards({ summary, report }: { summary: SimulationResult['summary']; report: SimulationResult['report'] }) {
   const ratingColor = report?.ratingColor || 'green';
   const solvent = monthsSolvent(summary);
@@ -624,11 +635,24 @@ function SummaryCards({ summary, report }: { summary: SimulationResult['summary'
       </Card>
       <Card>
         <CardContent className="pt-4 pb-3">
-          <div className="text-xs text-muted-foreground mb-1">Funding</div>
-          <div className="text-2xl font-bold font-mono text-emerald-500">
-            {summary.fundingProbability.toFixed(0)}%
-          </div>
-          <div className="text-xs text-muted-foreground">probability</div>
+          <div className="text-xs text-muted-foreground mb-1">Investor interest</div>
+          {summary.investorEncounters === 0 ? (
+            <>
+              <div className="text-2xl font-bold font-mono text-muted-foreground">—</div>
+              <div className="text-xs text-muted-foreground">no investor reads in this run</div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-bold font-mono text-emerald-500">
+                {investorInterest(summary).toFixed(0)}%
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {summary.investorEncounters != null
+                  ? `${summary.investorInterestEvents ?? 0} of ${summary.investorEncounters} investor reads in this run`
+                  : 'of investor reads in this run'}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
       <Card>

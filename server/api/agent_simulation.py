@@ -71,7 +71,7 @@ async def run_simulation(
             num_rounds=request.num_rounds,
             seed=request.seed,
             survival_probability=result["summary"]["survivalProbability"],
-            funding_probability=result["summary"]["fundingProbability"],
+            funding_probability=result["summary"]["investorInterestPct"],
             final_cash=result["summary"]["finalCash"],
             final_runway=result["summary"]["finalRunway"],
             results_json=json.dumps(result),

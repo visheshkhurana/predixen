@@ -241,11 +241,16 @@ def _compile_results(
     cash_at_end = final_state.get("cash_balance", 0)
     runway_at_end = min(final_state.get("runway_months", 0), 999)
 
+    # One simulated path, so this is NOT a funding probability: it is the share
+    # of investor-agent reads in this run that came back interested. Exposed as
+    # investorInterestPct (with the raw counts); fundingProbability is kept as a
+    # deprecated alias for stored runs and shared links.
     funding_events = [e for e in events if e["eventType"] in ("investment_interest", "investment_pass")]
-    funding_probability = 0
-    if funding_events:
-        interest = sum(1 for e in funding_events if e["eventType"] == "investment_interest")
-        funding_probability = interest / len(funding_events) * 100
+    investor_encounters = len(funding_events)
+    investor_interest_events = sum(1 for e in funding_events if e["eventType"] == "investment_interest")
+    investor_interest_pct = (
+        investor_interest_events / investor_encounters * 100 if investor_encounters else 0
+    )
 
     risk_events = [e for e in events if e["severity"] in ("warning", "danger")]
 
@@ -274,7 +279,10 @@ def _compile_results(
             "monthsSolventPct": round(months_solvent_pct, 1),
             "survivedHorizon": survived_horizon,
             "survivalProbability": round(months_solvent_pct, 1),  # deprecated alias
-            "fundingProbability": round(funding_probability, 1),
+            "investorInterestPct": round(investor_interest_pct, 1),
+            "investorInterestEvents": investor_interest_events,
+            "investorEncounters": investor_encounters,
+            "fundingProbability": round(investor_interest_pct, 1),  # deprecated alias
             "finalCash": round(cash_at_end, 0),
             "finalRunway": round(runway_at_end, 1),
             "finalRevenue": round(final_state.get("monthly_revenue", 0), 0),
@@ -354,7 +362,7 @@ def _generate_recommendations(
             "priority": "high",
             "title": "Improve fundraising readiness",
             "description": "No investor interest was generated during the simulation. Focus on improving growth metrics and unit economics.",
-            "impact": "Strong metrics increase funding probability significantly",
+            "impact": "Strong metrics raise investor interest",
             "category": "fundraising",
         })
 

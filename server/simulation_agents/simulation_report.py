@@ -44,7 +44,10 @@ def generate_report(simulation_result: Dict[str, Any]) -> Dict[str, Any]:
         "ratingColor": rating_color,
         "monthsSolventPct": survival,
         "survivalProbability": summary.get("survivalProbability", 0),  # deprecated alias
-        "fundingProbability": summary.get("fundingProbability", 0),
+        # Share of investor reads that were interested in ONE run -- not a probability.
+        "investorInterestPct": summary.get("investorInterestPct", summary.get("fundingProbability", 0)),
+        "investorEncounters": summary.get("investorEncounters"),
+        "fundingProbability": summary.get("fundingProbability", 0),  # deprecated alias
         "headline": _generate_headline(summary, overall_rating),
         "keyMetrics": {
             "finalCash": summary.get("finalCash", 0),
