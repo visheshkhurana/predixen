@@ -1550,6 +1550,22 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+const RUNWAY_CALCULATOR_PATH = "/tools/runway-calculator";
+
+// The link text is the shared citation label. Restating it here fails
+// test_the_copy_is_declared_once_and_read_everywhere_else: seo-prerender.ts is
+// scanned for a second copy of every aiCitation string.
+function citationLabelForPath(path: string): string {
+  const match = aiCitation.links.find((link) => {
+    try {
+      return new URL(link.href).pathname === path;
+    } catch {
+      return false;
+    }
+  });
+  return escapeHtml(match?.label ?? path);
+}
+
 const NOT_FOUND_BODY = `
 <h1>Page not found</h1>
 <p>There is nothing at this address. It may have been renamed, or the link may
@@ -1557,7 +1573,7 @@ have a typo in it.</p>
 <p>Try one of these instead:</p>
 <ul>
   <li><a href="/">FounderConsole home</a></li>
-  <li><a href="/tools/runway-calculator">Free startup runway calculator</a></li>
+  <li><a href="${RUNWAY_CALCULATOR_PATH}">${citationLabelForPath(RUNWAY_CALCULATOR_PATH)}</a></li>
   <li><a href="/simulate">Simulate your scenarios</a></li>
   <li><a href="/pricing">Pricing</a></li>
   <li><a href="/blog">Blog</a></li>

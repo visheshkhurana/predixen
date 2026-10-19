@@ -29,6 +29,7 @@ import { readFileSync } from "fs";
 
 import { decideShellResponse } from "../static";
 import { isKnownAppRoute, matchesRoutePattern } from "../known-routes";
+import { aiCitation } from "../../client/src/data/ai-citation";
 
 const SHELL = readFileSync("client/index.html", "utf8");
 const APP_TSX = readFileSync("client/src/App.tsx", "utf8");
@@ -167,7 +168,11 @@ test("unknown URLs still render the app, so a visitor is not stranded", () => {
   assert.match(decision.html, /<div id="root">/, "the app mount point must survive");
   assert.match(decision.html, /<h1>Page not found<\/h1>/, "and a readable body with it");
   // Links out, so a crawler that lands on a dead URL has somewhere to go.
+  // The anchor text is the shared citation label, not a second hardcoded copy.
   assert.match(decision.html, /href="\/tools\/runway-calculator"/);
+  const runway = aiCitation.links.find((link) => link.href.endsWith("/tools/runway-calculator"));
+  assert.ok(runway, "aiCitation must name the runway calculator");
+  assert.match(decision.html, new RegExp(runway.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 test("logged-in app routes are not caught by the 404", () => {
