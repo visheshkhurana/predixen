@@ -39,7 +39,37 @@ COUNT_FILES = [
     ROOT / "client" / "src" / "pages" / "auth.tsx",
     ROOT / "server" / "seo-prerender.ts",
     ROOT / "server" / "email" / "templates.py",
+    # Added with the ai-cfo fix: the PR edits these three to say 34 and they were
+    # not asserted, so a revert to 37 here would have passed CI.
+    ROOT / "client" / "src" / "data" / "blog-posts.ts",
+    ROOT / "client" / "src" / "components" / "marketing" / "redesign" / "TwinDashboardDemo.tsx",
+    ROOT / "server" / "services" / "notifications.py",
 ]
+
+# Every public marketing surface that carried the retired trial offer. The
+# previous version of this guard read landing.tsx only, which is exactly why
+# /ai-cfo kept selling a 30-day trial and "$29/month" while the rest of the
+# site said free during early access.
+#
+# Legal text is deliberately absent: client/src/pages/terms.tsx and the Terms
+# block in server/seo-prerender.ts still describe a one-time 30-day trial.
+# Changing legal copy is a separate decision, not a marketing-string fix.
+TRIAL_FILES = [
+    ROOT / "client" / "src" / "pages" / "landing.tsx",
+    ROOT / "client" / "src" / "pages" / "ai-cfo.tsx",
+    ROOT / "client" / "src" / "pages" / "pricing.tsx",
+    ROOT / "client" / "src" / "pages" / "faq.tsx",
+    ROOT / "client" / "src" / "pages" / "product.tsx",
+    ROOT / "client" / "src" / "pages" / "marketing-features.tsx",
+    ROOT / "client" / "src" / "pages" / "alternatives.tsx",
+    ROOT / "client" / "src" / "pages" / "how-it-works.tsx",
+    ROOT / "client" / "src" / "pages" / "auth.tsx",
+]
+RETIRED_OFFER_PHRASES = (
+    "30-day",
+    "Start Free Trial",
+    "Paid plans from $29",
+)
 STALE_COUNT_PHRASES = (
     "37 data connector",
     "37 Data Connector",
@@ -94,12 +124,21 @@ def test_sameas_does_not_cite_the_missing_github_org():
         assert "github.com/founderconsole" not in text, path
 
 
-def test_landing_does_not_sell_a_29_dollar_trial():
+def test_marketing_pages_do_not_sell_a_30_day_trial():
+    """The retired offer, checked on every page that carried it.
+
+    Assertion scope is the point: the old version read landing.tsx only, so
+    ai-cfo.tsx could ship the same claim -- in JSON-LD, no less -- and pass.
+    """
+    for path in TRIAL_FILES:
+        text = path.read_text()
+        for phrase in RETIRED_OFFER_PHRASES:
+            assert phrase not in text, f"{path}: still sells the retired offer: {phrase!r}"
+
+
+def test_landing_frames_the_published_plans_as_planned():
     text = (ROOT / "client/src/pages/landing.tsx").read_text()
-    assert "30-day" not in text
-    assert "Start Free Trial" not in text
     assert "Starter ($29)" not in text
-    assert "Paid plans from $29" not in text
     assert "prices below are planned for later" in text
 
 
