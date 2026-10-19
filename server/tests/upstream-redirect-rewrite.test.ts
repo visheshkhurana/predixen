@@ -70,14 +70,46 @@ test("a loopback public host that is not the upstream port is kept", () => {
   );
 });
 
-test("when the only host is the internal bind, the location stays relative", () => {
-  const headers: { location?: string } = { location: "https://localhost:8001/templates/" };
-  applyUpstreamRedirectRewrite(
-    { statusCode: 307, headers },
-    { headers: { host: "localhost:8001" }, protocol: "https" },
-    { upstreamOrigin: UPSTREAM, publicPrefix: "/api" },
-  );
-  assert.equal(headers.location, "/api/templates/");
+test("when APP_BASE_URL is unset, the location stays relative", () => {
+  const previous = process.env.APP_BASE_URL;
+  delete process.env.APP_BASE_URL;
+  try {
+    const headers: { location?: string } = { location: "https://localhost:8001/templates/" };
+    applyUpstreamRedirectRewrite(
+      { statusCode: 307, headers },
+      { headers: { host: "evil.example" }, protocol: "http" },
+      { upstreamOrigin: UPSTREAM, publicPrefix: "/api" },
+    );
+    assert.equal(headers.location, "/api/templates/");
+  } finally {
+    if (previous === undefined) delete process.env.APP_BASE_URL;
+    else process.env.APP_BASE_URL = previous;
+  }
+});
+
+test("an evil Host header cannot choose the redirect origin", () => {
+  const previous = process.env.APP_BASE_URL;
+  process.env.APP_BASE_URL = "https://founderconsole.ai";
+  try {
+    const headers: { location?: string } = { location: "https://localhost:8001/templates/" };
+    applyUpstreamRedirectRewrite(
+      { statusCode: 307, headers },
+      {
+        headers: {
+          host: "evil.example",
+          "x-forwarded-host": "evil.example",
+          "x-forwarded-proto": "http",
+        },
+        protocol: "http",
+      },
+      { upstreamOrigin: UPSTREAM, publicPrefix: "/api" },
+    );
+    assert.equal(headers.location, "https://founderconsole.ai/api/templates/");
+    assert.equal(headers.location.includes("evil.example"), false);
+  } finally {
+    if (previous === undefined) delete process.env.APP_BASE_URL;
+    else process.env.APP_BASE_URL = previous;
+  }
 });
 
 test("non-redirects and other proxies are not prefixed twice", () => {
@@ -99,6 +131,8 @@ test("non-redirects and other proxies are not prefixed twice", () => {
 });
 
 test("the api proxy rewrites a leaked Location before the browser sees it", async () => {
+  const previous = process.env.APP_BASE_URL;
+  process.env.APP_BASE_URL = "https://founderconsole.ai";
   const upstream = http.createServer((req, res) => {
     const path = req.url || "/";
     if (path.startsWith("/external")) {
@@ -135,23 +169,27 @@ test("the api proxy rewrites a leaked Location before the browser sees it", asyn
 
   try {
     const leaked = await request(proxy, "/api/templates", {
-      host: "founderconsole.ai",
-      "x-forwarded-proto": "https",
+      host: "evil.example",
+      "x-forwarded-host": "evil.example",
+      "x-forwarded-proto": "http",
     });
     assert.equal(leaked.status, 307);
     assert.equal(leaked.location, "https://founderconsole.ai/api/templates/");
     assert.equal(leaked.location.includes("localhost"), false);
     assert.equal(leaked.location.includes("8001"), false);
+    assert.equal(leaked.location.includes("evil.example"), false);
 
     const oauth = await request(proxy, "/api/external", {
-      host: "founderconsole.ai",
-      "x-forwarded-proto": "https",
+      host: "evil.example",
+      "x-forwarded-proto": "http",
     });
     assert.equal(oauth.status, 302);
     assert.equal(oauth.location, "https://accounts.google.com/o/oauth2/v2/auth?x=1");
   } finally {
     proxy.close();
     upstream.close();
+    if (previous === undefined) delete process.env.APP_BASE_URL;
+    else process.env.APP_BASE_URL = previous;
   }
 });
 

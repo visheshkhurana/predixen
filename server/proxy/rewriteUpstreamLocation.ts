@@ -5,8 +5,8 @@
  * gone. Rewrite only those upstream locations. Anything else — Google OAuth,
  * /auth/callback, email click targets — is left alone.
  *
- * The public host is the Host header on the request Express received, never
- * X-Forwarded-Host (a client can set that and turn this into an open redirect).
+ * The public origin is APP_BASE_URL. The request Host and X-Forwarded-Host
+ * are not used: a client can set either and turn this into an open redirect.
  */
 import type { IncomingHttpHeaders } from "http";
 
@@ -26,12 +26,6 @@ export interface UpstreamRedirectOptions {
   upstreamOrigin: string;
   /** Restored when the proxy stripped it. Empty when the path already includes the mount. */
   publicPrefix?: string;
-}
-
-function firstHeader(value: string | string[] | undefined): string {
-  if (!value) return "";
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw.split(",")[0]?.trim() ?? "";
 }
 
 function normalizeHost(hostname: string): string {
@@ -67,25 +61,19 @@ function prefixPath(pathname: string, search: string, hash: string, publicPrefix
   return `${path}${search}${hash}`;
 }
 
-function pickProtocol(req: RedirectRequest): string {
-  const forwarded = firstHeader(req.headers["x-forwarded-proto"]).toLowerCase();
-  if (forwarded === "http" || forwarded === "https") return forwarded;
-  const protocol = (req.protocol || "").replace(/:$/, "").toLowerCase();
-  if (protocol === "http" || protocol === "https") return protocol;
-  return "https";
-}
-
-function pickPublicHost(req: RedirectRequest, upstreamOrigin: string): string {
-  const host = firstHeader(req.headers.host);
-  if (!host) return "";
+/** Origin of the rewritten Location. Never the request Host. */
+function publicOriginFromAppBase(): { host: string; protocol: string } {
+  const raw = (process.env.APP_BASE_URL || "").trim();
+  if (!raw) return { host: "", protocol: "https" };
   try {
-    const upstream = new URL(upstreamOrigin);
-    const asUrl = new URL(`http://${host}/`);
-    if (locationTargetsUpstream(asUrl, upstream)) return "";
+    const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return { host: "", protocol: "https" };
+    }
+    return { host: url.host, protocol: url.protocol.replace(/:$/, "") };
   } catch {
-    return host;
+    return { host: "", protocol: "https" };
   }
-  return host;
 }
 
 export function rewriteUpstreamLocation(
@@ -133,14 +121,17 @@ export function applyUpstreamRedirectRewrite(
   req: RedirectRequest,
   options: UpstreamRedirectOptions,
 ): void {
+  // req is part of the proxy callback shape. Its Host is intentionally unread.
+  void req;
   const status = proxyRes.statusCode ?? 0;
   if (status < 300 || status >= 400) return;
 
   const current = proxyRes.headers.location;
   if (!current) return;
   const values = Array.isArray(current) ? current : [current];
-  const publicHost = pickPublicHost(req, options.upstreamOrigin);
-  const publicProtocol = pickProtocol(req);
+  const origin = publicOriginFromAppBase();
+  const publicHost = origin.host;
+  const publicProtocol = origin.protocol;
   const rewritten = values.map((value) =>
     rewriteUpstreamLocation(value, {
       ...options,
