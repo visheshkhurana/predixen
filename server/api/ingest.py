@@ -8,6 +8,7 @@ import os
 import json
 import logging
 
+from server.core.openai_credentials import chat_sampling_params, is_missing_key_error
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -1198,17 +1199,31 @@ class OnboardingExtractionResponse(BaseModel):
     raw_data_preview: Optional[Dict[str, Any]] = None  # For cross-check UI with Excel/CSV
 
 
+def _resolve_onboarding_openai() -> tuple[Optional[str], Optional[str]]:
+    """Return ``(api_key, base_url)`` for the onboarding extractors.
+
+    The Replit AI Integrations key only works against its own proxy, so its base
+    URL is returned with it. A plain ``OPENAI_API_KEY`` talks to OpenAI directly
+    and must not inherit the integration base URL. Shared with the PDF and Excel
+    extractors so every onboarding path answers this the same way.
+    """
+    from server.core.openai_credentials import resolve_openai_credentials
+
+    return resolve_openai_credentials()
+
+
 def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
     """Use OpenAI to extract company info and financials from document text."""
     from openai import OpenAI
-    
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+
+    api_key, base_url = _resolve_onboarding_openai()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key, base_url=base_url)
+        raise ValueError(
+            "OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY."
+        )
+
+    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
     
     try:
         response = client.chat.completions.create(
@@ -1223,8 +1238,7 @@ def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
                     "content": ONBOARDING_EXTRACTION_PROMPT + "\n\nDocument text:\n\n" + text[:20000]
                 }
             ],
-            max_tokens=2000,
-            temperature=0.1,
+            **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
             timeout=60
         )
         
@@ -1245,14 +1259,15 @@ def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
 def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
     """Use OpenAI Vision to extract company info and financials from images."""
     from openai import OpenAI
-    
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+
+    api_key, base_url = _resolve_onboarding_openai()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key, base_url=base_url)
+        raise ValueError(
+            "OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY."
+        )
+
+    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
     
     content = [{"type": "text", "text": ONBOARDING_VISION_PROMPT}]
     
@@ -1278,8 +1293,7 @@ def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[st
                     "content": content
                 }
             ],
-            max_tokens=2000,
-            temperature=0.1,
+            **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
             timeout=90
         )
         
@@ -1389,6 +1403,8 @@ async def extract_onboarding_deck(
                         if metrics.get('operating_income') and not result['financials'].get('operating_income'):
                             result['financials']['operating_income'] = metrics['operating_income']
                 except Exception as struct_err:
+                    if is_missing_key_error(struct_err):
+                        raise
                     logger.warning(f"Structured Excel extraction failed, using GPT result: {struct_err}")
                 
             except Exception as excel_error:

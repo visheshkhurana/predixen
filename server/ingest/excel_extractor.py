@@ -4,6 +4,11 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from server.lib.lazy_imports import pd
+from server.core.openai_credentials import (
+    chat_sampling_params,
+    is_missing_key_error,
+    resolve_openai_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,15 +93,16 @@ def create_word_representations(metrics: Dict[str, Any], currency: str = "USD") 
 
 
 def get_openai_client():
-    """Get OpenAI client with validation."""
+    """Get the OpenAI client, from whichever credential this deployment has."""
     from openai import OpenAI
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+    from server.core.openai_credentials import missing_key_error, resolve_openai_credentials
+
+    api_key, base_url = resolve_openai_credentials()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured. Please check environment settings.")
-    
-    return OpenAI(api_key=api_key, base_url=base_url)
+        raise missing_key_error()
+
+    return OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
 
 
 EXCEL_EXTRACTION_PROMPT = """Analyze the following Excel spreadsheet data and extract all key financial and operational metrics.
@@ -177,6 +183,7 @@ def excel_to_text(file_path: str, max_rows: int = 100) -> str:
 def extract_metrics_with_openai(excel_text: str) -> Dict[str, Any]:
     """Use OpenAI to extract financial metrics from Excel text."""
     try:
+        _, base_url = resolve_openai_credentials()
         client = get_openai_client()
         
         response = client.chat.completions.create(
@@ -191,8 +198,7 @@ def extract_metrics_with_openai(excel_text: str) -> Dict[str, Any]:
                     "content": EXCEL_EXTRACTION_PROMPT + excel_text[:20000]  # Limit text length
                 }
             ],
-            max_tokens=2000,
-            temperature=0.1,
+            **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
             timeout=60,
         )
         
@@ -465,6 +471,7 @@ def parse_income_statement(file_path: str, fx_rate: Optional[float] = None) -> D
 def generate_ai_summary(metrics: Dict[str, Any]) -> str:
     """Generate AI summary of the extracted metrics."""
     try:
+        _, base_url = resolve_openai_credentials()
         client = get_openai_client()
         
         metrics_text = "\n".join([f"- {k}: {v:,.2f}" if isinstance(v, float) else f"- {k}: {v}" 
@@ -482,8 +489,7 @@ def generate_ai_summary(metrics: Dict[str, Any]) -> str:
                     "content": f"Summarize these financial metrics:\n{metrics_text}"
                 }
             ],
-            max_tokens=200,
-            temperature=0.3,
+            **chat_sampling_params(base_url, max_tokens=200, temperature=0.3),
             timeout=30,
         )
         
@@ -828,6 +834,10 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
             parsed['report_date'] = ai_metrics.get('report_date') or parsed.get('report_date')
             
         except Exception as e:
+            # Same as the PDF path: never turn a missing credential into a
+            # pattern-only result that looks like a successful extraction.
+            if is_missing_key_error(e):
+                raise
             logger.error(f"AI extraction also failed: {e}")
             if not metrics:
                 raise ValueError(f"Could not extract data from Excel. Please ensure the file is a valid financial report. Error: {str(e)}")
