@@ -360,16 +360,21 @@ async def upload_termina_pdf(
             gross_margin = baseline.get("gross_margin", 70) or 70
             cogs = monthly_revenue * (1 - gross_margin / 100)
             
+            from server.ingest.termina_costs import termina_cost_lines
+            costs = termina_cost_lines(
+                revenue=monthly_revenue,
+                cogs=cogs,
+                opex=baseline.get("operating_expenses", 0) or 0,
+                payroll=baseline.get("payroll", 0) or 0,
+                net_burn=baseline.get("net_burn"),
+            )
             record = FinancialRecord(
                 company_id=company_id,
                 period_start=first_of_month,
                 period_end=today,
                 revenue=monthly_revenue,
-                cogs=cogs,
-                opex=baseline.get("operating_expenses", 0) or 0,
-                payroll=baseline.get("payroll", 0) or 0,
-                other_costs=baseline.get("net_burn", 0) or 0,
-                cash_balance=baseline.get("cash_balance", 0) or 0
+                cash_balance=baseline.get("cash_balance", 0) or 0,
+                **costs,
             )
             db.add(record)
             
@@ -449,16 +454,20 @@ async def upload_termina_excel(
             gross_margin = baseline.get("gross_margin", 70) or 70
             cogs = baseline.get("cogs") or (monthly_revenue * (1 - gross_margin / 100))
             
+            from server.ingest.termina_costs import termina_cost_lines
             record = FinancialRecord(
                 company_id=company_id,
                 period_start=first_of_month,
                 period_end=today,
                 revenue=monthly_revenue,
-                cogs=cogs,
-                opex=baseline.get("opex", 0) or 0,
-                payroll=baseline.get("payroll", 0) or 0,
-                other_costs=baseline.get("net_burn", 0) or 0,
-                cash_balance=baseline.get("cash_balance", 0) or 0
+                cash_balance=baseline.get("cash_balance", 0) or 0,
+                **termina_cost_lines(
+                    revenue=monthly_revenue,
+                    cogs=cogs,
+                    opex=baseline.get("opex", 0) or 0,
+                    payroll=baseline.get("payroll", 0) or 0,
+                    net_burn=baseline.get("net_burn"),
+                ),
             )
             db.add(record)
             

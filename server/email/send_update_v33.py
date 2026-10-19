@@ -155,7 +155,7 @@ FounderConsole
 
 def build_html(rcpt: dict) -> str:
     email = rcpt['email']
-    open_tracking_url = f"{BASE_URL}/email-tracking/analytics?token=founderconsole-analytics-2026&campaign={CAMPAIGN}&email={email}&event=open"
+    open_tracking_url = f"{BASE_URL}/email-tracking/analytics?campaign={CAMPAIGN}&email={email}&event=open"
     return f"""<!DOCTYPE html>
 <html>
 <head>
