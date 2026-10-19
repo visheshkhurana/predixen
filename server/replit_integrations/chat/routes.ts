@@ -35,6 +35,26 @@ interface ChatMessage {
   content: string;
 }
 
+// The system prompt is ours: callers may only send their own user/assistant
+// turns, bounded in count and length, so a client cannot rewrite the advisor's
+// instructions or pad a request to burn tokens.
+const MAX_MESSAGES = 30;
+const MAX_CONTENT_CHARS = 4000;
+
+export function sanitizeChatMessages(raw: unknown): ChatMessage[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw
+    .filter(
+      (m): m is ChatMessage =>
+        !!m &&
+        typeof m === "object" &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string",
+    )
+    .slice(-MAX_MESSAGES)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_CONTENT_CHARS) }));
+}
+
 export function registerChatRoutes(app: Express, options: ChatRouteOptions = {}): void {
   const resolveClient = options.getOpenAIClient ?? getOpenAIClient;
   const limitAi = aiUserRateLimit(options.rateLimit);
@@ -45,8 +65,8 @@ export function registerChatRoutes(app: Express, options: ChatRouteOptions = {})
 
   router.post("/chat", limitAi, async (req: Request, res: Response) => {
     try {
-      const { messages, context } = req.body as {
-        messages: ChatMessage[];
+      const { messages: rawMessages, context } = req.body as {
+        messages: unknown;
         context?: {
           companyName?: string;
           industry?: string;
@@ -60,7 +80,8 @@ export function registerChatRoutes(app: Express, options: ChatRouteOptions = {})
         };
       };
 
-      if (!messages || !Array.isArray(messages)) {
+      const messages = sanitizeChatMessages(rawMessages);
+      if (!messages || messages.length === 0) {
         return res.status(400).json({ error: "Messages array is required" });
       }
 

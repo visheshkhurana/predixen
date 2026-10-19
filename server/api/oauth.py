@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from server.core.db import get_db
 from server.core.config import settings
-from server.core.security import create_access_token, set_auth_cookie, set_refresh_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE
+from server.core.security import create_access_token, set_auth_cookie, set_refresh_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, revoke_all_sessions
 from server.models.user import User, RefreshToken
 from server.services.posthog import sanitize_distinct_id
 
@@ -71,14 +71,37 @@ def _take_google_state(state: str | None) -> tuple[bool, str | None]:
     return False, None
 
 
+class OAuthLinkError(Exception):
+    """An OAuth identity that must not be attached to the matching account."""
+
+
 def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: str,
                                display_name: str = None, avatar_url: str = None,
                                anonymous_distinct_id: str | None = None) -> User:
     user = db.query(User).filter(User.email == email).first()
     if user:
+        if user.oauth_provider == provider and user.oauth_id and oauth_id and user.oauth_id != oauth_id:
+            # Same email, different Google account: never silently re-bind.
+            raise OAuthLinkError("oauth_account_mismatch")
         if not user.oauth_provider:
+            if user.password_hash and not user.is_email_verified:
+                # Pre-hijack defence: anyone can register a password account for
+                # an address they don't own, because signup issues a session before
+                # the email is verified. The Google sign-in is the first proof of who
+                # really owns this inbox, so the unverified password (and every
+                # session minted from it) is discarded rather than kept alongside.
+                logger.warning(
+                    "OAuth link to unverified password account user_id=%s: "
+                    "clearing password and revoking sessions", user.id,
+                )
+                user.password_hash = None
+                # Before commit, so a token minted from the planted password
+                # cannot be used once this link is durable.
+                revoke_all_sessions(db, user.id)
             user.oauth_provider = provider
             user.oauth_id = oauth_id
+        # Only reached with an email the provider has verified (see callback).
+        user.is_email_verified = True
         if display_name and not user.display_name:
             user.display_name = display_name
         if avatar_url and not user.avatar_url:
@@ -94,6 +117,7 @@ def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: 
         oauth_id=oauth_id,
         display_name=display_name,
         avatar_url=avatar_url,
+        is_email_verified=True,
     )
     db.add(user)
     db.commit()
@@ -229,16 +253,23 @@ def google_callback(request: Request, code: str = None, state: str = None, error
     email = profile.get("email")
     if not email:
         return RedirectResponse(url=f"{base}/auth?error=google_no_email", status_code=302)
+    # Account linking keys on email, so the email must be one Google has verified.
+    if profile.get("verified_email") is not True:
+        return RedirectResponse(url=f"{base}/auth?error=google_unverified_email", status_code=302)
 
-    user = _get_or_create_oauth_user(
-        db,
-        email=email.lower().strip(),
-        provider="google",
-        oauth_id=profile.get("id", ""),
-        display_name=profile.get("name"),
-        avatar_url=profile.get("picture"),
-        anonymous_distinct_id=anonymous_distinct_id,
-    )
+    try:
+        user = _get_or_create_oauth_user(
+            db,
+            email=email.lower().strip(),
+            provider="google",
+            oauth_id=profile.get("id", ""),
+            display_name=profile.get("name"),
+            avatar_url=profile.get("picture"),
+            anonymous_distinct_id=anonymous_distinct_id,
+        )
+    except OAuthLinkError as e:
+        logger.warning(f"Google OAuth link refused: {e}")
+        return RedirectResponse(url=f"{base}/auth?error=google_account_mismatch", status_code=302)
     return _build_auth_redirect(request, user, db)
 
 

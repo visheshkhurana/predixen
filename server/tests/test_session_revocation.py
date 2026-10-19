@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from server.api import auth as auth_api
+from server.api import oauth as oauth_api
 from server.core import security
 from server.core.config import settings
 from server.core.db import get_db
@@ -120,6 +121,35 @@ def test_password_reset_ends_every_existing_session(env):
     db.close()
 
     fresh = _token(uid)  # the next login
+    assert _me(client, fresh) == 200
+
+
+def test_oauth_password_clear_rejects_the_old_access_token(env):
+    """Linking Google onto an unverified password account is a password change.
+
+    The access token minted from the planted password must fail afterwards.
+    Refresh-token revocation alone left that JWT valid until it expired.
+    """
+    client, Session, uid = env
+    stolen = _token(uid, issued_seconds_ago=30)
+    assert _me(client, stolen) == 200
+
+    db = Session()
+    user = db.query(User).filter(User.id == uid).one()
+    user.is_email_verified = False
+    user.oauth_provider = None
+    user.password_hash = security.get_password_hash("planted-pass-1")
+    db.commit()
+    email = user.email
+    db.close()
+
+    db = Session()
+    linked = oauth_api._get_or_create_oauth_user(db, email, "google", "g-reclaim")
+    assert linked.password_hash is None
+    db.close()
+
+    assert _me(client, stolen) == 401
+    fresh = _token(uid)
     assert _me(client, fresh) == 200
 
 

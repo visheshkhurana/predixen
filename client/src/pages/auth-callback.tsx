@@ -29,6 +29,8 @@ export default function AuthCallback() {
         google_no_email: 'No email found on your Google account',
         github_no_email: 'No email found on your GitHub account. Make sure your email is public or verified.',
         google_profile_failed: 'Could not retrieve your Google profile',
+        google_unverified_email: 'Your Google account email is not verified. Verify it with Google, then try again.',
+        google_account_mismatch: 'This email is already linked to a different Google account.',
         github_profile_failed: 'Could not retrieve your GitHub profile',
       };
       setError(messages[errorParam] || 'Sign-in failed. Please try again.');
