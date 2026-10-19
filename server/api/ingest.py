@@ -8,7 +8,7 @@ import os
 import json
 import logging
 
-from server.core.openai_credentials import chat_sampling_params
+from server.core.openai_credentials import chat_sampling_params, is_missing_key_error
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -1376,6 +1376,8 @@ async def extract_onboarding_deck(
                         if metrics.get('operating_income') and not result['financials'].get('operating_income'):
                             result['financials']['operating_income'] = metrics['operating_income']
                 except Exception as struct_err:
+                    if is_missing_key_error(struct_err):
+                        raise
                     logger.warning(f"Structured Excel extraction failed, using GPT result: {struct_err}")
                 
             except Exception as excel_error:

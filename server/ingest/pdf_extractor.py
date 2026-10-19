@@ -6,6 +6,11 @@ import json
 import logging
 from typing import Dict, Any, Optional, List
 import pdfplumber
+from server.core.openai_credentials import (
+    chat_sampling_params,
+    is_missing_key_error,
+    resolve_openai_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -283,15 +288,16 @@ def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
 
 
 def get_openai_client():
-    """Get OpenAI client with validation."""
+    """Get the OpenAI client, from whichever credential this deployment has."""
     from openai import OpenAI
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+    from server.core.openai_credentials import missing_key_error, resolve_openai_credentials
+
+    api_key, base_url = resolve_openai_credentials()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured. Please check environment settings.")
-    
-    return OpenAI(api_key=api_key, base_url=base_url)
+        raise missing_key_error()
+
+    return OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
 
 
 def pdf_to_images(file_path: str, max_pages: int = 5) -> List[str]:
@@ -459,6 +465,7 @@ def extract_text_from_pdf(file_path: str) -> str:
 def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
     """Use OpenAI to extract financial metrics from PDF text."""
     try:
+        _, base_url = resolve_openai_credentials()
         client = get_openai_client()
         
         response = client.chat.completions.create(
@@ -473,8 +480,7 @@ def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
                     "content": EXTRACTION_PROMPT + "Here is the report text:\n\n" + pdf_text[:15000]
                 }
             ],
-            max_tokens=2000,
-            temperature=0.1,
+            **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
             timeout=60,
         )
         
@@ -508,6 +514,7 @@ def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
 def extract_metrics_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
     """Use OpenAI Vision to extract financial metrics from PDF images."""
     try:
+        _, base_url = resolve_openai_credentials()
         client = get_openai_client()
         
         # Build content with images
@@ -534,8 +541,7 @@ def extract_metrics_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
                     "content": content
                 }
             ],
-            max_tokens=2000,
-            temperature=0.1,
+            **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
             timeout=90,
         )
         
@@ -717,6 +723,10 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
             ai_metrics = extract_metrics_with_openai(pdf_text)
             extraction_method = "pattern+ai"
         except Exception as e:
+            # A missing credential is a deployment error, not a reason to fall
+            # back to a pattern-only result and report the upload as a success.
+            if is_missing_key_error(e):
+                raise
             logger.warning(f"AI extraction failed: {e}")
             if not pattern_metrics:
                 extraction_method = "vision"

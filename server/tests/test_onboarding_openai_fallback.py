@@ -149,3 +149,89 @@ def test_no_key_names_both_variables(fake_openai):
     message = str(excinfo.value)
     assert "AI_INTEGRATIONS_OPENAI_API_KEY" in message
     assert "OPENAI_API_KEY" in message
+
+
+# --- Sentinel F1: the PDF/Excel factories only ever read the integration key ---
+
+
+def test_pdf_extractor_client_uses_a_plain_key_without_a_base_url(fake_openai, monkeypatch):
+    from server.ingest import pdf_extractor
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-plain")
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_BASE_URL", "https://integrations.example/v1")
+
+    pdf_extractor.get_openai_client()
+
+    assert fake_openai.last_kwargs["api_key"] == "sk-plain"
+    assert "base_url" not in fake_openai.last_kwargs
+
+
+def test_excel_extractor_client_uses_a_plain_key(fake_openai, monkeypatch):
+    from server.ingest import excel_extractor
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-plain")
+
+    excel_extractor.get_openai_client()
+
+    assert fake_openai.last_kwargs["api_key"] == "sk-plain"
+
+
+def test_extractor_client_without_a_key_names_both_variables(fake_openai):
+    from server.ingest import excel_extractor, pdf_extractor
+
+    for factory in (pdf_extractor.get_openai_client, excel_extractor.get_openai_client):
+        with pytest.raises(ValueError) as excinfo:
+            factory()
+        message = str(excinfo.value)
+        assert "AI_INTEGRATIONS_OPENAI_API_KEY" in message
+        assert "OPENAI_API_KEY" in message
+
+
+def test_missing_key_is_not_swallowed_by_a_pattern_only_pdf_result(
+    fake_openai, monkeypatch, tmp_path
+):
+    """A pattern match must not turn a missing credential into a success."""
+    from server.core.openai_credentials import missing_key_error
+    from server.ingest import pdf_extractor
+
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(pdf_extractor, "extract_text_from_pdf", lambda _path: "x" * 500)
+    monkeypatch.setattr(
+        pdf_extractor, "extract_metrics_with_patterns", lambda _text: {"revenue": 1.0}
+    )
+
+    def no_key(_text):
+        raise missing_key_error()
+
+    monkeypatch.setattr(pdf_extractor, "extract_metrics_with_openai", no_key)
+
+    with pytest.raises(ValueError) as excinfo:
+        pdf_extractor.process_termina_pdf(str(pdf))
+    assert "AI_INTEGRATIONS_OPENAI_API_KEY" in str(excinfo.value)
+
+
+def test_missing_key_is_not_swallowed_by_a_partial_excel_result(
+    fake_openai, monkeypatch, tmp_path
+):
+    from server.core.openai_credentials import missing_key_error
+    from server.ingest import excel_extractor
+
+    book = tmp_path / "report.xlsx"
+    book.write_bytes(b"fake")
+    monkeypatch.setattr(
+        excel_extractor, "parse_income_statement_canonical", lambda _path: {"success": False}
+    )
+    monkeypatch.setattr(
+        excel_extractor, "parse_income_statement", lambda _path: {"metrics": {"revenue": 1.0}}
+    )
+    monkeypatch.setattr(excel_extractor, "excel_to_text", lambda _path: "text")
+
+    def no_key(_text):
+        raise missing_key_error()
+
+    monkeypatch.setattr(excel_extractor, "extract_metrics_with_openai", no_key)
+
+    with pytest.raises(ValueError) as excinfo:
+        excel_extractor.process_termina_excel(str(book))
+    assert "AI_INTEGRATIONS_OPENAI_API_KEY" in str(excinfo.value)
