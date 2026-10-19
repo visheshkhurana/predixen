@@ -28,6 +28,7 @@ from .base import (
     InvoiceRecord,
 )
 from .registry import ConnectorRegistry
+from .url_safety import SAFE_CLIENT_KWARGS, validate_public_url_async
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +203,9 @@ class TallyConnector(BaseConnector):
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
         # For on-prem Tally
-        self._tally_url = config.credentials.get("tally_url", "http://localhost:9000")
+        # The URL is user-supplied and fetched server-side, so it is validated
+        # (public host, https, no redirects) before the first request.
+        self._tally_url = config.credentials.get("tally_url", "")
         self._company_name = config.credentials.get("company_name", "")
         # For Tally Forms API
         self._api_key = config.credentials.get("api_key", "")
@@ -220,12 +223,15 @@ class TallyConnector(BaseConnector):
                         "Content-Type": "application/json",
                     },
                     timeout=30.0,
+                    **SAFE_CLIENT_KWARGS,
                 )
             else:
+                await validate_public_url_async(self._tally_url)
                 self._client = httpx.AsyncClient(
                     base_url=self._tally_url,
                     headers={"Content-Type": "application/xml"},
                     timeout=60.0,  # Tally can be slow
+                    **SAFE_CLIENT_KWARGS,
                 )
         return self._client
     
