@@ -171,13 +171,11 @@ async def list_catalog(
     
     company_connectors = {}
     if company_id:
-        from server.models.company import Company
-        try:
-            company = db.query(Company).filter(Company.id == company_id).first()
-            if company and company.metadata_json:
-                company_connectors = company.metadata_json.get("connectors", {})
-        except Exception:
-            pass
+        # Install status is per-company data: only members may read it.
+        from server.core.company_access import get_user_company
+        company = get_user_company(db, company_id, current_user)
+        if company.metadata_json:
+            company_connectors = company.metadata_json.get("connectors", {}) or {}
     
     catalog = []
     for p in providers:

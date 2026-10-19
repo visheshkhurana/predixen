@@ -928,6 +928,24 @@ async def check_and_send_publish_notification() -> None:
         logger.error(f"Error in publish notification check: {e}")
 
 
+def _personalize_announcement(email: str, html: str, text: Optional[str]):
+    """Per-recipient unsubscribe link and opt-out for announcement mail.
+
+    Returns None when the recipient opted out (or the check could not run).
+    """
+    from server.core.db import SessionLocal
+    from server.email.lifecycle_guard import prepare_bulk_send
+
+    db = SessionLocal()
+    try:
+        return prepare_bulk_send(db, email, html, text)
+    except Exception as e:
+        logger.error(f"Could not check email preferences for an announcement recipient: {e}")
+        return None
+    finally:
+        db.close()
+
+
 async def send_platform_update(
     to_emails: Optional[List[str]] = None,
     subject: str = "FounderConsole v14: AI Copilot Now Thinks Like a McKinsey Partner",
@@ -1122,8 +1140,13 @@ Visit: https://founderconsole.ai
         failed = []
         
         async with httpx.AsyncClient() as client:
+            skipped = []
             for i, email in enumerate(to_emails):
                 try:
+                    prepared = _personalize_announcement(email, html_content, text_content)
+                    if prepared is None:
+                        skipped.append(email)
+                        continue
                     # Rate limit: 2 requests per second, so wait 600ms between emails
                     if i > 0:
                         await asyncio.sleep(0.6)
@@ -1138,8 +1161,9 @@ Visit: https://founderconsole.ai
                             "from": from_email,
                             "to": [email],
                             "subject": subject,
-                            "html": html_content,
-                            "text": text_content
+                            "html": prepared.html,
+                            "text": prepared.text,
+                            **({"headers": prepared.headers} if prepared.headers else {}),
                         },
                         timeout=30.0
                     )
@@ -1158,8 +1182,9 @@ Visit: https://founderconsole.ai
             "success": len(failed) == 0,
             "sent": sent,
             "failed": failed,
+            "skipped_opted_out": skipped,
             "total_recipients": len(to_emails),
-            "message": f"Sent {len(sent)} email(s), {len(failed)} failed"
+            "message": f"Sent {len(sent)} email(s), {len(failed)} failed, {len(skipped)} opted out"
         }
         
     except Exception as e:
@@ -1280,7 +1305,12 @@ FounderConsole"""
         failed = []
         
         async with httpx.AsyncClient() as client:
+            skipped = []
             for i, email in enumerate(to_emails):
+                prepared = _personalize_announcement(email, html_content, text_content)
+                if prepared is None:
+                    skipped.append(email)
+                    continue
                 if i > 0:
                     await asyncio.sleep(0.6)
                 try:
@@ -1294,8 +1324,9 @@ FounderConsole"""
                             "from": from_email,
                             "to": [email],
                             "subject": "[FounderConsole] Coming Soon: Major Hybrid Feature Update",
-                            "html": html_content,
-                            "text": text_content
+                            "html": prepared.html,
+                            "text": prepared.text,
+                            **({"headers": prepared.headers} if prepared.headers else {}),
                         },
                         timeout=30.0
                     )
@@ -1312,8 +1343,9 @@ FounderConsole"""
             "success": len(failed) == 0,
             "sent": sent,
             "failed": failed,
+            "skipped_opted_out": skipped,
             "total_recipients": len(to_emails),
-            "message": f"Sent {len(sent)} email(s), {len(failed)} failed"
+            "message": f"Sent {len(sent)} email(s), {len(failed)} failed, {len(skipped)} opted out"
         }
         
     except Exception as e:
