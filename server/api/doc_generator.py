@@ -104,6 +104,66 @@ class GenerateDocRequest(BaseModel):
     scenario_id: Optional[int] = None
 
 
+# Doc-generator metric -> truth-scan keys to try, in order.
+_METRIC_SOURCES = {
+    "mrr": ["mrr"],
+    "arr": ["arr"],
+    "monthly_revenue": ["monthly_revenue"],
+    "burn_rate": ["net_burn", "monthly_burn"],
+    "cash_balance": ["cash_balance"],
+    "runway_months": ["runway_months", "runway_p50"],
+    "gross_margin": ["gross_margin"],
+    "revenue_growth": ["revenue_growth_mom"],
+    "customers": ["customer_count", "customers"],
+    "churn_rate": ["churn_rate"],
+    "cac": ["cac"],
+    "ltv": ["ltv"],
+    "ltv_cac_ratio": ["ltv_cac_ratio"],
+    "ndr": ["net_revenue_retention", "ndr"],
+}
+
+_ESTIMATE_MARKERS = ("estimat", "imput", "placeholder", "default", "assum")
+
+
+def _is_estimated(key: str, value: Any, estimated: set) -> bool:
+    if key in estimated:
+        return True
+    if isinstance(value, dict):
+        for marker_key in ("source", "confidence", "status", "origin"):
+            marker = value.get(marker_key)
+            if marker is not None and any(t in str(marker).lower() for t in _ESTIMATE_MARKERS):
+                return True
+    return False
+
+
+def _known_metrics(metrics: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    """Reported metrics only. Missing or estimated values are None, never 0.
+
+    truth_scan writes placeholders (CAC, LTV, NRR, a 150-customer default) into
+    `metrics` and lists them on `_estimated_metrics`; those must not reach the
+    prompt as if the founder reported them.
+    """
+    metrics = metrics if isinstance(metrics, dict) else {}
+    listed = metrics.get("_estimated_metrics")
+    estimated = {str(x) for x in listed} if isinstance(listed, list) else set()
+    out: Dict[str, Optional[float]] = {}
+    for name, keys in _METRIC_SOURCES.items():
+        out[name] = None
+        for key in keys:
+            raw = metrics.get(key)
+            if raw is None or _is_estimated(key, raw, estimated):
+                continue
+            if isinstance(raw, dict) and raw.get("value") is None:
+                continue
+            try:
+                out[name] = extract_metric_value(raw, None)
+            except Exception:
+                out[name] = None
+            if out[name] is not None:
+                break
+    return out
+
+
 def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company.id
@@ -151,41 +211,28 @@ def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
             "latest_simulation": sim_data,
         })
 
+    def _num(v: Any) -> Optional[float]:
+        return float(v) if v is not None else None
+
     fin_records_data = []
     for fr in financial_records:
         fin_records_data.append({
             "period_start": fr.period_start.isoformat() if fr.period_start else None,
-            "revenue": float(fr.revenue or 0),
-            "cogs": float(fr.cogs or 0),
-            "opex": float(fr.opex or 0),
-            "payroll": float(fr.payroll or 0),
-            "cash_balance": float(fr.cash_balance or 0),
-            "mrr": float(fr.mrr or 0) if fr.mrr else None,
-            "arr": float(fr.arr or 0) if fr.arr else None,
-            "gross_margin": float(fr.gross_margin or 0) if fr.gross_margin is not None else None,
-            "net_burn": float(fr.net_burn or 0) if fr.net_burn is not None else None,
-            "runway_months": float(fr.runway_months or 0) if fr.runway_months is not None else None,
+            "revenue": _num(fr.revenue),
+            "cogs": _num(fr.cogs),
+            "opex": _num(fr.opex),
+            "payroll": _num(fr.payroll),
+            "cash_balance": _num(fr.cash_balance),
+            "mrr": _num(fr.mrr),
+            "arr": _num(fr.arr),
+            "gross_margin": _num(fr.gross_margin),
+            "net_burn": _num(fr.net_burn),
+            "runway_months": _num(fr.runway_months),
             "headcount": fr.headcount,
             "customers": fr.customers,
         })
 
-    extracted_metrics = {
-        "mrr": extract_metric_value(metrics.get("mrr"), 0),
-        "arr": extract_metric_value(metrics.get("arr"), 0),
-        "monthly_revenue": extract_metric_value(metrics.get("monthly_revenue"), 0),
-        "burn_rate": extract_metric_value(metrics.get("monthly_burn"), 0),
-        "cash_balance": extract_metric_value(metrics.get("cash_balance"), 0),
-        "runway_months": extract_metric_value(metrics.get("runway_months"), 0),
-        "gross_margin": extract_metric_value(metrics.get("gross_margin"), 0),
-        "revenue_growth": extract_metric_value(metrics.get("revenue_growth_mom"), 0),
-        "customers": extract_metric_value(metrics.get("customers"), 0),
-        "churn_rate": extract_metric_value(metrics.get("churn_rate"), 0),
-        "cac": extract_metric_value(metrics.get("cac"), 0),
-        "ltv": extract_metric_value(metrics.get("ltv"), 0),
-        "ltv_cac_ratio": extract_metric_value(metrics.get("ltv_cac_ratio"), 0),
-        "ndr": extract_metric_value(metrics.get("ndr"), 0),
-    }
-
+    extracted_metrics = _known_metrics(metrics)
     return {
         "company": {
             "id": company.id,
@@ -201,27 +248,85 @@ def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
     }
 
 
+def _fmt_money(v: float) -> str:
+    return f"${v:,.0f}"
+
+
+def _fmt_pct(v: float) -> str:
+    return f"{v:.1f}%"
+
+
+# (label, metric key, formatter) — the order they appear in the prompt.
+_PROMPT_METRICS = [
+    ("MRR", "mrr", _fmt_money),
+    ("ARR", "arr", _fmt_money),
+    ("Monthly Revenue", "monthly_revenue", _fmt_money),
+    ("Net Burn (monthly)", "burn_rate", _fmt_money),
+    ("Cash Balance", "cash_balance", _fmt_money),
+    ("Runway", "runway_months", lambda v: f"{v:.1f} months"),
+    ("Gross Margin", "gross_margin", _fmt_pct),
+    ("Revenue Growth MoM", "revenue_growth", _fmt_pct),
+    ("Customers", "customers", lambda v: f"{v:,.0f}"),
+    ("Monthly Churn", "churn_rate", _fmt_pct),
+    ("CAC", "cac", _fmt_money),
+    ("LTV", "ltv", _fmt_money),
+    ("LTV/CAC", "ltv_cac_ratio", lambda v: f"{v:.1f}x"),
+    ("Net Revenue Retention", "ndr", _fmt_pct),
+]
+
+
+def _format_financial_records(records: List[Dict[str, Any]]) -> str:
+    lines = []
+    for fr in records[:12]:
+        parts = [fr.get("period_start") or "unknown period"]
+        for label, key in (
+            ("revenue", "revenue"), ("cogs", "cogs"), ("opex", "opex"),
+            ("payroll", "payroll"), ("cash", "cash_balance"), ("net burn", "net_burn"),
+        ):
+            val = fr.get(key)
+            if val is not None:
+                parts.append(f"{label} ${val:,.0f}")
+        if fr.get("headcount") is not None:
+            parts.append(f"headcount {fr['headcount']}")
+        if fr.get("customers") is not None:
+            parts.append(f"customers {fr['customers']}")
+        lines.append("- " + ", ".join(parts))
+    return "\n".join(lines)
+
+
 def _build_section_prompt(doc_type: str, section: str, context: Dict, custom_instructions: Optional[str] = None) -> str:
     company = context["company"]
     m = context["metrics"]
 
+    known_lines = []
+    unknown_labels = []
+    for label, key, fmt in _PROMPT_METRICS:
+        val = m.get(key)
+        if val is None:
+            unknown_labels.append(label)
+        else:
+            known_lines.append(f"{label}: {fmt(val)}")
+
     data_block = (
-        f"Company: {company['name']} ({company.get('industry', 'Tech')}, {company.get('stage', 'Seed')})\n"
-        f"MRR: ${m.get('mrr', 0):,.0f} | ARR: ${m.get('arr', 0):,.0f}\n"
-        f"Monthly Revenue: ${m.get('monthly_revenue', 0):,.0f}\n"
-        f"Burn Rate: ${m.get('burn_rate', 0):,.0f}/mo | Cash: ${m.get('cash_balance', 0):,.0f}\n"
-        f"Runway: {m.get('runway_months', 0):.1f} months\n"
-        f"Gross Margin: {m.get('gross_margin', 0):.1f}% | Revenue Growth MoM: {m.get('revenue_growth', 0):.1f}%\n"
-        f"Customers: {m.get('customers', 0):.0f} | Churn: {m.get('churn_rate', 0):.1f}%\n"
-        f"LTV/CAC: {m.get('ltv_cac_ratio', 0):.1f}x (LTV: ${m.get('ltv', 0):,.0f}, CAC: ${m.get('cac', 0):,.0f})\n"
-        f"Data Confidence: {context.get('confidence', 50)}%\n"
+        f"Company: {company['name']} ({company.get('industry') or 'industry not available'}, "
+        f"{company.get('stage') or 'stage not available'})\n"
     )
+    data_block += "\n".join(known_lines) + ("\n" if known_lines else "")
+    if unknown_labels:
+        data_block += "Not available (no reported data): " + ", ".join(unknown_labels) + "\n"
+    data_block += f"Data Confidence: {context.get('confidence', 50)}%\n"
+
+    records_text = _format_financial_records(context.get("financial_records") or [])
 
     scenarios_text = ""
     for sc in context.get("scenarios", [])[:3]:
         sim = sc.get("latest_simulation") or {}
-        runway = sim.get("runway", {})
-        scenarios_text += f"- {sc['name']}: P50 runway {runway.get('p50', 'N/A')}mo\n"
+        runway = sim.get("runway") or {}
+        p50 = runway.get("p50") if isinstance(runway, dict) else None
+        if p50 is not None:
+            scenarios_text += f"- {sc['name']}: P50 runway {p50} months\n"
+        else:
+            scenarios_text += f"- {sc['name']}: no simulation result yet\n"
 
     prompt = (
         f"You are a top-tier startup CFO and strategy consultant.\n"
@@ -229,6 +334,9 @@ def _build_section_prompt(doc_type: str, section: str, context: Dict, custom_ins
         f"Section: {section}\n\n"
         f"Company Data:\n{data_block}\n"
     )
+
+    if records_text:
+        prompt += f"Monthly Financial Records (most recent first):\n{records_text}\n\n"
 
     if scenarios_text:
         prompt += f"Active Scenarios:\n{scenarios_text}\n"
@@ -238,7 +346,9 @@ def _build_section_prompt(doc_type: str, section: str, context: Dict, custom_ins
 
     prompt += (
         f"\nWrite the '{section}' section for this {doc_type.replace('-', ' ')}. "
-        f"Use specific numbers and data points from the company data. "
+        f"Use only the numbers given above. Never invent, estimate or assume a figure "
+        f"that is not listed; where a metric is marked not available, say it is not yet "
+        f"tracked rather than giving a number. "
         f"Be concise, professional, and actionable. Write 2-4 paragraphs. "
         f"Do not use markdown headers. Use plain text with clear structure."
     )
@@ -335,18 +445,22 @@ def generate_document(
                 "has_web_research": False,
             })
 
-    try:
-        from server.email.activity_triggers import trigger_document_generated_email
-        trigger_document_generated_email(
-            user_email=current_user.email,
-            company_name=company.name,
-            doc_type=request.doc_type,
-            doc_name=doc_config["name"],
-            sections_count=len(sections_result),
-            sections=[{"title": s["title"]} for s in sections_result],
-        )
-    except Exception as e:
-        logger.warning(f"Doc generator email trigger failed: {e}")
+    succeeded = [s for s in sections_result if s["model_used"] != "error"]
+
+    # No "your document is ready" email for a document with nothing in it.
+    if succeeded:
+        try:
+            from server.email.activity_triggers import trigger_document_generated_email
+            trigger_document_generated_email(
+                user_email=current_user.email,
+                company_name=company.name,
+                doc_type=request.doc_type,
+                doc_name=doc_config["name"],
+                sections_count=len(succeeded),
+                sections=[{"title": s["title"]} for s in succeeded],
+            )
+        except Exception as e:
+            logger.warning(f"Doc generator email trigger failed: {e}")
 
     return {
         "doc_type": doc_config,

@@ -183,6 +183,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(llm_usage_api.router)
     app.include_router(doc_generator_api.router)
     app.include_router(slack_bot_api.router)
+    app.include_router(slack_bot_api.link_router)
     app.include_router(digital_twin_api.router)
     app.include_router(intelligence_graph_api.router)
     app.include_router(agent_simulation_api.router)

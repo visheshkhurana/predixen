@@ -2147,6 +2147,11 @@ export default function OverviewPage() {
               {dynamicBenchmarks?.is_cached && (
                 <Badge variant="outline" className="text-xs">Cached</Badge>
               )}
+              {dynamicBenchmarks?.is_fallback && (
+                <Badge variant="outline" className="text-xs" title={dynamicBenchmarks.note ?? undefined} data-testid="badge-benchmarks-generic">
+                  Generic defaults
+                </Badge>
+              )}
             </div>
             <CardDescription>
               Real-time benchmarks from industry reports
