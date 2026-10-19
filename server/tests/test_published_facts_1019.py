@@ -94,6 +94,15 @@ def test_sameas_does_not_cite_the_missing_github_org():
         assert "github.com/founderconsole" not in text, path
 
 
+def test_landing_does_not_sell_a_29_dollar_trial():
+    text = (ROOT / "client/src/pages/landing.tsx").read_text()
+    assert "30-day" not in text
+    assert "Start Free Trial" not in text
+    assert "Starter ($29)" not in text
+    assert "Paid plans from $29" not in text
+    assert "prices below are planned for later" in text
+
+
 def test_current_marketing_copy_does_not_claim_37_connectors():
     for path in COUNT_FILES:
         text = path.read_text()
