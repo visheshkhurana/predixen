@@ -18,6 +18,7 @@ from server.alerts import (
     AlertConfig,
 )
 from server.alerts.models import AlertThreshold
+from server.core.burn import gross_burn
 from server.alerts.detector import check_runway_warning, check_covenant_violations
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -75,10 +76,7 @@ def get_company_alerts(
     # Extract metrics - calculate burn from available fields
     revenue_values = [float(r.revenue or 0) for r in records]
     # Calculate net burn as total costs minus revenue (negative means burn)
-    burn_values = [
-        float(r.opex or 0) + float(r.payroll or 0) + float(r.cogs or 0) + float(r.other_costs or 0) - float(r.revenue or 0)
-        for r in records
-    ]
+    burn_values = [gross_burn(r) - float(r.revenue or 0) for r in records]
     cash_values = [float(r.cash_balance or 0) for r in records]
     
     # Detect anomalies
@@ -95,13 +93,12 @@ def get_company_alerts(
     # Check runway
     if len(records) > 0:
         latest = records[-1]
-        cash = float(latest.cash_balance) if latest.cash_balance else 0.0
-        # Calculate burn from components
-        total_costs = float(latest.opex or 0) + float(latest.payroll or 0) + float(latest.cogs or 0) + float(latest.other_costs or 0)
-        burn = total_costs - float(latest.revenue or 0)
-        runway_alert = check_runway_warning(cash, max(burn, 0.0), company_id)
-        if runway_alert:
-            all_alerts.append(runway_alert)
+        burn = gross_burn(latest) - float(latest.revenue or 0)
+        # No runway alert when profitable or when cash was never provided.
+        if burn > 0 and latest.cash_balance is not None:
+            runway_alert = check_runway_warning(float(latest.cash_balance), burn, company_id)
+            if runway_alert:
+                all_alerts.append(runway_alert)
     
     return {
         "alerts": [a.to_dict() for a in all_alerts],
@@ -172,33 +169,39 @@ def _perform_health_analysis(
     # Even with 1 record, we can provide basic health metrics
     if len(records) == 1:
         record = records[0]
-        cash = float(record.cash_balance or 0)
+        # A cash balance nobody entered is unknown, not 0. Turning it into 0
+        # made every runway test below false and the company "healthy".
+        cash_known = record.cash_balance is not None
+        cash = float(record.cash_balance) if cash_known else 0.0
         revenue = float(record.revenue or 0)
-        total_costs = float(record.opex or 0) + float(record.payroll or 0) + float(record.cogs or 0) + float(record.other_costs or 0)
+        total_costs = gross_burn(record)
         net_burn = total_costs - revenue
-        runway = cash / max(net_burn, 1) if net_burn > 0 else None
+        runway = cash / max(net_burn, 1) if cash_known and net_burn > 0 else None
         gross_margin = (revenue - float(record.cogs or 0)) / max(revenue, 1) if revenue > 0 else 0
-        
-        # Determine status based on runway
-        if runway and runway < 6:
+
+        # Determine status based on runway. Compare against None, not truthiness:
+        # a real 0.0 (cash exhausted) is the most critical runway there is.
+        if cash_known and runway is not None and runway < 6:
             overall = "critical"
-        elif runway and runway < 12:
+        elif cash_known and runway is not None and runway < 12:
             overall = "warning"
         elif net_burn <= 0:
             overall = "healthy"
+        elif not cash_known:
+            overall = "unknown"
         else:
-            overall = "warning" if runway and runway < 18 else "healthy"
+            overall = "warning" if runway is not None and runway < 18 else "healthy"
         
         drivers = {
             "runway_months": {
                 "metric": "runway_months",
-                "status": "critical" if runway and runway < 6 else ("warning" if runway and runway < 12 else "healthy"),
-                "current_value": runway or 0,
-                "historical_mean": runway or 0,
+                "status": "critical" if runway is not None and runway < 6 else ("warning" if runway is not None and runway < 12 else ("unknown" if not cash_known and net_burn > 0 else "healthy")),
+                "current_value": runway,
+                "historical_mean": runway,
                 "z_score": 0,
                 "trend_direction": "flat",
-                "alert_count": 1 if runway and runway < 12 else 0,
-                "history": [runway] if runway else [],
+                "alert_count": 1 if runway is not None and runway < 12 else 0,
+                "history": [runway] if runway is not None else [],
             },
             "net_burn": {
                 "metric": "net_burn",
@@ -223,8 +226,10 @@ def _perform_health_analysis(
         }
         
         recommendations = []
-        if runway and runway < 12:
+        if runway is not None and runway < 12:
             recommendations.append("Consider extending runway by reducing burn or raising capital")
+        if not cash_known:
+            recommendations.append("Add your cash balance so runway can be computed")
         if gross_margin < 0.5:
             recommendations.append("Focus on improving gross margin through pricing or COGS reduction")
         if not recommendations:
@@ -266,10 +271,13 @@ def _perform_health_analysis(
     churn_values = []
     for r in records:
         rev = float(r.revenue or 0)
-        total_costs = float(r.opex or 0) + float(r.payroll or 0) + float(r.cogs or 0) + float(r.other_costs or 0)
+        total_costs = gross_burn(r)
         nb = total_costs - rev
         burn_values.append(nb)
-        if nb > 0 and float(r.cash_balance or 0) > 0:
+        # Same split as the single-record branch above: known-ness is
+        # `is not None`, and a real 0.0 (cash exhausted) is a runway of zero,
+        # not a missing one.
+        if nb > 0 and r.cash_balance is not None:
             runway_values.append(float(r.cash_balance) / nb)
         else:
             runway_values.append(None)

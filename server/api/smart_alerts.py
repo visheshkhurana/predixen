@@ -19,6 +19,7 @@ from server.models.company import Company
 from server.models.truth_scan import TruthScan
 from server.models.financial import FinancialRecord
 from server.api.simulations import extract_metric_value
+from server.core.burn import burn_summary, gross_burn
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +81,8 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
     previous = records[1] if len(records) > 1 else None
 
     if latest and previous:
-        curr_burn = (
-            float(latest.opex or 0) + float(latest.payroll or 0) +
-            float(latest.cogs or 0) + float(latest.other_costs or 0)
-        )
-        prev_burn = (
-            float(previous.opex or 0) + float(previous.payroll or 0) +
-            float(previous.cogs or 0) + float(previous.other_costs or 0)
-        )
+        curr_burn = gross_burn(latest)
+        prev_burn = gross_burn(previous)
         if prev_burn > 0:
             burn_change = (curr_burn - prev_burn) / prev_burn * 100
             if burn_change > 15:
@@ -148,11 +143,7 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
 
     if latest:
         cash = float(latest.cash_balance or 0)
-        total_costs = (
-            float(latest.opex or 0) + float(latest.payroll or 0) +
-            float(latest.cogs or 0) + float(latest.other_costs or 0)
-        )
-        net_burn = total_costs - float(latest.revenue or 0)
+        net_burn = gross_burn(latest) - float(latest.revenue or 0)
         if net_burn > 0 and cash > 0:
             runway = cash / net_burn
             if runway < 12:
@@ -206,7 +197,73 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
                 "suggestedAction": "Investigate customer satisfaction. Deploy retention campaigns and review product quality."
             })
 
+    # Tag each alert with the period it describes so re-evaluating the same
+    # data does not mint a fresh duplicate (see _merge_alerts).
+    record_period = latest.period_start.isoformat() if latest and latest.period_start else None
+    scan_period = f"truth_scan:{truth_scan.id}" if truth_scan else None
+    for alert in new_alerts:
+        alert["period"] = scan_period if alert.get("metric") == "churn_rate" else record_period
+
     return new_alerts
+
+
+def _alert_key(alert: Dict[str, Any]):
+    return (alert.get("type"), alert.get("metric"), alert.get("period"))
+
+
+def _merge_alerts(new_alerts: List[Dict[str, Any]], existing_alerts: List[Dict[str, Any]]):
+    """Merge freshly evaluated alerts into the stored list without duplicates.
+
+    Alerts are keyed by (type, metric, period). A re-evaluated alert that is
+    already stored keeps its id, first-seen timestamp and acknowledged state;
+    only its values/message refresh. Legacy rows stored before alerts carried a
+    period (period missing) are folded into the matching new alert. Duplicates
+    already in storage are collapsed, acknowledged if any copy was.
+
+    Returns (merged_list, truly_new_alerts).
+    """
+    merged: List[Dict[str, Any]] = []
+    by_key: Dict[Any, Dict[str, Any]] = {}
+    for alert in existing_alerts or []:
+        if not isinstance(alert, dict):
+            continue
+        key = _alert_key(alert)
+        kept = by_key.get(key)
+        if kept is None:
+            by_key[key] = alert
+            merged.append(alert)
+        elif alert.get("acknowledged"):
+            kept["acknowledged"] = True
+
+    fresh: List[Dict[str, Any]] = []
+    head: List[Dict[str, Any]] = []
+    refresh_fields = ("severity", "title", "message", "currentValue", "previousValue",
+                      "changePercent", "suggestedAction")
+    for alert in new_alerts:
+        key = _alert_key(alert)
+        legacy_key = (alert.get("type"), alert.get("metric"), None)
+        kept = by_key.get(key)
+        legacy = by_key.get(legacy_key) if key != legacy_key else None
+        if kept is None and legacy is not None:
+            # Adopt the legacy row: give it this period from now on.
+            del by_key[legacy_key]
+            legacy["period"] = alert.get("period")
+            by_key[key] = legacy
+            kept = legacy
+        elif kept is not None and legacy is not None:
+            if legacy.get("acknowledged"):
+                kept["acknowledged"] = True
+            merged.remove(legacy)
+            del by_key[legacy_key]
+        if kept is not None:
+            for f in refresh_fields:
+                if f in alert:
+                    kept[f] = alert[f]
+            continue
+        by_key[key] = alert
+        head.append(alert)
+        fresh.append(alert)
+    return head + merged, fresh
 
 
 @router.post("/companies/{company_id}/smart-alerts/evaluate")
@@ -216,11 +273,10 @@ def evaluate_alerts(
     current_user: User = Depends(get_current_user),
 ):
     company = get_user_company(db, company_id, current_user)
-    new_alerts = _evaluate_alerts(company, db)
+    evaluated = _evaluate_alerts(company, db)
 
     metadata = _get_metadata(company)
-    existing_alerts = metadata.get("smart_alerts", [])
-    existing_alerts = new_alerts + existing_alerts
+    existing_alerts, new_alerts = _merge_alerts(evaluated, metadata.get("smart_alerts", []))
     _save_key(db, company, "smart_alerts", existing_alerts)
 
     auto_simulations = []
@@ -445,20 +501,22 @@ async def send_weekly_briefing(
     key_metrics = {}
     if latest:
         revenue = float(latest.revenue or 0)
-        total_costs = (
-            float(latest.opex or 0) + float(latest.payroll or 0) +
-            float(latest.cogs or 0) + float(latest.other_costs or 0)
-        )
+        # The shared rule, not a local sum: the local sum omitted marketing and
+        # told the model a burning company was taking money in. Cash and runway
+        # come from the same summary, so an unentered balance stays unknown
+        # instead of arriving as a fabricated 0.
+        summary = burn_summary(latest)
+        total_costs = summary["gross_burn"] or 0.0
         net_burn = total_costs - revenue
-        cash = float(latest.cash_balance or 0)
-        runway = cash / net_burn if net_burn > 0 else None
+        cash = summary["cash_balance"]
+        runway = summary["runway_months"]
 
         key_metrics = {
             "mrr": revenue,
             "burn_rate": total_costs,
             "net_burn": net_burn,
             "cash_balance": cash,
-            "runway_months": round(runway, 1) if runway else None,
+            "runway_months": round(runway, 1) if runway is not None else None,
         }
 
     unacknowledged = [a for a in alerts if not a.get("acknowledged")]

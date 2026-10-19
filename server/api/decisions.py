@@ -385,15 +385,8 @@ def _derive_net_burn(latest_record, metrics, revenue):
     understate burn (e.g. $13K instead of $24K), which in turn inflates runway
     (39mo instead of 21mo). Only fall back to the stored scalar when there is no
     expense breakdown to compute from."""
-    breakdown_expenses = 0.0
-    if latest_record:
-        breakdown_expenses = (
-            float(latest_record.payroll or 0) +
-            float(latest_record.marketing_expense or 0) +
-            float(latest_record.opex or 0) +
-            float(latest_record.cogs or 0) +
-            float(latest_record.other_costs or 0)
-        )
+    from server.core.burn import gross_burn
+    breakdown_expenses = gross_burn(latest_record) if latest_record else 0.0
     if breakdown_expenses > 0:
         return breakdown_expenses - revenue
     fr_net_burn = float(latest_record.net_burn) if latest_record and latest_record.net_burn else 0

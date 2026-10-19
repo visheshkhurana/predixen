@@ -13,6 +13,7 @@ from server.models.raw_data_event import RawDataEvent
 from server.models.metric_definition import MetricDefinition
 from server.models.metric_value import MetricValue
 from server.metrics.formula_parser import FormulaParser, FormulaError
+from server.core.burn import burn_summary
 
 logger = logging.getLogger(__name__)
 
@@ -270,15 +271,14 @@ class MetricEngine:
             for record in reversed(financials):
                 revenue = record.revenue or 0
                 cogs = record.cogs or 0
-                opex = record.opex or 0
-                payroll = record.payroll or 0
-                other_costs = record.other_costs or 0
-                cash = record.cash_balance or 0
+                cash = record.cash_balance
                 headcount = record.headcount or 0
-                total_costs = cogs + opex + payroll + other_costs
-                net_burn = max(0, total_costs - revenue)
+                # Shared rule: signed net burn incl. marketing; runway null when
+                # profitable or cash unknown (no fabricated 12 / 36 months).
+                burn = burn_summary(record)
+                net_burn = burn["net_burn"]
                 gross_margin = ((revenue - cogs) / revenue) if revenue > 0 else 0
-                runway = (cash / net_burn) if net_burn > 0 and cash > 0 else (36 if net_burn <= 0 else 12)
+                runway = burn["runway_months"]
                 
                 snapshot_row = {
                     "mrr": revenue,
@@ -286,10 +286,10 @@ class MetricEngine:
                     "monthly_revenue": revenue,
                     "cash_balance": cash,
                     "net_burn": net_burn,
-                    "runway_months": min(runway, 60),
+                    "runway_months": runway,
                     "gross_margin": gross_margin,
                     "headcount": headcount,
-                    "churn_rate": self._ts_metric_val(ts_metrics, "churn_rate", 0.02),
+                    "churn_rate": self._ts_metric_val(ts_metrics, "churn_rate", None),
                     "cac": self._ts_metric_val(ts_metrics, "cac", 0),
                     "ltv": self._ts_metric_val(ts_metrics, "ltv", 0),
                     "ltv_cac_ratio": self._ts_metric_val(ts_metrics, "ltv_cac_ratio", 0),
