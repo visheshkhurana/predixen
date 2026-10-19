@@ -57,7 +57,41 @@ def _save_key(db: Session, company: Company, key: str, value: Any):
     save_metadata_value(db, company, key, value)
 
 
+def _effective_rules(company: Company) -> Dict[str, Dict[str, Any]]:
+    """alert_type -> rule, from the company's stored rules (defaults if none).
+
+    Stored rules override defaults per type; a type with no rule at all falls
+    back to its default so a partial rule list never silently disables alerts.
+    """
+    rules: Dict[str, Dict[str, Any]] = {r["alert_type"]: dict(r) for r in _default_rules()}
+    stored = _get_metadata(company).get("alert_rules")
+    if isinstance(stored, list):
+        for r in stored:
+            if isinstance(r, dict) and r.get("alert_type") in rules:
+                rules[r["alert_type"]] = {**rules[r["alert_type"]], **r}
+    return rules
+
+
+def _rule_on(rules: Dict[str, Dict[str, Any]], alert_type: str) -> Optional[float]:
+    """The rule's threshold when it is enabled, else None (rule off)."""
+    rule = rules.get(alert_type)
+    if not rule or not rule.get("enabled", True):
+        return None
+    try:
+        return float(rule.get("threshold"))
+    except (TypeError, ValueError):
+        return None
+
+
 def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
+    rules = _effective_rules(company)
+    burn_spike_pct = _rule_on(rules, "burn_spike")
+    mrr_drop_pct = _rule_on(rules, "mrr_drop")
+    growth_slowdown_pct = _rule_on(rules, "growth_slowdown")
+    runway_warning_mo = _rule_on(rules, "runway_warning")
+    runway_caution_mo = _rule_on(rules, "runway_caution")
+    churn_spike_pct = _rule_on(rules, "churn_spike")
+
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company.id
     ).order_by(TruthScan.created_at.desc()).first()
@@ -85,7 +119,7 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
         prev_burn = gross_burn(previous)
         if prev_burn > 0:
             burn_change = (curr_burn - prev_burn) / prev_burn * 100
-            if burn_change > 15:
+            if burn_spike_pct is not None and burn_change > burn_spike_pct:
                 new_alerts.append({
                     "id": str(uuid.uuid4()),
                     "type": "burn_spike",
@@ -105,7 +139,7 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
         prev_revenue = float(previous.revenue or 0)
         if prev_revenue > 0:
             mrr_change = (curr_revenue - prev_revenue) / prev_revenue * 100
-            if mrr_change < -5:
+            if mrr_drop_pct is not None and mrr_change < -mrr_drop_pct:
                 new_alerts.append({
                     "id": str(uuid.uuid4()),
                     "type": "mrr_drop",
@@ -125,7 +159,7 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
         prev_growth = float(previous.mom_growth or 0) if previous.mom_growth else 0
         if prev_growth > 0 and curr_growth > 0:
             growth_change = (curr_growth - prev_growth) / prev_growth * 100
-            if growth_change < -30:
+            if growth_slowdown_pct is not None and growth_change < -growth_slowdown_pct:
                 new_alerts.append({
                     "id": str(uuid.uuid4()),
                     "type": "growth_slowdown",
@@ -146,13 +180,13 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
         net_burn = gross_burn(latest) - float(latest.revenue or 0)
         if net_burn > 0 and cash > 0:
             runway = cash / net_burn
-            if runway < 12:
+            if runway_warning_mo is not None and runway < runway_warning_mo:
                 new_alerts.append({
                     "id": str(uuid.uuid4()),
                     "type": "runway_warning",
                     "severity": "critical",
                     "title": "Critical Runway Warning",
-                    "message": f"Runway is {runway:.1f} months — below 12-month safety threshold. Cash: ${cash:,.0f}, Net burn: ${net_burn:,.0f}/mo.",
+                    "message": f"Runway is {runway:.1f} months — below your {runway_warning_mo:g}-month threshold. Cash: ${cash:,.0f}, Net burn: ${net_burn:,.0f}/mo.",
                     "metric": "runway_months",
                     "currentValue": round(runway, 1),
                     "previousValue": None,
@@ -161,13 +195,13 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
                     "acknowledged": False,
                     "suggestedAction": "Initiate fundraising preparation or implement immediate cost reduction measures."
                 })
-            elif runway < 18:
+            elif runway_caution_mo is not None and runway < runway_caution_mo:
                 new_alerts.append({
                     "id": str(uuid.uuid4()),
                     "type": "runway_caution",
                     "severity": "warning",
                     "title": "Runway Caution",
-                    "message": f"Runway is {runway:.1f} months — approaching the 18-month planning threshold.",
+                    "message": f"Runway is {runway:.1f} months — below your {runway_caution_mo:g}-month planning threshold.",
                     "metric": "runway_months",
                     "currentValue": round(runway, 1),
                     "previousValue": None,
@@ -181,7 +215,7 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
     ts_prev_churn = extract_metric_value(metrics.get("prev_churn_rate"), 0)
     if ts_prev_churn > 0 and ts_churn > 0:
         churn_change = (ts_churn - ts_prev_churn) / ts_prev_churn * 100
-        if churn_change > 50:
+        if churn_spike_pct is not None and churn_change > churn_spike_pct:
             new_alerts.append({
                 "id": str(uuid.uuid4()),
                 "type": "churn_spike",
@@ -431,6 +465,10 @@ def update_rule(
     company = get_user_company(db, company_id, current_user)
     metadata = _get_metadata(company)
     rules = metadata.get("alert_rules", _default_rules())
+    # Older clients sent "burn-spike" for the server's "default-burn-spike".
+    ids = {r.get("id") for r in rules}
+    if rule_id not in ids and f"default-{rule_id}" in ids:
+        rule_id = f"default-{rule_id}"
 
     found = False
     for r in rules:

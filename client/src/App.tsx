@@ -103,7 +103,6 @@ const CapTablePage = lazy(() => import("@/pages/cap-table"));
 const InvestorRoomPage = lazy(() => import("@/pages/investor-room"));
 const KPIBoardPage = lazy(() => import("@/pages/kpi-board"));
 const ConnectorMarketplacePage = lazy(() => import("@/pages/connector-marketplace"));
-const AddDataSourcePage = lazy(() => import("@/pages/add-data-source"));
 const DashboardsPage = lazy(() => import("@/pages/dashboards"));
 const DashboardBuilderPage = lazy(() => import("@/pages/dashboard-builder"));
 const MetricCatalogPage = lazy(() => import("@/pages/metric-catalog"));
@@ -457,8 +456,10 @@ function Router() {
       <Route path="/marketplace">
         {() => <AuthenticatedRoute component={ConnectorMarketplacePage} />}
       </Route>
+      {/* The add-data-source wizard faked "Test connection" and "connected"
+          without calling the API. Integrations is the real connect flow. */}
       <Route path="/add-data-source">
-        {() => <AuthenticatedRoute component={AddDataSourcePage} />}
+        {() => <Redirect to="/integrations" />}
       </Route>
       {/* Marketplace "manage" and add-data-source complete navigated here.
           No connector-detail page exists — Integrations is the live dest. */}

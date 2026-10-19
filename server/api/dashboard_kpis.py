@@ -1,7 +1,6 @@
 """
 Dashboard KPIs API endpoint for founder-friendly metrics with historical data.
 """
-import random
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
@@ -13,7 +12,7 @@ from server.core.security import get_current_user
 from server.models import User, Company
 from server.models.truth_scan import TruthScan
 from server.models.financial import FinancialRecord
-from server.core.burn import burn_summary, gross_burn
+from server.core.burn import burn_summary, net_burn as record_net_burn
 
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -73,37 +72,16 @@ METRIC_DEFINITIONS = {
 }
 
 
-def generate_mock_history(
-    current_value: float,
-    months: int = 12,
-    volatility: float = 0.1,
-    trend: str = "stable"
-) -> List[Dict[str, Any]]:
-    """Generate mock historical data for sparklines."""
-    history = []
-    value = current_value
-    
-    trend_factor = 1.02 if trend == "up" else (0.98 if trend == "down" else 1.0)
-    
-    for i in range(months, 0, -1):
-        date = (datetime.now() - timedelta(days=i * 30)).strftime("%Y-%m")
-        value = value / trend_factor * (1 + random.uniform(-volatility, volatility))
-        history.append({"date": date, "value": max(0, value)})
-    
-    history.append({"date": datetime.now().strftime("%Y-%m"), "value": current_value})
-    return history
-
-
-def calculate_change_percent(current: float, previous: float) -> Optional[float]:
+def calculate_change_percent(current: Optional[float], previous: Optional[float]) -> Optional[float]:
     """Calculate percentage change between two values."""
-    if previous == 0:
+    if current is None or previous is None or previous == 0:
         return None
     return ((current - previous) / abs(previous)) * 100
 
 
-def determine_trend(current: float, previous: float, threshold: float = 0.05) -> str:
+def determine_trend(current: Optional[float], previous: Optional[float], threshold: float = 0.05) -> str:
     """Determine trend direction based on change."""
-    if previous == 0:
+    if current is None or previous is None or previous == 0:
         return "stable"
     change = (current - previous) / abs(previous)
     if change > threshold:
@@ -191,25 +169,64 @@ def generate_recommendations(kpis: Dict[str, Any]) -> List[Dict[str, Any]]:
     return recommendations[:3]
 
 
+def _metric_from_record(record: FinancialRecord, metric_name: str, prev: Optional[FinancialRecord],
+                        year_ago: Optional[FinancialRecord]) -> Optional[float]:
+    """One real metric value for one FinancialRecord, or None when the record
+    does not carry enough data to compute it (never a filler 0)."""
+    revenue = record.revenue
+    if metric_name == "revenue":
+        return float(revenue) if revenue is not None else None
+    if metric_name == "cash_balance":
+        return float(record.cash_balance) if record.cash_balance is not None else None
+    if metric_name == "net_burn":
+        return record_net_burn(record)
+    if metric_name == "gross_margin":
+        if not revenue or revenue <= 0 or record.cogs is None:
+            return None
+        return (revenue - record.cogs) / revenue * 100
+    if metric_name == "runway":
+        # Finite runway only; profitable/unknown cash has no point on the line.
+        return burn_summary(record)["runway_months"]
+    if metric_name == "revenue_growth_yoy":
+        if year_ago is None or not year_ago.revenue or year_ago.revenue <= 0 or revenue is None:
+            return None
+        return (revenue - year_ago.revenue) / year_ago.revenue * 100
+    if metric_name == "burn_multiple":
+        if prev is None or prev.revenue is None or revenue is None:
+            return None
+        burn = record_net_burn(record)
+        net_new_arr = (revenue - prev.revenue) * 12
+        if burn is None or burn <= 0 or net_new_arr <= 0:
+            return None
+        return round(burn / net_new_arr, 2)
+    return None
+
+
 def get_real_history(financials: List[FinancialRecord], metric_name: str, months: int = 12) -> List[Dict[str, Any]]:
-    """Get real historical data for sparklines from financial records."""
-    history = []
-    for record in reversed(financials[:months]):
-        date_str = record.period_end.strftime("%Y-%m") if record.period_end else ""
-        if metric_name == "revenue":
-            value = record.revenue or 0
-        elif metric_name == "cash_balance":
-            value = record.cash_balance or 0
-        elif metric_name == "net_burn":
-            value = gross_burn(record) - (record.revenue or 0)
-        elif metric_name == "gross_margin":
-            revenue = record.revenue or 0
-            cogs = record.cogs or 0
-            value = ((revenue - cogs) / revenue * 100) if revenue > 0 else 0
-        else:
-            value = 0
-        history.append({"date": date_str, "value": value})
-    return history
+    """Sparkline points built from real FinancialRecord rows, oldest first.
+
+    `financials` is ordered newest first. A record whose metric cannot be
+    computed is skipped. Fewer than 2 points -> [] (no sparkline), so the UI
+    never draws a trend that the data does not support.
+    """
+    by_period = {}
+    for r in financials:
+        if r.period_end is not None:
+            by_period.setdefault(r.period_end.strftime("%Y-%m"), r)
+
+    history: List[Dict[str, Any]] = []
+    for idx in range(min(months, len(financials)) - 1, -1, -1):
+        record = financials[idx]
+        if record.period_end is None:
+            continue
+        prev = financials[idx + 1] if idx + 1 < len(financials) else None
+        pe = record.period_end
+        year_ago = by_period.get(f"{pe.year - 1:04d}-{pe.month:02d}")
+        value = _metric_from_record(record, metric_name, prev, year_ago)
+        if value is None:
+            continue
+        history.append({"date": pe.strftime("%Y-%m"), "value": value})
+    return history if len(history) >= 2 else []
 
 
 @router.get("/companies/{company_id}/kpis")
@@ -332,20 +349,15 @@ async def get_dashboard_kpis(
         runway_value = None
         runway_status = "profitable"
 
-    if financials:
-        revenue_history = get_real_history(financials, "revenue", 12)
-        cash_history = get_real_history(financials, "cash_balance", 12)
-        net_burn_history = get_real_history(financials, "net_burn", 12)
-        gross_margin_history = get_real_history(financials, "gross_margin", 12)
-    else:
-        revenue_history = []
-        cash_history = []
-        net_burn_history = []
-        gross_margin_history = []
-    
-    runway_history = generate_mock_history(runway_value or 16.5, 12, 0.05, "up") if runway_value else []
-    revenue_growth_history = generate_mock_history(revenue_growth_value or 0, 12, 0.15, "up") if revenue_growth_value else []
-    burn_multiple_history = generate_mock_history(burn_multiple_value or 0, 12, 0.1, "down") if burn_multiple_value else []
+    # Every sparkline comes from real FinancialRecord rows by period; with
+    # fewer than 2 computable points the history is [] and no line is drawn.
+    revenue_history = get_real_history(financials, "revenue", 12)
+    cash_history = get_real_history(financials, "cash_balance", 12)
+    net_burn_history = get_real_history(financials, "net_burn", 12)
+    gross_margin_history = get_real_history(financials, "gross_margin", 12)
+    runway_history = get_real_history(financials, "runway", 12)
+    revenue_growth_history = get_real_history(financials, "revenue_growth_yoy", 12)
+    burn_multiple_history = get_real_history(financials, "burn_multiple", 12)
     mrr_history = revenue_history
     
     kpis = {
