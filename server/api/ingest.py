@@ -1298,15 +1298,19 @@ def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[st
 
 @router.post("/ingest/onboarding/extract-deck")
 async def extract_onboarding_deck(
-    file: UploadFile = File(...)
+    current_user: User = Depends(get_current_user),
+    file: UploadFile = File(...),
 ):
     """
     Extract company information and financials from a pitch deck or financial document.
     Supports PDF, Excel (XLS/XLSX), and CSV files.
     Uses text extraction with GPT-4o, falling back to vision for image-based PDFs.
-    
-    This endpoint does NOT require authentication - it's used during onboarding before user creation.
+
+    Auth runs before any OpenAI call. An anonymous upload must not reach GPT-4o.
+    ``current_user`` is the gate: FastAPI resolves it before this body runs.
     """
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file uploaded")
     
