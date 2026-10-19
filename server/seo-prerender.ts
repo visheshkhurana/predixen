@@ -1433,12 +1433,22 @@ function getPageMeta(path: string): PageMeta | null {
   }
 
   // Shared scenario and agent-simulation links are private-by-URL views of one
-  // company's numbers. Never index them.
-  if (/^\/scenarios\/shared\/[^/]+$/.test(path) || /^\/simulate-v2\/shared\/[^/]+$/.test(path)) {
+  // company's numbers. Never index them. The token is the only attacker-controlled
+  // piece of the canonical, so it has to be a safe alphabet and escaped.
+  const SHARE_TOKEN = /^[A-Za-z0-9_-]+$/;
+  for (const prefix of ["/scenarios/shared/", "/simulate-v2/shared/"]) {
+    if (!path.startsWith(prefix)) continue;
+    const token = path.slice(prefix.length);
+    if (!SHARE_TOKEN.test(token)) {
+      return notFoundMeta(
+        `${SITE_URL}/scenarios`,
+        "This shared simulation does not exist.",
+      );
+    }
     return {
       title: "Shared simulation | FounderConsole",
       description: "A FounderConsole simulation shared by its owner.",
-      canonical: SITE_URL + path,
+      canonical: `${SITE_URL}${prefix}${escapeHtml(token)}`,
       robots: "noindex, follow",
     };
   }
