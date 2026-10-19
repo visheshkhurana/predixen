@@ -287,6 +287,17 @@ async def _run_deferred_startup():
                 logger.info("Skipping demo data seeding (SEED_DEMO_DATA=false)")
         except Exception as e:
             logger.error(f"Error during seeding: {e}")
+        try:
+            # Per-visitor demo workspaces past their TTL, and the opt-in
+            # one-time reset of the legacy shared demo account
+            # (DEMO_LEGACY_CLEANUP=true). Both only touch demo-owned rows.
+            from server.core.demo_workspace import cleanup_expired_demo_users, cleanup_legacy_demo_account
+            db.rollback()
+            cleanup_legacy_demo_account(db)
+            cleanup_expired_demo_users(db)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Demo workspace cleanup skipped: {e}")
         finally:
             db.close()
 
@@ -454,6 +465,7 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",
     "/auth/register",
     "/auth/login",
+    "/auth/demo",
     "/auth/admin/login",
     "/auth/refresh",
     "/companies/*/seed-sample",
@@ -462,6 +474,10 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/email/unsubscribe",
     "/api/email/unsubscribe",
 ])
+
+# Demo sessions: no admin, no email/invite/share/billing/integration writes.
+from server.middleware.demo_guard import DemoGuardMiddleware
+app.add_middleware(DemoGuardMiddleware)
 
 app.add_middleware(
     RateLimiterMiddleware,

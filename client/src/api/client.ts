@@ -178,15 +178,24 @@ async function request<T>(
 
 export const api = {
   auth: {
-    register: (email: string, password: string) =>
+    // `invite` is the token from /auth?invite=…; the server accepts it when
+    // it was sent to this email (workspace membership or platform role).
+    register: (email: string, password: string, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
       }),
-    login: (email: string, password: string) =>
+    login: (email: string, password: string, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
+      }),
+    // Opens a private demo workspace: a throwaway account with its own copy of
+    // the sample company. No credentials involved.
+    demo: () =>
+      request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean; is_demo: boolean }>('/auth/demo', {
+        method: 'POST',
+        body: JSON.stringify({}),
       }),
     adminLogin: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/admin/login', {

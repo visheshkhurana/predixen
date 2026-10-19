@@ -1099,7 +1099,7 @@ function getPageMeta(path: string): PageMeta | null {
     };
   }
 
-  // /demo/enter is an action, not a page: it logs into the shared sample account
+  // /demo/enter is an action, not a page: it opens a private demo workspace
   // and forwards to /overview. It gets a real 200 and a plain body so a visitor
   // without JavaScript still sees what is happening, but it is noindex — a
   // forwarding route has nothing to rank for, and indexing it would put a login
