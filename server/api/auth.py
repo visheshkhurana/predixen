@@ -106,12 +106,23 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     name: str = ""
+    # Anonymous browser distinct_id, so signup can alias the pre-account person.
+    distinct_id: str | None = None
 
     @field_validator("name")
     @classmethod
     def sanitize_name(cls, v):
         sanitized = re.sub(r'<[^>]*>', '', v).strip()
         return sanitized
+
+    @field_validator("distinct_id", mode="before")
+    @classmethod
+    def clean_distinct_id(cls, value):
+        from server.services.posthog import sanitize_distinct_id
+
+        if not isinstance(value, str):
+            return None
+        return sanitize_distinct_id(value)
 
     @field_validator("password")
     @classmethod
@@ -213,7 +224,12 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
 
     try:
         from server.services.activation import emit_signup_completed
-        emit_signup_completed(user_id=user.id, method="email")
+        emit_signup_completed(
+            user_id=user.id,
+            method="email",
+            email=user.email,
+            anonymous_distinct_id=req.distinct_id,
+        )
     except Exception as e:
         auth_logger.warning(f"signup_completed emit failed: {e}")
     

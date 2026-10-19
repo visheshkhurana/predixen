@@ -11,6 +11,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import { flushPostHogQueue, type QueuedPostHogCall } from "../../client/src/lib/posthog-queue";
+import { distinctIdFromPersistence } from "../../client/src/lib/posthog";
 
 const posthogLib = readFileSync("client/src/lib/posthog.ts", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
@@ -154,10 +155,26 @@ test("signup_completed fires through trackFunnel and the server first-success pa
   assert.match(funnel, /signup_completed/);
   assert.match(auth, /trackFunnel\(\s*['"]signup_completed['"]/);
   assert.match(callback, /trackFunnel\(\s*['"]signup_completed['"]/);
-  assert.match(authApi, /emit_signup_completed\(user_id=user\.id, method="email"\)/);
-  assert.match(oauth, /emit_signup_completed\(user_id=user\.id, method="google"\)/);
+  assert.match(authApi, /emit_signup_completed\(\s*user_id=user\.id,\s*method="email"/);
+  assert.match(authApi, /anonymous_distinct_id=req\.distinct_id/);
+  assert.match(oauth, /emit_signup_completed\(\s*user_id=user\.id,\s*method="google"/);
+  assert.match(oauth, /anonymous_distinct_id=anonymous_distinct_id/);
   assert.match(activation, /posthog_capture\(\s*"signup_completed"/);
+  // Browser identifyUser uses String(userId). A user:{id} prefix is a second person.
+  assert.match(activation, /user_distinct_id\(user_id\)/);
+  assert.doesNotMatch(activation, /f"user:\{user_id\}"/);
+  assert.match(posthogLib, /distinctId:\s*String\(userId\)/);
   assert.doesNotMatch(authApi, /emit_signup_completed.*login/i);
+});
+
+test("server events alias the pre-signup id onto the browser user id", () => {
+  const activation = readFileSync("server/services/activation.py", "utf8");
+  const posthog = readFileSync("server/services/posthog.py", "utf8");
+  assert.match(activation, /posthog_alias\(/);
+  assert.match(posthog, /\$create_alias/);
+  assert.match(posthog, /"alias":\s*canonical/);
+  // The event distinct_id is the id being merged; alias is the canonical user id.
+  assert.match(posthog, /"distinct_id":\s*previous/);
 });
 
 test("founder_activated is gated on is_sample and wired on first real success", () => {
@@ -191,9 +208,41 @@ test("successful lead creates emit lead_captured on the server", () => {
   const posthog = readFileSync("server/services/posthog.py", "utf8");
   assert.match(leads, /background\.add_task\(_emit_lead_captured,/);
   assert.match(leads, /posthog_capture\(\s*"lead_captured"/);
+  assert.match(leads, /"browser"/);
+  assert.match(leads, /"email_hash"/);
   assert.match(posthog, /\/capture\//);
+  assert.match(posthog, /refusing/);
   assert.doesNotMatch(posthog, /\.identify\(/);
   assert.doesNotMatch(leads, /posthog.*identify/i);
+});
+
+test("lead forms and signup pass the browser distinct_id when they have one", () => {
+  const runway = readFileSync("client/src/pages/runway-calculator.tsx", "utf8");
+  const survival = readFileSync("client/src/pages/survival-simulator.tsx", "utf8");
+  const auth = readFileSync("client/src/pages/auth.tsx", "utf8");
+  const api = readFileSync("client/src/api/client.ts", "utf8");
+  for (const page of [runway, survival]) {
+    assert.match(page, /getBrowserDistinctId\(/);
+    assert.match(page, /distinct_id:\s*distinctId/);
+  }
+  assert.match(auth, /getBrowserDistinctId\(/);
+  assert.match(auth, /api\.auth\.register\([^)]*distinctId/);
+  assert.match(auth, /params\.set\(\s*['"]distinct_id['"]/);
+  assert.match(auth, /\/api\/auth\/\$\{provider\}\/start/);
+  assert.match(api, /distinct_id:\s*distinctId/);
+});
+
+test("persistence distinct_id is read only when it is a real id", () => {
+  assert.equal(
+    distinctIdFromPersistence(JSON.stringify({ distinct_id: "anon-browser" })),
+    "anon-browser",
+  );
+  assert.equal(distinctIdFromPersistence(JSON.stringify({ distinct_id: "  anon-browser  " })), "anon-browser");
+  assert.equal(distinctIdFromPersistence(JSON.stringify({ distinct_id: "founder@example.com" })), null);
+  assert.equal(distinctIdFromPersistence(JSON.stringify({ distinct_id: "" })), null);
+  assert.equal(distinctIdFromPersistence(JSON.stringify({ distinct_id: "x".repeat(201) })), null);
+  assert.equal(distinctIdFromPersistence("not-json"), null);
+  assert.equal(distinctIdFromPersistence(null), null);
 });
 
 test("the survival simulator sends the same lead fields the email is keyed off", () => {

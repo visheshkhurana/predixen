@@ -178,10 +178,14 @@ async function request<T>(
 
 export const api = {
   auth: {
-    register: (email: string, password: string) =>
+    register: (email: string, password: string, distinctId?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(distinctId ? { distinct_id: distinctId } : {}),
+        }),
       }),
     login: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {

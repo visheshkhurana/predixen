@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
 import { founderFaqs } from "@/data/founder-faqs";
 import { trackFunnel } from "@/lib/funnel";
+import { getBrowserDistinctId } from "@/lib/posthog";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
 import {
   ArrowRight,
@@ -144,6 +145,7 @@ export default function RunwayCalculatorPage() {
     if (sendState === "sending" || !email.trim()) return;
     setSendState("sending");
     try {
+      const distinctId = await getBrowserDistinctId();
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -161,6 +163,10 @@ export default function RunwayCalculatorPage() {
           runway_months: results.runwayMonths >= 36 ? "36+" : String(results.runwayMonths),
           runway_date: results.runwayMonths >= 36 ? "beyond 36 months" : results.runwayDate,
           monthly_burn: formatCurrency(results.monthlyBurn) + "/mo",
+          // Joins lead_captured to this browser person. Omitted when PostHog
+          // has no id yet; the server then hashes the email and aliases it
+          // on signup.
+          ...(distinctId ? { distinct_id: distinctId } : {}),
         }),
       });
       if (!res.ok) throw new Error(String(res.status));

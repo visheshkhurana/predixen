@@ -47,6 +47,35 @@ def test_emit_mirrors_location_source_and_runway():
         assert properties["source"] == "runway-calculator"
         assert properties["runway_months"] == "4"
         assert properties["created"] is True
+        assert properties["distinct_id_source"] == "email_hash"
+
+
+def test_emit_uses_browser_distinct_id_when_the_client_sends_one():
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        distinct_id="anon-browser",
+    )
+    assert data.distinct_id == "anon-browser"
+    with patch("server.api.leads.posthog_capture") as capture:
+        _emit_lead_captured(data, created=True)
+        event, distinct_id, properties = capture.call_args.args
+        assert event == "lead_captured"
+        assert distinct_id == "anon-browser"
+        assert properties["distinct_id_source"] == "browser"
+
+
+def test_emit_falls_back_to_hash_for_email_or_overlong_distinct_id():
+    emailed = LeadCreate(email="founder@example.com", distinct_id="founder@example.com")
+    too_long = LeadCreate(email="founder@example.com", distinct_id="x" * 201)
+    blank = LeadCreate(email="founder@example.com", distinct_id="   ")
+    assert emailed.distinct_id is None
+    assert too_long.distinct_id is None
+    assert blank.distinct_id is None
+    with patch("server.api.leads.posthog_capture") as capture:
+        _emit_lead_captured(emailed, created=True)
+        assert capture.call_args.args[1] == _lead_distinct_id("founder@example.com")
+        assert capture.call_args.args[2]["distinct_id_source"] == "email_hash"
 
 
 def test_emit_omits_runway_when_absent():
@@ -114,6 +143,24 @@ def test_create_lead_queues_capture_after_commit():
     db.commit.assert_called_once()
     queued = [call.args[0] for call in background.add_task.call_args_list]
     assert _emit_lead_captured in queued
+
+
+def test_create_lead_keeps_browser_distinct_id_for_the_queued_emit():
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        distinct_id="anon-browser",
+    )
+    background = MagicMock()
+    db = MagicMock()
+    db.query.return_value.filter.return_value.one_or_none.return_value = None
+
+    create_lead(data, background, db)
+
+    emit_call = next(
+        call for call in background.add_task.call_args_list if call.args[0] is _emit_lead_captured
+    )
+    assert emit_call.args[1].distinct_id == "anon-browser"
 
 
 def test_create_lead_emits_on_repeat_submission():
