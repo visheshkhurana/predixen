@@ -128,6 +128,12 @@ def test_the_destination_is_not_the_killed_tools_nav_link() -> None:
         assert "](/tools)" not in post, f"{slug} links the killed /tools nav page"
 
 
+def test_seed_benchmarks_burn_multiple_is_net_burn_over_net_new_arr() -> None:
+    body = content_block(blocks(source())["seed-stage-saas-benchmarks-2026"])
+    assert "net burn divided by net new ARR" in body
+    assert "net new ARR divided by net burn" not in body
+
+
 def test_the_footer_route_already_existed_and_is_unchanged() -> None:
     # Measured, not assumed: `MarketingLayout` already carries a site-wide
     # footer nav link to the calculator, identical on `main`, so this change is
