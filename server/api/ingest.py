@@ -16,6 +16,7 @@ from server.models.dataset import Dataset
 from server.models.financial import FinancialRecord
 from server.ingest.pdf_extractor import process_termina_pdf, extract_text_from_pdf
 from server.ingest.excel_extractor import process_termina_excel
+from server.core.units import gross_margin_pct as gross_margin_pct_of
 
 logger = logging.getLogger(__name__)
 
@@ -780,13 +781,13 @@ async def get_computed_metrics(
     else:
         runway = 0
 
-    gross_margin = fr_val('gross_margin') or ts_val('gross_margin', 0)
-    if gross_margin > 1:
-        gross_margin_pct = gross_margin
-        gross_margin_dec = gross_margin / 100
-    else:
-        gross_margin_dec = gross_margin
-        gross_margin_pct = gross_margin * 100
+    # Records and the truth scan store a percentage; legacy rows may hold a
+    # fraction. One shared rule (server/core/units.py) so -56% stays -56%.
+    gross_margin_raw = fr_val('gross_margin', None)
+    if gross_margin_raw is None:
+        gross_margin_raw = ts_val('gross_margin', 0)
+    gross_margin_pct = gross_margin_pct_of(gross_margin_raw) or 0.0
+    gross_margin_dec = gross_margin_pct / 100
 
     ltv = fr_val('ltv') or ts_val('ltv', 0)
     cac = fr_val('cac') or ts_val('cac', 0)

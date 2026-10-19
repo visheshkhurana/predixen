@@ -224,7 +224,7 @@ test("the committed sitemap carries the new loc, so the page is not shipped invi
 });
 
 test("the page ends in the same signup CTA as /tools/runway-calculator", () => {
-  assert.match(page, /href="\/auth\?tab=register"/);
+  assert.match(page, /href="\/signup"/);
   assert.match(page, /data-testid="button-cta-connect"/);
   assert.match(page, /location: "burn-multiple"/);
 });
@@ -260,5 +260,5 @@ test("the server-rendered text carries the formula and both sources", () => {
   assert.match(body, /cash out minus cash in/);
   assert.match(body, /scalevp\.com/);
   assert.match(body, /benchmarkit\.ai/);
-  assert.match(body, /href="\/auth"/);
+  assert.match(body, /href="\/signup"/);
 });

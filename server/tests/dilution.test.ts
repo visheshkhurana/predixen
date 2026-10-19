@@ -280,11 +280,11 @@ test("the server-rendered text carries the formula, the choice and a signup link
   assert.match(body, /amount raised divided by the post-money valuation/);
   assert.match(body, /option pool/i);
   assert.match(body, /dilutes existing holders and never the new investor/);
-  assert.match(body, /href="\/auth"/);
+  assert.match(body, /href="\/signup"/);
 });
 
 test("the page ends in the same signup CTA as /tools/runway-calculator", () => {
-  assert.match(page, /href="\/auth\?tab=register"/);
+  assert.match(page, /href="\/signup"/);
   assert.match(page, /data-testid="button-cta-connect"/);
   assert.match(page, /location: "dilution"/);
 });

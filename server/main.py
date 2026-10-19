@@ -234,6 +234,16 @@ async def _run_deferred_startup():
         except Exception as e:
             logger.warning(f"Could not ensure competitor tables: {e}")
 
+        try:
+            from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
+            Base.metadata.create_all(
+                bind=engine,
+                tables=[RevokedAccessToken.__table__, UserSessionCutoff.__table__],
+            )
+            logger.info("Ensured session-revocation tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure session-revocation tables: {e}")
+
         if settings.should_run_migrations:
             logger.info("Running migrations...")
             from server.core.migrations import run_migrations

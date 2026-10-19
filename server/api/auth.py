@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import timedelta, datetime
 from server.core.db import get_db
-from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user, set_auth_cookie, clear_auth_cookie, set_refresh_cookie, REFRESH_COOKIE_NAME
+from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user, set_auth_cookie, clear_auth_cookie, set_refresh_cookie, REFRESH_COOKIE_NAME, AUTH_COOKIE_NAME, revoke_all_sessions, revoke_token_string
 from server.core.config import settings
 from server.models.user import User, PasswordResetToken, EmailVerificationToken, RefreshToken
 from server.models.login_history import LoginHistory
@@ -473,6 +473,8 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     
     user.password_hash = get_password_hash(req.new_password)
     token_record.used = True
+    # Whoever had the old password may still hold a session; end them all.
+    revoke_all_sessions(db, user.id)
     db.commit()
     
     return {"message": "Password has been reset successfully. You can now log in with your new password."}
@@ -552,6 +554,13 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
         record = db.query(RefreshToken).filter(RefreshToken.token == rt, RefreshToken.revoked == False).first()
         if record:
             record.revoked = True
-            db.commit()
+    # Clearing the cookie is not enough: a copied access token would keep
+    # working until it expires, so record this one as revoked.
+    access = request.cookies.get(AUTH_COOKIE_NAME)
+    auth_header = request.headers.get("authorization") or ""
+    if auth_header.lower().startswith("bearer "):
+        access = auth_header[7:].strip() or access
+    revoke_token_string(access, db)
+    db.commit()
     clear_auth_cookie(response)
     return {"message": "Logged out successfully."}

@@ -237,14 +237,14 @@ function Hero() {
               asChild
               data-testid="button-hero-start-simulation"
             >
-              <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "hero" })}>
+              <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "hero" })}>
                 Start Simulation
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </Magnetic>
           <Button size="lg" variant="outline" className="h-12 px-8 text-base backdrop-blur" asChild data-testid="button-hero-view-demo">
-            <Link href="/demo">View Demo</Link>
+            <Link href="/demo/enter">View Demo</Link>
           </Button>
         </motion.div>
         {/*
@@ -680,7 +680,7 @@ function PricingPreview() {
                 variant={tier.highlighted ? "default" : "outline"}
                 data-testid={`button-pricing-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: `pricing-${tier.name.toLowerCase()}` })}>
+                <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: `pricing-${tier.name.toLowerCase()}` })}>
                   {tier.cta}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
@@ -856,7 +856,7 @@ export default function LandingPage() {
                   asChild
                   data-testid="button-bottom-start-trial"
                 >
-                  <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "footer-cta" })}>
+                  <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "footer-cta" })}>
                     Get Started Free
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>

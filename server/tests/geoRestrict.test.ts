@@ -10,7 +10,29 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import type { Server } from "http";
+import { readdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { geoRestrict } from "../middleware/geoRestrict";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+
+/**
+ * Every file at the root of `client/public/`, spelled as the path it is served
+ * at. Enumerated from the disk rather than listed here, because a second
+ * hand-written list would drift from `EXEMPT_EXACT` exactly the way
+ * `EXEMPT_EXACT` drifted from the directory.
+ *
+ * Dotfiles are skipped: `.DS_Store` and friends are OS or build artifacts, not
+ * things a crawler goes looking for, and naming them in `EXEMPT_EXACT` would be
+ * noise. Anything else at this root is served at a clean public URL.
+ */
+function rootPublicFiles(): string[] {
+  return readdirSync(resolve(REPO_ROOT, "client/public"), { withFileTypes: true })
+    .filter((e) => e.isFile() && !e.name.startsWith("."))
+    .map((e) => `/${e.name}`)
+    .sort();
+}
 
 function startServer(): Promise<{ base: string; server: Server }> {
   const app = express();
@@ -170,11 +192,43 @@ test("never locks out an existing signed-in user abroad", async () => {
   );
 });
 
-test("exempts API, embeds and crawler files", async () => {
+test("exempts API, embeds and every file at the root of client/public", async () => {
+  // The two prefixes are named because they are prefixes — there is no disk to
+  // read them from. The root files are NOT named.
+  //
+  // This list used to be hand-written, and it had drifted from the directory in
+  // both directions: it named `/favicon.ico`, which no file in the repo serves,
+  // and it omitted `/llms.txt` and `/favicon.png`, which exist. Measured on the
+  // parent commit, a browser user agent from CN got **403** for both of those,
+  // while this test was green.
   const h = { "x-forwarded-for": IP.china };
-  for (const p of ["/api/health", "/embed/survival", "/robots.txt", "/sitemap.xml", "/favicon.ico"]) {
+
+  // Deliberately not pinned to a count. The disk is the source of truth here,
+  // so naming "five" would put a second remembered number in the file — which is
+  // the defect this test exists to catch. What is asserted is only that the read
+  // found something, so an unreadable or moved directory reddens instead of
+  // making the loop below vacuous.
+  const rootFiles = rootPublicFiles();
+  assert.ok(
+    rootFiles.length > 0,
+    `could not read any files at the root of client/public — the loop below would pass vacuously`,
+  );
+
+  for (const p of ["/api/health", "/embed/survival", ...rootFiles]) {
     assert.equal(await status(p, h), 200, `expected ${p} exempt`);
   }
+});
+
+test("the exemption is exact, so a path outside it is still blocked", async () => {
+  // The counterweight to the test above. Without it, "everything returns 200"
+  // would satisfy a disk-derived loop — and the pairing already in this file
+  // ("blocks everything else") is what proves the gate is closing at all, so
+  // the two tests together are the discriminator.
+  const h = { "x-forwarded-for": IP.china };
+  assert.equal(await status("/overview", h), 403);
+  // `/llms.txt` is exempt; `/llms.txt.bak` must not be. An exemption is a path,
+  // not a prefix, and the file that would make that mistake is this one.
+  assert.equal(await status("/llms.txt.bak", h), 403);
 });
 
 test("fails open on private, missing and malformed addresses", async () => {
