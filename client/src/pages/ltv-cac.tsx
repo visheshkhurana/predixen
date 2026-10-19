@@ -420,7 +420,7 @@ export default function LtvCacPage() {
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
               <Link
-                href="/auth?tab=register"
+                href="/signup"
                 onClick={() => trackFunnel("cta_click", { location: "ltv-cac" })}
               >
                 Connect Your Real Data

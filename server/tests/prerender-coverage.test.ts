@@ -110,7 +110,7 @@ for (const path of RUNWAY_PATHS) {
     "/survival-simulator",
     "/default-alive",
     "/features",
-    "/auth",
+    "/signup",
     "/blog/founderconsole-vs-sturppy-vs-finmark-vs-causal",
   ];
   const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
@@ -138,7 +138,7 @@ for (const path of RUNWAY_PATHS) {
     "/tools/runway-calculator",
     "/survival-simulator",
     "/default-alive",
-    "/auth",
+    "/signup",
   ];
   const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
   const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
@@ -166,7 +166,7 @@ for (const path of RUNWAY_PATHS) {
     "/tools/runway-calculator",
     "/survival-simulator",
     "/default-alive",
-    "/auth",
+    "/signup",
   ];
   const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
   const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
@@ -194,7 +194,7 @@ for (const path of RUNWAY_PATHS) {
     "/default-alive",
     "/runway/saas",
     "/pricing",
-    "/auth",
+    "/signup",
   ];
   const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
   const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
@@ -222,7 +222,7 @@ for (const path of RUNWAY_PATHS) {
     "/survival-simulator",
     "/default-alive",
     "/pricing",
-    "/auth",
+    "/signup",
   ];
   const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
   const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
@@ -253,7 +253,7 @@ for (const path of RUNWAY_PATHS) {
     "/survival-simulator",
     "/default-alive",
     "/pricing",
-    "/auth",
+    "/signup",
   ];
   const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
   const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
@@ -267,7 +267,7 @@ for (const path of RUNWAY_PATHS) {
   );
 }
 
-// /signup was a blank SPA shell (empty #ssr-content) because the route
+// /signup used to be a blank SPA shell (empty #ssr-content) because the route
 // redirected to /auth?tab=register. Body must be non-empty and keep the
 // register funnel plus product / free-tool hrefs.
 {
@@ -275,7 +275,7 @@ for (const path of RUNWAY_PATHS) {
   const body = (out.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/) || [, ""])[1];
   const txt = textOf(out);
   const hrefs = [
-    "/auth?tab=register",
+    "/signup",
     "/product",
     "/features",
     "/pricing",
@@ -302,13 +302,13 @@ for (const path of RUNWAY_PATHS) {
   const body = (out.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/) || [, ""])[1];
   const txt = textOf(out);
   // HAG-236 moved this page's "get started free" anchor from /signup to
-  // /auth?tab=register, because /signup cannot create an account. Not to be
-  // confused with the page list on line 19, where /signup is still a page.
+  // /auth?tab=register; HAG-449 moved every register CTA back to /signup, which
+  // now renders the same register form from a prerendered document.
   const hrefs = [
     "/product",
     "/privacy",
     "/terms",
-    "/auth?tab=register",
+    "/signup",
     "/contact",
   ];
   const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
