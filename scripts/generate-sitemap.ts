@@ -97,6 +97,9 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/blog", lastmod: "2026-08-10", changefreq: "weekly", priority: "0.8" },
   { path: "/default-alive", lastmod: "2026-08-08", changefreq: "monthly", priority: "0.9" },
   { path: "/faq", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.5" },
+  // HAG-449: the hub itself. The four leaves below were in the sitemap while the
+  // page they hang off returned 404, so a crawler had the tools and no index.
+  { path: "/tools", lastmod: "2026-10-19", changefreq: "monthly", priority: "0.9" },
   { path: "/tools/runway-calculator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.8" },
   { path: "/tools/burn-multiple", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
   { path: "/tools/dilution", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },

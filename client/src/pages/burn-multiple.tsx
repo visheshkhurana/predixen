@@ -443,7 +443,7 @@ export default function BurnMultiplePage() {
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
               <Link
-                href="/auth?tab=register"
+                href="/signup"
                 onClick={() => trackFunnel("cta_click", { location: "burn-multiple" })}
               >
                 Connect Your Real Data

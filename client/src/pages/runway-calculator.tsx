@@ -456,7 +456,7 @@ export default function RunwayCalculatorPage() {
               </p>
               <Button asChild className="mt-4" data-testid="button-signup-prompt">
                 <Link
-                  href="/auth?tab=register"
+                  href="/signup"
                   onClick={() =>
                     trackFunnel("signup_prompt_click", {
                       location: "runway-calculator",
@@ -542,7 +542,7 @@ export default function RunwayCalculatorPage() {
               confidence bands — so you know your true runway probability.
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
-              <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "runway-calculator" })}>
+              <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "runway-calculator" })}>
                 Connect Your Real Data
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>

@@ -2,7 +2,7 @@
 //
 // Without this, a failed GET leaves the page looking empty ("no data yet")
 // when the truth is "the request failed". Kept free of React / DOM imports so
-// server/tests/query-error-toast.test.ts can unit-test it.
+// server/tests/frontend-audit-ux.test.ts can unit-test it.
 
 export interface QueryErrorMeta {
   /** Set `meta: { suppressErrorToast: true }` on a query that handles its own errors. */

@@ -67,6 +67,10 @@ def _inputs_from_dataset(ds):
         payroll=b["payroll"] * m,
         other_costs=b["otherCosts"] * m,
         cash_balance=b["cashBalance"] * m,
+        # The engine default used to be 5% churn and is now 0 (audit 10-16).
+        # Pinned so every QA dataset still runs out of cash, which these
+        # contract tests rely on (as test_monte_carlo_runway.py does).
+        churn_rate=5.0,
     )
 
 
@@ -146,9 +150,20 @@ def test_a_zero_variance_run_really_is_a_single_point(ds_id):
 
     That fallback is the reason this is asserted rather than assumed. If
     someone re-adds a spread floor to make the chart "look better", this fails.
+
+    Audit 10-16: the engine now adds cost noise (cost_sigma), so with default
+    sigmas these datasets have a REAL spread and no longer serve. The property
+    under test -- a zero-variance input yields a single point, with no spread
+    invented downstream -- is pinned by switching every noise source off.
     """
+    from dataclasses import replace
+
     ds = next(d for d in _datasets() if d["id"] == ds_id)
-    out = _run(_inputs_from_dataset(ds), 1000)
+    inputs = replace(
+        _inputs_from_dataset(ds),
+        cost_sigma=0.0, growth_sigma=0.0, margin_sigma=0.0, churn_sigma=0.0,
+    )
+    out = _run(inputs, 1000)
     sample = out["distributions"]["runway"]
     summary = out["runway"]
 
@@ -175,6 +190,9 @@ def test_the_survived_to_horizon_mass_is_the_999_sentinel_and_is_counted():
         payroll=50_000,
         other_costs=10_000,
         cash_balance=2_000_000,
+        # Explicit since audit 10-16 (default is now 0): without churn no path
+        # ever runs out and the "ended" partition below would be empty.
+        churn_rate=5.0,
     )
     out = _run(healthy, 1000)
     sample = out["distributions"]["runway"]
