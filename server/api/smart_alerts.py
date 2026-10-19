@@ -176,9 +176,14 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
                 })
 
     if latest:
-        cash = float(latest.cash_balance or 0)
+        # An unentered balance is unknown, not $0: coalescing it to 0.0 here
+        # made "Runway is 0.0 months" a thing the product said to a founder who
+        # had only left the field blank. A real 0.0 is cash exhausted, and that
+        # is the most urgent runway there is, so it must still fire.
+        cash_known = latest.cash_balance is not None
+        cash = float(latest.cash_balance) if cash_known else None
         net_burn = gross_burn(latest) - float(latest.revenue or 0)
-        if net_burn > 0 and cash > 0:
+        if net_burn > 0 and cash_known:
             runway = cash / net_burn
             if runway_warning_mo is not None and runway < runway_warning_mo:
                 new_alerts.append({
