@@ -54,7 +54,9 @@ def run_agent_simulation(
         if scenario_key in scenario:
             company_financials[fin_key] = scenario[scenario_key]
 
-    for alt_key, real_key in [("revenue_monthly", "monthly_revenue"), ("expenses_monthly", "monthly_burn")]:
+    # expenses_monthly is total costs (gross), monthly_burn is NET burn; they
+    # are not interchangeable. build_initial_company_state reads both.
+    for alt_key, real_key in [("revenue_monthly", "monthly_revenue")]:
         if alt_key in company_financials and real_key not in company_financials:
             company_financials[real_key] = company_financials[alt_key]
 
@@ -112,7 +114,10 @@ def run_agent_simulation(
             "month": month,
             "cash_balance": round(company_state["cash_balance"], 0),
             "monthly_revenue": round(company_state["monthly_revenue"], 0),
+            # Operating spend excluding COGS (what the agents act on) and the
+            # NET burn the dashboard reports.
             "monthly_burn": round(company_state["monthly_burn"], 0),
+            "net_burn": round(company_state.get("net_burn", 0), 0),
             "runway_months": round(company_state["runway_months"], 1),
             "headcount": company_state.get("headcount", 0),
             "customers": company_state.get("customers", 0),
@@ -204,6 +209,7 @@ def _advance_financials(
     company["cash_balance"] = cash + net_cashflow
 
     net_burn = max(0, burn - new_revenue * gross_margin)
+    company["net_burn"] = net_burn
     company["runway_months"] = company["cash_balance"] / net_burn if net_burn > 0 else 999
 
     company["growth_rate"] = effective_growth * 100
@@ -219,9 +225,14 @@ def _compile_results(
     company_info: Dict[str, Any],
     scenario: Dict[str, Any],
 ) -> Dict[str, Any]:
+    # One simulated path, so this is NOT a probability: it is the share of
+    # simulated months that ended with cash above zero. Exposed honestly as
+    # monthsSolventPct; survivalProbability is kept as a deprecated alias for
+    # stored runs and shared links.
     survived_months = sum(1 for s in snapshots if s["survival"])
     total_months = len(snapshots)
-    survival_probability = (survived_months / total_months * 100) if total_months > 0 else 0
+    months_solvent_pct = (survived_months / total_months * 100) if total_months > 0 else 0
+    survived_horizon = bool(snapshots) and bool(snapshots[-1]["survival"])
 
     cash_trajectory = [s["cash_balance"] for s in snapshots]
     revenue_trajectory = [s["monthly_revenue"] for s in snapshots]
@@ -260,7 +271,9 @@ def _compile_results(
         "scenarioInputs": scenario,
         "numRounds": total_months,
         "summary": {
-            "survivalProbability": round(survival_probability, 1),
+            "monthsSolventPct": round(months_solvent_pct, 1),
+            "survivedHorizon": survived_horizon,
+            "survivalProbability": round(months_solvent_pct, 1),  # deprecated alias
             "fundingProbability": round(funding_probability, 1),
             "finalCash": round(cash_at_end, 0),
             "finalRunway": round(runway_at_end, 1),

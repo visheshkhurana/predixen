@@ -1,3 +1,4 @@
+import { isSustainableRunway } from "@/lib/simulation/runwayFormat";
 import { useState, useEffect, type FormEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
@@ -22,6 +23,12 @@ import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 import { trackFunnel } from "@/lib/funnel";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
+
+// 999 is the engine's "revenue covers costs" sentinel; never show "999mo".
+function runwayLabel(value: number, unit = "mo"): string {
+  if (isSustainableRunway(value)) return "Sustainable";
+  return `${value}${unit}`;
+}
 
 const STORAGE_KEY = "fc_survival_sim_count";
 
@@ -185,7 +192,7 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <Label className="text-sm font-medium">Growth Rate</Label>
+              <Label className="text-sm font-medium">Growth Rate (before churn)</Label>
               <span className="text-sm text-primary font-mono">{inputs.growth_rate}% /mo</span>
             </div>
             <Slider
@@ -417,8 +424,8 @@ function SimulationResultsCard({ results }: { results: SimResults }) {
               Your startup has a <span className={gradeTextColors[grade.color]}>{survival["12m"]}%</span> chance of surviving 12 months
             </h3>
             <p className="text-muted-foreground">
-              Median runway: <span className="text-white font-semibold">{runway.p50} months</span>
-              {" "}(range: {runway.p10} – {runway.p90} months)
+              Median runway: <span className="text-white font-semibold">{runwayLabel(runway.p50, " months")}</span>
+              {" "}(range: {runwayLabel(runway.p10, "")} – {runwayLabel(runway.p90, " months")})
             </p>
           </div>
         </div>
@@ -433,17 +440,17 @@ function SimulationResultsCard({ results }: { results: SimResults }) {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Pessimistic</p>
-            <p className="text-lg font-bold text-red-400">{runway.p10}mo</p>
+            <p className="text-lg font-bold text-red-400">{runwayLabel(runway.p10)}</p>
             <p className="text-xs text-muted-foreground">P10 Runway</p>
           </div>
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Most Likely</p>
-            <p className="text-lg font-bold text-white">{runway.p50}mo</p>
+            <p className="text-lg font-bold text-white">{runwayLabel(runway.p50)}</p>
             <p className="text-xs text-muted-foreground">P50 Runway</p>
           </div>
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Optimistic</p>
-            <p className="text-lg font-bold text-emerald-400">{runway.p90}mo</p>
+            <p className="text-lg font-bold text-emerald-400">{runwayLabel(runway.p90)}</p>
             <p className="text-xs text-muted-foreground">P90 Runway</p>
           </div>
         </div>
@@ -522,7 +529,7 @@ function EmailResultPanel({ results }: { results: SimResults }) {
 
   const p50 = results.runway.p50;
   const monthlyBurn = results.inputs.monthly_expenses - results.inputs.monthly_revenue;
-  const runwayDate = formatDate(p50);
+  const runwayDate = isSustainableRunway(p50) ? "Sustainable" : formatDate(p50);
 
   async function handleEmailResult(e: FormEvent) {
     e.preventDefault();
@@ -536,7 +543,7 @@ function EmailResultPanel({ results }: { results: SimResults }) {
           email: email.trim(),
           source: "survival-simulator",
           plan: "survival-simulator",
-          notes: `Grade ${results.grade.letter} (${results.grade.label}). Median runway ${p50} months (P10 ${results.runway.p10} – P90 ${results.runway.p90}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`,
+          notes: `Grade ${results.grade.letter} (${results.grade.label}). Median runway ${runwayLabel(p50, " months")} (P10 ${runwayLabel(results.runway.p10, "")} – P90 ${runwayLabel(results.runway.p90, "")}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`,
           // Server only queues the outbound email when these three are present.
           runway_months: String(p50),
           runway_date: runwayDate,
@@ -625,7 +632,7 @@ function ShareResultPanel({ results }: { results: SimResults }) {
   const p50 = results.runway?.p50 ?? 0;
   const surv12 = results.survival?.["12m"] ?? 0;
 
-  const shareText = `My startup scored a ${grade} on the FounderConsole Survival Simulator — ${p50} months median runway, ${surv12}% chance of surviving 12 months. What's yours?`;
+  const shareText = `My startup scored a ${grade} on the FounderConsole Survival Simulator — ${runwayLabel(p50, " months")} median runway, ${surv12}% chance of surviving 12 months. What's yours?`;
 
   const copy = (value: string, label: string) => {
     navigator.clipboard.writeText(value);
@@ -823,9 +830,9 @@ function ExportButton({ results }: { results: SimResults }) {
 </div>
 <h2>Runway Projections</h2>
 <div class="metrics">
-  <div class="metric"><div class="metric-value" style="color:#ef4444">${runway.p10}mo</div><div class="metric-label">Pessimistic (P10)</div></div>
-  <div class="metric"><div class="metric-value">${runway.p50}mo</div><div class="metric-label">Most Likely (P50)</div></div>
-  <div class="metric"><div class="metric-value" style="color:#10b981">${runway.p90}mo</div><div class="metric-label">Optimistic (P90)</div></div>
+  <div class="metric"><div class="metric-value" style="color:#ef4444">${runwayLabel(runway.p10)}</div><div class="metric-label">Pessimistic (P10)</div></div>
+  <div class="metric"><div class="metric-value">${runwayLabel(runway.p50)}</div><div class="metric-label">Most Likely (P50)</div></div>
+  <div class="metric"><div class="metric-value" style="color:#10b981">${runwayLabel(runway.p90)}</div><div class="metric-label">Optimistic (P90)</div></div>
 </div>
 <h2>Survival Probability</h2>
 <div class="survival">

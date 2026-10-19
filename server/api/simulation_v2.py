@@ -17,7 +17,7 @@ from server.models import User
 from server.lib.llm.openai_client import get_openai_client
 from server.services.simulation.engine import SimulationEngine
 from server.services.simulation.input_normalization import inputs_for_simulation_request
-from server.services.simulation.types import CompanyState, AgentAction
+from server.services.simulation.types import CompanyState, AgentAction, net_runway_months
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["simulation-v2"])
@@ -28,6 +28,8 @@ _results_store: dict = {}
 class SimulationV2Request(BaseModel):
     total_rounds: int = Field(default=24, ge=6, le=60)
     monthly_revenue: float = Field(default=50000, ge=0)
+    # GROSS monthly spend (all costs incl. COGS), NOT the dashboard's net burn:
+    # the engine does cash += monthly_revenue - monthly_burn.
     monthly_burn: float = Field(default=80000)
     cash_balance: float = Field(default=500000, ge=0)
     customers: int = Field(default=50, ge=0)
@@ -48,7 +50,8 @@ def build_simulation_v2_state(normalized: dict) -> tuple[CompanyState, dict, int
     """Build the engine inputs from normalised values.
 
     The formulas match the historical inline construction: ARR is 12x revenue,
-    and runway is cash / burn, or 999 when burn is not positive.
+    and runway is cash / (burn - revenue) -- monthly_burn is gross spend -- or
+    999 when revenue covers spend.
     """
     monthly_revenue = normalized["monthly_revenue"]
     monthly_burn = normalized["monthly_burn"]
@@ -58,7 +61,7 @@ def build_simulation_v2_state(normalized: dict) -> tuple[CompanyState, dict, int
         arr=monthly_revenue * 12,
         burn_rate=monthly_burn,
         cash=cash_balance,
-        runway_months=cash_balance / monthly_burn if monthly_burn > 0 else 999,
+        runway_months=net_runway_months(cash_balance, monthly_revenue, monthly_burn),
         customers=normalized["customers"],
         churn_rate=normalized["churn_rate"],
         team_size=normalized["team_size"],
