@@ -20,7 +20,23 @@ app.disable("x-powered-by");
 // Railway terminates TLS and forwards the real client address in
 // X-Forwarded-For. Without this, req.ip is the proxy and every visitor looks
 // like the same private address.
-app.set("trust proxy", true);
+//
+// One hop, not "any": exactly one proxy fronts the app -- RAILWAY_DEPLOYMENT.md:
+// "Internet -> Railway edge (TLS) -> app container :5000". The edge APPENDS the
+// address it saw, so a caller that sends `X-Forwarded-For: 1.2.3.4` arrives as
+// `1.2.3.4, <real client>`. Under `true`, Express trusts every hop and req.ip
+// becomes the caller's own 1.2.3.4; under a count of 1 it is the address the
+// edge appended. Measured on this repo's express:
+//
+//   X-Forwarded-For: "1.2.3.4, 5.6.7.8"
+//   trust proxy=true -> req.ip=1.2.3.4   (forged)
+//   trust proxy=1    -> req.ip=5.6.7.8   (the appended hop)
+//   trust proxy=2    -> req.ip=1.2.3.4   (forged again)
+//
+// This assumes the single edge hop the deployment doc describes. A second
+// proxy in front (a CDN, say) would need its own count; adding one without
+// changing this line silently moves req.ip back to a caller-written entry.
+app.set("trust proxy", 1);
 
 app.use((req, res, next) => {
   const requestId = (req.headers["x-request-id"] as string) || randomUUID();
