@@ -8,6 +8,7 @@ import os
 import json
 import logging
 
+from server.core.openai_credentials import chat_sampling_params
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -1180,14 +1181,12 @@ def _resolve_onboarding_openai() -> tuple[Optional[str], Optional[str]]:
 
     The Replit AI Integrations key only works against its own proxy, so its base
     URL is returned with it. A plain ``OPENAI_API_KEY`` talks to OpenAI directly
-    and must not inherit the integration base URL.
+    and must not inherit the integration base URL. Shared with the PDF and Excel
+    extractors so every onboarding path answers this the same way.
     """
-    integration_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    if integration_key:
-        return integration_key, os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    from server.core.openai_credentials import resolve_openai_credentials
 
-    plain_key = os.environ.get("OPENAI_API_KEY")
-    return (plain_key, None) if plain_key else (None, None)
+    return resolve_openai_credentials()
 
 
 def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
@@ -1216,8 +1215,7 @@ def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
                     "content": ONBOARDING_EXTRACTION_PROMPT + "\n\nDocument text:\n\n" + text[:20000]
                 }
             ],
-            max_tokens=2000,
-            temperature=0.1,
+            **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
             timeout=60
         )
         
@@ -1272,8 +1270,7 @@ def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[st
                     "content": content
                 }
             ],
-            max_tokens=2000,
-            temperature=0.1,
+            **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
             timeout=90
         )
         

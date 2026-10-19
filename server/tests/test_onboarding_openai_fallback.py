@@ -19,7 +19,12 @@ class _FakeResponse:
 
 
 class _FakeCompletions:
+    last_kwargs = None
+
     def create(self, **kwargs):
+        # Record what was actually sent: a fake that accepts any keyword cannot
+        # catch a parameter api.openai.com would reject with a 400.
+        type(self).last_kwargs = kwargs
         return _FakeResponse()
 
 
@@ -38,6 +43,7 @@ class _FakeOpenAI:
 @pytest.fixture
 def fake_openai(monkeypatch):
     _FakeOpenAI.last_kwargs = None
+    _FakeCompletions.last_kwargs = None
     monkeypatch.setattr("openai.OpenAI", _FakeOpenAI)
     for name in (
         "AI_INTEGRATIONS_OPENAI_API_KEY",
@@ -94,6 +100,46 @@ def test_vision_extraction_uses_a_plain_openai_key(fake_openai, monkeypatch):
     assert result == {"summary": "ok"}
     assert fake_openai.last_kwargs["api_key"] == "sk-plain"
     assert "base_url" not in fake_openai.last_kwargs
+
+
+def test_direct_document_call_sends_only_params_openai_accepts(fake_openai, monkeypatch):
+    """GPT-5 on api.openai.com rejects max_tokens and a non-default temperature."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-plain")
+
+    ingest.extract_onboarding_data_with_openai("a document")
+
+    kwargs = _FakeCompletions.last_kwargs
+    assert kwargs["model"] == "gpt-5"
+    assert kwargs["max_completion_tokens"] == 4000
+    assert "max_tokens" not in kwargs
+    assert "temperature" not in kwargs
+    assert kwargs["timeout"] == 60
+
+
+def test_direct_vision_call_sends_only_params_openai_accepts(fake_openai, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-plain")
+
+    ingest.extract_onboarding_data_with_vision(["ZmFrZQ=="])
+
+    kwargs = _FakeCompletions.last_kwargs
+    assert kwargs["model"] == "gpt-5"
+    assert kwargs["max_completion_tokens"] == 4000
+    assert "max_tokens" not in kwargs
+    assert "temperature" not in kwargs
+    assert kwargs["timeout"] == 90
+
+
+def test_proxy_call_keeps_its_original_params(fake_openai, monkeypatch):
+    """The proxy accepts these, and the direct-path fix must not change it."""
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_API_KEY", "integration-key")
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_BASE_URL", "https://integrations.example/v1")
+
+    ingest.extract_onboarding_data_with_openai("a document")
+
+    kwargs = _FakeCompletions.last_kwargs
+    assert kwargs["max_tokens"] == 2000
+    assert kwargs["temperature"] == 0.1
+    assert "max_completion_tokens" not in kwargs
 
 
 def test_no_key_names_both_variables(fake_openai):
