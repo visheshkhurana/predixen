@@ -11,7 +11,8 @@ interface IntegrationCardProps {
   isConnected: boolean;
   onConnect: (integration: IntegrationConfig) => void;
   onDisconnect: (integrationId: string) => void;
-  onConfigure: (integrationId: string) => void;
+  /** Omit when the integration has nothing to configure; the button is hidden. */
+  onConfigure?: (integrationId: string) => void;
   lastSyncAt?: Date;
   status?: IntegrationStatus;
   testId?: string;
@@ -127,18 +128,21 @@ export function IntegrationCard({
             </Button>
           ) : isConnected ? (
             <>
-              <Button
-                onClick={() => onConfigure(integration.id)}
-                variant="secondary"
-                className="flex-1"
-                data-testid={`button-configure-${integration.id}`}
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Configure
-              </Button>
+              {onConfigure && (
+                <Button
+                  onClick={() => onConfigure(integration.id)}
+                  variant="secondary"
+                  className="flex-1"
+                  data-testid={`button-configure-${integration.id}`}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configure
+                </Button>
+              )}
               <Button
                 onClick={() => onDisconnect(integration.id)}
                 variant="outline"
+                aria-label={`Disconnect ${integration.name}`}
                 className="text-destructive hover:text-destructive"
                 data-testid={`button-disconnect-${integration.id}`}
               >

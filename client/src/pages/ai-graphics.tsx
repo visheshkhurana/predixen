@@ -377,6 +377,7 @@ export default function AIGraphicsPage() {
                             handleRemoveFromGallery(image.id);
                           }}
                           data-testid={`button-remove-gallery-${image.id}`}
+                          aria-label="Delete"
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>

@@ -9,7 +9,6 @@ import {
   Target,
   DollarSign,
   Calendar,
-  ArrowRight,
   CheckCircle,
   AlertCircle,
   Zap
@@ -391,11 +390,6 @@ export function SimulationInsights({ simulation, scenarioName, testId = 'simulat
                   </div>
                   <p className="text-sm text-muted-foreground">{rec.description}</p>
                 </div>
-                {rec.actionable && (
-                  <Button variant="ghost" size="icon" className="shrink-0">
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                )}
               </div>
             ))}
           </div>

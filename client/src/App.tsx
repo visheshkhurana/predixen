@@ -771,10 +771,11 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
               placeholder="Ask about your financials..."
+              aria-label="Ask the copilot a question"
               className="flex-1"
               data-testid="input-copilot-drawer"
             />
-            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} data-testid="button-copilot-send">
+            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} aria-label="Send message" data-testid="button-copilot-send">
               <Send className="h-4 w-4" />
             </Button>
           </div>
@@ -1052,7 +1053,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               {getConfidenceBadge()}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" data-testid="button-user-avatar">
+                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" aria-label="Account menu" data-testid="button-user-avatar">
                     <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
                       {user?.email?.charAt(0)?.toUpperCase() || 'U'}
                     </div>

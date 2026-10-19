@@ -324,7 +324,7 @@ export function ShareModal({ open, onOpenChange, data, companyId, companyName }:
                   data-testid={`input-share-email-${i}`}
                 />
                 {recipients.length > 1 && (
-                  <Button size="icon" variant="ghost" onClick={() => removeRecipient(i)} data-testid={`button-remove-recipient-${i}`}>
+                  <Button size="icon" variant="ghost" onClick={() => removeRecipient(i)} data-testid={`button-remove-recipient-${i}`} aria-label="Remove recipient">
                     <X className="h-4 w-4" />
                   </Button>
                 )}

@@ -38,12 +38,11 @@ import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
-import { IntegrationCard, OAuthConnectModal, ApiKeyConnectModal, GoogleSheetsConfigModal, StripeConnectModal } from "@/components/integrations";
+import { IntegrationCard, ApiKeyConnectModal, StripeConnectModal } from "@/components/integrations";
+import { useFounderStore } from "@/store/founderStore";
 import { 
   IntegrationConfig, 
-  integrationRegistry, 
   getIntegrationsByCategory,
-  SheetMapping 
 } from "@/lib/integrations";
 
 interface IntegrationProvider {
@@ -575,92 +574,54 @@ function getProviderType(providerId: string): "accounting" | "crm" | "payments" 
 export default function IntegrationsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [companyId] = useState(1);
+  const companyId = useFounderStore((s) => s.currentCompany?.id) ?? 0;
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
   const [selectedConnectorCategory, setSelectedConnectorCategory] = useState<ConnectorCategory>("all");
   
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationConfig | null>(null);
-  const [oauthModalOpen, setOauthModalOpen] = useState(false);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
-  const [sheetsConfigOpen, setSheetsConfigOpen] = useState(false);
   const [stripeModalOpen, setStripeModalOpen] = useState(false);
-  const [connectedNewIntegrations, setConnectedNewIntegrations] = useState<Set<string>>(new Set());
-  const [sheetMappings, setSheetMappings] = useState<SheetMapping[]>([]);
 
   const spreadsheetIntegrations = getIntegrationsByCategory('spreadsheets');
   const analyticsIntegrations = getIntegrationsByCategory('analytics');
 
+  // Only integrations with a real backend connector can be connected from these
+  // cards; the rest are flagged isComingSoon in the registry and render disabled.
   const handleConnectIntegration = (integration: IntegrationConfig) => {
+    if (integration.isComingSoon || !integration.connectorProviderId) return;
     setSelectedIntegration(integration);
-    if (integration.authType === 'oauth2') {
-      setOauthModalOpen(true);
-    } else if (integration.authType === 'api_key' || integration.authType === 'basic_auth' || integration.authType === 'service_account') {
-      setApiKeyModalOpen(true);
-    }
+    setApiKeyModalOpen(true);
   };
 
-  const handleModalClose = (modalType: 'oauth' | 'apikey' | 'sheets') => {
-    if (modalType === 'oauth') {
-      setOauthModalOpen(false);
-    } else if (modalType === 'apikey') {
-      setApiKeyModalOpen(false);
-    } else if (modalType === 'sheets') {
-      setSheetsConfigOpen(false);
-    }
-    setSelectedIntegration(null);
-  };
-
-  const handleOAuthConnect = (integrationId: string, selectedDataPoints: string[]) => {
-    setConnectedNewIntegrations(prev => new Set(prev).add(integrationId));
-    trackEvent('integration_connected', { integration_id: integrationId, auth_type: 'oauth2', name: selectedIntegration?.name });
-    toast({
-      title: "Integration Connected",
-      description: `Successfully connected ${selectedIntegration?.name}. Data will sync shortly.`,
-    });
-    setOauthModalOpen(false);
-    
-    if (integrationId === 'google-sheets') {
-      setSheetsConfigOpen(true);
-    } else {
-      setSelectedIntegration(null);
-    }
-  };
-
-  const handleApiKeyConnect = (integrationId: string, credentials: Record<string, string>, selectedDataPoints: string[]) => {
-    setConnectedNewIntegrations(prev => new Set(prev).add(integrationId));
-    trackEvent('integration_connected', { integration_id: integrationId, auth_type: 'api_key', name: selectedIntegration?.name });
-    toast({
-      title: "Integration Connected",
-      description: `Successfully connected ${selectedIntegration?.name}. Initial sync started.`,
-    });
+  const handleApiKeyModalClose = () => {
     setApiKeyModalOpen(false);
     setSelectedIntegration(null);
   };
 
-  const handleDisconnectIntegration = (integrationId: string) => {
-    setConnectedNewIntegrations(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(integrationId);
-      return newSet;
-    });
-    toast({
-      title: "Integration Disconnected",
-      description: "The integration has been removed.",
-    });
-  };
-
-  const handleConfigureIntegration = (integrationId: string) => {
-    if (integrationId === 'google-sheets') {
-      setSheetsConfigOpen(true);
+  const handleApiKeyConnect = async (integrationId: string, credentials: Record<string, string>) => {
+    const integration = selectedIntegration;
+    const providerId = integration?.connectorProviderId;
+    if (!integration || integration.id !== integrationId || !providerId) {
+      throw new Error("This integration cannot be connected yet.");
     }
-  };
-
-  const handleSaveSheetMappings = (mappings: SheetMapping[]) => {
-    setSheetMappings(mappings);
+    if (!companyId) {
+      throw new Error("Select a company before connecting a data source.");
+    }
+    try {
+      // The server checks the credentials with the provider before saving them.
+      await apiRequest("POST", `/api/connectors/companies/${companyId}/connect`, {
+        provider_id: providerId,
+        credentials,
+      });
+    } catch (error) {
+      throw new Error(getErrorMessage(error, "Connection failed. Check your credentials."));
+    }
+    trackEvent('integration_connected', { integration_id: integrationId, auth_type: integration.authType, name: integration.name });
     toast({
-      title: "Configuration Saved",
-      description: `Configured ${mappings.length} sheet mapping(s). Data will sync on schedule.`,
+      title: "Integration Connected",
+      description: `${integration.name} credentials were verified and saved.`,
     });
+    queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
   };
 
   const { data: availableIntegrations } = useQuery<{
@@ -678,6 +639,7 @@ export default function IntegrationsPage() {
     };
   }>({
     queryKey: ["/api/integrations/companies", companyId, "status"],
+    enabled: !!companyId,
   });
   
   const { data: connectorStatus } = useQuery<{
@@ -691,12 +653,13 @@ export default function IntegrationsPage() {
     }>;
   }>({
     queryKey: ["/api/connectors/companies", companyId, "status"],
+    enabled: !!companyId,
   });
 
   const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const syncMutation = useMutation({
-    mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp"; provider: string }) => {
+    mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
       setSyncingProvider(provider);
       if (type === "payroll" || type === "erp" || connectorSyncIds.includes(provider)) {
         const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/sync/${provider}`);
@@ -791,22 +754,33 @@ export default function IntegrationsPage() {
   const getConnectorInfo = (providerId: string) => {
     return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
   };
+
+  const isRegistryIntegrationConnected = (integration: IntegrationConfig) =>
+    !!integration.connectorProviderId && !!getConnectorInfo(integration.connectorProviderId)?.connected;
+
+  const handleDisconnectRegistryIntegration = (integrationId: string) => {
+    const integration = [...spreadsheetIntegrations, ...analyticsIntegrations].find(i => i.id === integrationId);
+    if (integration?.connectorProviderId) {
+      disconnectMutation.mutate({ provider: integration.connectorProviderId });
+    }
+  };
   
   const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
     const isConnectorBacked = type === "payroll" || type === "erp" || connectorBackedIds.includes(provider.id);
+    const legacyType = type === "accounting" || type === "crm" ? type : undefined;
     const isConnected = isConnectorBacked
       ? connectorInfo?.connected || false
       : type === "payments"
         ? status?.integrations.payments?.connected === provider.id
-        : status?.integrations[type]?.connected === provider.id;
+        : legacyType ? status?.integrations[legacyType]?.connected === provider.id : false;
     const integrationStatus = isConnectorBacked
       ? undefined
       : type === "payments"
         ? status?.integrations.payments
-        : status?.integrations[type];
+        : legacyType ? status?.integrations[legacyType] : undefined;
     const lastSync = isConnectorBacked
       ? connectorInfo?.last_sync
       : integrationStatus?.last_sync;
@@ -1145,17 +1119,19 @@ export default function IntegrationsPage() {
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            {spreadsheetIntegrations.map((integration) => (
-              <IntegrationCard
-                key={integration.id}
-                integration={integration}
-                isConnected={connectedNewIntegrations.has(integration.id)}
-                onConnect={handleConnectIntegration}
-                onDisconnect={handleDisconnectIntegration}
-                onConfigure={handleConfigureIntegration}
-                status={connectedNewIntegrations.has(integration.id) ? 'connected' : 'disconnected'}
-              />
-            ))}
+            {spreadsheetIntegrations.map((integration) => {
+              const connected = isRegistryIntegrationConnected(integration);
+              return (
+                <IntegrationCard
+                  key={integration.id}
+                  integration={integration}
+                  isConnected={connected}
+                  onConnect={handleConnectIntegration}
+                  onDisconnect={handleDisconnectRegistryIntegration}
+                  status={connected ? 'connected' : 'disconnected'}
+                />
+              );
+            })}
           </div>
         </TabsContent>
 
@@ -1167,17 +1143,19 @@ export default function IntegrationsPage() {
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            {analyticsIntegrations.map((integration) => (
-              <IntegrationCard
-                key={integration.id}
-                integration={integration}
-                isConnected={connectedNewIntegrations.has(integration.id)}
-                onConnect={handleConnectIntegration}
-                onDisconnect={handleDisconnectIntegration}
-                onConfigure={handleConfigureIntegration}
-                status={connectedNewIntegrations.has(integration.id) ? 'connected' : 'disconnected'}
-              />
-            ))}
+            {analyticsIntegrations.map((integration) => {
+              const connected = isRegistryIntegrationConnected(integration);
+              return (
+                <IntegrationCard
+                  key={integration.id}
+                  integration={integration}
+                  isConnected={connected}
+                  onConnect={handleConnectIntegration}
+                  onDisconnect={handleDisconnectRegistryIntegration}
+                  status={connected ? 'connected' : 'disconnected'}
+                />
+              );
+            })}
           </div>
         </TabsContent>
 
@@ -1296,28 +1274,11 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {selectedIntegration && (
-        <>
-          <OAuthConnectModal
-            integration={selectedIntegration}
-            isOpen={oauthModalOpen}
-            onClose={() => handleModalClose('oauth')}
-            onConnect={handleOAuthConnect}
-          />
-          <ApiKeyConnectModal
-            integration={selectedIntegration}
-            isOpen={apiKeyModalOpen}
-            onClose={() => handleModalClose('apikey')}
-            onConnect={handleApiKeyConnect}
-          />
-        </>
-      )}
-
-      <GoogleSheetsConfigModal
-        isOpen={sheetsConfigOpen}
-        onClose={() => handleModalClose('sheets')}
-        onSave={handleSaveSheetMappings}
-        existingMappings={sheetMappings}
+      <ApiKeyConnectModal
+        integration={selectedIntegration}
+        isOpen={apiKeyModalOpen}
+        onClose={handleApiKeyModalClose}
+        onConnect={handleApiKeyConnect}
       />
 
       <StripeConnectModal
@@ -1522,7 +1483,7 @@ function ConnectDialog({
   companyId,
 }: {
   provider: IntegrationProvider;
-  type: "accounting" | "crm" | "payments" | "payroll" | "erp";
+  type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable";
   companyId: number;
 }) {
   const { toast } = useToast();

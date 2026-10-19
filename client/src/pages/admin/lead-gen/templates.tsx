@@ -128,16 +128,16 @@ function TemplateRow({ template, isEditing, onEdit, onCancel, onSaved }: {
         ) : (
           <>
             <div>
-              <Label>Label</Label>
-              <Input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} />
+              <Label htmlFor="templates-label">Label</Label>
+              <Input id="templates-label" value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} />
             </div>
             <div>
-              <Label>Sample subject</Label>
-              <Input value={form.sample_subject} onChange={e => setForm(f => ({ ...f, sample_subject: e.target.value }))} />
+              <Label htmlFor="templates-sample-subject">Sample subject</Label>
+              <Input id="templates-sample-subject" value={form.sample_subject} onChange={e => setForm(f => ({ ...f, sample_subject: e.target.value }))} />
             </div>
             <div>
-              <Label>System prompt</Label>
-              <Textarea
+              <Label htmlFor="templates-system-prompt">System prompt</Label>
+              <Textarea id="templates-system-prompt"
                 rows={8}
                 className="font-mono text-sm"
                 value={form.system_prompt}
@@ -148,8 +148,8 @@ function TemplateRow({ template, isEditing, onEdit, onCancel, onSaved }: {
               </p>
             </div>
             <div>
-              <Label>Model</Label>
-              <Input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="gpt-5-mini" />
+              <Label htmlFor="templates-model">Model</Label>
+              <Input id="templates-model" value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="gpt-5-mini" />
             </div>
             <div className="flex items-center justify-between">
               <Label>Active</Label>

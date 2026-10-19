@@ -162,7 +162,7 @@ function KPIWidget({ widget, companyId }: { widget: Widget; companyId: number })
         </CardTitle>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" data-testid={`widget-info-${widget.id}`}>
+            <Button variant="ghost" size="icon" data-testid={`widget-info-${widget.id}`} aria-label="More information">
               <Info className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
@@ -491,7 +491,7 @@ export default function DashboardBuilderPage() {
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setLocation('/dashboards')} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={() => setLocation('/dashboards')} data-testid="button-back" aria-label="Go back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -542,6 +542,7 @@ export default function DashboardBuilderPage() {
                   variant="ghost"
                   onClick={() => deleteWidgetMutation.mutate(widget.id)}
                   data-testid={`button-delete-widget-${widget.id}`}
+                  aria-label="Delete"
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>

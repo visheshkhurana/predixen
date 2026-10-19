@@ -8,6 +8,8 @@
  * Mutations still refresh, then redirect only if the session is actually gone.
  */
 
+import { buildExpiredLoginUrl } from "./loginNext";
+
 let _refreshingToken: Promise<boolean> | null = null;
 let _redirecting401 = false;
 
@@ -65,9 +67,11 @@ export function hardRedirectToLogin(): void {
     window.dispatchEvent(new CustomEvent("session-expired"));
   } catch {}
 
+  // ?next= brings the user back to this page after they sign in again.
+  const target = buildExpiredLoginUrl(window.location.pathname + window.location.search);
   setTimeout(() => {
     try {
-      window.location.assign("/auth?expired=1");
+      window.location.assign(target);
     } catch {}
   }, 100);
 }

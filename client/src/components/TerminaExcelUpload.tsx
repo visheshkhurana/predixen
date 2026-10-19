@@ -387,6 +387,7 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
                   onClick={clearFile}
                   className="ml-2"
                   data-testid="button-clear-excel-file"
+                  aria-label="Clear file"
                 >
                   <X className="h-4 w-4" />
                 </Button>

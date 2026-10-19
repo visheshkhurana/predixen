@@ -472,17 +472,17 @@ function AddInvestorDialog({ open, onClose }: { open: boolean; onClose: () => vo
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Firm Name</Label>
-            <Input value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} placeholder="e.g. Sequoia Capital" data-testid="input-add-firm" />
+            <Label htmlFor="fundraising-firm-name">Firm Name</Label>
+            <Input id="fundraising-firm-name" value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} placeholder="e.g. Sequoia Capital" data-testid="input-add-firm" />
           </div>
           <div className="grid gap-4 grid-cols-2">
             <div className="space-y-2">
-              <Label>Key Partner</Label>
-              <Input value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })} placeholder="e.g. Alfred Lin" data-testid="input-add-partner" />
+              <Label htmlFor="fundraising-key-partner">Key Partner</Label>
+              <Input id="fundraising-key-partner" value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })} placeholder="e.g. Alfred Lin" data-testid="input-add-partner" />
             </div>
             <div className="space-y-2">
-              <Label>Check Size</Label>
-              <Input value={form.checkSize} onChange={e => setForm({ ...form, checkSize: e.target.value })} placeholder="e.g. $5-10M" data-testid="input-add-check-size" />
+              <Label htmlFor="fundraising-check-size">Check Size</Label>
+              <Input id="fundraising-check-size" value={form.checkSize} onChange={e => setForm({ ...form, checkSize: e.target.value })} placeholder="e.g. $5-10M" data-testid="input-add-check-size" />
             </div>
           </div>
           <div className="space-y-2">
@@ -695,7 +695,7 @@ function InvestorDatabaseTab() {
           <div className="col-span-full text-center py-12 text-muted-foreground">
             <Database className="h-10 w-10 mx-auto mb-3 opacity-50" />
             <p className="text-sm">No investors match your filters</p>
-            <Button variant="link" size="sm" onClick={resetFilters} className="mt-2" data-testid="button-reset-filters">Reset all filters</Button>
+            <Button variant="ghost" size="sm" onClick={resetFilters} className="mt-2 text-primary underline-offset-4 hover:underline" data-testid="button-reset-filters">Reset all filters</Button>
           </div>
         )}
       </div>
@@ -1275,16 +1275,16 @@ export default function FundraisingPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Pre-Money Valuation</Label>
-                  <Input type="number" placeholder="25000000" value={simulationConfig.pre_money} onChange={(e) => setSimulationConfig({ ...simulationConfig, pre_money: e.target.value })} data-testid="input-pre-money" />
+                  <Label htmlFor="fundraising-pre-money-valuation">Pre-Money Valuation</Label>
+                  <Input id="fundraising-pre-money-valuation" type="number" placeholder="25000000" value={simulationConfig.pre_money} onChange={(e) => setSimulationConfig({ ...simulationConfig, pre_money: e.target.value })} data-testid="input-pre-money" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Raise Amount</Label>
-                  <Input type="number" placeholder="5000000" value={simulationConfig.raise} onChange={(e) => setSimulationConfig({ ...simulationConfig, raise: e.target.value })} data-testid="input-raise" />
+                  <Label htmlFor="fundraising-raise-amount">Raise Amount</Label>
+                  <Input id="fundraising-raise-amount" type="number" placeholder="5000000" value={simulationConfig.raise} onChange={(e) => setSimulationConfig({ ...simulationConfig, raise: e.target.value })} data-testid="input-raise" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Option Pool Refresh (%)</Label>
-                  <Input type="number" placeholder="10" value={simulationConfig.option_pool_refresh} onChange={(e) => setSimulationConfig({ ...simulationConfig, option_pool_refresh: e.target.value })} data-testid="input-pool-refresh" />
+                  <Label htmlFor="fundraising-option-pool-refresh">Option Pool Refresh (%)</Label>
+                  <Input id="fundraising-option-pool-refresh" type="number" placeholder="10" value={simulationConfig.option_pool_refresh} onChange={(e) => setSimulationConfig({ ...simulationConfig, option_pool_refresh: e.target.value })} data-testid="input-pool-refresh" />
                 </div>
               </div>
               <Button onClick={handleSimulate} disabled={simulateMutation.isPending} data-testid="button-simulate">
@@ -1362,8 +1362,8 @@ export default function FundraisingPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={newCapTableName} onChange={(e) => setNewCapTableName(e.target.value)} placeholder="Current Cap Table" data-testid="input-cap-table-name" />
+              <Label htmlFor="fundraising-name">Name</Label>
+              <Input id="fundraising-name" value={newCapTableName} onChange={(e) => setNewCapTableName(e.target.value)} placeholder="Current Cap Table" data-testid="input-cap-table-name" />
             </div>
           </div>
           <DialogFooter>
@@ -1381,17 +1381,17 @@ export default function FundraisingPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Round Name</Label>
-              <Input value={newRound.name} onChange={(e) => setNewRound({ ...newRound, name: e.target.value })} placeholder="Series A" data-testid="input-round-name" />
+              <Label htmlFor="fundraising-round-name">Round Name</Label>
+              <Input id="fundraising-round-name" value={newRound.name} onChange={(e) => setNewRound({ ...newRound, name: e.target.value })} placeholder="Series A" data-testid="input-round-name" />
             </div>
             <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
-                <Label>Target Raise ($)</Label>
-                <Input type="number" value={newRound.target_raise} onChange={(e) => setNewRound({ ...newRound, target_raise: e.target.value })} placeholder="5000000" data-testid="input-round-raise" />
+                <Label htmlFor="fundraising-target-raise">Target Raise ($)</Label>
+                <Input id="fundraising-target-raise" type="number" value={newRound.target_raise} onChange={(e) => setNewRound({ ...newRound, target_raise: e.target.value })} placeholder="5000000" data-testid="input-round-raise" />
               </div>
               <div className="space-y-2">
-                <Label>Pre-Money Valuation ($)</Label>
-                <Input type="number" value={newRound.pre_money} onChange={(e) => setNewRound({ ...newRound, pre_money: e.target.value })} placeholder="25000000" data-testid="input-round-pre-money" />
+                <Label htmlFor="fundraising-pre-money-valuation-2">Pre-Money Valuation ($)</Label>
+                <Input id="fundraising-pre-money-valuation-2" type="number" value={newRound.pre_money} onChange={(e) => setNewRound({ ...newRound, pre_money: e.target.value })} placeholder="25000000" data-testid="input-round-pre-money" />
               </div>
             </div>
             <div className="grid gap-4 grid-cols-2">
@@ -1407,8 +1407,8 @@ export default function FundraisingPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Option Pool Refresh (%)</Label>
-                <Input type="number" value={newRound.option_pool_refresh_percent} onChange={(e) => setNewRound({ ...newRound, option_pool_refresh_percent: e.target.value })} placeholder="10" data-testid="input-round-pool" />
+                <Label htmlFor="fundraising-option-pool-refresh-2">Option Pool Refresh (%)</Label>
+                <Input id="fundraising-option-pool-refresh-2" type="number" value={newRound.option_pool_refresh_percent} onChange={(e) => setNewRound({ ...newRound, option_pool_refresh_percent: e.target.value })} placeholder="10" data-testid="input-round-pool" />
               </div>
             </div>
           </div>
