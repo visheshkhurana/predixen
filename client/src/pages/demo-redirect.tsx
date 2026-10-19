@@ -6,6 +6,20 @@ import { useFounderStore } from '@/store/founderStore';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw, UserPlus } from 'lucide-react';
 
+/**
+ * /demo/enter — the working demo entry point.
+ *
+ * This component existed but was imported in App.tsx and never routed, so the
+ * one thing the site promised — "Try the live demo, sample company, no account
+ * needed" — was reachable only by landing on /auth, reading past "Welcome back"
+ * and finding the card on the login tab. HAG-449 routes it at `/demo/enter` and
+ * points the hero, the header CTA and /demo at it.
+ *
+ * It logs into the shared sample account, selects the sample company, and lands
+ * on /overview. No login form is rendered at any point: while the request is in
+ * flight the visitor sees a loading line, and on failure a retry plus a real
+ * signup link.
+ */
 export default function DemoRedirectPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -19,7 +33,7 @@ export default function DemoRedirectPage() {
     try {
       const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
 
-      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
+      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
 
       if (typeof window !== 'undefined' && (window as any).gtag) {
         (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(result.user_id) });
@@ -39,7 +53,10 @@ export default function DemoRedirectPage() {
       }
 
       toast({ title: 'Welcome to the demo!' });
-      setLocation('/');
+      // /overview is the first screen the sample company has something to show.
+      // Landing on `/` works too but relies on PublicOrAuthHome deciding to
+      // forward, which is the indirection this route exists to remove.
+      setLocation('/overview');
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Unable to load the demo right now. Please try again.';
       setError(message);
@@ -68,7 +85,7 @@ export default function DemoRedirectPage() {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
-              <Link href="/auth?tab=register">
+              <Link href="/signup">
                 <Button variant="outline" data-testid="button-demo-signup">
                   <UserPlus className="h-4 w-4 mr-2" />
                   Sign Up Instead

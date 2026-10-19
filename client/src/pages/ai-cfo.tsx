@@ -101,14 +101,14 @@ export default function AiCfoPage() {
           >
             <Magnetic>
               <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/25" asChild data-testid="button-aicfo-hero-cta">
-                <Link href="/auth?tab=register" onClick={cta("aicfo-hero")}>
+                <Link href="/signup" onClick={cta("aicfo-hero")}>
                   Start Free Trial
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
             </Magnetic>
             <Button size="lg" variant="outline" className="h-12 px-8 text-base backdrop-blur" asChild data-testid="button-aicfo-demo">
-              <Link href="/demo">Watch Demo</Link>
+              <Link href="/demo/enter">Live Demo</Link>
             </Button>
           </motion.div>
           <p className="mt-4 text-xs text-muted-foreground">Free 30-day trial · No credit card required</p>
@@ -167,7 +167,7 @@ export default function AiCfoPage() {
         <div className="mt-8">
           <Magnetic>
             <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/25" asChild data-testid="button-aicfo-final-cta">
-              <Link href="/auth?tab=register" onClick={cta("aicfo-final")}>
+              <Link href="/signup" onClick={cta("aicfo-final")}>
                 Start Free Trial
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>

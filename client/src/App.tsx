@@ -347,6 +347,11 @@ function Router() {
         <Route path="/tools/burn-multiple">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BurnMultiplePage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
         <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
+        {/* HAG-449: the entry point the hero's "View Demo" uses. It logs into the
+            shared sample account and drops the visitor straight into /overview in
+            Demo Mode — no login form, no "Welcome back". /demo stays as the page
+            that explains what the demo is. */}
+        <Route path="/demo/enter">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoRedirectPage /></Suspense>}</Route>
         <Route path="/demo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoPage /></Suspense>}</Route>
         <Route path="/auth/callback" component={AuthCallback} />
         <Route path="/auth" component={AuthPage} />
@@ -356,16 +361,17 @@ function Router() {
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/terms" component={TermsOfServicePage} />
       {/* /login means login. /register and /join still land on the register
-          tab so old links do not drop people on the login form. /signup is a
-          public get-started page; its primary CTA goes to /auth?tab=register. */}
+          form so old links do not drop people on the login form. /signup is a
+          public get-started page that renders the same form from a prerendered
+          document, so every register entry now points there (HAG-449). */}
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>
       <Route path="/register">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       <Route path="/join">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       {/* cleya.ai leftover traffic (#44 defer). No matching/referral/apply
           product exists — send visitors to a live marketing page, not 404. */}
@@ -880,7 +886,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   
   const marketingPaths = [
     '/', '/features', '/product', '/pricing', '/about', '/compare', '/customers', '/use-cases', '/how-it-works', '/alternatives', '/blog', '/faq',
-    '/contact', '/demo', '/auth', '/onboarding', '/onboard', '/owner-console',
+    '/contact', '/demo', '/demo/enter', '/auth', '/onboarding', '/onboard', '/owner-console',
     '/survival-simulator', '/default-alive', '/privacy', '/terms', '/security',
     '/reset-password', '/verify-email', '/auth/callback',
     '/login', '/signup', '/register', '/join',
@@ -935,8 +941,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 to /overview both times before giving up.
 
                 Signing out first is what makes the escape real: it clears the
-                demo session so /auth?tab=register renders instead of
-                redirecting.
+                demo session so /signup renders instead of redirecting.
               */}
               <span>
                 Demo Mode — You are viewing simulated sample data.{" "}
@@ -947,7 +952,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                   onClick={async () => {
                     try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
                     useFounderStore.getState().logout();
-                    navigate('/auth?tab=register');
+                    navigate('/signup');
                   }}
                 >
                   Sign up free
