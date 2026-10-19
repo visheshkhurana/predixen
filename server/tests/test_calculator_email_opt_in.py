@@ -7,6 +7,7 @@ only a transactional sender here, with no lead double opt-in to reuse.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from server.api.leads import (
     MARKETING_OPT_IN_PENDING,
     LeadCreate,
     _emit_lead_captured,
+    _notes_result_html,
     _runway_email_html,
     _send_runway_email,
     create_lead,
@@ -158,8 +160,9 @@ def test_consent_timestamp_and_source_page_are_stored_pending():
     assert lead.consent_at is not None
     assert lead.consent_at >= before
     assert lead.consent_at.year != 1999
-    assert result["consent"] is True
-    assert result["consent_status"] == MARKETING_OPT_IN_PENDING
+    assert result == {"status": "ok"}
+    assert "created" not in result
+    assert "consent_status" not in result
     assert lead_may_receive_founder_tips(lead) is False
 
 
@@ -191,7 +194,7 @@ def test_lead_captured_includes_the_request_host():
 
 
 def test_forwarded_host_is_what_gets_queued():
-    data = _consented(runway_months="6", runway_date="March 2027")
+    data = _consented(runway_months="6", runway_date="2027-03-01")
     background = MagicMock()
     db = _db_for_new_lead()
     request = _Request(host="internal:8000", forwarded="founderconsole.ai, proxy.internal")
@@ -275,8 +278,7 @@ def test_post_route_stores_consent_and_emits_host():
         )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["consent"] is True
-    assert body["consent_status"] == "pending"
+    assert body == {"status": "ok"}
     lead = db.add.call_args.args[0]
     assert lead.consent is True
     assert lead.source_page == "/tools/burn-multiple"
@@ -303,6 +305,62 @@ def test_post_route_rejects_consent_false():
     )
     assert response.status_code == 400
     db.add.assert_not_called()
+
+
+def test_response_body_is_identical_for_new_pending_and_confirmed():
+    def run(existing_status, email):
+        if existing_status is None:
+            db = _db_for_new_lead()
+        else:
+            existing = MagicMock()
+            existing.consent_status = existing_status
+            db = MagicMock()
+            db.query.return_value.filter.return_value.one_or_none.return_value = existing
+        return create_lead(_consented(email=email), MagicMock(), _Request(), db)
+
+    new = run(None, "new-lead@example.com")
+    pending = run(MARKETING_OPT_IN_PENDING, "pending-lead@example.com")
+    confirmed = run(MARKETING_OPT_IN_CONFIRMED, "confirmed-lead@example.com")
+    assert new == pending == confirmed == {"status": "ok"}
+    assert "created" not in new
+    assert "consent" not in new
+    assert "consent_status" not in new
+
+
+def test_four_calculators_queue_an_escaped_result_email():
+    pages = {
+        "burn-multiple": "/tools/burn-multiple",
+        "dilution": "/tools/dilution",
+        "ltv-cac": "/tools/ltv-cac",
+        "default-alive": "/default-alive",
+    }
+    for source, page in pages.items():
+        background = MagicMock()
+        db = _db_for_new_lead()
+        notes = f"{source} result 2 < 3 <img src=x onerror=alert(1)>"
+        result = create_lead(
+            _consented(
+                email=f"{source}@example.com",
+                source=source,
+                source_page=page,
+                plan=source,
+                notes=notes,
+            ),
+            background,
+            _Request(),
+            db,
+        )
+        assert result == {"status": "ok"}
+        queued = [call.args[0] for call in background.add_task.call_args_list]
+        assert queued.count(_send_runway_email) == 1
+        html = _notes_result_html(
+            _consented(source=source, source_page=page, notes=notes)
+        )
+        assert "<img" not in html
+        assert "&lt;img src=x onerror=alert(1)&gt;" in html
+        assert "pending" in html
+        assert "hello@founderconsole.ai" in html
+        assert "?" not in "".join(re.findall(r'href="([^"]*)"', html))
 
 
 def test_commit_failure_still_hides_the_database_error():

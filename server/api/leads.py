@@ -17,7 +17,9 @@ disclosure of every address collected.
 """
 
 import hashlib
+import html
 import logging
+import re
 import threading
 import time
 import uuid
@@ -31,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from server.api.admin import require_platform_admin
 from server.core.db import get_db
+from server.middleware.rate_limiter import client_ip
 from server.models.lead import Lead
 from server.services.posthog import capture as posthog_capture
 from server.services.posthog import lead_distinct_id, sanitize_distinct_id
@@ -73,26 +76,114 @@ class LeadCreate(BaseModel):
         return sanitize_distinct_id(value)
 
 
+def _esc(value: object) -> str:
+    if value is None:
+        return ""
+    return html.escape(str(value), quote=True)
+
+
+# ASCII digits only. A Unicode digit class would accept other numerals.
+_NUMBER_RE = re.compile(r"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+_ISO_DATE_RE = re.compile(
+    r"^([0-9]{4})-([0-9]{2})-([0-9]{2})"
+    r"(?:[T ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?)?$"
+)
+
+
+def _is_iso_date(value: str) -> bool:
+    match = _ISO_DATE_RE.fullmatch(value)
+    if not match:
+        return False
+    year, month, day = (int(match.group(i)) for i in range(1, 4))
+    hour = int(match.group(4) or 0)
+    minute = int(match.group(5) or 0)
+    second = int(match.group(6) or 0)
+    if hour > 23 or minute > 59 or second > 59:
+        return False
+    try:
+        datetime(year, month, day, hour, minute, second)
+    except ValueError:
+        return False
+    return True
+
+
+def _is_number_or_iso_date(value: str) -> bool:
+    return _NUMBER_RE.fullmatch(value) is not None or _is_iso_date(value)
+
+
+def _require_safe_result_fields(data: LeadCreate) -> None:
+    """Reject runway fields that are not a number or an ISO date.
+
+    These three values are interpolated into the result email. A tag, a
+    currency string, or a prose date is a 400, and the row is not written.
+    The template also escapes every interpolated value.
+    """
+    for field in ("runway_months", "runway_date", "monthly_burn"):
+        raw = getattr(data, field)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text:
+            setattr(data, field, None)
+            continue
+        if not _is_number_or_iso_date(text):
+            raise HTTPException(status_code=400, detail="Invalid result field")
+        setattr(data, field, text)
+
+
+def _result_email_footer() -> str:
+    return """<p style="margin:0;color:#5b6472;font-size:13px">You asked for this result.
+      Monthly founder finance tips are pending and are not sent until you confirm.
+      Unsubscribe any time by emailing hello@founderconsole.ai.</p>"""
+
+
 def _runway_email_html(data: LeadCreate) -> str:
+    months = _esc(data.runway_months)
+    when = _esc(data.runway_date)
+    burn = _esc(data.monthly_burn)
     return f"""
     <div style="font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#1a1d24;max-width:520px">
       <h2 style="margin:0 0 4px;font-size:20px">Your runway</h2>
       <p style="margin:0 0 20px;color:#5b6472">From the FounderConsole runway calculator.</p>
       <table style="border-collapse:collapse;width:100%;margin-bottom:20px">
         <tr><td style="padding:8px 0;color:#5b6472">Months of runway</td>
-            <td style="padding:8px 0;text-align:right;font-weight:600">{data.runway_months}</td></tr>
+            <td style="padding:8px 0;text-align:right;font-weight:600">{months}</td></tr>
         <tr><td style="padding:8px 0;color:#5b6472">Cash runs out</td>
-            <td style="padding:8px 0;text-align:right;font-weight:600">{data.runway_date}</td></tr>
+            <td style="padding:8px 0;text-align:right;font-weight:600">{when}</td></tr>
         <tr><td style="padding:8px 0;color:#5b6472">Monthly net burn</td>
-            <td style="padding:8px 0;text-align:right;font-weight:600">{data.monthly_burn}</td></tr>
+            <td style="padding:8px 0;text-align:right;font-weight:600">{burn}</td></tr>
       </table>
       <p style="margin:0 0 8px;color:#5b6472">This uses a simple linear model: cash divided by net burn,
       with revenue growing at the rate you entered. It assumes burn stays flat, which it rarely does.</p>
       <p style="margin:0 0 8px"><a href="https://founderconsole.ai/tools/runway-calculator"
          style="color:#2563eb">Adjust the numbers</a></p>
-      <p style="margin:0;color:#5b6472;font-size:13px">You asked for this result.
-      Monthly founder finance tips are pending and are not sent until you confirm.
-      Unsubscribe any time by emailing hello@founderconsole.ai.</p>
+      {_result_email_footer()}
+    </div>
+    """
+
+
+# Burn multiple, dilution, LTV/CAC, and default-alive say "check your inbox"
+# but they have no runway fields. Their result is the notes string. The page
+# URL is fixed here so the message cannot carry a caller-supplied link.
+_NOTES_RESULT_EMAILS = {
+    "burn-multiple": ("Your burn multiple", "https://founderconsole.ai/tools/burn-multiple"),
+    "dilution": ("Your dilution", "https://founderconsole.ai/tools/dilution"),
+    "ltv-cac": ("Your LTV to CAC", "https://founderconsole.ai/tools/ltv-cac"),
+    "default-alive": ("Your default-alive result", "https://founderconsole.ai/default-alive"),
+}
+
+
+def _notes_result_html(data: LeadCreate) -> str:
+    title, page = _NOTES_RESULT_EMAILS.get(
+        data.source or "",
+        ("Your result", "https://founderconsole.ai"),
+    )
+    return f"""
+    <div style="font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#1a1d24;max-width:520px">
+      <h2 style="margin:0 0 4px;font-size:20px">{_esc(title)}</h2>
+      <p style="margin:0 0 16px">{_esc(data.notes)}</p>
+      <p style="margin:0 0 8px"><a href="{_esc(page)}" style="color:#2563eb">Open the calculator</a></p>
+      {_result_email_footer()}
     </div>
     """
 
@@ -129,14 +220,27 @@ async def _send_runway_email(data: LeadCreate) -> None:
     try:
         from server.email.service import send_email
 
+        if data.runway_months and data.runway_date:
+            subject = f"Your runway: {data.runway_months} months"
+            html_content = _runway_email_html(data)
+            campaign = "runway-calculator"
+        else:
+            title, _page = _NOTES_RESULT_EMAILS.get(
+                data.source or "",
+                ("Your calculator result", ""),
+            )
+            subject = title
+            html_content = _notes_result_html(data)
+            campaign = data.source if data.source in _NOTES_RESULT_EMAILS else "calculator"
+        subject = subject.replace("\r", "").replace("\n", "")
         await send_email(
             to=str(data.email),
-            subject=f"Your runway: {data.runway_months} months",
-            html_content=_runway_email_html(data),
-            campaign="runway-calculator",
+            subject=subject,
+            html_content=html_content,
+            campaign=campaign,
         )
     except Exception:
-        logger.exception("[leads] could not email the runway result")
+        logger.exception("[leads] could not email the calculator result")
 
 
 def _lead_distinct_id(email: str) -> str:
@@ -153,18 +257,17 @@ _LEAD_LOCK = threading.Lock()
 
 
 def lead_client_key(request: Optional[Request]) -> str:
-    """Last trusted forwarded hop, else the socket host. Never an email."""
-    raw = ""
-    headers = getattr(request, "headers", None) if request is not None else None
-    if headers is not None:
-        getter = getattr(headers, "get", None)
-        if getter is not None:
-            raw = getter("x-forwarded-for") or getter("X-Forwarded-For") or ""
-    parts = [part.strip() for part in str(raw).split(",") if part.strip() and "@" not in part]
-    key = parts[-1] if parts else ""
-    if not key:
-        client = getattr(request, "client", None)
-        key = str(getattr(client, "host", "") or "")
+    """Client address for the lead bucket. Never an email.
+
+    Delegates to client_ip: X-Real-IP when Railway set it, otherwise the
+    X-Forwarded-For entry in front of exactly two trusted hops.
+    """
+    if request is None:
+        return "unknown"
+    headers = getattr(request, "headers", None)
+    client = getattr(request, "client", None)
+    host = str(getattr(client, "host", "") or "")
+    key = client_ip(headers, host)
     if not key or "@" in key:
         return "unknown"
     return key[:200]
@@ -318,10 +421,12 @@ def create_lead(
 
     Consent has to be true and name the page. The row is stored
     consent_status=pending. No double opt-in email is sent: see
-    MARKETING_OPT_IN_PENDING. The result email, when the runway fields are
-    present, is the result they asked for, not the monthly tips. It is queued
-    only after the consent row commits, and the sender checks that row again
-    before Resend. The address is not sent to an LLM.
+    MARKETING_OPT_IN_PENDING. The result email is the result they asked for,
+    not the monthly tips. Runway fields queue the runway message. Burn
+    multiple, dilution, LTV/CAC, and default-alive queue the notes shown on
+    the page. Either way it is queued only after the consent row commits, and
+    the sender checks that row again before Resend. The public body is always
+    {"status": "ok"}. The address is not sent to an LLM.
     """
     if lead_rate_limited(lead_client_key(request)):
         raise HTTPException(status_code=429, detail="Too many requests")
@@ -330,6 +435,7 @@ def create_lead(
     source_page = (data.source_page or "").strip()
     if not source_page:
         raise HTTPException(status_code=400, detail="A source page is required")
+    _require_safe_result_fields(data)
 
     email = data.email.lower().strip()
     host = _request_host(request)
@@ -374,13 +480,13 @@ def create_lead(
     background.add_task(_emit_lead_captured, data, created, host)
     if data.runway_months and data.runway_date:
         background.add_task(_send_runway_email, data)
+    elif (data.source or "") in _NOTES_RESULT_EMAILS and (data.notes or "").strip():
+        background.add_task(_send_runway_email, data)
 
-    return {
-        "status": "ok",
-        "created": created,
-        "consent": True,
-        "consent_status": lead.consent_status,
-    }
+    # One body for a new row, a pending row, and a confirmed row. created and
+    # consent_status would tell a stranger whether this address is already
+    # on the list, and whether the opt-in is still pending.
+    return {"status": "ok"}
 
 
 @router.get("")

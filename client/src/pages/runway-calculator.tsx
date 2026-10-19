@@ -34,6 +34,24 @@ function formatDate(months: number): string {
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
+/** Plain decimal. The lead API accepts a number, not currency or "36+". */
+function leadNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  const sign = value < 0 ? "-" : "";
+  const trimmed = Math.abs(value).toFixed(2).replace(/\.?0+$/, "");
+  return `${sign}${trimmed}`;
+}
+
+/** YYYY-MM-DD. The lead API rejects prose dates such as "March 2027". */
+function leadIsoDate(months: number): string {
+  const whole = Number.isFinite(months) ? Math.max(0, Math.floor(months)) : 0;
+  const d = new Date();
+  d.setMonth(d.getMonth() + whole);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
 const DEFAULTS = { cash: 500000, revenue: 20000, expenses: 60000, growthRate: 5 };
 
 /**
@@ -426,9 +444,9 @@ export default function RunwayCalculatorPage() {
             sourcePage="/tools/runway-calculator"
             plan="runway-calculator"
             notes={`Runway ${results.runwayMonths >= 36 ? "36+" : results.runwayMonths} months (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`}
-            runwayMonths={results.runwayMonths >= 36 ? "36+" : String(results.runwayMonths)}
-            runwayDate={results.runwayMonths >= 36 ? "beyond 36 months" : results.runwayDate}
-            monthlyBurn={formatCurrency(results.monthlyBurn) + "/mo"}
+            runwayMonths={leadNumber(results.runwayMonths)}
+            runwayDate={leadIsoDate(results.runwayMonths)}
+            monthlyBurn={leadNumber(results.monthlyBurn)}
             trackExtra={{ runway_months: results.runwayMonths }}
           />
         </div>

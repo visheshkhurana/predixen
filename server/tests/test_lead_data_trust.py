@@ -47,10 +47,18 @@ class _Headers(dict):
 
 
 class _Request:
-    def __init__(self, host="founderconsole.ai", client_host="203.0.113.40", forwarded_for=None):
+    def __init__(
+        self,
+        host="founderconsole.ai",
+        client_host="203.0.113.40",
+        forwarded_for=None,
+        real_ip=None,
+    ):
         headers = {"host": host}
         if forwarded_for:
             headers["x-forwarded-for"] = forwarded_for
+        if real_ip:
+            headers["x-real-ip"] = real_ip
         self.headers = _Headers({k.lower(): v for k, v in headers.items()})
         self.url = type("U", (), {"hostname": host.split(":")[0]})()
         self.client = type("C", (), {"host": client_host})()
@@ -196,7 +204,7 @@ def test_consent_row_commits_before_the_email_task_is_queued():
 
     background.add_task.side_effect = add_task
     create_lead(
-        _consented(runway_months="6", runway_date="April 2027"),
+        _consented(runway_months="6", runway_date="2027-04-01"),
         background,
         _Request(client_host="203.0.113.41"),
         db,
@@ -243,13 +251,17 @@ def test_rate_limit_window_blocks_without_counting_the_rejected_call():
 
 
 def test_rate_limit_key_is_the_client_not_the_email():
+    # One forwarded address plus the socket is shorter than two trusted hops
+    # plus a client, so the key is the socket, never the address.
     emailed = _Request(client_host="203.0.113.43", forwarded_for=f"10.1.1.1, {EMAIL}")
-    assert lead_client_key(emailed) == "10.1.1.1"
+    assert lead_client_key(emailed) == "203.0.113.43"
+    assert EMAIL not in lead_client_key(emailed)
     only_email = _Request(client_host="203.0.113.44", forwarded_for=EMAIL)
     assert lead_client_key(only_email) == "203.0.113.44"
     assert "@" not in lead_client_key(only_email)
-    last_hop = _Request(client_host="203.0.113.45", forwarded_for="10.0.0.1, 10.0.0.2")
-    assert lead_client_key(last_hop) == "10.0.0.2"
+    # spoof, real client, shared edge, Express socket. Not the last hop.
+    proxied = _Request(client_host="127.0.0.1", forwarded_for="1.2.3.4, 203.0.113.45, 100.64.0.8")
+    assert lead_client_key(proxied) == "203.0.113.45"
 
 
 def test_create_lead_returns_429_before_saving_or_queueing_email():
@@ -301,9 +313,14 @@ def test_middleware_caps_post_leads_and_drops_email_keys():
     assert middleware._get_category(request("/api/leads")) == ("leads", 8)
     api_limit = middleware.rate_limit_api
     assert middleware._get_category(request("/leads", method="GET")) == ("api", api_limit)
-    assert middleware._get_identifier(
+    # The address is dropped. One remaining hop is not enough to skip two
+    # trusted proxies, so the socket is the key and the address is not.
+    assert "@" not in middleware._get_identifier(
         request("/leads", forwarded_for=f"10.0.0.8, {EMAIL}")
-    ) == "10.0.0.8"
+    )
+    assert middleware._get_identifier(
+        request("/leads", forwarded_for=f"10.0.0.8, {EMAIL}", client_host="10.9.9.9")
+    ) == "10.9.9.9"
     assert middleware._get_identifier(
         request("/leads", forwarded_for=EMAIL, client_host="10.2.2.2")
     ) == "10.2.2.2"
@@ -346,3 +363,141 @@ def test_send_and_emit_do_not_import_or_call_an_llm():
     assert not any(
         name == "openai" or name == "anthropic" or "llm" in name.lower() for name in seen
     )
+
+
+def _proxied(spoof: str, client: str, real_ip: str | None = None, edge: str = "100.64.0.8"):
+    """Railway edge plus Express: spoof, client, shared edge, loopback socket."""
+    return _Request(
+        client_host="127.0.0.1",
+        forwarded_for=f"{spoof}, {client}, {edge}",
+        real_ip=real_ip,
+    )
+
+
+def test_two_clients_get_separate_buckets_and_a_spoof_does_not_bypass():
+    store: dict[str, list[float]] = {}
+    client_a = lead_client_key(_proxied("198.51.100.1", "203.0.113.70", real_ip="203.0.113.70"))
+    client_a_spoofed = lead_client_key(
+        _proxied("203.0.113.250", "198.51.100.9", real_ip="203.0.113.70")
+    )
+    client_b = lead_client_key(_proxied("198.51.100.1", "203.0.113.71", real_ip="203.0.113.71"))
+    assert client_a == client_a_spoofed == "203.0.113.70"
+    assert client_b == "203.0.113.71"
+    assert client_a not in {"100.64.0.8", "127.0.0.1", "198.51.100.1"}
+
+    for n in range(LEAD_RATE_LIMIT):
+        assert lead_rate_limited(
+            client_a, now=n, limit=LEAD_RATE_LIMIT, window=60, store=store
+        ) is False
+    assert lead_rate_limited(
+        client_a_spoofed, now=LEAD_RATE_LIMIT, limit=LEAD_RATE_LIMIT, window=60, store=store
+    ) is True
+    assert lead_rate_limited(
+        client_b, now=LEAD_RATE_LIMIT, limit=LEAD_RATE_LIMIT, window=60, store=store
+    ) is False
+
+    # No X-Real-IP. The client is the address in front of the two trusted hops.
+    # Changing the leftmost spoof does not open a bucket, and the shared edge does not either.
+    no_real_a = lead_client_key(_proxied("1.1.1.1", "203.0.113.80"))
+    no_real_a_spoof = lead_client_key(_proxied("9.9.9.9", "203.0.113.80"))
+    no_real_b = lead_client_key(_proxied("1.1.1.1", "203.0.113.81"))
+    assert no_real_a == no_real_a_spoof == "203.0.113.80"
+    assert no_real_b == "203.0.113.81"
+    assert no_real_a != "100.64.0.8"
+    assert lead_rate_limited(no_real_a, now=0, limit=1, window=60, store=store) is False
+    assert lead_rate_limited(no_real_a_spoof, now=1, limit=1, window=60, store=store) is True
+    assert lead_rate_limited(no_real_b, now=1, limit=1, window=60, store=store) is False
+
+
+def test_middleware_keys_on_the_client_not_the_shared_edge():
+    middleware = RateLimiterMiddleware(MagicMock())
+
+    def request(forwarded_for, real_ip=None, client_host="127.0.0.1"):
+        headers = {"X-Forwarded-For": forwarded_for}
+        if real_ip:
+            headers["X-Real-IP"] = real_ip
+        return type(
+            "R",
+            (),
+            {
+                "url": type("U", (), {"path": "/leads"})(),
+                "method": "POST",
+                "headers": headers,
+                "client": type("C", (), {"host": client_host})(),
+            },
+        )()
+
+    a = middleware._get_identifier(
+        request("1.1.1.1, 203.0.113.70, 100.64.0.8", real_ip="203.0.113.70")
+    )
+    a_spoof = middleware._get_identifier(
+        request("9.9.9.9, 198.51.100.1, 100.64.0.8", real_ip="203.0.113.70")
+    )
+    b = middleware._get_identifier(
+        request("1.1.1.1, 203.0.113.71, 100.64.0.8", real_ip="203.0.113.71")
+    )
+    assert a == a_spoof == "203.0.113.70"
+    assert b == "203.0.113.71"
+    forwarded = middleware._get_identifier(request("8.8.8.8, 203.0.113.80, 100.64.0.8"))
+    forwarded_spoof = middleware._get_identifier(request("1.2.3.4, 203.0.113.80, 100.64.0.8"))
+    assert forwarded == forwarded_spoof == "203.0.113.80"
+    assert forwarded != "100.64.0.8"
+    assert forwarded != "8.8.8.8"
+
+
+def test_result_markup_is_rejected_and_the_email_escapes_it():
+    background = MagicMock()
+    db = _db()
+    with pytest.raises(HTTPException) as exc:
+        create_lead(
+            _consented(
+                runway_months="<b>",
+                runway_date="2027-03-15",
+                monthly_burn="10",
+            ),
+            background,
+            _Request(client_host="203.0.113.90"),
+            db,
+        )
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Invalid result field"
+    db.commit.assert_not_called()
+    background.add_task.assert_not_called()
+
+    rejected = [
+        dict(runway_months="4", runway_date="March 2027", monthly_burn="10"),
+        dict(runway_months="4", runway_date="2027-03-15", monthly_burn="$10"),
+        dict(runway_months="36+", runway_date="2027-03-15", monthly_burn="10"),
+        dict(runway_months="1e6", runway_date="2027-03-15", monthly_burn="10"),
+        dict(runway_months="4", runway_date="2027-13-40", monthly_burn="10"),
+    ]
+    for overrides in rejected:
+        db = _db()
+        with pytest.raises(HTTPException) as exc:
+            create_lead(
+                _consented(**overrides),
+                MagicMock(),
+                _Request(client_host="203.0.113.91"),
+                db,
+            )
+        assert exc.value.status_code == 400
+        db.add.assert_not_called()
+
+    html = _runway_email_html(
+        _consented(
+            runway_months="<b>",
+            runway_date="2027-03-15",
+            monthly_burn="1<2",
+        )
+    )
+    assert "<b>" not in html
+    assert "&lt;b&gt;" in html
+    assert "1&lt;2" in html
+
+    accepted = create_lead(
+        _consented(runway_months="4.5", runway_date="2027-03-15T00:00:00Z", monthly_burn="-1200"),
+        MagicMock(),
+        _Request(client_host="203.0.113.92"),
+        _db(),
+    )
+    assert accepted == {"status": "ok"}

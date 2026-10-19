@@ -7,6 +7,7 @@ Stale entries are cleaned up by a background task every 5 minutes.
 
 import os
 import asyncio
+import ipaddress
 import time
 from typing import Tuple, Optional
 from fastapi import Request
@@ -19,6 +20,89 @@ import logging
 logger = logging.getLogger(__name__)
 
 _cleanup_task_started = False
+
+# Two trusted proxies sit in front of this process: Railway's public edge, then
+# the Express app. server/index.ts sets `trust proxy` to 1 and proxies /api to
+# FastAPI, so FastAPI's socket peer is Express, not the visitor. The rightmost
+# X-Forwarded-For entry is the hop that shared proxy appended (Railway's edge
+# address). It is the same for every visitor. Keying a limit on it puts
+# everyone in one bucket.
+#
+# Railway sets X-Real-IP to the client whose TCP connection it accepted, and
+# overwrites a caller-supplied value. Prefer that single address.
+#
+# When X-Real-IP is absent, take the client from X-Forwarded-For with exactly
+# two trusted hops. The chain is the header, left to right, plus the socket
+# peer. The two rightmost addresses are the proxies. The client is the address
+# immediately before them. A leftmost value the caller wrote is untrusted and
+# must not open a new bucket.
+TRUSTED_PROXY_HOPS = 2
+
+_HEADER_NAMES = {
+    "x-real-ip": ("x-real-ip", "X-Real-IP", "X-Real-Ip"),
+    "x-forwarded-for": ("x-forwarded-for", "X-Forwarded-For", "X-Forwarded-for"),
+}
+
+
+def _header(headers, name: str) -> str:
+    if headers is None:
+        return ""
+    getter = getattr(headers, "get", None)
+    if not callable(getter):
+        return ""
+    for candidate in _HEADER_NAMES.get(name, (name,)):
+        try:
+            value = getter(candidate, None)
+        except TypeError:
+            value = getter(candidate)
+        if value:
+            return str(value).strip()
+    return ""
+
+
+def _canonical_ip(value: str) -> str:
+    text = (value or "").strip()
+    if not text or "@" in text:
+        return ""
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    if "%" in text:
+        text = text.split("%", 1)[0]
+    try:
+        return str(ipaddress.ip_address(text))
+    except ValueError:
+        return ""
+
+
+def _forwarded_ips(value: str) -> list[str]:
+    return [ip for ip in (_canonical_ip(part) for part in str(value or "").split(",")) if ip]
+
+
+def client_ip(headers, client_host: str = "") -> str:
+    """Real client address for a rate-limit bucket. Never an email.
+
+    See TRUSTED_PROXY_HOPS above for why this is X-Real-IP, or else the
+    X-Forwarded-For entry in front of exactly two trusted hops.
+    """
+    raw_real = _header(headers, "x-real-ip")
+    if raw_real and "," not in raw_real:
+        real = _canonical_ip(raw_real)
+        if real:
+            return real
+
+    chain = _forwarded_ips(_header(headers, "x-forwarded-for"))
+    socket_ip = _canonical_ip(client_host)
+    if socket_ip:
+        chain.append(socket_ip)
+    index = len(chain) - TRUSTED_PROXY_HOPS - 1
+    if index >= 0:
+        return chain[index]
+    if socket_ip:
+        return socket_ip
+    host = (client_host or "").strip()
+    if host and "@" not in host:
+        return host[:200]
+    return ""
 
 
 def _get_engine():
@@ -108,21 +192,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 logger.warning("Could not start rate limit cleanup task - no event loop")
 
     def _get_identifier(self, request: Request) -> str:
-        # The trusted Railway edge appends the real client IP as the LAST X-Forwarded-For
-        # entry (Express proxies without xfwd, so it isn't rewritten downstream). Using the
-        # last entry — not the first — stops clients from minting a fresh rate-limit bucket
-        # per request by injecting their own X-Forwarded-For header.
-        xff = request.headers.get("X-Forwarded-For")
-        if xff:
-            # An address is not a client IP. Dropping those hops keeps the
-            # email out of the rate_limits table and stops one address per bucket.
-            parts = [p.strip() for p in xff.split(",") if p.strip() and "@" not in p]
-            if parts:
-                return parts[-1]
+        # Same derivation as lead capture. The comment on TRUSTED_PROXY_HOPS
+        # is the contract: X-Real-IP when Railway set it, otherwise the
+        # X-Forwarded-For slot in front of exactly two trusted hops.
         client = request.client.host if request.client else ""
-        if client and "@" not in client:
-            return client
-        return "unknown"
+        return client_ip(request.headers, client or "") or "unknown"
 
     def _get_category(self, request: Request) -> Tuple[str, int]:
         path = request.url.path

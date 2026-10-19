@@ -155,7 +155,7 @@ def test_create_lead_queues_capture_after_commit():
         source_page="/tools/runway-calculator",
         consent=True,
         runway_months="6",
-        runway_date="March 2027",
+        runway_date="2027-03-01",
     )
     background = MagicMock()
     db = MagicMock()
@@ -163,8 +163,7 @@ def test_create_lead_queues_capture_after_commit():
 
     result = create_lead(data, background, _Request(), db)
 
-    assert result["status"] == "ok"
-    assert result["created"] is True
+    assert result == {"status": "ok"}
     db.commit.assert_called_once()
     queued = [call.args[0] for call in background.add_task.call_args_list]
     assert _emit_lead_captured in queued
@@ -205,7 +204,7 @@ def test_create_lead_emits_on_repeat_submission():
 
     result = create_lead(data, background, _Request(), db)
 
-    assert result["created"] is False
+    assert result == {"status": "ok"}
     queued = [call.args[0] for call in background.add_task.call_args_list]
     assert _emit_lead_captured in queued
 

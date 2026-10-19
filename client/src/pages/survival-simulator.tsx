@@ -55,10 +55,22 @@ const formatCurrency = (val: number) => {
   return `$${val.toFixed(0)}`;
 };
 
-function formatDate(months: number): string {
+/** Plain decimal. The lead API accepts a number, not "$12K/mo" or "Sustainable". */
+function leadNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  const sign = value < 0 ? "-" : "";
+  const trimmed = Math.abs(value).toFixed(2).replace(/\.?0+$/, "");
+  return `${sign}${trimmed}`;
+}
+
+/** YYYY-MM-DD. The lead API rejects prose dates. */
+function leadIsoDate(months: number): string {
+  const whole = Number.isFinite(months) ? Math.max(0, Math.floor(months)) : 0;
   const d = new Date();
-  d.setMonth(d.getMonth() + Math.floor(months));
-  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  d.setMonth(d.getMonth() + whole);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 const gradeColors: Record<string, string> = {
@@ -522,7 +534,6 @@ function EmailResultPanel({ results }: { results: SimResults }) {
   // other public calculators. The runway fields still key the result email.
   const p50 = results.runway.p50;
   const monthlyBurn = results.inputs.monthly_expenses - results.inputs.monthly_revenue;
-  const runwayDate = isSustainableRunway(p50) ? "Sustainable" : formatDate(p50);
 
   return (
     <CalculatorEmailOptIn
@@ -532,9 +543,9 @@ function EmailResultPanel({ results }: { results: SimResults }) {
       sourcePage="/survival-simulator"
       plan="survival-simulator"
       notes={`Grade ${results.grade.letter} (${results.grade.label}). Median runway ${runwayLabel(p50, " months")} (P10 ${runwayLabel(results.runway.p10, "")} – P90 ${runwayLabel(results.runway.p90, "")}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`}
-      runwayMonths={String(p50)}
-      runwayDate={runwayDate}
-      monthlyBurn={formatCurrency(monthlyBurn) + "/mo"}
+      runwayMonths={leadNumber(p50)}
+      runwayDate={leadIsoDate(p50)}
+      monthlyBurn={leadNumber(monthlyBurn)}
       trackExtra={{
         runway_months: p50,
         grade: results.grade.letter,
