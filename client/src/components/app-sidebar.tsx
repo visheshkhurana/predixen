@@ -83,12 +83,8 @@ const settingsGroups: { label: string; items: SettingsNavItem[] }[] = [
       { title: "Goals", url: "/goals", icon: Flag },
     ],
   },
-  {
-    label: "Account",
-    items: [
-      { title: "Plans & Billing", url: "/billing", icon: CreditCard },
-    ],
-  },
+  // No "Plans & Billing" entry: FounderConsole is free. /billing stays
+  // routable only so pre-free subscribers can reach the Stripe portal.
 ];
 
 const adminSettingsItems: SettingsNavItem[] = [

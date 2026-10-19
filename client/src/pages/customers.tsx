@@ -70,7 +70,7 @@ export default function CustomersPage() {
           <Link href="/pricing" className="text-primary hover:underline" data-testid="link-customers-pricing">
             pricing
           </Link>{" "}
-          (every feature is free during early access). Try these with no account: the{" "}
+          (FounderConsole is free — all features, no credit card). Try these with no account: the{" "}
           <Link href="/tools/runway-calculator" className="text-primary hover:underline" data-testid="link-customers-runway">
             startup runway calculator
           </Link>

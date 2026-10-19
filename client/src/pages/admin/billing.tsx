@@ -56,8 +56,8 @@ export default function AdminBilling() {
           <DollarSign className="h-4 w-4 text-emerald-500" />
         </div>
         <div>
-          <p className="font-medium text-emerald-500">Free Beta — All Features Unlocked</p>
-          <p className="text-sm text-muted-foreground">All features are free for early users during our public beta. No billing required.</p>
+          <p className="font-medium text-emerald-500">Free mode — All Features Unlocked</p>
+          <p className="text-sm text-muted-foreground">Free mode: FounderConsole is free for every user — checkout, subscribe and trials are disabled. Rows below are legacy subscriptions bought before the switch; cancel them in Stripe.</p>
         </div>
       </div>
 

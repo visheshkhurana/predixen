@@ -440,15 +440,11 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
-from server.core.subscription import PaywallMiddleware
-# Paywall: gated by PAYWALL_ENABLED env var (also re-checked per-request inside
-# the middleware, so flipping the variable takes effect on redeploy without a
-# code change). Existing users are grandfathered via PAYWALL_GRANDFATHER_BEFORE.
-app.add_middleware(PaywallMiddleware)
+# FounderConsole is free: there is no paywall. PaywallMiddleware is inert and
+# PAYWALL_ENABLED is ignored (see server/core/plans.py FREE_FOR_ALL), so it is
+# no longer registered.
 if settings.PAYWALL_ENABLED:
-    logger.info("Paywall ENABLED — premium features are gated by plan")
-else:
-    logger.info("Paywall disabled — set PAYWALL_ENABLED=true to gate features")
+    logger.warning("PAYWALL_ENABLED is set but ignored — FounderConsole is free for everyone")
 
 app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",

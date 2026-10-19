@@ -164,7 +164,27 @@ test("no page promises a 30-day trial or a Start Free Trial button", () => {
     assert.doesNotMatch(src, /30-day trial/i, page);
     assert.doesNotMatch(src, /Start Free Trial/, page);
   }
-  assert.match(read("client/src/pages/landing.tsx"), /free while in early access/);
+  // FounderConsole is free: one plan, no paid tiers anywhere on the marketing site.
+  assert.match(read("client/src/pages/landing.tsx"), /Free — all features, no credit card/);
+});
+
+test("pricing copy offers a single Free plan and no paid tiers", () => {
+  for (const page of [
+    "client/src/pages/landing.tsx",
+    "client/src/pages/pricing.tsx",
+    "client/src/pages/faq.tsx",
+    "client/src/pages/ai-cfo.tsx",
+    "client/src/pages/terms.tsx",
+    "server/seo-prerender.ts",
+  ]) {
+    const src = read(page);
+    assert.doesNotMatch(src, /\$(29|49|99)\b/, `${page} still quotes a paid tier price`);
+    assert.doesNotMatch(src, /planned (paid )?pricing|planned paid/i, `${page} still promises future pricing`);
+    assert.doesNotMatch(src, /30-day (free )?trial/i, `${page} still offers a trial`);
+  }
+  const pricing = read("client/src/pages/pricing.tsx");
+  assert.match(pricing, /Free — all features, no credit card/);
+  assert.doesNotMatch(pricing, /name: "(Starter|Growth|Scale)"/);
 });
 
 test("connector copy matches the catalog: 37 connectors, 16 via OAuth", () => {
@@ -192,5 +212,7 @@ test("security copy names the cipher the code uses (Fernet), not envelope encryp
 test("/demo lists tour stops, not timestamps for a video that does not exist", () => {
   const src = read("client/src/pages/demo.tsx");
   assert.doesNotMatch(src, /time: "\d+:\d\d"/);
-  assert.match(src, /tourStops/);
+  // main (HAG-449) replaced the tour list with a live-demo button; either way
+  // there must be no video chapter timestamps.
+  assert.doesNotMatch(src, /\d:\d\d\b.*(Connect data|Baseline forecast)/);
 });

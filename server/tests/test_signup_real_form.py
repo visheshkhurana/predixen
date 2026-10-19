@@ -122,7 +122,7 @@ def test_pin_four_the_prerendered_body_still_serves_the_register_funnel():
         "/default-alive",
     ):
         assert f'href="{href}"' in body, f"the /signup body lost {href}"
-    for phrase in ("early access", "no credit card", "Create a free account"):
+    for phrase in ("free — all features", "no credit card", "Create a free account"):
         assert phrase.lower() in body.lower(), f"the /signup body lost {phrase!r}"
 
 

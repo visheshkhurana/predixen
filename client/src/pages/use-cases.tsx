@@ -99,7 +99,7 @@ export default function UseCasesPage() {
           <Link href="/pricing" className="text-primary hover:underline" data-testid="link-use-cases-pricing">
             pricing
           </Link>{" "}
-          (every feature is free during early access).
+          (FounderConsole is free — all features, no credit card).
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-use-cases-auth">

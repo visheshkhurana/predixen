@@ -63,9 +63,10 @@ const billing = readFileSync("client/src/pages/billing.tsx", "utf8");
 assert.doesNotMatch(
   billing,
   /window.*posthog/,
-  "billing checkout success must go through trackEvent so it queues before init",
+  "billing must not reach for window.posthog directly",
 );
-assert.match(billing, /trackEvent\(\s*['"]purchase_subscription['"]/);
+// FounderConsole is free: /billing has no checkout, so there is no
+// purchase_subscription event to pin any more.
 assert.doesNotMatch(indexHtml, /<script[^>]+array\.js/i, "no second inline PostHog snippet");
 assert.doesNotMatch(indexHtml, /<script[^>]+posthog/i, "no second inline PostHog snippet");
 assert.doesNotMatch(indexHtml, /cdn\.posthog/, "no second inline PostHog snippet");

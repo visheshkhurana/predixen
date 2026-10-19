@@ -1,4 +1,15 @@
-"""Plan definitions and feature gating for FounderConsole."""
+"""Plan definitions and feature gating for FounderConsole.
+
+FounderConsole is free: every account gets every feature with no plan limits
+(owner decision, 2026-10). The single source of truth is ``FREE_FOR_ALL``
+below. ``has_feature`` and ``get_plan_limit`` never deny, whatever plan string
+a caller passes, so a stale ``subscriptions`` row cannot lock anyone out.
+
+The Starter/Growth/Scale entries stay in ``PLAN_DETAILS`` only so the Stripe
+webhook and price lookups keep working for any subscription bought before the
+switch. Nothing sells them any more. Cost/abuse controls (rate limits,
+ai_governance budgets) are not plan-based and live elsewhere.
+"""
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -41,28 +52,31 @@ class Feature(str, Enum):
     INVESTOR_ROOM = "investor_room"
 
 
+# -1 means "no limit" everywhere plan limits are read.
+UNLIMITED = -1
+
+# Every user gets every feature. Kept as a named constant so the intent is
+# greppable and a test can pin it.
+FREE_FOR_ALL = True
+
 PLAN_DETAILS: Dict[str, dict] = {
     PlanTier.FREE: {
         "name": "Free",
         "price_monthly": 0,
         "price_annual": 0,
-        "tagline": "Explore the platform",
-        "max_companies": 1,
-        "max_simulations_per_month": 3,
-        "max_copilot_messages_per_month": 10,
-        "max_connectors": 0,
-        "features": [
-            Feature.DASHBOARD,
-            Feature.BASIC_METRICS,
-            Feature.CSV_UPLOAD,
-            Feature.MANUAL_DATA_ENTRY,
-        ],
+        "tagline": "All features, no credit card",
+        "max_companies": UNLIMITED,
+        "max_simulations_per_month": UNLIMITED,
+        "max_copilot_messages_per_month": UNLIMITED,
+        "max_connectors": UNLIMITED,
+        "features": list(Feature),
         "highlights": [
-            "1 company",
-            "3 simulations / month",
-            "10 copilot messages / month",
-            "CSV upload",
-            "Basic dashboard",
+            "Every feature unlocked",
+            "Unlimited companies",
+            "Unlimited simulations",
+            "Unlimited copilot",
+            "All data connectors",
+            "No credit card required",
         ],
     },
     PlanTier.STARTER: {
@@ -194,26 +208,34 @@ PLAN_DETAILS: Dict[str, dict] = {
     },
 }
 
-TRIAL_DURATION_DAYS = 30
-TRIAL_PLAN = PlanTier.SCALE
+# Trials no longer exist: there is nothing to trial. Kept so old imports work.
+TRIAL_DURATION_DAYS = 0
+TRIAL_PLAN = PlanTier.FREE
 
 
 def get_plan_features(plan: str) -> List[str]:
+    if FREE_FOR_ALL:
+        return list(Feature)
     plan_info = PLAN_DETAILS.get(plan, PLAN_DETAILS[PlanTier.FREE])
     return plan_info["features"]
 
 
 def has_feature(plan: str, feature: str) -> bool:
-    features = get_plan_features(plan)
-    return feature in features
+    if FREE_FOR_ALL:
+        return True
+    return feature in get_plan_features(plan)
 
 
 def get_plan_limit(plan: str, limit_key: str) -> int:
+    if FREE_FOR_ALL and limit_key.startswith("max_"):
+        return UNLIMITED
     plan_info = PLAN_DETAILS.get(plan, PLAN_DETAILS[PlanTier.FREE])
     return plan_info.get(limit_key, 0)
 
 
 def minimum_plan_for_feature(feature: str) -> Optional[str]:
+    if FREE_FOR_ALL:
+        return PlanTier.FREE
     for tier in [PlanTier.STARTER, PlanTier.GROWTH, PlanTier.SCALE]:
         if feature in PLAN_DETAILS[tier]["features"]:
             return tier

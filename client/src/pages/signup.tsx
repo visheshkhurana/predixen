@@ -34,14 +34,14 @@ export default function SignupPage() {
   useSEO({
     title: "Get Started — Create a Free FounderConsole Account",
     description:
-      "Create a free FounderConsole account to connect live data and run ongoing runway forecasts. Every feature is free during early access — no credit card required. Prefer a quick answer first? Try the free tools with no account.",
+      "Create a free FounderConsole account to connect live data and run ongoing runway forecasts. FounderConsole is free — all features, no credit card. Prefer a quick answer first? Try the free tools with no account.",
     path: "/signup",
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "WebPage",
       name: "Get Started — Create a Free FounderConsole Account",
       description:
-        "Create a free FounderConsole account to connect live data and run ongoing runway forecasts. Every feature is free during early access — no credit card required.",
+        "Create a free FounderConsole account to connect live data and run ongoing runway forecasts. FounderConsole is free — all features, no credit card.",
       url: "https://founderconsole.ai/signup",
       isPartOf: { "@type": "WebSite", name: "FounderConsole", url: "https://founderconsole.ai" },
     },

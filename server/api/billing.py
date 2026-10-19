@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from server.core.db import get_db, SessionLocal
 from server.core.security import get_current_user
-from server.core.plans import PlanTier, PLAN_DETAILS, Feature, FEATURE_LABELS, TRIAL_DURATION_DAYS, TRIAL_PLAN, minimum_plan_for_feature
-from server.core.subscription import get_user_subscription, start_trial
+from server.core.plans import PlanTier, PLAN_DETAILS, FEATURE_LABELS
+from server.core.subscription import get_user_subscription
 from server.core import stripe_billing
 
 logger = logging.getLogger(__name__)
@@ -21,25 +21,33 @@ class SubscribeBody(BaseModel):
     interval: str = "monthly"  # "monthly" | "annual"
 
 
+FREE_MESSAGE = "FounderConsole is free — every feature is unlocked, no plan or credit card needed."
+
+
+def _gone():
+    # 410 Gone: these flows were removed on purpose when FounderConsole became
+    # free. The Stripe webhook and the billing portal stay up so any
+    # subscription bought before the switch can still be managed or cancelled.
+    raise HTTPException(status_code=410, detail=FREE_MESSAGE)
+
+
 @router.get("/plans")
 def get_plans():
-    plans = []
-    for tier in [PlanTier.FREE, PlanTier.STARTER, PlanTier.GROWTH, PlanTier.SCALE]:
-        info = PLAN_DETAILS[tier]
-        plans.append({
-            "id": tier.value,
-            "name": info["name"],
-            "price_monthly": info["price_monthly"],
-            "price_annual": info["price_annual"],
-            "tagline": info["tagline"],
-            "max_companies": info["max_companies"],
-            "max_simulations_per_month": info["max_simulations_per_month"],
-            "max_copilot_messages_per_month": info["max_copilot_messages_per_month"],
-            "max_connectors": info["max_connectors"],
-            "highlights": info["highlights"],
-            "features": [f.value for f in info["features"]],
-        })
-    return {"plans": plans, "payments_enabled": stripe_billing.stripe_enabled()}
+    info = PLAN_DETAILS[PlanTier.FREE]
+    plan = {
+        "id": PlanTier.FREE.value,
+        "name": info["name"],
+        "price_monthly": 0,
+        "price_annual": 0,
+        "tagline": info["tagline"],
+        "max_companies": info["max_companies"],
+        "max_simulations_per_month": info["max_simulations_per_month"],
+        "max_copilot_messages_per_month": info["max_copilot_messages_per_month"],
+        "max_connectors": info["max_connectors"],
+        "highlights": info["highlights"],
+        "features": [f.value for f in info["features"]],
+    }
+    return {"plans": [plan], "payments_enabled": False, "free_mode": True}
 
 
 @router.get("/subscription")
@@ -49,30 +57,24 @@ def get_subscription(
 ):
     sub = get_user_subscription(db, current_user.id)
     plan_info = PLAN_DETAILS.get(sub["plan"], PLAN_DETAILS[PlanTier.FREE])
+    # A legacy paid subscription (pre-free) still shows so its owner can reach
+    # the Stripe portal and cancel; everyone gets every feature regardless.
+    legacy_paid = bool(sub.get("has_payment_method")) and sub["plan"] != PlanTier.FREE
     return {
         **sub,
         "plan_name": plan_info["name"],
         "plan_price": plan_info["price_monthly"],
-        "plan_highlights": plan_info["highlights"],
-        "trial_duration_days": TRIAL_DURATION_DAYS,
-        "payments_enabled": stripe_billing.stripe_enabled(),
+        "plan_highlights": PLAN_DETAILS[PlanTier.FREE]["highlights"],
+        "trial_duration_days": 0,
+        "payments_enabled": False,
+        "free_mode": True,
+        "legacy_paid_subscription": legacy_paid,
     }
 
 
 @router.post("/start-trial")
-def api_start_trial(
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    try:
-        result = start_trial(db, current_user.id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    return {
-        "message": f"Your {TRIAL_DURATION_DAYS}-day free trial has started!",
-        **result,
-    }
+def api_start_trial(current_user=Depends(get_current_user)):
+    _gone()
 
 
 @router.post("/subscribe/{plan_id}")
@@ -80,37 +82,8 @@ def subscribe(
     plan_id: str,
     body: Optional[SubscribeBody] = None,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    if plan_id not in [t.value for t in PlanTier]:
-        raise HTTPException(status_code=404, detail="Plan not found")
-
-    plan_info = PLAN_DETAILS[plan_id]
-    if plan_info["price_monthly"] == 0:
-        return {"message": "Free plan activated", "plan": plan_id}
-
-    if not stripe_billing.stripe_enabled():
-        raise HTTPException(
-            status_code=503,
-            detail="Payments are not configured yet. Please try again later.",
-        )
-
-    interval = (body.interval if body else "monthly")
-    if interval not in ("monthly", "annual"):
-        raise HTTPException(status_code=400, detail="interval must be 'monthly' or 'annual'")
-
-    try:
-        checkout_url = stripe_billing.create_checkout_session(db, current_user, plan_id, interval)
-    except Exception as e:
-        logger.error(f"Stripe checkout creation failed for user {current_user.id}: {e}")
-        raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
-
-    return {
-        "checkout_url": checkout_url,
-        "plan": plan_id,
-        "plan_name": plan_info["name"],
-        "stripe_connected": True,
-    }
+    _gone()
 
 
 @router.post("/portal")
@@ -311,21 +284,14 @@ async def stripe_webhook(request: Request):
 def check_feature(
     feature: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    sub = get_user_subscription(db, current_user.id)
-    plan_features = PLAN_DETAILS.get(sub["plan"], PLAN_DETAILS[PlanTier.FREE])["features"]
-    has_access = feature in [f.value if hasattr(f, 'value') else f for f in plan_features]
-
-    min_plan = minimum_plan_for_feature(feature)
-    feature_label = FEATURE_LABELS.get(feature, feature)
-
     return {
         "feature": feature,
-        "has_access": has_access,
-        "current_plan": sub["plan"],
-        "required_plan": min_plan,
-        "feature_label": feature_label,
-        "is_trial": sub["is_trial"],
-        "trial_days_remaining": sub["trial_days_remaining"],
+        "has_access": True,
+        "current_plan": PlanTier.FREE.value,
+        "required_plan": PlanTier.FREE.value,
+        "feature_label": FEATURE_LABELS.get(feature, feature),
+        "is_trial": False,
+        "trial_days_remaining": 0,
+        "free_mode": True,
     }

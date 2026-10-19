@@ -10,68 +10,24 @@ import { FadeIn, ScrollReveal, StaggerChildren, StaggerItem } from '@/components
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
+// FounderConsole is free. One plan, every feature, no limits, no card.
 const tiers = [
   {
     name: "Free",
     price: "$0",
     period: "",
-    bullet: "Explore the platform at your own pace.",
+    bullet: "All features, no credit card.",
     features: [
-      "1 company",
-      "3 simulations / month",
-      "10 copilot messages / month",
-      "CSV upload & manual entry",
-      "Basic dashboard",
-    ],
-    highlighted: false,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Starter",
-    price: "$29",
-    period: "/month",
-    bullet: "For early-stage founders finding their footing.",
-    features: [
-      "50 simulations / month",
-      "100 copilot messages / month",
-      "2 data connectors",
-      "Truth Scan & Stress Tests",
-      "Industry benchmarks",
-      "PDF export",
-    ],
-    highlighted: false,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Growth",
-    price: "$49",
-    period: "/month",
-    bullet: "For scaling startups that decide weekly.",
-    features: [
-      "Up to 3 companies",
+      "Every feature unlocked",
+      "Unlimited companies",
       "Unlimited simulations & copilot",
-      "10 data connectors",
-      "Fundraising OS & cap table",
-      "Board deck export",
-      "Fundraising readiness score",
+      "All data connectors",
+      "Truth Scan, stress tests & benchmarks",
+      "Fundraising OS, cap table & investor room",
+      "Document generator & AI graphics",
+      "Board deck & PDF export",
     ],
     highlighted: true,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Scale",
-    price: "$99",
-    period: "/month",
-    bullet: "Full power for serious founders.",
-    features: [
-      "Unlimited companies & connectors",
-      "Flight Simulator (AI agents)",
-      "Document Generator & AI Graphics",
-      "Digital Twin & Investor Room",
-      "Hiring Planner",
-      "Cross-company intelligence",
-    ],
-    highlighted: false,
     cta: "Get Started Free",
   },
 ];
@@ -110,7 +66,7 @@ export default function PricingPage() {
 
   useSEO({
     title: "Pricing | FounderConsole",
-    description: "FounderConsole is free while in early access — every feature unlocked, no credit card required. Planned pricing: Free, Starter $29, Growth $49, Scale $99 per month.",
+    description: "FounderConsole is free — every feature unlocked, unlimited companies, simulations and copilot, no credit card required.",
     path: "/pricing",
     jsonLd: {
       "@context": "https://schema.org",
@@ -118,39 +74,13 @@ export default function PricingPage() {
       name: "FounderConsole",
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
-      offers: [
-        {
-          "@type": "Offer",
-          name: "Free",
-          price: "0",
-          priceCurrency: "USD",
-          description: "Explore the platform: 1 company, basic dashboard, CSV upload.",
-        },
-        {
-          "@type": "Offer",
-          name: "Starter",
-          price: "29",
-          priceCurrency: "USD",
-          billingIncrement: "month",
-          description: "For early-stage founders: simulations, copilot, Truth Scan, benchmarks.",
-        },
-        {
-          "@type": "Offer",
-          name: "Growth",
-          price: "49",
-          priceCurrency: "USD",
-          billingIncrement: "month",
-          description: "For scaling startups: unlimited simulations, Fundraising OS, cap table.",
-        },
-        {
-          "@type": "Offer",
-          name: "Scale",
-          price: "99",
-          priceCurrency: "USD",
-          billingIncrement: "month",
-          description: "Full power: AI agent simulations, document generator, investor room.",
-        },
-      ],
+      offers: {
+        "@type": "Offer",
+        name: "Free",
+        price: "0",
+        priceCurrency: "USD",
+        description: "Free — all features, no credit card.",
+      },
     },
   });
 
@@ -160,14 +90,14 @@ export default function PricingPage() {
       <FadeIn delay={0.05} duration={0.5}>
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
-          <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-trial">
-            Free During Early Access — No Credit Card
+          <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free">
+            Free — No Credit Card
           </Badge>
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-pricing-title">
-            Everything's free while we're in early access
+            FounderConsole is free
           </h1>
           <p className="mt-3 max-w-xl mx-auto text-lg text-muted-foreground" data-testid="text-pricing-subtitle">
-            Every feature is unlocked today — no credit card required. The plans below are our planned pricing for when we exit early access.
+            One plan: Free — all features, no credit card. No trials, no tiers, no usage caps.
           </p>
         </div>
       </section>
@@ -176,7 +106,7 @@ export default function PricingPage() {
       <ScrollReveal>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <StaggerChildren className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" staggerDelay={0.1}>
+          <StaggerChildren className="mx-auto grid max-w-md gap-6" staggerDelay={0.1}>
             {tiers.map((tier) => (
               <StaggerItem key={tier.name}>
               <Card
@@ -186,11 +116,6 @@ export default function PricingPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-lg">{tier.name}</CardTitle>
-                    {tier.highlighted && (
-                      <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-                        Most Popular
-                      </Badge>
-                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">{tier.bullet}</p>
                 </CardHeader>
@@ -275,7 +200,7 @@ export default function PricingPage() {
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10 text-center">
           <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
-            All plans include SSL encryption, daily backups, and reliable cloud hosting. Everything is free while we're in early access — no credit card required. We'll give plenty of notice before paid plans begin.
+            Includes SSL encryption, daily backups, and reliable cloud hosting. Free — all features, no credit card.
           </p>
         </div>
       </section>
