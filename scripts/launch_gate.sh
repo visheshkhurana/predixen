@@ -44,9 +44,30 @@ BASE_URL="${1:-https://founderconsole.ai}"
 # of being silently promoted to the target's 200.
 REPLY_STATUS=""
 REPLY_BODY=""
+REPLY_CURL_RC=0
+# Name the failure a nonzero curl exit means, so a FAIL says which one happened.
+curl_reason() {
+  case "$1" in
+    6)  echo "could not resolve host" ;;
+    7)  echo "connection refused" ;;
+    18) echo "partial file: response truncated" ;;
+    28) echo "timed out" ;;
+    35) echo "TLS handshake failed" ;;
+    52) echo "empty reply from server" ;;
+    56) echo "failure receiving network data" ;;
+    *)  echo "transfer error" ;;
+  esac
+}
 fetch() {
-  local out
+  local out rc
   out="$(curl -s --max-time 20 -w $'\n%{http_code}' "$1" 2>/dev/null)"
+  # curl's exit status is the only signal that the transfer completed. A server
+  # that sends 200 and the marker and then truncates still prints %{http_code}
+  # 200 while curl exits 18 (partial file), so the status alone would PASS a
+  # response that never fully arrived. -f is deliberately NOT used: without it
+  # curl exits 0 on a real 4xx/5xx and the status assertion catches those.
+  rc=$?
+  REPLY_CURL_RC="$rc"
   REPLY_STATUS="${out##*$'\n'}"
   REPLY_BODY="${out%$'\n'*}"
   [ -n "$REPLY_STATUS" ] || REPLY_STATUS="000"
@@ -56,6 +77,11 @@ fetch() {
 check() {
   local name="$1" url="$2" want="$3" pattern="$4"
   fetch "$url"
+  if [ "$REPLY_CURL_RC" -ne 0 ]; then
+    echo "  FAIL: $name (curl exit $REPLY_CURL_RC: $(curl_reason "$REPLY_CURL_RC"))"
+    FAIL=$((FAIL+1))
+    return
+  fi
   if [ "$REPLY_STATUS" != "$want" ]; then
     echo "  FAIL: $name (status $REPLY_STATUS, wanted $want)"
     FAIL=$((FAIL+1))
