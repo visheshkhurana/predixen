@@ -169,21 +169,35 @@ def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
             "customers": fr.customers,
         })
 
+    def _metric(*keys):
+        # None, not 0, when the truth scan has no value: a memo that reads
+        # "burn $0/mo, runway 0 months" is a fabricated figure, not a gap.
+        for k in keys:
+            if metrics.get(k) is not None:
+                return extract_metric_value(metrics.get(k), None)
+        return None
+
+    latest = fin_records_data[0] if fin_records_data else {}
+
+    def _or_record(value, key):
+        return value if value is not None else latest.get(key)
+
     extracted_metrics = {
-        "mrr": extract_metric_value(metrics.get("mrr"), 0),
-        "arr": extract_metric_value(metrics.get("arr"), 0),
-        "monthly_revenue": extract_metric_value(metrics.get("monthly_revenue"), 0),
-        "burn_rate": extract_metric_value(metrics.get("monthly_burn"), 0),
-        "cash_balance": extract_metric_value(metrics.get("cash_balance"), 0),
-        "runway_months": extract_metric_value(metrics.get("runway_months"), 0),
-        "gross_margin": extract_metric_value(metrics.get("gross_margin"), 0),
-        "revenue_growth": extract_metric_value(metrics.get("revenue_growth_mom"), 0),
-        "customers": extract_metric_value(metrics.get("customers"), 0),
-        "churn_rate": extract_metric_value(metrics.get("churn_rate"), 0),
-        "cac": extract_metric_value(metrics.get("cac"), 0),
-        "ltv": extract_metric_value(metrics.get("ltv"), 0),
-        "ltv_cac_ratio": extract_metric_value(metrics.get("ltv_cac_ratio"), 0),
-        "ndr": extract_metric_value(metrics.get("ndr"), 0),
+        "mrr": _or_record(_metric("mrr"), "mrr"),
+        "arr": _or_record(_metric("arr"), "arr"),
+        "monthly_revenue": _or_record(_metric("monthly_revenue"), "revenue"),
+        # The truth scan writes net_burn; monthly_burn is the legacy name.
+        "burn_rate": _or_record(_metric("net_burn", "monthly_burn"), "net_burn"),
+        "cash_balance": _or_record(_metric("cash_balance", "cash_on_hand"), "cash_balance"),
+        "runway_months": _or_record(_metric("runway_months", "runway_p50"), "runway_months"),
+        "gross_margin": _or_record(_metric("gross_margin"), "gross_margin"),
+        "revenue_growth": _metric("revenue_growth_mom", "growth_rate"),
+        "customers": _or_record(_metric("customers"), "customers"),
+        "churn_rate": _metric("churn_rate"),
+        "cac": _metric("cac"),
+        "ltv": _metric("ltv"),
+        "ltv_cac_ratio": _metric("ltv_cac_ratio"),
+        "ndr": _metric("ndr"),
     }
 
     return {
@@ -201,19 +215,31 @@ def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
     }
 
 
+NOT_AVAILABLE = "not available"
+
+
+def _fmt(value, pattern: str) -> str:
+    if value is None:
+        return NOT_AVAILABLE
+    try:
+        return pattern.format(float(value))
+    except (TypeError, ValueError):
+        return NOT_AVAILABLE
+
+
 def _build_section_prompt(doc_type: str, section: str, context: Dict, custom_instructions: Optional[str] = None) -> str:
     company = context["company"]
     m = context["metrics"]
 
     data_block = (
         f"Company: {company['name']} ({company.get('industry', 'Tech')}, {company.get('stage', 'Seed')})\n"
-        f"MRR: ${m.get('mrr', 0):,.0f} | ARR: ${m.get('arr', 0):,.0f}\n"
-        f"Monthly Revenue: ${m.get('monthly_revenue', 0):,.0f}\n"
-        f"Burn Rate: ${m.get('burn_rate', 0):,.0f}/mo | Cash: ${m.get('cash_balance', 0):,.0f}\n"
-        f"Runway: {m.get('runway_months', 0):.1f} months\n"
-        f"Gross Margin: {m.get('gross_margin', 0):.1f}% | Revenue Growth MoM: {m.get('revenue_growth', 0):.1f}%\n"
-        f"Customers: {m.get('customers', 0):.0f} | Churn: {m.get('churn_rate', 0):.1f}%\n"
-        f"LTV/CAC: {m.get('ltv_cac_ratio', 0):.1f}x (LTV: ${m.get('ltv', 0):,.0f}, CAC: ${m.get('cac', 0):,.0f})\n"
+        f"MRR: {_fmt(m.get('mrr'), '${:,.0f}')} | ARR: {_fmt(m.get('arr'), '${:,.0f}')}\n"
+        f"Monthly Revenue: {_fmt(m.get('monthly_revenue'), '${:,.0f}')}\n"
+        f"Burn Rate: {_fmt(m.get('burn_rate'), '${:,.0f}/mo')} | Cash: {_fmt(m.get('cash_balance'), '${:,.0f}')}\n"
+        f"Runway: {_fmt(m.get('runway_months'), '{:.1f} months')}\n"
+        f"Gross Margin: {_fmt(m.get('gross_margin'), '{:.1f}%')} | Revenue Growth MoM: {_fmt(m.get('revenue_growth'), '{:.1f}%')}\n"
+        f"Customers: {_fmt(m.get('customers'), '{:,.0f}')} | Churn: {_fmt(m.get('churn_rate'), '{:.1f}%')}\n"
+        f"LTV/CAC: {_fmt(m.get('ltv_cac_ratio'), '{:.1f}x')} (LTV: {_fmt(m.get('ltv'), '${:,.0f}')}, CAC: {_fmt(m.get('cac'), '${:,.0f}')})\n"
         f"Data Confidence: {context.get('confidence', 50)}%\n"
     )
 
@@ -239,6 +265,8 @@ def _build_section_prompt(doc_type: str, section: str, context: Dict, custom_ins
     prompt += (
         f"\nWrite the '{section}' section for this {doc_type.replace('-', ' ')}. "
         f"Use specific numbers and data points from the company data. "
+        f"A metric marked '{NOT_AVAILABLE}' is missing, not zero: say it is not yet "
+        f"available, and never state, estimate or imply a figure for it. "
         f"Be concise, professional, and actionable. Write 2-4 paragraphs. "
         f"Do not use markdown headers. Use plain text with clear structure."
     )

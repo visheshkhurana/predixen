@@ -36,6 +36,7 @@ import {
   ArrowRight,
   Ban,
 } from "lucide-react";
+import { formatRunway, survival12mPct } from "@/lib/hiringSimResults";
 
 interface RoleDefinition {
   id: string;
@@ -600,32 +601,30 @@ export default function HiringPlannerPage() {
                     <div className="text-center space-y-1 p-3 rounded-md bg-muted/50">
                       <span className="text-xs text-muted-foreground">P10 (Bear)</span>
                       <p className="text-lg font-bold font-mono text-red-500" data-testid="text-sim-p10">
-                        {simResults.p10_runway ?? simResults.runway_p10 ?? "N/A"}
+                        {formatRunway(simResults.runway?.p10 ?? simResults.p10_runway ?? simResults.runway_p10)}
                       </p>
                       <span className="text-[10px] text-muted-foreground">months</span>
                     </div>
                     <div className="text-center space-y-1 p-3 rounded-md bg-muted/50">
                       <span className="text-xs text-muted-foreground">P50 (Base)</span>
                       <p className="text-lg font-bold font-mono text-amber-500" data-testid="text-sim-p50">
-                        {simResults.p50_runway ?? simResults.runway_p50 ?? "N/A"}
+                        {formatRunway(simResults.runway?.p50 ?? simResults.p50_runway ?? simResults.runway_p50)}
                       </p>
                       <span className="text-[10px] text-muted-foreground">months</span>
                     </div>
                     <div className="text-center space-y-1 p-3 rounded-md bg-muted/50">
                       <span className="text-xs text-muted-foreground">P90 (Bull)</span>
                       <p className="text-lg font-bold font-mono text-emerald-500" data-testid="text-sim-p90">
-                        {simResults.p90_runway ?? simResults.runway_p90 ?? "N/A"}
+                        {formatRunway(simResults.runway?.p90 ?? simResults.p90_runway ?? simResults.runway_p90)}
                       </p>
                       <span className="text-[10px] text-muted-foreground">months</span>
                     </div>
                   </div>
-                  {simResults.survival_probability != null && (
+                  {survival12mPct(simResults) != null && (
                     <div className="flex items-center justify-between gap-2 text-sm px-1">
                       <span className="text-muted-foreground">12-Month Survival</span>
                       <span className="font-bold font-mono" data-testid="text-sim-survival">
-                        {typeof simResults.survival_probability === "number"
-                          ? `${(simResults.survival_probability * 100).toFixed(0)}%`
-                          : simResults.survival_probability}
+                        {`${survival12mPct(simResults)!.toFixed(0)}%`}
                       </span>
                     </div>
                   )}
