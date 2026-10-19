@@ -16,6 +16,7 @@ import { legacyRedirects } from "./middleware/legacyRedirects";
 import { aiAgentLog } from "./middleware/aiAgentLog";
 import { requestId } from "./middleware/requestId";
 import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
+import { setProxyClientIp } from "./proxy/clientIp";
 
 const app = express();
 app.disable("x-powered-by");
@@ -274,7 +275,9 @@ function startFastAPIServer(): ChildProcess {
   
   killProcessOnPort(port);
   
-  const cmd = [pythonCommand, "-u", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port];
+  // asgi_app records the TCP peer before proxy headers. --no-proxy-headers
+  // keeps Uvicorn from wrapping a second rewrite outside that record.
+  const cmd = [pythonCommand, "-u", "-m", "uvicorn", "server.main:asgi_app", "--host", "0.0.0.0", "--port", port, "--no-proxy-headers"];
   
   console.log(`[fastapi] Starting uvicorn: ${cmd.join(" ")}`);
   
@@ -286,7 +289,7 @@ function startFastAPIServer(): ChildProcess {
   childEnv.NODE_ENV = nodeEnv;
   childEnv.ENVIRONMENT = nodeEnv;
   childEnv.PYTHONUNBUFFERED = "1";
-  const child = spawn(pythonCommand, ["-u", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
+  const child = spawn(pythonCommand, cmd.slice(1), {
     stdio: ["ignore", "pipe", "pipe"],
     shell: false,
     detached: process.platform !== "win32",
@@ -737,6 +740,9 @@ const apiProxy = createProxyMiddleware({
     "^/api": "",
   },
   on: {
+    proxyReq: (proxyReq, req) => {
+      setProxyClientIp(proxyReq, req);
+    },
     proxyRes: (proxyRes, req) => {
       applyUpstreamRedirectRewrite(proxyRes, req, {
         upstreamOrigin: FASTAPI_URL,

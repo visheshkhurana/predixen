@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 
 from server.api.admin import require_platform_admin
 from server.core.db import get_db
-from server.middleware.rate_limiter import client_ip
+from server.middleware.rate_limiter import client_ip, socket_host
 from server.models.lead import Lead
 from server.services.posthog import capture as posthog_capture
 from server.services.posthog import lead_distinct_id, sanitize_distinct_id
@@ -221,15 +221,16 @@ _LEAD_LOCK = threading.Lock()
 def lead_client_key(request: Optional[Request]) -> str:
     """Client address for the lead bucket. Never an email.
 
-    Delegates to client_ip: X-Real-IP when Railway set it, otherwise the
-    X-Forwarded-For entry in front of exactly two trusted hops.
+    Delegates to client_ip. X-Real-IP counts only when the TCP peer is
+    loopback (Express, which overwrites that header with req.ip). Otherwise
+    the bucket is the X-Forwarded-For entry in front of exactly two trusted
+    hops. This store is separate from the middleware window so a request is
+    not counted twice.
     """
     if request is None:
         return "unknown"
     headers = getattr(request, "headers", None)
-    client = getattr(request, "client", None)
-    host = str(getattr(client, "host", "") or "")
-    key = client_ip(headers, host)
+    key = client_ip(headers, socket_host(request))
     if not key or "@" in key:
         return "unknown"
     return key[:200]

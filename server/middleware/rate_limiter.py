@@ -8,6 +8,7 @@ Stale entries are cleaned up by a background task every 5 minutes.
 import os
 import asyncio
 import ipaddress
+import threading
 import time
 from typing import Tuple, Optional
 from fastapi import Request
@@ -23,20 +24,36 @@ _cleanup_task_started = False
 
 # Two trusted proxies sit in front of this process: Railway's public edge, then
 # the Express app. server/index.ts sets `trust proxy` to 1 and proxies /api to
-# FastAPI, so FastAPI's socket peer is Express, not the visitor. The rightmost
-# X-Forwarded-For entry is the hop that shared proxy appended (Railway's edge
-# address). It is the same for every visitor. Keying a limit on it puts
-# everyone in one bucket.
+# FastAPI, so FastAPI's TCP peer is Express on loopback, not the visitor.
 #
-# Railway sets X-Real-IP to the client whose TCP connection it accepted, and
-# overwrites a caller-supplied value. Prefer that single address.
+# Express overwrites X-Real-IP with req.ip before the proxy hop and drops a
+# caller-supplied value. That header is the client only when the socket peer
+# is loopback — the Express proxy. A direct connection to this process (uvicorn
+# binds every interface) can put any address in X-Real-IP, and trusting it
+# opens a fresh bucket per request. Measured: a POST that sent X-Real-IP was
+# keyed on that header, so the 9th call in a minute was a new bucket and the
+# consent check answered 400 instead of 429.
 #
-# When X-Real-IP is absent, take the client from X-Forwarded-For with exactly
-# two trusted hops. The chain is the header, left to right, plus the socket
-# peer. The two rightmost addresses are the proxies. The client is the address
-# immediately before them. A leftmost value the caller wrote is untrusted and
-# must not open a new bucket.
+# Uvicorn's proxy-headers middleware rewrites scope["client"] from
+# X-Forwarded-For before the application runs, which hides the loopback peer.
+# server.main:asgi_app records the TCP peer on extensions["peer_host"] first.
+# Production starts uvicorn with --no-proxy-headers so that record is Express,
+# not the forwarded address. socket_host() reads it.
+#
+# When X-Real-IP is not trusted, take the client from X-Forwarded-For with
+# exactly two trusted hops. The chain is the header, left to right, plus the
+# socket peer. The two rightmost addresses are the proxies. The client is the
+# address immediately before them. A leftmost value the caller wrote is
+# untrusted and must not open a new bucket.
 TRUSTED_PROXY_HOPS = 2
+PEER_HOST_KEY = "peer_host"
+
+# In-process window for POST /leads. The PostgreSQL counter is shared across
+# processes when the database is up, and it fails open when it is not. This
+# window does not. One replica (railway.json numReplicas) is the production
+# shape; the database counter still applies when it succeeds.
+_LEAD_HITS: dict[str, list[float]] = {}
+_LEAD_LOCK = threading.Lock()
 
 _HEADER_NAMES = {
     "x-real-ip": ("x-real-ip", "X-Real-IP", "X-Real-Ip"),
@@ -78,17 +95,54 @@ def _forwarded_ips(value: str) -> list[str]:
     return [ip for ip in (_canonical_ip(part) for part in str(value or "").split(",")) if ip]
 
 
+def _is_loopback(value: str) -> bool:
+    text = _canonical_ip(value)
+    if not text:
+        return False
+    try:
+        addr = ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    if addr.is_loopback:
+        return True
+    # A dual-stack listener reports 127.0.0.1 as ::ffff:127.0.0.1. Python does
+    # not treat that as loopback; it is still the Express proxy on this host.
+    mapped = getattr(addr, "ipv4_mapped", None)
+    return bool(mapped is not None and mapped.is_loopback)
+
+
+def socket_host(request) -> str:
+    """TCP peer, not the address Uvicorn derived from X-Forwarded-For.
+
+    asgi_app stashes the peer before proxy headers run. A request that did not
+    pass through that wrapper (tests, a direct TestClient) falls back to
+    request.client.host, which is the peer when proxy headers are off.
+    """
+    scope = getattr(request, "scope", None)
+    if isinstance(scope, dict):
+        extensions = scope.get("extensions") or {}
+        if isinstance(extensions, dict):
+            peer = extensions.get(PEER_HOST_KEY)
+            if peer:
+                return str(peer)
+    client = getattr(request, "client", None)
+    host = getattr(client, "host", "") if client is not None else ""
+    return str(host or "")
+
+
 def client_ip(headers, client_host: str = "") -> str:
     """Real client address for a rate-limit bucket. Never an email.
 
-    See TRUSTED_PROXY_HOPS above for why this is X-Real-IP, or else the
-    X-Forwarded-For entry in front of exactly two trusted hops.
+    X-Real-IP is trusted only when client_host is loopback (Express).
+    Otherwise the bucket is the X-Forwarded-For entry in front of exactly
+    two trusted hops. See TRUSTED_PROXY_HOPS above.
     """
-    raw_real = _header(headers, "x-real-ip")
-    if raw_real and "," not in raw_real:
-        real = _canonical_ip(raw_real)
-        if real:
-            return real
+    if _is_loopback(client_host):
+        raw_real = _header(headers, "x-real-ip")
+        if raw_real and "," not in raw_real:
+            real = _canonical_ip(raw_real)
+            if real:
+                return real
 
     chain = _forwarded_ips(_header(headers, "x-forwarded-for"))
     socket_ip = _canonical_ip(client_host)
@@ -103,6 +157,35 @@ def client_ip(headers, client_host: str = "") -> str:
     if host and "@" not in host:
         return host[:200]
     return ""
+
+
+def lead_window_limited(
+    key: str,
+    *,
+    limit: int = 8,
+    window: float = 60.0,
+    now: Optional[float] = None,
+    store: Optional[dict] = None,
+) -> Tuple[bool, int]:
+    """True when this key is over the lead window. A rejected call does not count.
+
+    The database counter fails open. This one is what makes the 9th POST in a
+    minute a 429 when Postgres is down, and when the handler never runs because
+    body validation already failed.
+    """
+    bucket = _LEAD_HITS if store is None else store
+    stamp = time.monotonic() if now is None else now
+    with _LEAD_LOCK:
+        hits = [seen for seen in bucket.get(key, []) if stamp - seen < window]
+        if len(hits) >= limit:
+            bucket[key] = hits
+            retry = 1
+            if hits:
+                retry = max(1, int(window - (stamp - hits[0])) + 1)
+            return True, retry
+        hits.append(stamp)
+        bucket[key] = hits
+        return False, 0
 
 
 def _get_engine():
@@ -192,11 +275,23 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 logger.warning("Could not start rate limit cleanup task - no event loop")
 
     def _get_identifier(self, request: Request) -> str:
-        # Same derivation as lead capture. The comment on TRUSTED_PROXY_HOPS
-        # is the contract: X-Real-IP when Railway set it, otherwise the
-        # X-Forwarded-For slot in front of exactly two trusted hops.
-        client = request.client.host if request.client else ""
-        return client_ip(request.headers, client or "") or "unknown"
+        # Same derivation as lead capture. X-Real-IP only from a loopback
+        # peer; otherwise the X-Forwarded-For slot in front of two trusted hops.
+        return client_ip(request.headers, socket_host(request)) or "unknown"
+
+    def _too_many(self, identifier: str, category: str, limit, retry_after: int) -> JSONResponse:
+        logger.warning(
+            f"Rate limit exceeded: {identifier} ({category}), "
+            f"retry_after={retry_after}s, limit={limit}/min"
+        )
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": f"Rate limit exceeded. Maximum {limit} requests per minute.",
+                "retry_after": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
 
     def _get_category(self, request: Request) -> Tuple[str, int]:
         path = request.url.path
@@ -261,6 +356,10 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
             request_count, window_start = row[0], row[1]
 
+            # SQLite and some drivers return the timestamp as text. Reading
+            # tzinfo on a str throws, and the caller then fails open.
+            if isinstance(window_start, str):
+                window_start = datetime.fromisoformat(window_start)
             if window_start.tzinfo is None:
                 window_start = window_start.replace(tzinfo=timezone.utc)
 
@@ -291,6 +390,16 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 logger.error(f"Middleware error: {exc}")
                 return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+        # Count leads before the database and before the route. The consent
+        # 400 is the string create_lead raises after its own counter, and a
+        # body that fails validation never enters that function. Either way
+        # this cap has to answer first. The database counter fails open, which
+        # dropped the limit whenever the insert threw.
+        if category == "leads":
+            blocked, retry_after = lead_window_limited(identifier, limit=int(limit))
+            if blocked:
+                return self._too_many(identifier, category, limit, retry_after)
+
         try:
             allowed, remaining, retry_after = self._check_rate_limit(identifier, category, int(limit))
         except Exception as e:
@@ -298,18 +407,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             allowed, remaining, retry_after = True, int(limit), 0
 
         if not allowed:
-            logger.warning(
-                f"Rate limit exceeded: {identifier} ({category}), "
-                f"retry_after={retry_after}s, limit={limit}/min"
-            )
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "detail": f"Rate limit exceeded. Maximum {limit} requests per minute.",
-                    "retry_after": retry_after,
-                },
-                headers={"Retry-After": str(retry_after)},
-            )
+            return self._too_many(identifier, category, limit, retry_after)
 
         try:
             response = await call_next(request)
