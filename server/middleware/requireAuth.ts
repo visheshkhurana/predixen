@@ -3,6 +3,18 @@
 // carried in the `auth_token` cookie or an Authorization: Bearer header).
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
+import {
+  databaseRevocationQuery,
+  isAccessTokenRevoked,
+  type RevocationQuery,
+} from "./sessionRevocation";
+
+// Tests inject a query so a revoked jti can be rejected without Postgres.
+let revocationQueryForTests: RevocationQuery | null = null;
+
+export function setRevocationQueryForTests(query: RevocationQuery | null): void {
+  revocationQueryForTests = query;
+}
 
 function b64urlDecode(s: string): Buffer {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -62,9 +74,24 @@ function readAuthPayload(req: Request, res: Response): Record<string, any> | nul
   return payload;
 }
 
-/** Requires a valid, unexpired, backend-signed session. Blocks unauthenticated access. */
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  if (!readAuthPayload(req, res)) return;
+/** Requires a valid, unexpired, backend-signed session that has not been revoked. */
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const payload = readAuthPayload(req, res);
+  if (!payload) return;
+  const query = revocationQueryForTests ?? databaseRevocationQuery();
+  if (query) {
+    try {
+      if (await isAccessTokenRevoked(payload, query)) {
+        res.status(401).json({ error: "Session has ended. Please sign in again." });
+        return;
+      }
+    } catch (err) {
+      // Same window FastAPI documents: the revocation tables are created after
+      // the process starts answering. A missing table must not 500 every
+      // authenticated Express request. A present row still rejects the token.
+      console.error("[requireAuth] revocation check failed:", err);
+    }
+  }
   next();
 }
 
