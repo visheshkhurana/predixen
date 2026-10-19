@@ -165,15 +165,17 @@ function buildToolsIndexBodyContent(): string {
   // HAG-449: `/tools` used to be a deliberate 404 (the soft-404 work listed it
   // beside `/tools/unknown`), which made it a dead end for anyone who trimmed a
   // tool URL. The four links below are the four `/tools/*` routes `App.tsx`
-  // registers; `server/tests/tools-index.test.ts` fails if that set drifts, so a
-  // new tool page cannot ship and leave the hub pointing at three of four.
+  // registers; `server/tests/soft-404-status.test.ts` fails if that set drifts,
+  // so a new tool page cannot ship and leave the hub pointing at three of four.
   //
-  // The other three free calculators live at the site root. They are listed in
+  // The two other free calculators live at the site root. They are listed in
   // their own group rather than omitted: a page called "free tools" that hides
-  // half the free tools sends a visitor to a search engine instead.
+  // half the free tools sends a visitor to a search engine instead. `/ai-cfo` is
+  // deliberately NOT in that group — it is the product, not a no-account tool,
+  // and its own page says so. It is linked from the closing paragraph instead.
   return `<article>
 <h1>Free Startup Finance Tools</h1>
-<p>Four free calculators for the numbers that decide how long a company has left, and three more free tools that answer the same kind of question. No account, no card, no demo call.</p>
+<p>Four free calculators for the numbers that decide how long a company has left, and two more free tools that answer the same kind of question. No account, no card, no demo call.</p>
 <h2>The four calculators</h2>
 <ul>
 <li><a href="/tools/runway-calculator">Startup runway calculator</a> — enter cash on hand, monthly revenue, monthly expenses and growth rate to get your months of runway and the month the cash runs out.</li>
@@ -181,17 +183,16 @@ function buildToolsIndexBodyContent(): string {
 <li><a href="/tools/dilution">Dilution calculator</a> — the percentage of the company a round costs you, from pre-money valuation, amount raised and the existing option pool.</li>
 <li><a href="/tools/ltv-cac">LTV:CAC calculator</a> — lifetime value against acquisition cost, graded separately from payback, because a healthy ratio with a slow payback is how a growing company runs out of cash.</li>
 </ul>
-<h2>Three more free tools</h2>
+<h2>Two more free tools</h2>
 <ul>
 <li><a href="/default-alive">Default alive or default dead test</a> — Paul Graham's question, answered on your own numbers, with what it would take to flip the answer.</li>
 <li><a href="/survival-simulator">Startup survival simulator</a> — a Monte Carlo survival probability rather than a single point estimate.</li>
-<li><a href="/ai-cfo">AI CFO</a> — a financial question answered from your own numbers.</li>
 </ul>
 <h2>One number is not a forecast</h2>
 <p>Every calculator here holds your inputs steady and returns a single answer. Real revenue is lumpy, and the month that decides the outcome is rarely the average month. FounderConsole connects to your actual financial data and runs the same question thousands of times, so runway comes back as a distribution with P10/P50/P90 bands instead of one date.</p>
 <h2>Where these formulas come from</h2>
 <p>Each calculator states its formula and its benchmark on the page, records whether the formula is textbook or a stated choice, and pins a worked example in a test. Where a common shortcut is wrong — monthly churn multiplied by twelve instead of compounded, for instance — the page shows the size of the error rather than hiding it.</p>
-<p>When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>. See <a href="/pricing">pricing</a> for what is included during early access.</p>
+<p>When you are ready for live data and ongoing forecasts, the <a href="/ai-cfo">AI CFO</a> answers a financial question from your own connected numbers, and you can <a href="/auth">get started free</a>. See <a href="/pricing">pricing</a> for what is included during early access.</p>
 </article>`;
 }
 
@@ -1476,7 +1477,7 @@ function getPageMeta(path: string): PageMeta | null {
   if (path === "/tools") {
     return {
       title: "Free Startup Finance Tools — Runway, Burn, Dilution, LTV:CAC | FounderConsole",
-      description: "Four free startup finance calculators and three more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
+      description: "Four free startup finance calculators and two more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
       canonical: SITE_URL + "/tools",
       bodyContent: buildToolsIndexBodyContent(),
       jsonLd: [{

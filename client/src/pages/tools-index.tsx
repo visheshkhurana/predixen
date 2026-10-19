@@ -17,8 +17,14 @@ import { ArrowRight, Calculator } from "lucide-react";
  * individual tools, so a crawler had the leaves and no hub.
  *
  * The four calculators under `/tools/` are listed first because they share the
- * URL segment. The three other free calculators live at the site root and get
+ * URL segment. The two other free calculators live at the site root and get
  * their own group rather than being quietly omitted from a page called "tools".
+ *
+ * `/ai-cfo` is NOT in that group. It is the product, not a no-account tool: its
+ * own page excludes itself from the no-account list and its only CTA is `/auth`.
+ * A card promising "no account, no card" that lands on a signup is the same
+ * false-promise shape this page exists to remove, so it is linked from the
+ * closing ("when you are ready") section instead.
  */
 
 interface ToolEntry {
@@ -70,12 +76,6 @@ const MORE_TOOLS: readonly ToolEntry[] = [
     input: "Your financials",
     output: "A Monte Carlo survival probability rather than a single point estimate",
   },
-  {
-    href: "/ai-cfo",
-    name: "AI CFO",
-    input: "A financial question",
-    output: "An answer grounded in your own numbers",
-  },
 ];
 
 function ToolGrid({ tools }: { tools: readonly ToolEntry[] }) {
@@ -110,7 +110,7 @@ export default function ToolsIndexPage() {
   useSEO({
     title: "Free Startup Finance Tools — Runway, Burn, Dilution, LTV:CAC | FounderConsole",
     description:
-      "Four free startup finance calculators and three more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
+      "Four free startup finance calculators and two more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
     path: "/tools",
     jsonLd: [
       {
@@ -166,11 +166,11 @@ export default function ToolsIndexPage() {
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12">
           <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
-            Three more free tools
+            Two more free tools
           </h2>
           <p className="mb-6 max-w-2xl text-muted-foreground">
-            These do not sit under <code>/tools</code>, but they are free in the same way and
-            they answer the same kind of question.
+            These do not sit under <code>/tools</code>, but they are free in the same way — no
+            account, no card — and they answer the same kind of question.
           </p>
           <ToolGrid tools={MORE_TOOLS} />
         </div>
@@ -188,6 +188,13 @@ export default function ToolsIndexPage() {
               month. FounderConsole connects to your actual financial data and runs the same
               question thousands of times, so you get a distribution with P10/P50/P90 bands
               instead of a single date.
+            </p>
+            <p className="mt-3 max-w-2xl text-muted-foreground">
+              When you want that answer from your own connected numbers rather than a form, the{" "}
+              <Link href="/ai-cfo" className="text-primary underline underline-offset-4">
+                AI CFO
+              </Link>{" "}
+              is the next step.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href="/auth?tab=register">
