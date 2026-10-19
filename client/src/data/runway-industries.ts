@@ -29,7 +29,7 @@ export const RUNWAY_INDUSTRIES: IndustryProfile[] = [
       "Target a burn multiple under 2x — anything above 3x is a hard fundraising signal.",
     ],
     burnMultipleNotes:
-      "For SaaS, burn multiple = net new ARR / net burn. Top-quartile seed companies operate at 0.5x-1.5x. Above 2.5x and the next round becomes very hard.",
+      "For SaaS, burn multiple = net burn / net new ARR. Lower is better. Top-quartile seed companies operate at 0.5x-1.5x. Above 2.5x and the next round becomes very hard.",
     fundraisingNotes:
       "Begin a Series A process when you have 9-12 months of runway, $1M+ ARR, and growing 3x year-over-year. Below those thresholds, extend runway first.",
     primaryRiskFactors: [
