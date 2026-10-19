@@ -756,6 +756,7 @@ export default function DataInput() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           messages: [...chatMessages, userMessage].map((m) => ({
             role: m.role,

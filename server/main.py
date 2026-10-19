@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 print(f"[main.py] Importing FastAPI... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 print(f"[main.py] FastAPI imported (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
@@ -82,7 +82,6 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import export as export_api
     from server.api import company_lookup as company_lookup_api
     from server.api import benchmark_search as benchmark_search_api
-    from server.api import connector_catalog as connector_catalog_api
     from server.api import dashboards as dashboards_api
     from server.api import metrics as metrics_api
     from server.api import suggestions as suggestions_api
@@ -157,7 +156,6 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(export_api.router)
     app.include_router(company_lookup_api.router)
     app.include_router(benchmark_search_api.router)
-    app.include_router(connector_catalog_api.router)
     app.include_router(dashboards_api.router)
     app.include_router(metrics_api.router)
     app.include_router(suggestions_api.router)
@@ -235,6 +233,16 @@ async def _run_deferred_startup():
             logger.info("Ensured competition-tracking tables exist")
         except Exception as e:
             logger.warning(f"Could not ensure competitor tables: {e}")
+
+        try:
+            from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
+            Base.metadata.create_all(
+                bind=engine,
+                tables=[RevokedAccessToken.__table__, UserSessionCutoff.__table__],
+            )
+            logger.info("Ensured session-revocation tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure session-revocation tables: {e}")
 
         if settings.should_run_migrations:
             logger.info("Running migrations...")
@@ -494,13 +502,21 @@ def demo_metrics():
         "message": "Sign up to see your real metrics"
     }
 
-@app.get("/metrics/internal")
+from server.core.security import get_current_user
+
+@app.get("/metrics/internal", dependencies=[Depends(get_current_user)])
 def internal_metrics():
+    """In-process timing summary. Internal, so it requires a session.
+
+    Failures stay generic: the previous handler returned str(e), which put
+    driver and query text on an unauthenticated 200.
+    """
     try:
         from server.core.observability import get_metrics_summary
         return {"metrics": get_metrics_summary()}
-    except Exception as e:
-        return {"metrics": {}, "error": str(e)}
+    except Exception:
+        logger.exception("internal metrics summary failed")
+        return {"metrics": {}, "error": "Internal metrics unavailable"}
 
 
 @app.get("/health")

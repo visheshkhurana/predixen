@@ -14,10 +14,45 @@ from server.models.customer import CustomerRecord
 from server.ingest.parsers import parse_csv, detect_column_mapping, parse_financial_records, parse_transaction_records, parse_customer_records
 from server.ingest.pdf_extractor import process_termina_pdf
 from server.ingest.excel_extractor import process_termina_excel
+import logging
 import tempfile
 import os
+from server.core.units import gross_margin_pct
 
 router = APIRouter(tags=["datasets"])
+logger = logging.getLogger(__name__)
+
+
+def split_cogs_from_entered_costs(
+    revenue: float, gross_margin: float, opex: float, payroll: float, other_costs: float
+) -> Dict[str, float]:
+    """Store the COGS a gross margin implies without inventing extra spend.
+
+    Onboarding asks for opex, payroll and other costs and shows the founder
+    burn = (opex + payroll + other) - revenue. Those are their whole cost base,
+    so the COGS implied by the margin is already inside them. Writing it as an
+    additional line made every breakdown-based reader (dashboard, truth scan)
+    count it twice: AlphaKids showed 11.6 months of runway against onboarding's
+    12.5. The implied COGS is carved out of opex, then other costs (payroll is
+    left as entered), so the stored lines still add up to what was typed. Only
+    if the margin implies more COGS than opex + other can hold does the total
+    rise, because then the inputs themselves say costs are higher.
+    """
+    gm_pct = gross_margin_pct(gross_margin)
+    gm_pct = 0.0 if gm_pct is None else gm_pct
+    cogs = max(0.0, float(revenue) * (1 - gm_pct / 100)) if revenue > 0 else 0.0
+
+    from_opex = min(cogs, max(0.0, float(opex)))
+    from_other = min(cogs - from_opex, max(0.0, float(other_costs)))
+    new_opex = float(opex) - from_opex
+    new_other = float(other_costs) - from_other
+    return {
+        "cogs": cogs,
+        "opex": new_opex,
+        "other_costs": new_other,
+        "gross_margin_pct": gm_pct,
+        "total_costs": cogs + new_opex + float(payroll) + new_other,
+    }
 
 class ManualBaseline(BaseModel):
     monthly_revenue: float
@@ -221,20 +256,48 @@ def manual_baseline(
     today = date.today()
     first_of_month = today.replace(day=1)
     
-    cogs = baseline.monthly_revenue * (1 - baseline.gross_margin_pct / 100)
-    
+    split = split_cogs_from_entered_costs(
+        revenue=baseline.monthly_revenue,
+        gross_margin=baseline.gross_margin_pct,
+        opex=baseline.opex,
+        payroll=baseline.payroll,
+        other_costs=baseline.other_costs,
+    )
+    entered_total = baseline.opex + baseline.payroll + baseline.other_costs
+    net_burn = max(0.0, split["total_costs"] - baseline.monthly_revenue)
+    runway = baseline.cash_balance / net_burn if net_burn > 0 else None
+
     record = FinancialRecord(
         company_id=company_id,
         period_start=first_of_month,
         period_end=today,
         revenue=baseline.monthly_revenue,
-        cogs=cogs,
-        opex=baseline.opex,
+        cogs=split["cogs"],
+        opex=split["opex"],
         payroll=baseline.payroll,
-        other_costs=baseline.other_costs,
+        other_costs=split["other_costs"],
         cash_balance=baseline.cash_balance,
         headcount=baseline.headcount
     )
+    # Store the derived figures too, so readers that use the stored values
+    # agree with the ones recomputed from the breakdown.
+    derived = dict(
+        mrr=baseline.monthly_revenue,
+        arr=baseline.monthly_revenue * 12,
+        gross_margin=split["gross_margin_pct"],
+        gross_profit=baseline.monthly_revenue - split["cogs"],
+        net_burn=net_burn,
+        runway_months=round(runway, 1) if runway else None,
+    )
+    for k, v in derived.items():
+        if hasattr(record, k):
+            setattr(record, k, v)
+    if split["total_costs"] > entered_total + 0.005:
+        logger.info(
+            "manual_baseline company=%s: implied COGS %.0f exceeds opex+other; "
+            "costs raised from %.0f to %.0f", company_id, split["cogs"],
+            entered_total, split["total_costs"],
+        )
     db.add(record)
     
     dataset = Dataset(

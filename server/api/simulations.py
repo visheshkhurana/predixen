@@ -30,6 +30,7 @@ from server.simulate.models import (
 )
 from dataclasses import asdict
 from typing import Union
+from server.core.units import clamp_gross_margin_pct, gross_margin_pct
 
 router = APIRouter(tags=["simulations"])
 
@@ -76,7 +77,13 @@ def resolve_baseline_financials(metrics: Dict[str, Any], latest_record) -> Dict[
     and a runaway (240mo / 100% survival) result.
 
     Returns a dict with keys: revenue, growth, cash, gross_margin,
-    opex, payroll, other_costs.
+    opex, payroll, other_costs, churn.
+
+    churn is monthly revenue churn in percent, read from the truth-scan metrics
+    when a source supplied one (connectors write it as a percentage, the same
+    convention as revenue_growth_mom and gross_margin). The truth scan itself
+    omits churn when it has no signal, and FinancialRecord has no churn column,
+    so the honest default is 0 -- not an invented 5%.
     """
     def frv(attr) -> float:
         v = getattr(latest_record, attr, None) if latest_record is not None else None
@@ -94,7 +101,10 @@ def resolve_baseline_financials(metrics: Dict[str, Any], latest_record) -> Dict[
     ))
     growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0) or frv("mom_growth")
     cash = max(0.0, extract_metric_value(metrics.get("cash_balance"), 0) or frv("cash_balance"))
-    gross_margin = extract_metric_value(metrics.get("gross_margin"), 0) or frv("gross_margin")
+    # Engines take a percentage; legacy rows may hold a fraction.
+    gross_margin = gross_margin_pct(
+        extract_metric_value(metrics.get("gross_margin"), 0) or frv("gross_margin")
+    ) or 0.0
 
     opex = extract_metric_value(metrics.get("opex"), 0) or frv("opex")
     payroll = extract_metric_value(metrics.get("payroll"), 0) or frv("payroll")
@@ -106,12 +116,17 @@ def resolve_baseline_financials(metrics: Dict[str, Any], latest_record) -> Dict[
             # Monte Carlo net cashflow = gross_profit - (opex + payroll + other).
             # To make the simulated burn equal the computed net burn, set total
             # operating cost = net_burn + gross_profit, where gross_profit = revenue * gm.
-            gm_frac = gross_margin / 100.0 if gross_margin > 1 else gross_margin
-            gm_frac = max(0.0, min(1.0, gm_frac))
+            gm_frac = clamp_gross_margin_pct(gross_margin_pct(gross_margin) or 0.0) / 100.0
             gross_profit = revenue * gm_frac
             opex = net_burn + gross_profit
             payroll = 0.0
             other_costs = 0.0
+
+    churn = 0.0
+    for key in ("churn_rate_revenue", "churn_rate", "gross_churn_rate"):
+        if metrics.get(key) is not None:
+            churn = max(0.0, extract_metric_value(metrics.get(key), 0) or 0.0)
+            break
 
     return {
         "revenue": revenue,
@@ -121,6 +136,7 @@ def resolve_baseline_financials(metrics: Dict[str, Any], latest_record) -> Dict[
         "opex": opex,
         "payroll": payroll,
         "other_costs": other_costs,
+        "churn": churn,
     }
 
 
@@ -550,49 +566,27 @@ def run_simulation(
     
     try:
         metrics = truth_scan.outputs_json.get("metrics", {})
-        scenario_inputs = scenario.inputs_json
-        
         latest_record = db.query(FinancialRecord).filter(
             FinancialRecord.company_id == company.id
         ).order_by(FinancialRecord.period_end.desc()).first()
         
-        resolved = resolve_baseline_financials(metrics, latest_record)
-        baseline_growth = resolved["growth"]
-        baseline_revenue = resolved["revenue"]
-        baseline_cash = resolved["cash"]
-        fr_opex = max(0, resolved["opex"])
-        fr_payroll = max(0, resolved["payroll"])
-        fr_other = max(0, resolved["other_costs"])
+        # One construction for every enhanced-engine call site: the hiring
+        # plan and the company's churn used to stop here (hires were summed
+        # for this log line only and never reached the engine).
+        enhanced_inputs = _build_enhanced_inputs(scenario, metrics, latest_record)
 
-        hiring_costs = 0
-        hiring_plan = scenario_inputs.get("hiring_plan", [])
-        for hire in hiring_plan:
-            hiring_costs += hire.get("count", 0) * hire.get("monthly_cost", 0)
-
-        total_monthly_costs = fr_opex + fr_payroll + fr_other + hiring_costs
-        if baseline_cash > 0 and total_monthly_costs > baseline_cash:
+        hiring_costs = sum(
+            float(h.get("count", 1) or 0) * float(h.get("monthly_cost", 0) or 0)
+            for h in enhanced_inputs.hiring_plan
+        )
+        total_monthly_costs = (
+            enhanced_inputs.opex + enhanced_inputs.payroll + enhanced_inputs.other_costs + hiring_costs
+        )
+        if enhanced_inputs.cash_balance > 0 and total_monthly_costs > enhanced_inputs.cash_balance:
             logger.warning(
                 f"Scenario {scenario_id}: monthly costs (${total_monthly_costs:,.0f}) exceed "
-                f"cash balance (${baseline_cash:,.0f}). Runway will be < 1 month."
+                f"cash balance (${enhanced_inputs.cash_balance:,.0f}). Runway will be < 1 month."
             )
-
-        enhanced_inputs = EnhancedSimulationInputs(
-            baseline_revenue=baseline_revenue,
-            baseline_growth_rate=baseline_growth,
-            gross_margin=resolved["gross_margin"],
-            opex=fr_opex,
-            payroll=fr_payroll,
-            other_costs=fr_other,
-            cash_balance=baseline_cash,
-            pricing_change_pct=scenario_inputs.get("pricing_change_pct", 0),
-            growth_uplift_pct=scenario_inputs.get("growth_uplift_pct", 0),
-            burn_reduction_pct=scenario_inputs.get("burn_reduction_pct", 0),
-            fundraise_month=scenario_inputs.get("fundraise_month"),
-            fundraise_amount=scenario_inputs.get("fundraise_amount", 0),
-            gross_margin_delta_pct=scenario_inputs.get("gross_margin_delta_pct", 0),
-            churn_change_pct=scenario_inputs.get("churn_change_pct", 0),
-            cac_change_pct=scenario_inputs.get("cac_change_pct", 0),
-        )
         
         sim_config = SimulationConfig(
             iterations=request.n_sims,
@@ -675,14 +669,23 @@ def _build_enhanced_inputs(scenario: Scenario, metrics: Dict, latest_record, ove
     if overrides:
         si = {**si, **overrides}
 
+    hiring_plan = []
+    for hire in si.get("hiring_plan") or []:
+        if hasattr(hire, "dict"):
+            hire = hire.dict()
+        if isinstance(hire, dict):
+            hiring_plan.append(hire)
+
     return EnhancedSimulationInputs(
         baseline_revenue=resolved["revenue"],
         baseline_growth_rate=resolved["growth"],
         gross_margin=resolved["gross_margin"],
-        opex=resolved["opex"],
-        payroll=resolved["payroll"],
-        other_costs=resolved["other_costs"],
+        opex=max(0, resolved["opex"]),
+        payroll=max(0, resolved["payroll"]),
+        other_costs=max(0, resolved["other_costs"]),
         cash_balance=resolved["cash"],
+        churn_rate=resolved.get("churn", 0.0),
+        hiring_plan=hiring_plan,
         pricing_change_pct=si.get("pricing_change_pct", 0),
         growth_uplift_pct=si.get("growth_uplift_pct", 0),
         burn_reduction_pct=si.get("burn_reduction_pct", 0),
@@ -714,10 +717,9 @@ def _compute_fundraising_metrics(
     opex = resolved["opex"]
     payroll = resolved["payroll"]
     other_costs = resolved["other_costs"]
-    gm_value = resolved["gross_margin"]
-    gross_margin_pct = (gm_value / 100) if gm_value > 1 else gm_value
+    gm_frac = clamp_gross_margin_pct(gross_margin_pct(resolved["gross_margin"]) or 0.0) / 100.0
 
-    gross_profit = monthly_revenue * gross_margin_pct
+    gross_profit = monthly_revenue * gm_frac
     monthly_burn = max(0, opex + payroll + other_costs - gross_profit)
     
     pre_raise_runway = current_cash / monthly_burn if monthly_burn > 0 else 48
@@ -854,7 +856,9 @@ COUNTER_MOVES = [
         "name": "Freeze Hiring",
         "description": "Pause all new hires, reducing payroll growth and burn",
         "icon": "user-minus",
-        "overrides": {"burn_reduction_pct": 15, "growth_uplift_pct": -2},
+        # Freezing hiring removes the planned hires (now that they reach the
+        # engine) on top of the existing 15% burn trim.
+        "overrides": {"burn_reduction_pct": 15, "growth_uplift_pct": -2, "hiring_plan": []},
         "additive_keys": ["burn_reduction_pct", "growth_uplift_pct"],
     },
 ]

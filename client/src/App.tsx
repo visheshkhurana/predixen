@@ -103,7 +103,6 @@ const CapTablePage = lazy(() => import("@/pages/cap-table"));
 const InvestorRoomPage = lazy(() => import("@/pages/investor-room"));
 const KPIBoardPage = lazy(() => import("@/pages/kpi-board"));
 const ConnectorMarketplacePage = lazy(() => import("@/pages/connector-marketplace"));
-const AddDataSourcePage = lazy(() => import("@/pages/add-data-source"));
 const DashboardsPage = lazy(() => import("@/pages/dashboards"));
 const DashboardBuilderPage = lazy(() => import("@/pages/dashboard-builder"));
 const MetricCatalogPage = lazy(() => import("@/pages/metric-catalog"));
@@ -146,6 +145,8 @@ const DefaultAlivePage = lazy(() => import("@/pages/default-alive"));
 const BurnMultiplePage = lazy(() => import("@/pages/burn-multiple"));
 const DilutionPage = lazy(() => import("@/pages/dilution"));
 const LtvCacPage = lazy(() => import("@/pages/ltv-cac"));
+const ToolsIndexPage = lazy(() => import("@/pages/tools-index"));
+const VsRunwayCalculatorVsSpreadsheetPage = lazy(() => import("@/pages/vs-runway-calculator-vs-spreadsheet"));
 const AiCfoPage = lazy(() => import("@/pages/ai-cfo"));
 
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
@@ -335,14 +336,21 @@ function Router() {
         <Route path="/blog">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
         <Route path="/faq">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><FAQPage /></Suspense>}</Route>
         <Route path="/ai-cfo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AiCfoPage /></Suspense>}</Route>
+        <Route path="/tools">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ToolsIndexPage /></Suspense>}</Route>
         <Route path="/tools/runway-calculator">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayCalculatorPage /></Suspense>}</Route>
         <Route path="/tools/dilution">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DilutionPage /></Suspense>}</Route>
 
         <Route path="/tools/ltv-cac">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><LtvCacPage /></Suspense>}</Route>
+        <Route path="/vs/runway-calculator-vs-spreadsheet">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><VsRunwayCalculatorVsSpreadsheetPage /></Suspense>}</Route>
         <Route path="/default-alive">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DefaultAlivePage /></Suspense>}</Route>
         <Route path="/tools/burn-multiple">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BurnMultiplePage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
         <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
+        {/* HAG-449: the entry point the hero's "View Demo" uses. It logs into the
+            shared sample account and drops the visitor straight into /overview in
+            Demo Mode — no login form, no "Welcome back". /demo stays as the page
+            that explains what the demo is. */}
+        <Route path="/demo/enter">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoRedirectPage /></Suspense>}</Route>
         <Route path="/demo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoPage /></Suspense>}</Route>
         <Route path="/auth/callback" component={AuthCallback} />
         <Route path="/auth" component={AuthPage} />
@@ -352,16 +360,17 @@ function Router() {
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/terms" component={TermsOfServicePage} />
       {/* /login means login. /register and /join still land on the register
-          tab so old links do not drop people on the login form. /signup is a
-          public get-started page; its primary CTA goes to /auth?tab=register. */}
+          form so old links do not drop people on the login form. /signup is a
+          public get-started page that renders the same form from a prerendered
+          document, so every register entry now points there (HAG-449). */}
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>
       <Route path="/register">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       <Route path="/join">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       {/* cleya.ai leftover traffic (#44 defer). No matching/referral/apply
           product exists — send visitors to a live marketing page, not 404. */}
@@ -455,8 +464,10 @@ function Router() {
       <Route path="/marketplace">
         {() => <AuthenticatedRoute component={ConnectorMarketplacePage} />}
       </Route>
+      {/* The add-data-source wizard faked "Test connection" and "connected"
+          without calling the API. Integrations is the real connect flow. */}
       <Route path="/add-data-source">
-        {() => <AuthenticatedRoute component={AddDataSourcePage} />}
+        {() => <Redirect to="/integrations" />}
       </Route>
       {/* Marketplace "manage" and add-data-source complete navigated here.
           No connector-detail page exists — Integrations is the live dest. */}
@@ -876,15 +887,15 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   
   const marketingPaths = [
     '/', '/features', '/product', '/pricing', '/about', '/compare', '/customers', '/use-cases', '/how-it-works', '/alternatives', '/blog', '/faq',
-    '/contact', '/demo', '/auth', '/onboarding', '/onboard', '/owner-console',
+    '/contact', '/demo', '/demo/enter', '/auth', '/onboarding', '/onboard', '/owner-console',
     '/survival-simulator', '/default-alive', '/privacy', '/terms', '/security',
     '/reset-password', '/verify-email', '/auth/callback',
     '/login', '/signup', '/register', '/join',
-    '/ai-cfo', '/embed/survival',
+    '/ai-cfo', '/embed/survival', '/tools',
   ];
   const marketingPrefixes = [
     '/blog/', '/tools/', '/admin', '/scenarios/shared/',
-    '/survival/', '/runway/', '/embed/',
+    '/survival/', '/runway/', '/embed/', '/vs/',
   ];
   // Use wouter's location (not window.location) so client-side navigations
   // re-evaluate the shell instead of keeping whatever was true on hard load.
@@ -931,8 +942,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 to /overview both times before giving up.
 
                 Signing out first is what makes the escape real: it clears the
-                demo session so /auth?tab=register renders instead of
-                redirecting.
+                demo session so /signup renders instead of redirecting.
               */}
               <span>
                 Demo Mode — You are viewing simulated sample data.{" "}
@@ -943,7 +953,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                   onClick={async () => {
                     try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
                     useFounderStore.getState().logout();
-                    navigate('/auth?tab=register');
+                    navigate('/signup');
                   }}
                 >
                   Sign up free

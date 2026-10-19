@@ -5,7 +5,7 @@ import viteConfig from "../vite.config";
 import fs from "fs";
 import path from "path";
 import { nanoid } from "nanoid";
-import { injectSEO } from "./seo-prerender";
+import { renderHtmlPage } from "./seo-prerender";
 
 const viteLogger = createLogger();
 
@@ -55,8 +55,8 @@ export async function setupVite(server: Server, app: Express) {
       );
       const page = await vite.transformIndexHtml(url, template);
       const cleanPath = url.split("?")[0].split("#")[0];
-      const enrichedPage = injectSEO(page, cleanPath);
-      res.status(200).set({ "Content-Type": "text/html" }).end(enrichedPage);
+      const rendered = renderHtmlPage(page, cleanPath);
+      res.status(rendered.status).set({ "Content-Type": "text/html" }).end(rendered.html);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);

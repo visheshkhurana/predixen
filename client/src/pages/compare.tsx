@@ -61,6 +61,21 @@ export default function ComparePage() {
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tight text-foreground">
+          Spreadsheet or calculator?
+        </h2>
+        <p className="mt-3 text-muted-foreground">
+          If the question you are weighing is a spreadsheet against a purpose-built tool, we wrote that comparison out in full — including the parts where the{" "}
+          <Link
+            href="/vs/runway-calculator-vs-spreadsheet"
+            className="text-primary hover:underline"
+            data-testid="link-compare-vs-spreadsheet"
+          >
+            spreadsheet is the better choice
+          </Link>
+          .
+        </p>
+
+        <h2 className="mt-10 text-2xl font-semibold tracking-tight text-foreground">
           Related free tools
         </h2>
         <p className="mt-3 text-muted-foreground">
@@ -84,7 +99,7 @@ export default function ComparePage() {
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-compare-auth">
-            <Link href="/auth?tab=register">
+            <Link href="/signup">
               Get started free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
