@@ -1,6 +1,6 @@
 """Database migration helpers for adding new columns to existing tables."""
 import logging
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
@@ -33,14 +33,36 @@ def ensure_financial_record_columns(engine: Engine) -> None:
         ('marketing_expense', 'FLOAT'),
         ('source_type', 'VARCHAR(20)'),
         ('extraction_summary', 'TEXT'),
+        # Sync provenance. Same three columns as Alembic revision b7d3e1a04c21.
+        # IF NOT EXISTS so startup migrations and Alembic can run in either order.
+        ('source', 'VARCHAR(64)'),
+        ('synced_at', 'VARCHAR(40)'),
+        ('synced_fields', 'JSON'),
     ]
     
     with engine.connect() as conn:
+        try:
+            existing = {
+                column["name"]
+                for column in inspect(conn).get_columns("financial_records")
+            }
+        except Exception as e:
+            logger.debug(f"Could not read financial_records columns: {e}")
+            existing = set()
+        # Postgres accepts ADD COLUMN IF NOT EXISTS. SQLite in this project
+        # rejects that clause, so the catalog check above is what makes the
+        # SQLite path idempotent. A column already in `existing` is skipped.
+        if_not_exists = conn.dialect.name != "sqlite"
         for col_name, col_type in new_columns:
+            if col_name in existing:
+                continue
+            clause = "IF NOT EXISTS " if if_not_exists else ""
             try:
-                conn.execute(text(
-                    f'ALTER TABLE financial_records ADD COLUMN IF NOT EXISTS {col_name} {col_type}'
-                ))
+                with conn.begin_nested():
+                    conn.execute(text(
+                        f"ALTER TABLE financial_records ADD COLUMN {clause}{col_name} {col_type}"
+                    ))
+                existing.add(col_name)
             except Exception as e:
                 logger.debug(f"Column {col_name} may already exist or error: {e}")
         conn.commit()
