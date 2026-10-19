@@ -18,6 +18,7 @@ from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
 from server.models.company import Company
+from server.core.company_access import get_user_company
 from server.models.conversation import Conversation, ConversationMessage, ConversationRecommendation
 from server.models.scenario import Scenario
 
@@ -99,12 +100,7 @@ async def list_conversations(
     current_user: User = Depends(get_current_user)
 ):
     """List all conversations for a company with pagination."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     conversations = db.query(Conversation).filter(
         Conversation.company_id == company_id,
@@ -147,12 +143,7 @@ async def get_conversation(
     current_user: User = Depends(get_current_user)
 ):
     """Get detailed conversation with all messages and recommendations."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id,
@@ -201,12 +192,7 @@ async def create_conversation(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new conversation for a company."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     conversation = Conversation(
         company_id=company_id,
@@ -245,12 +231,7 @@ async def use_conversation_shortcut(
     - revisit_last_session: Restore the most recent conversation context
     - use_scenario_assumptions: Load assumptions from a named scenario
     """
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     if request.shortcut_type == "revisit_last_session":
         last_conversation = db.query(Conversation).filter(
@@ -314,12 +295,7 @@ async def get_active_conversation(
     current_user: User = Depends(get_current_user)
 ):
     """Get or create the active conversation for current chat session."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     active_conversation = db.query(Conversation).filter(
         Conversation.company_id == company_id,
@@ -356,12 +332,7 @@ async def submit_recommendation_feedback(
     current_user: User = Depends(get_current_user)
 ):
     """Submit feedback for a recommendation (accepted, ignored, later)."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     recommendation = db.query(ConversationRecommendation).filter(
         ConversationRecommendation.id == recommendation_id,
@@ -398,12 +369,7 @@ async def get_conversation_recommendations(
     current_user: User = Depends(get_current_user)
 ):
     """Get all recommendations for a conversation with feedback status."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id,

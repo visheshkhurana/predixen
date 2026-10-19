@@ -590,7 +590,7 @@ Verified financial metrics (single source of truth -- use these exact numbers, n
 
 Answer the founder's question directly and specifically in 1-2 short paragraphs of plain prose (not bullet lists). Ground every claim in the metrics above, citing the actual numbers. If the question asks about risks or priorities, name the top items explicitly and explain why, using the data. Be opinionated and actionable. Do not restate the metrics as a list -- weave them into your analysis."""
 
-        response = self._call_llm(
+        response = await self._acall_llm(
             messages=[{"role": "user", "content": prompt}],
             system_prompt=CFO_SYSTEM_PROMPT,
             task_type="financial_analysis",

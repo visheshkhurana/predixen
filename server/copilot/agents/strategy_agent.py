@@ -623,7 +623,7 @@ User question: {query}
 Provide a brief, actionable strategic insight (2-3 sentences) focused on the most important strategic move the company should consider. Be specific about timing, priorities, and expected outcomes."""
         
         try:
-            response = self._call_llm(
+            response = await self._acall_llm(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=STRATEGY_SYSTEM_PROMPT,
                 task_type="strategy",
