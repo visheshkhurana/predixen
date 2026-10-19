@@ -192,5 +192,5 @@ test("security copy names the cipher the code uses (Fernet), not envelope encryp
 test("/demo lists tour stops, not timestamps for a video that does not exist", () => {
   const src = read("client/src/pages/demo.tsx");
   assert.doesNotMatch(src, /time: "\d+:\d\d"/);
-  assert.match(src, /tourStops/);
+  assert.match(src, /What the demo covers/);
 });

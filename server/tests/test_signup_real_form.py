@@ -113,7 +113,7 @@ def test_pin_four_the_prerendered_body_still_serves_the_register_funnel():
     body = prerender[prerender.index("function buildSignupBodyContent") :]
     body = body[: body.index("function buildSecurityBodyContent")]
     for href in (
-        "/auth?tab=register",
+        "/signup",
         "/product",
         "/features",
         "/pricing",

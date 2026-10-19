@@ -20,23 +20,47 @@ logger = logging.getLogger(__name__)
 
 # NOTE: FastAPI sees paths WITHOUT the /api prefix (Express strips it when
 # proxying), but keep the prefix optional so this works in both contexts.
+#
+# HAG-265: six of these patterns matched NO live route, and one of them was the
+# only pattern naming a feature at all. They are listed in the order the old
+# map had them, with the dead six replaced by the routes that actually exist:
+#
+#   companies/\d+/copilot        -> companies/\d+/chat
+#   companies/\d+/simulations    -> companies/\d+/simulate + /simulation/
+#   companies/\d+/truth-scan     -> companies/\d+/truth/ + /truth-scan/
+#   export/board-deck            -> companies/\d+/board-export/
+#   companies/\d+/digital-twin   -> companies/\d+/twin/
+#   doc-generator/               -> companies/\d+/doc-generator/
+#
+# The two that mattered most: `POST /companies/{company_id}/chat` is the main
+# Copilot call and was named by no pattern, and `POST /scenarios/{scenario_id}/simulate`
+# is what the product's own scenario page calls -- the `/simulation/` patterns
+# cover the v2 family, which `/scenarios` does not use.
+#
+# Scenario ids are matched as `[^/]+` rather than `\d+`: `/scenarios/shared/{share_uuid}`
+# is a live route, so an id is not always numeric.
 ROUTE_FEATURE_MAP: List[tuple] = [
-    (re.compile(r"^(?:/api)?/companies/\d+/copilot"), Feature.COPILOT),
+    (re.compile(r"^(?:/api)?/companies/\d+/chat"), Feature.COPILOT),
     (re.compile(r"^(?:/api)?/companies/\d+/quick-chat"), Feature.COPILOT),
-    (re.compile(r"^(?:/api)?/companies/\d+/simulations"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/companies/\d+/simulate"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/companies/\d+/simulation/"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/scenarios/[^/]+/simulate"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/scenarios/[^/]+/simulation/latest"), Feature.SIMULATIONS),
     (re.compile(r"^(?:/api)?/simulation/"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/simulations/"), Feature.SIMULATIONS),
     (re.compile(r"^(?:/api)?/simulator/"), Feature.FLIGHT_SIMULATOR),
     (re.compile(r"^(?:/api)?/simulation-copilot/"), Feature.SIMULATIONS),
-    (re.compile(r"^(?:/api)?/companies/\d+/truth-scan"), Feature.TRUTH_SCAN),
+    (re.compile(r"^(?:/api)?/companies/\d+/truth/"), Feature.TRUTH_SCAN),
+    (re.compile(r"^(?:/api)?/truth-scan/"), Feature.TRUTH_SCAN),
     (re.compile(r"^(?:/api)?/connectors/"), Feature.DATA_CONNECTORS),
     (re.compile(r"^(?:/api)?/companies/\d+/fundraising"), Feature.FUNDRAISING_OS),
     (re.compile(r"^(?:/api)?/companies/\d+/cap-table"), Feature.CAP_TABLE),
-    (re.compile(r"^(?:/api)?/export/board-deck"), Feature.BOARD_DECK),
+    (re.compile(r"^(?:/api)?/companies/\d+/board-export/"), Feature.BOARD_DECK),
     (re.compile(r"^(?:/api)?/companies/\d+/hiring"), Feature.HIRING_PLANNER),
-    (re.compile(r"^(?:/api)?/companies/\d+/digital-twin"), Feature.DIGITAL_TWIN),
+    (re.compile(r"^(?:/api)?/companies/\d+/twin/"), Feature.DIGITAL_TWIN),
     (re.compile(r"^(?:/api)?/companies/\d+/ai-graphics"), Feature.AI_GRAPHICS),
     (re.compile(r"^(?:/api)?/companies/\d+/investor-room"), Feature.INVESTOR_ROOM),
-    (re.compile(r"^(?:/api)?/doc-generator/"), Feature.DOCUMENT_GENERATOR),
+    (re.compile(r"^(?:/api)?/companies/\d+/doc-generator/"), Feature.DOCUMENT_GENERATOR),
 ]
 
 EXEMPT_METHODS = {"GET", "HEAD", "OPTIONS"}
