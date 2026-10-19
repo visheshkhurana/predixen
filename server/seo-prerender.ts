@@ -161,6 +161,40 @@ ${founderFaqs
 </article>`;
 }
 
+function buildToolsIndexBodyContent(): string {
+  // HAG-449: `/tools` used to be a deliberate 404 (the soft-404 work listed it
+  // beside `/tools/unknown`), which made it a dead end for anyone who trimmed a
+  // tool URL. The four links below are the four `/tools/*` routes `App.tsx`
+  // registers; `server/tests/tools-index.test.ts` fails if that set drifts, so a
+  // new tool page cannot ship and leave the hub pointing at three of four.
+  //
+  // The other three free calculators live at the site root. They are listed in
+  // their own group rather than omitted: a page called "free tools" that hides
+  // half the free tools sends a visitor to a search engine instead.
+  return `<article>
+<h1>Free Startup Finance Tools</h1>
+<p>Four free calculators for the numbers that decide how long a company has left, and three more free tools that answer the same kind of question. No account, no card, no demo call.</p>
+<h2>The four calculators</h2>
+<ul>
+<li><a href="/tools/runway-calculator">Startup runway calculator</a> — enter cash on hand, monthly revenue, monthly expenses and growth rate to get your months of runway and the month the cash runs out.</li>
+<li><a href="/tools/burn-multiple">Burn multiple calculator</a> — how many dollars of burn bought each dollar of net new ARR, from new and total ARR at the start and end of a period.</li>
+<li><a href="/tools/dilution">Dilution calculator</a> — the percentage of the company a round costs you, from pre-money valuation, amount raised and the existing option pool.</li>
+<li><a href="/tools/ltv-cac">LTV:CAC calculator</a> — lifetime value against acquisition cost, graded separately from payback, because a healthy ratio with a slow payback is how a growing company runs out of cash.</li>
+</ul>
+<h2>Three more free tools</h2>
+<ul>
+<li><a href="/default-alive">Default alive or default dead test</a> — Paul Graham's question, answered on your own numbers, with what it would take to flip the answer.</li>
+<li><a href="/survival-simulator">Startup survival simulator</a> — a Monte Carlo survival probability rather than a single point estimate.</li>
+<li><a href="/ai-cfo">AI CFO</a> — a financial question answered from your own numbers.</li>
+</ul>
+<h2>One number is not a forecast</h2>
+<p>Every calculator here holds your inputs steady and returns a single answer. Real revenue is lumpy, and the month that decides the outcome is rarely the average month. FounderConsole connects to your actual financial data and runs the same question thousands of times, so runway comes back as a distribution with P10/P50/P90 bands instead of one date.</p>
+<h2>Where these formulas come from</h2>
+<p>Each calculator states its formula and its benchmark on the page, records whether the formula is textbook or a stated choice, and pins a worked example in a test. Where a common shortcut is wrong — monthly churn multiplied by twelve instead of compounded, for instance — the page shows the size of the error rather than hiding it.</p>
+<p>When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>. See <a href="/pricing">pricing</a> for what is included during early access.</p>
+</article>`;
+}
+
 function buildBurnMultipleBodyContent(): string {
   // The formula and the benchmark bands are not written from memory here: they are the
   // published formulas and sourced figures from `hive/reports/quant-forge-tools-maths.md`
@@ -1436,13 +1470,47 @@ function getPageMeta(path: string): PageMeta | null {
     };
   }
 
-  // Known tool slugs return above. Anything else under /tools is not a page:
-  // /tools, /tools/, and /tools/<unknown> used to fall through to the homepage
-  // shell with HTTP 200.
-  if (path === "/tools" || path.startsWith("/tools/")) {
+  // HAG-449: the hub itself. Everything above this line is a leaf, so `/tools`
+  // and `/tools/` (trailing slash stripped above) land here instead of on the
+  // 404 that used to own this path.
+  if (path === "/tools") {
+    return {
+      title: "Free Startup Finance Tools — Runway, Burn, Dilution, LTV:CAC | FounderConsole",
+      description: "Four free startup finance calculators and three more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
+      canonical: SITE_URL + "/tools",
+      bodyContent: buildToolsIndexBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        name: "Free Startup Finance Tools",
+        url: SITE_URL + "/tools",
+        hasPart: [
+          `${SITE_URL}/tools/runway-calculator`,
+          `${SITE_URL}/tools/burn-multiple`,
+          `${SITE_URL}/tools/dilution`,
+          `${SITE_URL}/tools/ltv-cac`,
+          `${SITE_URL}/default-alive`,
+          `${SITE_URL}/survival-simulator`,
+          `${SITE_URL}/ai-cfo`,
+        ].map((url) => ({ "@type": "WebPage", url })),
+      }, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Free tools", item: `${SITE_URL}/tools` },
+        ],
+      }],
+    };
+  }
+
+  // Known tool slugs return above and the hub returns just above. Anything else
+  // under /tools is not a page: /tools/<unknown> used to fall through to the
+  // homepage shell with HTTP 200 and must stay a real 404.
+  if (path.startsWith("/tools/")) {
     return notFoundMeta(
-      SITE_URL + "/tools/runway-calculator",
-      "This page does not exist. Browse the free runway calculator instead.",
+      SITE_URL + "/tools",
+      "This page does not exist. Browse the free startup finance tools instead.",
     );
   }
 

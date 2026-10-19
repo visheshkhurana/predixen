@@ -2,6 +2,11 @@
 // noindex title and an empty body). They must be a real 404: status and SSR.
 // Valid slugs stay 200.
 //
+// HAG-449 removed `/tools` and `/tools/` from the 404 list: the hub is now a
+// real page, so both are 200. `/tools/<unknown>` is still a 404 and still has
+// to say so — otherwise this change would have turned every mistyped tool URL
+// back into a soft 404.
+//
 // Run: npx tsx --test server/tests/soft-404-status.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +18,7 @@ import { renderHtmlPage } from "../seo-prerender";
 
 const SHELL = readFileSync("client/index.html", "utf8");
 
-const NOT_FOUND = ["/tools/unknown", "/tools/", "/tools", "/runway/not-a-real-industry"];
+const NOT_FOUND = ["/tools/unknown", "/runway/not-a-real-industry"];
 const TOOLS = [
   "/tools/runway-calculator",
   "/tools/burn-multiple",
@@ -61,6 +66,16 @@ test("valid tool and industry slugs stay 200, including a trailing slash", async
       assert.match(html, /<h1>/, path + suffix);
       assert.doesNotMatch(html, /<h1>Page not found<\/h1>/, path + suffix);
     }
+  }
+
+  // The hub, with and without the trailing slash. It is listed separately from
+  // TOOLS because its body is the index, not a calculator.
+  for (const path of ["/tools", "/tools/"]) {
+    const response = await fetch(base + path);
+    const html = await response.text();
+    assert.equal(response.status, 200, path);
+    assert.match(html, /<h1>Free Startup Finance Tools<\/h1>/, path);
+    assert.doesNotMatch(html, /<h1>Page not found<\/h1>/, path);
   }
 
   for (const industry of RUNWAY_INDUSTRIES) {
