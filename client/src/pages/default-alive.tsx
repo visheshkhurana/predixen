@@ -10,6 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { useSEO } from "@/lib/seo";
 import { trackFunnel } from "@/lib/funnel";
 import { trackEvent } from "@/lib/posthog";
+import { toNumber } from "@/lib/tools/runway";
+import { computeVerdict, HORIZON } from "@/lib/tools/defaultAlive";
 import {
   ArrowRight,
   DollarSign,
@@ -20,8 +22,6 @@ import {
   Scissors,
   Landmark,
 } from "lucide-react";
-
-const HORIZON = 60;
 
 function formatCurrency(val: number): string {
   const sign = val < 0 ? "-" : "";
@@ -37,69 +37,23 @@ function monthLabel(monthsFromNow: number): string {
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-type Verdict = {
-  alive: boolean;
-  profitableMonth: number | null;
-  outOfCashMonth: number | null;
-  lowestCash: number;
-  series: { month: number; cash: number; rev: number; exp: number }[];
-};
-
-/**
- * Paul Graham's default alive test: at your current growth rate and current
- * expenses, do you reach profitability before the money runs out?
- *
- * The honest caveat, which most calculators of this shape omit: PG's original
- * framing holds expenses flat, and almost nobody's expenses stay flat while
- * revenue compounds. The expenseGrowth toggle exists so a founder can see how
- * fragile the "alive" verdict is once hiring is included — it very often flips.
- */
-function computeVerdict(
-  cash: number,
-  revenue: number,
-  expenses: number,
-  growthPct: number,
-  expenseGrowthPct: number,
-): Verdict {
-  const g = growthPct / 100;
-  const eg = expenseGrowthPct / 100;
-
-  let remaining = cash;
-  let profitableMonth: number | null = null;
-  let outOfCashMonth: number | null = null;
-  let lowestCash = cash;
-  const series: Verdict["series"] = [];
-
-  for (let m = 0; m <= HORIZON; m++) {
-    const rev = revenue * Math.pow(1 + g, m);
-    const exp = expenses * Math.pow(1 + eg, m);
-
-    if (profitableMonth === null && rev >= exp) profitableMonth = m;
-
-    series.push({ month: m, cash: remaining, rev, exp });
-    if (remaining < lowestCash) lowestCash = remaining;
-    if (remaining <= 0 && outOfCashMonth === null) outOfCashMonth = m;
-
-    remaining += rev - exp;
-  }
-
-  // Alive means you cross into profit while there is still money in the bank.
-  const alive =
-    profitableMonth !== null &&
-    (outOfCashMonth === null || profitableMonth < outOfCashMonth);
-
-  return { alive, profitableMonth, outOfCashMonth, lowestCash, series };
-}
-
 const DA_DEFAULTS = { cash: 500000, revenue: 25000, expenses: 75000, growthRate: 8 };
 
 export default function DefaultAlivePage() {
-  const [cash, setCash] = useState(DA_DEFAULTS.cash);
-  const [revenue, setRevenue] = useState(DA_DEFAULTS.revenue);
-  const [expenses, setExpenses] = useState(DA_DEFAULTS.expenses);
-  const [growthRate, setGrowthRate] = useState(DA_DEFAULTS.growthRate);
+  // Fields hold TEXT, as on /tools/runway-calculator: with
+  // a numeric state set from Number(e.target.value), Number("") is 0, so deleting the
+  // last digit snapped the field back to "0" and it could never be emptied.
+  const [cashText, setCashText] = useState(String(DA_DEFAULTS.cash));
+  const [revenueText, setRevenueText] = useState(String(DA_DEFAULTS.revenue));
+  const [expensesText, setExpensesText] = useState(String(DA_DEFAULTS.expenses));
+  const [growthText, setGrowthText] = useState(String(DA_DEFAULTS.growthRate));
   const [includeExpenseGrowth, setIncludeExpenseGrowth] = useState(false);
-  const [expenseGrowth, setExpenseGrowth] = useState(3);
+  const [expenseGrowthText, setExpenseGrowthText] = useState("3");
+  const cash = toNumber(cashText);
+  const revenue = toNumber(revenueText);
+  const expenses = toNumber(expensesText);
+  const growthRate = toNumber(growthText);
+  const expenseGrowth = toNumber(expenseGrowthText);
 
   // See the matching comment in runway-calculator.tsx: a page view here says
   // nothing about whether the visitor actually asked the question. This is the
@@ -222,27 +176,27 @@ export default function DefaultAlivePage() {
                     <Label htmlFor="da-cash" className="text-sm font-medium">Cash in the Bank</Label>
                     <div className="relative mt-1.5">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                      <Input id="da-cash" type="number" value={cash} onChange={(e) => setCash(Number(e.target.value))} className="pl-7" data-testid="input-da-cash" />
+                      <Input id="da-cash" type="number" inputMode="decimal" value={cashText} onChange={(e) => setCashText(e.target.value)} className="pl-7" data-testid="input-da-cash" />
                     </div>
                   </div>
                   <div>
                     <Label htmlFor="da-revenue" className="text-sm font-medium">Monthly Revenue</Label>
                     <div className="relative mt-1.5">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                      <Input id="da-revenue" type="number" value={revenue} onChange={(e) => setRevenue(Number(e.target.value))} className="pl-7" data-testid="input-da-revenue" />
+                      <Input id="da-revenue" type="number" inputMode="decimal" value={revenueText} onChange={(e) => setRevenueText(e.target.value)} className="pl-7" data-testid="input-da-revenue" />
                     </div>
                   </div>
                   <div>
                     <Label htmlFor="da-expenses" className="text-sm font-medium">Monthly Expenses</Label>
                     <div className="relative mt-1.5">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                      <Input id="da-expenses" type="number" value={expenses} onChange={(e) => setExpenses(Number(e.target.value))} className="pl-7" data-testid="input-da-expenses" />
+                      <Input id="da-expenses" type="number" inputMode="decimal" value={expensesText} onChange={(e) => setExpensesText(e.target.value)} className="pl-7" data-testid="input-da-expenses" />
                     </div>
                   </div>
                   <div>
                     <Label htmlFor="da-growth" className="text-sm font-medium">Monthly Revenue Growth</Label>
                     <div className="relative mt-1.5">
-                      <Input id="da-growth" type="number" value={growthRate} onChange={(e) => setGrowthRate(Number(e.target.value))} className="pr-8" data-testid="input-da-growth" />
+                      <Input id="da-growth" type="number" inputMode="decimal" value={growthText} onChange={(e) => setGrowthText(e.target.value)} className="pr-8" data-testid="input-da-growth" />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                         <Percent className="h-3.5 w-3.5" />
                       </span>
@@ -276,7 +230,7 @@ export default function DefaultAlivePage() {
                           Monthly expense growth
                         </Label>
                         <div className="relative mt-1.5">
-                          <Input id="da-expense-growth" type="number" value={expenseGrowth} onChange={(e) => setExpenseGrowth(Number(e.target.value))} className="pr-8" data-testid="input-da-expense-growth" />
+                          <Input id="da-expense-growth" type="number" inputMode="decimal" value={expenseGrowthText} onChange={(e) => setExpenseGrowthText(e.target.value)} className="pr-8" data-testid="input-da-expense-growth" />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                             <Percent className="h-3.5 w-3.5" />
                           </span>

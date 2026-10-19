@@ -42,7 +42,7 @@ export default function SecurityPage() {
           Integrations and credentials
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Integrations use OAuth2 with read-only access where possible. Credentials are stored encrypted. Passwords are hashed using bcrypt before storage.
+          Integrations use OAuth2 with read-only access where possible. Integration credentials are encrypted with Fernet (AES-128-CBC with an HMAC-SHA256 integrity check). Passwords are hashed using bcrypt before storage.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tight text-foreground">

@@ -33,7 +33,7 @@ const landingFaqs = [
   { q: "What is FounderConsole?", a: "FounderConsole is an AI-powered financial intelligence platform for startups. It connects your financial data, builds a digital twin of your company, runs Monte Carlo simulations, and provides AI-powered strategic recommendations." },
   { q: "Is FounderConsole free?", a: "Yes. All features are free during the public beta, including Monte Carlo simulations, AI copilot, cap table management, 37 data connectors, and board deck generation. No credit card is required." },
   { q: "How does FounderConsole help with fundraising?", a: "FounderConsole includes a Fundraising OS with cap table management, dilution modeling, investor CRM, SAFE conversion modeling, and exit waterfall analysis." },
-  { q: "What data sources can I connect?", a: "FounderConsole supports 37 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more." },
+  { q: "What data sources can I connect?", a: "FounderConsole supports 37 data connectors, six of them with one-click OAuth (QuickBooks, Xero, Gusto, NetSuite, Zoho Books and Google Sheets); the rest, including Stripe and Mercury, use an API key, a database connection or a file upload." },
   { q: "What is a Monte Carlo simulation?", a: "Monte Carlo simulation runs your financial model thousands of times with slightly different inputs each time, producing a probability distribution instead of a single forecast." },
   { q: "How is this different from a spreadsheet?", a: "Spreadsheets give you one forecast. FounderConsole runs thousands of scenarios, accounts for uncertainty, connects to live data, and uses AI to generate insights." },
   { q: "What is a startup digital twin?", a: "A digital twin is a continuously updated virtual representation of your company that reflects your current financial reality without manual updates." },
@@ -232,7 +232,7 @@ function buildDilutionBodyContent(): string {
 <h2>How startup dilution works</h2>
 <p>The investor's share is the amount raised divided by the post-money valuation, and post-money is pre-money plus the raise. Raise $2M at an $8M pre-money valuation and the investor owns 20% of the $10M post-money company. That part is arithmetic and every calculator agrees on it.</p>
 <h3>The option pool shuffle</h3>
-<p>Investors usually require the company to leave the round with an unissued option pool already in place, typically 10% to 15% of post-money. That pool is created before the investment is priced, so those shares are carved out of the existing holders rather than the new investor. In the worked example on the page — 8,000,000 founder shares, a 1,000,000-share pool, an $8M pre-money valuation, a $2M raise and a 12% post-money pool target — the investor still owns exactly 20%, but the founders finish at 68% rather than the 71.1% the simple formula implies. The founders lose 32 percentage points, not 20, and the extra 12 points go to the pool.</p>
+<p>Investors usually require the company to leave the round with an unissued option pool already in place, typically 10% to 15% of post-money. That pool is created before the investment is priced, so those shares are carved out of the existing holders rather than the new investor. In the worked example on the page — 8,000,000 founder shares, a 1,000,000-share pool, an $8M pre-money valuation, a $2M raise and a 12% post-money pool target — the investor still owns exactly 20%, but the founders, who held 88.9% before the round, finish at 68.0% rather than the 71.1% the simple formula implies. The founders lose 20.9 percentage points, and 3.1 of them are the cost of the option pool shuffle.</p>
 <h2>The formulas</h2>
 <p>With F founder shares, E existing pool shares, T = F + E, V the pre-money valuation, R the amount raised and p the pool target as a fraction of post-money: k = 1 + R / V; the new pool shares are dP = max(0, (p * T * k - E) / (1 - p * k)); the shares the investor buys are N = R * (T + dP) / V; and the post-money share count is T + dP + N. The investor's share, N divided by the post-money total, always equals R / (V + R), whatever the pool target is.</p>
 <h2>The choices this calculator states, and what is not a choice</h2>
@@ -396,9 +396,9 @@ function buildFeaturesBodyContent(): string {
 </ul>
 
 <h2>Data Connectors</h2>
-<p><strong>Connect everything. Auto-sync.</strong> 37 real OAuth2 integrations with the tools founders already use. QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and more. No CSV imports or screen scraping required.</p>
+<p><strong>Connect everything. Auto-sync.</strong> 37 data connectors for the tools founders already use. Six connect with one-click OAuth (QuickBooks, Xero, Gusto, NetSuite, Zoho Books and Google Sheets); the rest, including Stripe and Mercury, use an API key, a database connection or a file upload. No screen scraping.</p>
 <ul>
-<li>37 integrations with one-click OAuth connections</li>
+<li>37 data connectors, 6 with one-click OAuth</li>
 <li>QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid supported</li>
 <li>Auto-sync keeps your data fresh without manual intervention</li>
 <li>Multi-currency handling across all connected sources</li>
@@ -559,7 +559,7 @@ function buildSecurityBodyContent(): string {
 <h2>Encryption at rest and in transit</h2>
 <p>All data is encrypted using AES-256 at rest and TLS in transit. All connections use HTTPS/TLS encryption in transit.</p>
 <h2>Integrations and credentials</h2>
-<p>Integrations use OAuth2 with read-only access where possible. Credentials are stored encrypted. Passwords are hashed using bcrypt before storage.</p>
+<p>Integrations use OAuth2 with read-only access where possible. Integration credentials are encrypted with Fernet (AES-128-CBC with an HMAC-SHA256 integrity check). Passwords are hashed using bcrypt before storage.</p>
 <h2>Where data is stored</h2>
 <p>Your data is stored in US-based PostgreSQL databases with automated daily backups. See the <a href="/product">product</a> overview for what the platform does with connected data.</p>
 <h2>Compliance</h2>
@@ -615,7 +615,7 @@ const faqSections = [
   {
     title: "Data & Security",
     items: [
-      { q: "How is my financial data protected?", a: "All data is encrypted using AES-256 at rest and TLS in transit. Integrations use OAuth2 with read-only access where possible. Credentials are stored with envelope encryption. We never sell or share your data with third parties." },
+      { q: "How is my financial data protected?", a: "All data is encrypted using AES-256 at rest and TLS in transit. Integrations use OAuth2 with read-only access where possible. Integration credentials are encrypted with Fernet (AES-128-CBC with an HMAC-SHA256 integrity check). We never sell or share your data with third parties." },
       { q: "Where is my data stored?", a: "Your data is stored in US-based PostgreSQL databases with automated daily backups and point-in-time recovery. Infrastructure is hosted on secure, SOC2-compliant cloud providers with strict access controls and audit logging." },
       { q: "What compliance standards do you follow?", a: "We are fully GDPR compliant and are actively working toward SOC2 Type II certification. You can request a full data export or deletion at any time." },
     ],

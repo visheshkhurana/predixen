@@ -12,7 +12,7 @@ const faqSections = [
       {
         question: "What is FounderConsole?",
         answer:
-          "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 37 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions.",
+          "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 37 data connectors (6 with one-click OAuth), and strategic briefings — everything a founder needs to make data-driven decisions.",
       },
       {
         question: "How does FounderConsole help founders?",
@@ -72,7 +72,7 @@ const faqSections = [
       {
         question: "How is my financial data protected?",
         answer:
-          "All data is encrypted using AES-256 at rest and TLS in transit. Integrations use OAuth2 with read-only access where possible. Credentials are stored with envelope encryption. We never sell or share your data with third parties.",
+          "All data is encrypted using AES-256 at rest and TLS in transit. Integrations use OAuth2 with read-only access where possible. Integration credentials are encrypted with Fernet (AES-128-CBC with an HMAC-SHA256 integrity check). We never sell or share your data with third parties.",
       },
       {
         question: "Where is my data stored?",

@@ -73,8 +73,8 @@ const landingFaqs = [
     a: "FounderConsole is an AI-powered financial intelligence platform for startups. It connects your financial data, builds a digital twin of your company, runs Monte Carlo simulations, and provides AI-powered strategic recommendations — replacing spreadsheets with simulations.",
   },
   {
-    q: "Is there a free trial?",
-    a: "Yes. Every new account starts with a free 30-day trial with full access to every feature — no credit card required. After the trial you can continue on the Free plan or subscribe to Starter ($29), Growth ($49), or Scale ($99) per month.",
+    q: "Is FounderConsole free?",
+    a: "Yes. FounderConsole is free while in early access — every feature unlocked, no credit card required. Planned pricing for when early access ends: Free, Starter ($29), Growth ($49), or Scale ($99) per month, with plenty of notice before paid plans begin.",
   },
   {
     q: "How does FounderConsole help with fundraising?",
@@ -82,7 +82,7 @@ const landingFaqs = [
   },
   {
     q: "What data sources can I connect?",
-    a: "FounderConsole supports 37 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more. You can also upload CSV files or enter data manually.",
+    a: "FounderConsole supports 37 data connectors, 16 of them with one-click OAuth, including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more. The rest connect with an API key, a database connection or a file upload, and you can always upload a CSV or enter data manually.",
   },
   {
     q: "What is a Monte Carlo simulation?",
@@ -119,7 +119,7 @@ const pricingTiers = [
     description: "For early-stage founders finding their footing.",
     features: ["50 simulations / month", "100 copilot messages / month", "2 data connectors", "Truth Scan & Stress Tests", "Industry benchmarks"],
     highlighted: false,
-    cta: "Start Free Trial",
+    cta: "Get Started Free",
   },
   {
     name: "Growth",
@@ -128,7 +128,7 @@ const pricingTiers = [
     description: "For scaling startups that decide weekly.",
     features: ["Up to 3 companies", "Unlimited simulations & copilot", "10 data connectors", "Fundraising OS & cap table", "Board deck export"],
     highlighted: true,
-    cta: "Start Free Trial",
+    cta: "Get Started Free",
   },
   {
     name: "Scale",
@@ -137,7 +137,7 @@ const pricingTiers = [
     description: "Full power for serious founders.",
     features: ["Unlimited companies & connectors", "Flight Simulator (AI agents)", "Digital Twin & Investor Room", "Hiring Planner", "Cross-company intelligence"],
     highlighted: false,
-    cta: "Start Free Trial",
+    cta: "Get Started Free",
   },
 ];
 
@@ -283,7 +283,7 @@ function Hero() {
           transition={{ delay: 0.9 }}
           className="mt-4 text-xs text-muted-foreground"
         >
-          Free 30-day trial · No credit card required
+          Free during early access · No credit card required
         </motion.p>
       </motion.div>
 
@@ -637,8 +637,8 @@ function PricingPreview() {
             Simple, transparent pricing
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Start with a free 30-day trial of everything — no credit card required. Founding accounts keep their
-            complimentary access.
+            Everything is free while we&apos;re in early access — every feature unlocked, no credit card
+            required. The plans below are our planned pricing for when early access ends.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
@@ -783,7 +783,7 @@ export default function LandingPage() {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Free 30-day trial with full access — no credit card required. Paid plans from $29/month.",
+          description: "Free during early access with every feature unlocked — no credit card required. Planned paid plans from $29/month.",
         },
         featureList:
           "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
@@ -863,7 +863,7 @@ export default function LandingPage() {
                 </Button>
               </Magnetic>
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">Free 30-day trial · No credit card required.</p>
+            <p className="mt-4 text-xs text-muted-foreground">Free during early access · No credit card required.</p>
           </motion.div>
         </div>
       </section>

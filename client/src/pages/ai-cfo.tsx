@@ -24,7 +24,7 @@ const capabilities = [
 ];
 
 const bullets = [
-  "Free 30-day trial — no credit card required",
+  "Free during early access — no credit card required",
   "Set up in under 5 minutes",
   "37 data connectors incl. Stripe, QuickBooks, Mercury",
   "Monte Carlo P10/P50/P90 runway bands",
@@ -36,7 +36,7 @@ export default function AiCfoPage() {
   useSEO({
     title: "AI CFO for Startups — FounderConsole",
     description:
-      "FounderConsole is the AI CFO for startup founders: live runway and burn tracking, Monte Carlo forecasting, and plain-English financial answers. Free 30-day trial, no credit card.",
+      "FounderConsole is the AI CFO for startup founders: live runway and burn tracking, Monte Carlo forecasting, and plain-English financial answers. Free during early access, no credit card.",
     path: "/ai-cfo",
     jsonLd: [
       {
@@ -48,7 +48,7 @@ export default function AiCfoPage() {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Free 30-day trial with full access — no credit card required. Paid plans from $29/month.",
+          description: "Free during early access with every feature unlocked — no credit card required. Planned paid plans from $29/month.",
         },
       },
     ],
@@ -102,16 +102,16 @@ export default function AiCfoPage() {
             <Magnetic>
               <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/25" asChild data-testid="button-aicfo-hero-cta">
                 <Link href="/signup" onClick={cta("aicfo-hero")}>
-                  Start Free Trial
+                  Get Started Free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
             </Magnetic>
             <Button size="lg" variant="outline" className="h-12 px-8 text-base backdrop-blur" asChild data-testid="button-aicfo-demo">
-              <Link href="/demo/enter">Live Demo</Link>
+              <Link href="/demo/enter">See the Demo</Link>
             </Button>
           </motion.div>
-          <p className="mt-4 text-xs text-muted-foreground">Free 30-day trial · No credit card required</p>
+          <p className="mt-4 text-xs text-muted-foreground">Free during early access · No credit card required</p>
         </div>
       </section>
 
@@ -168,7 +168,7 @@ export default function AiCfoPage() {
           <Magnetic>
             <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/25" asChild data-testid="button-aicfo-final-cta">
               <Link href="/signup" onClick={cta("aicfo-final")}>
-                Start Free Trial
+                Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>

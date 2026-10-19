@@ -130,6 +130,12 @@ jobs:
       - name: signup CTAs open the register tab
         run: npx tsx server/tests/signup-cta-register-tab.test.ts
 
+      - name: dilution tool tests
+        run: npx tsx --test server/tests/dilution.test.ts
+
+      - name: free-tool runway / default-alive math and copy tests
+        run: npx tsx --test server/tests/free-tools-math.test.ts
+
       - name: sitemap.xml is generated, not hand-edited
         run: |
           npm run generate:sitemap

@@ -8,8 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
 import { ArrowRight, Calculator, TrendingUp, AlertTriangle } from "lucide-react";
-import { RUNWAY_INDUSTRIES, getIndustry } from "@/data/runway-industries";
+import { RUNWAY_INDUSTRIES, getIndustry, type IndustryProfile } from "@/data/runway-industries";
 import NotFound from "@/pages/not-found";
+import { simpleRunway, formatRunway, runwayVerdict, toNumber, type RunwayVerdict } from "@/lib/tools/runway";
+
+const VERDICT_TONE: Record<RunwayVerdict, string> = {
+  Profitable: "bg-emerald-600/30 text-emerald-300",
+  Healthy: "bg-emerald-600/30 text-emerald-300",
+  Watch: "bg-amber-600/30 text-amber-200",
+  "Raise soon": "bg-orange-600/30 text-orange-200",
+  Critical: "bg-red-600/30 text-red-200",
+};
 
 function buildJsonLd(name: string, slug: string) {
   return {
@@ -31,13 +40,25 @@ export default function RunwayByIndustryPage() {
   if (!industry) {
     return <NotFound />;
   }
+  // Keyed by slug: moving from /runway/saas to /runway/fintech remounts the
+  // calculator, so its inputs start from the new industry's defaults instead of
+  // keeping the last one's. The early return above sits before any hook.
+  return <IndustryRunwayCalculator key={industry.slug} industry={industry} />;
+}
 
-  const [cash, setCash] = useState(500000);
-  const [burn, setBurn] = useState(industry.defaultBurn);
-  const [revenue, setRevenue] = useState(industry.defaultRevenue);
+function IndustryRunwayCalculator({ industry }: { industry: IndustryProfile }) {
+  // Inputs hold text so a cleared field stays empty instead of snapping to 0.
+  const [cashText, setCashText] = useState("500000");
+  const [burnText, setBurnText] = useState(String(industry.defaultBurn));
+  const [revenueText, setRevenueText] = useState(String(industry.defaultRevenue));
 
-  const netBurn = Math.max(0, burn - revenue);
-  const runway = netBurn > 0 ? Math.floor(cash / netBurn) : 999;
+  const result = useMemo(
+    () => simpleRunway(toNumber(cashText), toNumber(burnText), toNumber(revenueText)),
+    [cashText, burnText, revenueText],
+  );
+  const netBurn = Math.max(0, result.netBurn);
+  const verdictLabel = runwayVerdict(result);
+  const verdict = { label: verdictLabel, tone: VERDICT_TONE[verdictLabel] };
 
   useSEO({
     title: `${industry.name} | FounderConsole`,
@@ -45,13 +66,6 @@ export default function RunwayByIndustryPage() {
     path: `/runway/${industry.slug}`,
     jsonLd: buildJsonLd(industry.name, industry.slug),
   });
-
-  const verdict = useMemo(() => {
-    if (runway >= 18) return { label: "Healthy", tone: "bg-emerald-600/30 text-emerald-300" };
-    if (runway >= 12) return { label: "Watch", tone: "bg-amber-600/30 text-amber-200" };
-    if (runway >= 6) return { label: "Raise soon", tone: "bg-orange-600/30 text-orange-200" };
-    return { label: "Critical", tone: "bg-red-600/30 text-red-200" };
-  }, [runway]);
 
   return (
     <MarketingLayout>
@@ -77,24 +91,24 @@ export default function RunwayByIndustryPage() {
               <div>
                 <Label htmlFor="cash">Cash on hand ($)</Label>
                 <Input
-                  id="cash" type="number" value={cash}
-                  onChange={(e) => setCash(Number(e.target.value) || 0)}
+                  id="cash" type="number" inputMode="decimal" value={cashText}
+                  onChange={(e) => setCashText(e.target.value)}
                   data-testid="input-runway-cash"
                 />
               </div>
               <div>
                 <Label htmlFor="burn">Monthly gross burn ($)</Label>
                 <Input
-                  id="burn" type="number" value={burn}
-                  onChange={(e) => setBurn(Number(e.target.value) || 0)}
+                  id="burn" type="number" inputMode="decimal" value={burnText}
+                  onChange={(e) => setBurnText(e.target.value)}
                   data-testid="input-runway-burn"
                 />
               </div>
               <div>
                 <Label htmlFor="revenue">Monthly revenue ($)</Label>
                 <Input
-                  id="revenue" type="number" value={revenue}
-                  onChange={(e) => setRevenue(Number(e.target.value) || 0)}
+                  id="revenue" type="number" inputMode="decimal" value={revenueText}
+                  onChange={(e) => setRevenueText(e.target.value)}
                   data-testid="input-runway-revenue"
                 />
               </div>
@@ -104,7 +118,7 @@ export default function RunwayByIndustryPage() {
               <div>
                 <div className="text-sm text-muted-foreground">Estimated runway</div>
                 <div className="text-3xl font-bold mt-1" data-testid="runway-result-months">
-                  {runway >= 999 ? "Profitable" : `${runway} months`}
+                  {formatRunway(result)}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   Net burn: ${netBurn.toLocaleString()}/mo · Benchmark: {industry.benchmarkRunway}

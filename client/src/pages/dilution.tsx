@@ -112,7 +112,7 @@ function formatPct(fraction: number, digits = 2): string {
   return `${(fraction * 100).toFixed(digits)}%`;
 }
 
-/** Percentage points, for the "founders lose 32 points, not 20" sentence. */
+/** Percentage points, for the "88.9% -> 68.0%, 20.9 points" sentence. */
 function points(fraction: number): string {
   return `${(fraction * 100).toFixed(1)}`;
 }
@@ -305,18 +305,36 @@ export default function DilutionPage() {
                         className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm leading-relaxed"
                         data-testid="text-dil-headline"
                       >
-                        A simple calculator would tell you the raise costs founders{" "}
-                        <span className="font-medium text-foreground">
-                          {points(result.simpleInvestorPct)} points
-                        </span>{" "}
-                        — that is just the investor's{" "}
-                        {formatPct(result.investorPct as number)}. You
-                        actually give up{" "}
-                        <span className="font-medium text-foreground">
-                          {points(1 - (result.founderPct as number))} points
-                        </span>
-                        , because the option pool is carved out of your side of the cap table
-                        before the money lands.
+                        {result.founderPrePct !== null && result.naiveFounderPct !== null ? (
+                          <>
+                            Founders go from{" "}
+                            <span className="font-medium text-foreground">
+                              {formatPct(result.founderPrePct, 1)}
+                            </span>{" "}
+                            to{" "}
+                            <span className="font-medium text-foreground">
+                              {formatPct(result.founderPct as number, 1)}
+                            </span>{" "}
+                            — you actually give up{" "}
+                            <span className="font-medium text-foreground">
+                              {points(result.founderPrePct - (result.founderPct as number))} points
+                            </span>
+                            . A simple calculator that only sells the investor their{" "}
+                            {points(result.simpleInvestorPct)}% would leave you at{" "}
+                            {formatPct(result.naiveFounderPct, 1)}; the option pool is carved out
+                            of your side of the cap table before the money lands, which costs{" "}
+                            <span className="font-medium text-foreground">
+                              {points(Math.max(0, result.naiveFounderPct - (result.founderPct as number)))} more
+                              points
+                            </span>
+                            .
+                          </>
+                        ) : (
+                          <>
+                            The investor's {points(result.simpleInvestorPct)}% comes out of the
+                            existing holders.
+                          </>
+                        )}
                       </p>
 
                       {shares && (
@@ -452,14 +470,15 @@ export default function DilutionPage() {
               Take 8,000,000 founder shares and a 1,000,000-share option pool, a $8M pre-money
               valuation, a $2M raise, and a 12% post-money pool target. The round issues
               411,765 new pool shares before the investment, and the investor buys 2,352,941
-              shares at the resulting price. The investor still owns exactly 20%. But the
-              founders finish at <strong className="font-medium text-foreground">68%</strong>,
-              not the 71.1% the simple formula implies — a 32-point loss, not 20. Twelve of
-              those points went to the pool, and they came out of the founders' column.
+              shares at the resulting price of $0.85. The investor still owns exactly 20%. The
+              founders, who held 88.9% before the round, finish at{" "}
+              <strong className="font-medium text-foreground">68.0%</strong> — a 20.9-point
+              drop. The simple formula, which leaves the pool alone, says 71.1%. The extra 3.1
+              points went to the new pool shares, and they came out of the founders' column.
             </p>
             <p className="text-muted-foreground leading-relaxed mb-4">
               That gap is the whole reason this page exists. A calculator that shows only the
-              investor's share understates founder dilution by 60% in this example.
+              investor's share misses the 3.1 points the option pool shuffle costs you here.
             </p>
 
             <h3 className="text-xl font-semibold text-foreground mt-8 mb-3">

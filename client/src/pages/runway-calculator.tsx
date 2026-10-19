@@ -10,6 +10,7 @@ import { useSEO } from "@/lib/seo";
 import { founderFaqs } from "@/data/founder-faqs";
 import { trackFunnel } from "@/lib/funnel";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
+import { projectRunway, formatRunway, roundMonths, RUNWAY_HORIZON_MONTHS } from "@/lib/tools/runway";
 import {
   ArrowRight,
   Calculator,
@@ -24,9 +25,17 @@ import {
 } from "lucide-react";
 
 function formatCurrency(val: number): string {
-  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`;
-  return `$${val.toFixed(0)}`;
+  // Sign outside the dollar: "-$20K", never "$-20000".
+  const sign = val < 0 ? "-" : "";
+  const abs = Math.abs(val);
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}K`;
+  return `${sign}$${abs.toFixed(0)}`;
+}
+
+/** Net burn for display: a profitable month is a surplus, not a negative burn. */
+function formatNetBurn(netBurn: number): string {
+  return netBurn > 0 ? formatCurrency(netBurn) : "Profitable";
 }
 
 function formatDate(months: number): string {
@@ -104,24 +113,29 @@ export default function RunwayCalculatorPage() {
     const months: { month: number; cashRemaining: number; burn: number; rev: number }[] = [];
     let remaining = cash;
     let currentRev = revenue;
-    let runwayMonths = 0;
 
-    for (let m = 0; m <= 36; m++) {
+    for (let m = 0; m <= RUNWAY_HORIZON_MONTHS; m++) {
       const currentBurn = expenses - currentRev;
       months.push({ month: m, cashRemaining: remaining, burn: currentBurn, rev: currentRev });
-      if (remaining <= 0 && runwayMonths === 0) {
-        runwayMonths = m;
-      }
       remaining -= currentBurn;
       currentRev *= 1 + growthRate / 100;
     }
 
-    if (runwayMonths === 0) runwayMonths = 36;
-
-    const runwayDate = formatDate(runwayMonths);
+    // Shared with /runway/:slug and /embed/survival (client/src/lib/tools/runway.ts):
+    // at 0% growth this is exactly cash / net burn. Cash of 0 while burning is 0
+    // months, not "36+".
+    const runway = projectRunway(cash, expenses, revenue, growthRate);
+    const runsOut = runway.kind === "months";
+    const runwayMonths = runsOut ? roundMonths(runway.months) : RUNWAY_HORIZON_MONTHS;
+    const runwayLabel = formatRunway(runway);
+    const runwayDate = runsOut
+      ? formatDate(runway.months)
+      : runway.kind === "profitable"
+        ? "Not while profitable"
+        : `beyond ${RUNWAY_HORIZON_MONTHS} months`;
     const maxCash = Math.max(...months.map((m) => m.cashRemaining), cash);
 
-    return { monthlyBurn, runwayMonths, runwayDate, months, maxCash };
+    return { monthlyBurn, runway, runsOut, runwayMonths, runwayLabel, runwayDate, months, maxCash };
   }, [cash, revenue, expenses, growthRate]);
 
   // The one conversion on this page that does not cost the visitor an account.
@@ -154,13 +168,17 @@ export default function RunwayCalculatorPage() {
           // The numbers matter more than the address. An email alone is a
           // stranger; an email plus "4 months of runway, burning $40K" is a
           // conversation with an opening line.
-          notes: `Runway ${results.runwayMonths >= 36 ? "36+" : results.runwayMonths} months (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`,
+          notes: `Runway ${results.runwayLabel} (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`,
           // The server keys the outbound email off these three. Send them or
           // the lead is stored silently and the "check your inbox" line above
           // becomes a lie.
-          runway_months: results.runwayMonths >= 36 ? "36+" : String(results.runwayMonths),
-          runway_date: results.runwayMonths >= 36 ? "beyond 36 months" : results.runwayDate,
-          monthly_burn: formatCurrency(results.monthlyBurn) + "/mo",
+          runway_months: results.runsOut
+            ? String(results.runwayMonths)
+            : results.runway.kind === "profitable"
+              ? "Profitable"
+              : `${RUNWAY_HORIZON_MONTHS}+`,
+          runway_date: results.runwayDate,
+          monthly_burn: results.monthlyBurn > 0 ? formatCurrency(results.monthlyBurn) + "/mo" : "Profitable",
         }),
       });
       if (!res.ok) throw new Error(String(res.status));
@@ -211,7 +229,10 @@ export default function RunwayCalculatorPage() {
   });
 
   const chartHeight = 200;
-  const chartData = results.months.slice(0, Math.min(results.runwayMonths + 6, 37));
+  const chartData = results.months.slice(
+    0,
+    Math.min(Math.ceil(results.runwayMonths) + 6, RUNWAY_HORIZON_MONTHS + 1),
+  );
   const maxVal = results.maxCash > 0 ? results.maxCash : 1;
 
   return (
@@ -335,7 +356,7 @@ export default function RunwayCalculatorPage() {
                   <CardContent className="pt-6 text-center">
                     <TrendingDown className="mx-auto h-5 w-5 text-orange-500 mb-2" />
                     <p className="text-2xl font-bold font-mono text-foreground" data-testid="text-burn-rate">
-                      {formatCurrency(results.monthlyBurn)}
+                      {formatNetBurn(results.monthlyBurn)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">Monthly Net Burn</p>
                   </CardContent>
@@ -344,7 +365,11 @@ export default function RunwayCalculatorPage() {
                   <CardContent className="pt-6 text-center">
                     <BarChart3 className="mx-auto h-5 w-5 text-primary mb-2" />
                     <p className="text-2xl font-bold font-mono text-foreground" data-testid="text-runway-months">
-                      {results.runwayMonths >= 36 ? "36+" : results.runwayMonths}
+                      {results.runsOut
+                        ? results.runwayMonths
+                        : results.runway.kind === "profitable"
+                          ? "∞"
+                          : `${RUNWAY_HORIZON_MONTHS}+`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">Months of Runway</p>
                   </CardContent>
@@ -353,7 +378,7 @@ export default function RunwayCalculatorPage() {
                   <CardContent className="pt-6 text-center">
                     <Calendar className="mx-auto h-5 w-5 text-emerald-500 mb-2" />
                     <p className="text-2xl font-bold font-mono text-foreground" data-testid="text-runway-date">
-                      {results.runwayMonths >= 36 ? "36+ mo" : results.runwayDate}
+                      {results.runsOut ? results.runwayDate : results.runway.kind === "profitable" ? "Profitable" : `${RUNWAY_HORIZON_MONTHS}+ mo`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">Runway Until</p>
                   </CardContent>
@@ -449,8 +474,8 @@ export default function RunwayCalculatorPage() {
                 That is an average, not a date.
               </h3>
               <p className="mt-2 text-sm text-muted-foreground" data-testid="text-signup-prompt-body">
-                Your {results.runwayMonths >= 36 ? "36+ months" : `${results.runwayMonths} months`} of
-                runway assumes every month from here looks like the last one. Real revenue and costs
+                Your {results.runway.kind === "profitable" ? "profitable month" : `${results.runwayLabel} of runway`}{" "}
+                assumes every month from here looks like the last one. Real revenue and costs
                 move. FounderConsole runs Monte Carlo simulations over your real financial data and
                 shows the month your cash actually runs out — and the chance it is sooner.
               </p>
