@@ -127,3 +127,20 @@ test("requireAuth rejects a revoked bearer and accepts a live one", async (t) =>
   });
   assert.equal(cookie.status, 401);
 });
+
+test("requireAuth fails closed when the revocation query throws", async (t) => {
+  setRevocationQueryForTests(async () => {
+    throw new Error("connection refused");
+  });
+  const { base, server } = await start();
+  t.after(() => {
+    setRevocationQueryForTests(null);
+    server.close();
+  });
+
+  const res = await fetch(base + "/api/ai/ping", {
+    headers: { authorization: `Bearer ${token({ jti: "jti-live" })}` },
+  });
+  assert.equal(res.status, 401);
+  assert.match(await res.text(), /Session has ended/);
+});
