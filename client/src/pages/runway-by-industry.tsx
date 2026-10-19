@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { runwayIndustryPageMeta } from "@/data/tool-page-meta";
+import { useCalculatorUsed } from "@/hooks/use-calculator-used";
 import { ArrowRight, Calculator, TrendingUp, AlertTriangle } from "lucide-react";
 import { RUNWAY_INDUSTRIES, getIndustry } from "@/data/runway-industries";
 import NotFound from "@/pages/not-found";
@@ -39,9 +41,15 @@ export default function RunwayByIndustryPage() {
   const netBurn = Math.max(0, burn - revenue);
   const runway = netBurn > 0 ? Math.floor(cash / netBurn) : 999;
 
+  useCalculatorUsed(
+    "runway-industry",
+    cash !== 500000 || burn !== industry.defaultBurn || revenue !== industry.defaultRevenue,
+    true,
+    [cash, burn, revenue],
+  );
+
   useSEO({
-    title: `${industry.name} | FounderConsole`,
-    description: `Free ${industry.shortName} startup runway calculator with industry benchmarks. ${industry.benchmarkRunway}. Run a Monte Carlo simulation tuned to ${industry.shortName} economics.`,
+    ...runwayIndustryPageMeta(industry),
     path: `/runway/${industry.slug}`,
     jsonLd: buildJsonLd(industry.name, industry.slug),
   });

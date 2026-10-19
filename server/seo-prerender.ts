@@ -6,6 +6,7 @@ import { blogPosts } from "./seo-data";
 // eight vertical pages cannot drift between what the page renders and what a
 // crawler is served.
 import { RUNWAY_INDUSTRIES, RUNWAY_RELATED_FREE_TOOLS } from "../client/src/data/runway-industries";
+import { TOOL_PAGE_META, runwayIndustryPageMeta } from "../client/src/data/tool-page-meta";
 // Same rule as runway-industries above: import the shared data so the Q&A a crawler is
 // served and the FAQPage markup beside it cannot drift from what the page renders.
 import { founderFaqs } from "../client/src/data/founder-faqs";
@@ -1153,8 +1154,7 @@ function getPageMeta(path: string): PageMeta | null {
       );
     }
     return {
-      title: `${ind.name} — Free Benchmarked Runway Tool | FounderConsole`,
-      description: `Free ${ind.shortName} startup runway calculator with industry benchmarks. ${ind.benchmarkRunway}. Run a Monte Carlo simulation tuned to ${ind.shortName} economics.`,
+      ...runwayIndustryPageMeta(ind),
       canonical: `${SITE_URL}/runway/${ind.slug}`,
       bodyContent: buildIndustryBodyContent(ind.slug) || undefined,
       // Reachable handler. A later /runway/:slug block used to emit this
@@ -1199,8 +1199,7 @@ function getPageMeta(path: string): PageMeta | null {
 
   if (path === "/tools/runway-calculator") {
     return {
-      title: "Free Startup Runway Calculator | FounderConsole",
-      description: "Calculate your startup runway in seconds. Enter cash on hand, monthly revenue, expenses, and growth rate to see how many months until you need to raise.",
+      ...TOOL_PAGE_META["/tools/runway-calculator"],
       canonical: SITE_URL + "/tools/runway-calculator",
       bodyContent: buildRunwayCalculatorBodyContent(),
       jsonLd: [{
@@ -1225,8 +1224,7 @@ function getPageMeta(path: string): PageMeta | null {
 
   if (path === "/tools/burn-multiple") {
     return {
-      title: "Free Burn Multiple Calculator | FounderConsole",
-      description: "Calculate your burn multiple in seconds: net new ARR against net burn, with the 2024 and 2025 SaaS benchmark bands. Free, no account required.",
+      ...TOOL_PAGE_META["/tools/burn-multiple"],
       canonical: SITE_URL + "/tools/burn-multiple",
       bodyContent: buildBurnMultipleBodyContent(),
       jsonLd: [{
@@ -1251,8 +1249,7 @@ function getPageMeta(path: string): PageMeta | null {
 
   if (path === "/tools/dilution") {
     return {
-      title: "Free Dilution Calculator with the Option Pool Shuffle | FounderConsole",
-      description: "Calculate startup dilution exactly: founder, investor and option pool ownership after one round. The option pool top-up is modelled pre-money, as term sheets require. Free, no account required.",
+      ...TOOL_PAGE_META["/tools/dilution"],
       canonical: SITE_URL + "/tools/dilution",
       bodyContent: buildDilutionBodyContent(),
       jsonLd: [{
@@ -1276,8 +1273,7 @@ function getPageMeta(path: string): PageMeta | null {
   }
   if (path === "/tools/ltv-cac") {
     return {
-      title: "Free LTV:CAC Calculator with CAC Payback | FounderConsole",
-      description: "Calculate LTV, CAC, the LTV:CAC ratio and CAC payback months for SaaS. Graded separately against a named benchmark, because a good ratio with a bad payback is a cash-flow trap. Free, no account required.",
+      ...TOOL_PAGE_META["/tools/ltv-cac"],
       canonical: SITE_URL + "/tools/ltv-cac",
       bodyContent: buildLtvCacBodyContent(),
       jsonLd: [{
@@ -1428,8 +1424,22 @@ function getPageMeta(path: string): PageMeta | null {
       title: "My Startup Survival Score — FounderConsole",
       description: "I just simulated my startup's survival probability with FounderConsole. Run yours free in 60 seconds.",
       canonical: `${SITE_URL}/survival/${simId}`,
+      // A share page exists for any id string and holds one founder's numbers:
+      // keep it out of the index, let crawlers follow its links.
+      robots: "noindex, follow",
       ogType: "article",
       ogImage: `${SITE_URL}/api/survival-sim/og-image/${simId}.png`,
+    };
+  }
+
+  // Shared scenario and agent-simulation links are private-by-URL views of one
+  // company's numbers. Never index them.
+  if (/^\/scenarios\/shared\/[^/]+$/.test(path) || /^\/simulate-v2\/shared\/[^/]+$/.test(path)) {
+    return {
+      title: "Shared simulation | FounderConsole",
+      description: "A FounderConsole simulation shared by its owner.",
+      canonical: SITE_URL + path,
+      robots: "noindex, follow",
     };
   }
 
@@ -1497,8 +1507,7 @@ function getPageMeta(path: string): PageMeta | null {
   // 404 that used to own this path.
   if (path === "/tools") {
     return {
-      title: "Free Startup Finance Tools — Runway, Burn, Dilution, LTV:CAC | FounderConsole",
-      description: "Four free startup finance calculators and two more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
+      ...TOOL_PAGE_META["/tools"],
       canonical: SITE_URL + "/tools",
       bodyContent: buildToolsIndexBodyContent(),
       jsonLd: [{

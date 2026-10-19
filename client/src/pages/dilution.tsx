@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { trackFunnel } from "@/lib/funnel";
+import { useCalculatorUsed } from "@/hooks/use-calculator-used";
 import {
   ArrowRight,
   Calculator,
@@ -144,11 +146,10 @@ export default function DilutionPage() {
 
   const shares = result.shares;
   const hasModel = result.founderPct !== null && result.investorPct !== null;
+  useCalculatorUsed("dilution", JSON.stringify(text) !== JSON.stringify(DEFAULT_TEXT), hasModel, text);
 
   useSEO({
-    title: "Free Dilution Calculator — What a Round Really Costs Founders | FounderConsole",
-    description:
-      "Free dilution calculator with the option pool shuffle. Enter your pre-money valuation, raise, shares and pool target to see founder, investor and pool ownership post-money — and why founders lose more than the raise implies.",
+    ...TOOL_PAGE_META["/tools/dilution"],
     path: "/tools/dilution",
     jsonLd: [
       {
