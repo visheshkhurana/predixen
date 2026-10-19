@@ -238,3 +238,122 @@ test("the calculator's number fields can actually be cleared", () => {
   assert.doesNotMatch(page, /onChange=\{\(e\) => set\w+\(Number\(e\.target\.value\)\)\}/);
   assert.match(page, /function toNumber\(text: string\): number/);
 });
+
+/* ------------------------------------------------------------------ HAG-161 */
+
+test("auth.tsx identifies PostHog, not only GA4, and does it before the conversion", () => {
+  // The defect: auth.tsx defined its own `identifyUser` that called gtag and nothing
+  // else, shadowing the PostHog one. PostHog was therefore identified only when
+  // App.tsx's effect reacted to the store — after trackSignup had already fired — so
+  // signup_completed landed on the anonymous device distinct id while every later event
+  // from that person carried the user id. One person, three ids.
+  const auth = readFileSync("client/src/pages/auth.tsx", "utf8");
+  assert.match(auth, /import \{ identifyUser \} from '@\/lib\/posthog';/);
+  assert.match(auth, /const identifyEverywhere = /);
+  assert.match(auth, /identifyUser\(userId, email, role\);/);
+  assert.doesNotMatch(
+    auth,
+    /const identifyUser = \(/,
+    "auth.tsx must not define its own identifyUser — that is the shadow that skipped PostHog",
+  );
+
+  // Ordering is the whole point: identify before the conversion it must be attributed to.
+  const registerIdx = auth.indexOf("const handleRegister");
+  const identifyIdx = auth.indexOf("identifyEverywhere(result.user_id", registerIdx);
+  const signupIdx = auth.indexOf("trackSignup(result.user_id", registerIdx);
+  assert.ok(identifyIdx !== -1, "register must identify");
+  assert.ok(signupIdx !== -1, "register must still fire the signup conversion");
+  assert.ok(
+    identifyIdx < signupIdx,
+    "identify must come before signup_completed, or the conversion lands on the device id",
+  );
+});
+
+test("signup_view fires once per page load, not once per tab toggle", () => {
+  // It fired on every transition INTO the register tab, so a visitor who toggled
+  // Login / Register / Login / Register produced two signup_view events from one visit.
+  const auth = readFileSync("client/src/pages/auth.tsx", "utf8");
+  const fx = auth.slice(auth.indexOf("Funnel: fire signup_view once"));
+  const body = fx.slice(0, fx.indexOf("}, [activeTab]);"));
+  assert.match(body, /const signupViewed = useRef\(false\)/, "needs a once-guard ref");
+  assert.match(body, /!signupViewed\.current/, "the guard must gate the capture");
+  assert.match(body, /signupViewed\.current = true;/);
+});
+
+test("purchase_subscription carries a value and a currency", () => {
+  // Without both, GA4 will not treat the event as a revenue key event and no ad platform
+  // can price the conversion — so the only conversion this product is paid for arrived
+  // with no number attached.
+  const billing = readFileSync("client/src/pages/billing.tsx", "utf8");
+  assert.match(billing, /buildPurchaseProperties\(input\)/);
+  assert.match(billing, /isPurchaseResolvable\(input, settled\)/);
+  assert.match(billing, /trackEvent\('purchase_subscription', properties\)/);
+  assert.match(billing, /gtag\?\.\('event', 'purchase_subscription', properties\)/);
+  assert.doesNotMatch(
+    billing,
+    /'purchase_subscription', \{ method: 'stripe_checkout' \}/,
+    "a valueless purchase event is the defect this card exists to fix",
+  );
+});
+
+test("the purchase property bag has a real value in every branch", async () => {
+  // The pure-function half, so the case that actually happens — the redirect lands
+  // before the subscription query has answered — is tested rather than assumed.
+  const { buildPurchaseProperties, isPurchaseResolvable } = await import(
+    "../../client/src/lib/purchase-properties"
+  );
+
+  const fromSubscription = buildPurchaseProperties({
+    planId: "growth",
+    checkoutId: "abc-123",
+    subscriptionPrice: 99,
+    cataloguePrice: 49,
+  });
+  assert.equal(fromSubscription.value, 99, "the server's number wins over the catalogue");
+  assert.equal(fromSubscription.value_source, "subscription");
+  assert.equal(fromSubscription.currency, "USD");
+  assert.equal(fromSubscription.plan, "growth");
+  assert.equal(fromSubscription.transaction_id, "abc-123");
+
+  const fromCatalogue = buildPurchaseProperties({ planId: "starter", cataloguePrice: 29 });
+  assert.equal(fromCatalogue.value, 29);
+  assert.equal(fromCatalogue.value_source, "catalogue");
+
+  // Nothing known yet: an explicit, labelled zero — never a missing `value`.
+  const unknown = buildPurchaseProperties({});
+  assert.equal(unknown.value, 0);
+  assert.equal(unknown.value_source, "unavailable");
+  assert.equal(unknown.plan, "unknown");
+  assert.ok("value" in unknown && "currency" in unknown);
+
+  // A free plan is a real zero, not a missing price.
+  const free = buildPurchaseProperties({ planId: "free", subscriptionPrice: 0, cataloguePrice: 0 });
+  assert.equal(free.value, 0);
+  assert.equal(free.value_source, "subscription");
+
+  // NaN and undefined are not prices.
+  assert.equal(buildPurchaseProperties({ subscriptionPrice: Number.NaN }).value_source, "unavailable");
+  assert.equal(isPurchaseResolvable({ subscriptionPrice: Number.NaN }, false), false);
+
+  // The event waits for a price, and does not wait forever for one.
+  assert.equal(isPurchaseResolvable({}, false), false, "must not fire before a price is known");
+  assert.equal(isPurchaseResolvable({}, true), true, "must not hang when both queries settle empty");
+  assert.equal(isPurchaseResolvable({ cataloguePrice: 49 }, false), true);
+});
+
+test("a checkout attempt is written down before the browser leaves for Stripe", () => {
+  // The redirect leaves the page, so the plan has to survive it; and the correlation id
+  // is what makes a reload of the success URL idempotent rather than a second purchase.
+  const billing = readFileSync("client/src/pages/billing.tsx", "utf8");
+  const handler = billing.slice(billing.indexOf("const handleSelectPlan"));
+  const writeIdx = handler.indexOf("sessionStorage.setItem");
+  const mutateIdx = handler.indexOf("subscribe.mutate(");
+  assert.ok(writeIdx !== -1, "the pending checkout must be written");
+  assert.ok(mutateIdx !== -1 && writeIdx < mutateIdx, "write it BEFORE the redirect is requested");
+  assert.match(billing, /const purchaseFired = useRef\(false\)/);
+  // The id reaches the event through the property bag, so assert the handoff on both
+  // sides: billing passes it in, and the bag (not billing) builds `transaction_id`.
+  assert.match(billing, /checkoutId: pending\?\.checkoutId/);
+  const bag = readFileSync("client/src/lib/purchase-properties.ts", "utf8");
+  assert.match(bag, /transaction_id: input\.checkoutId \?\? ''/);
+});
