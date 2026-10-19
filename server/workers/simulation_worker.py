@@ -129,11 +129,9 @@ def _execute_job(job_id: str, SessionLocal):
     from server.models.scenario import Scenario
     from server.simulate.enhanced_monte_carlo import (
         run_enhanced_monte_carlo,
-        EnhancedSimulationInputs,
         SimulationConfig,
-        ScenarioEvent,
-        DistributionParams,
     )
+    from server.simulate.baseline import MissingBaseline, enhanced_inputs_from_scenario
 
     db = SessionLocal()
     try:
@@ -162,23 +160,17 @@ def _execute_job(job_id: str, SessionLocal):
 
         events = _parse_events(events_json)
 
-        inputs = EnhancedSimulationInputs(
-            baseline_revenue=inputs_json.get("baseline_revenue", 100000),
-            baseline_growth_rate=inputs_json.get("baseline_growth_rate", 5),
-            gross_margin=inputs_json.get("gross_margin", 70),
-            opex=inputs_json.get("opex", 20000),
-            payroll=inputs_json.get("payroll", 50000),
-            other_costs=inputs_json.get("other_costs", 10000),
-            cash_balance=inputs_json.get("cash_balance", 500000),
-            churn_rate=inputs_json.get("churn_rate", 5),
-            pricing_change_pct=inputs_json.get("pricing_change_pct", 0),
-            growth_uplift_pct=inputs_json.get("growth_uplift_pct", 0),
-            burn_reduction_pct=inputs_json.get("burn_reduction_pct", 0),
-            fundraise_month=inputs_json.get("fundraise_month"),
-            fundraise_amount=inputs_json.get("fundraise_amount", 0),
-            gross_margin_delta_pct=inputs_json.get("gross_margin_delta_pct", 0),
-            events=events,
-        )
+        try:
+            inputs = enhanced_inputs_from_scenario(
+                db, scenario, inputs_json=inputs_json, events=events,
+            )
+        except MissingBaseline as missing:
+            job.status = SimulationJobStatus.FAILED.value
+            job.error_message = str(missing)[:500]
+            job.completed_at = datetime.utcnow()
+            db.commit()
+            logger.info(f"Job {job_id} has no baseline to simulate: {missing}")
+            return
 
         start_time = time.time()
         result = run_enhanced_monte_carlo(inputs, config)
