@@ -33,7 +33,22 @@ import server.models.scenario_version
 QA_LAB_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATASETS_FILE = os.path.join(QA_LAB_DIR, "datasets", "all-datasets.json")
 SCENARIOS_FILE = os.path.join(QA_LAB_DIR, "scenarios", "all-scenarios.json")
-REPORT_FILE = os.path.join(QA_LAB_DIR, "latest-report.md")
+# HAG-392. The DEFAULT here does not move, because this path is load-bearing:
+# `qa-lab/run.sh:6` pushes the file to Notion, and `server/index.ts:552` reads it at
+# runtime from `process.cwd()` for `POST /api/notion/push-report` -- where a missing
+# file is a 500 with no fallback. So both remedies proposed for the dirty tree are
+# closed: `git rm --cached` (the gitignore route) takes the file out of the deployed
+# image, and a move outside the working tree takes it out of `process.cwd()`. Either
+# one breaks a production endpoint to fix a local annoyance.
+#
+# The dirty tree is real, and its cause is measured: `datetime.now()` at :429 is
+# written as `**Generated**: {now}` at :458, so the report is non-deterministic and
+# every run rewrites a tracked file. This override is the one lever that lets a run
+# whose output will be thrown away -- a CI gate step, or a local check -- leave the
+# tracked copy alone, without changing where the deployed app reads from.
+REPORT_FILE = os.environ.get(
+    "QA_LAB_REPORT", os.path.join(QA_LAB_DIR, "latest-report.md")
+)
 
 TOLERANCE = 0.02
 MC_SEED = 42
