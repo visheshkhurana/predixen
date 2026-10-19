@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { trackFunnel } from "@/lib/funnel";
+import { useCalculatorUsed } from "@/hooks/use-calculator-used";
 import {
   ArrowRight,
   Calculator,
@@ -151,11 +153,17 @@ export default function BurnMultiplePage() {
 
   const { result } = results;
   const band = result.multiple === null ? null : bandFor(result.multiple);
+  useCalculatorUsed(
+    "burn-multiple",
+    JSON.stringify(text) !== JSON.stringify(DEFAULT_TEXT) ||
+      arrText.starting_arr !== "1200000" ||
+      arrText.ending_arr !== "1350000",
+    result.multiple !== null,
+    [text, arrText],
+  );
 
   useSEO({
-    title: "Burn Multiple Calculator — What Each Dollar of New ARR Costs You | FounderConsole",
-    description:
-      "Free burn multiple calculator. Enter new, expansion, churned and contraction ARR plus cash in and out to see your burn multiple, the ARR reconciliation check, and how it reads against the 2024 median of 2.3x.",
+    ...TOOL_PAGE_META["/tools/burn-multiple"],
     path: "/tools/burn-multiple",
     jsonLd: [
       {

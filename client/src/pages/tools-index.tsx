@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { ArrowRight, Calculator } from "lucide-react";
 
 /**
@@ -108,9 +109,7 @@ function ToolGrid({ tools }: { tools: readonly ToolEntry[] }) {
 
 export default function ToolsIndexPage() {
   useSEO({
-    title: "Free Startup Finance Tools — Runway, Burn, Dilution, LTV:CAC | FounderConsole",
-    description:
-      "Four free startup finance calculators and two more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
+    ...TOOL_PAGE_META["/tools"],
     path: "/tools",
     jsonLd: [
       {
