@@ -24,20 +24,38 @@ export default function SettingsPage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // email_enabled is the opt-out every non-account email checks, and the
-  // unsubscribe link sets. The monthly digest is not gated by it: it has its
-  // own switch on the dashboard (server/api/digest.py reads monthly_digest),
-  // though an unsubscribe clears that flag too.
+  // unsubscribe link sets. The digest reads its own monthly_digest flag
+  // (server/api/digest.py), which the unsubscribe clears as well, so this
+  // screen has to be able to write that flag back: a user with no company has
+  // no dashboard switch to do it on.
   const { data: notificationPrefs, isLoading: prefsLoading } = useNotificationPreferences();
   const updateNotificationPrefs = useUpdateNotificationPreferences();
   const productEmailsOn = notificationPrefs?.email_enabled ?? true;
+  const monthlyDigestOn = notificationPrefs?.monthly_digest ?? true;
 
   const handleProductEmailsChange = async (checked: boolean) => {
     if (!notificationPrefs) return;
     try {
-      await updateNotificationPrefs.mutateAsync({ ...notificationPrefs, email_enabled: checked });
+      await updateNotificationPrefs.mutateAsync({
+        ...notificationPrefs,
+        email_enabled: checked,
+        // Re-enabling restores the digest the unsubscribe turned off; turning
+        // product emails off leaves the digest switch where the user put it.
+        monthly_digest: checked ? true : notificationPrefs.monthly_digest,
+      });
       toast({ title: checked ? 'Product emails on' : 'Product emails off' });
     } catch {
       toast({ title: 'Could not save your email preference', variant: 'destructive' });
+    }
+  };
+
+  const handleMonthlyDigestChange = async (checked: boolean) => {
+    if (!notificationPrefs) return;
+    try {
+      await updateNotificationPrefs.mutateAsync({ ...notificationPrefs, monthly_digest: checked });
+      toast({ title: checked ? 'Monthly digest on' : 'Monthly digest off' });
+    } catch {
+      toast({ title: 'Could not save your digest preference', variant: 'destructive' });
     }
   };
 
@@ -174,9 +192,8 @@ export default function SettingsPage() {
             <div className="space-y-0.5">
               <p className="text-sm font-medium">Product emails</p>
               <p className="text-xs text-muted-foreground">
-                Onboarding tips, activity summaries and product updates. The monthly
-                digest has its own switch on the dashboard. Password, verification and
-                receipt emails are always sent.
+                Onboarding tips, activity summaries and product updates. Password,
+                verification and receipt emails are always sent.
               </p>
             </div>
             <Switch
@@ -184,6 +201,21 @@ export default function SettingsPage() {
               disabled={prefsLoading || !notificationPrefs || updateNotificationPrefs.isPending}
               onCheckedChange={handleProductEmailsChange}
               data-testid="switch-email-product"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">Monthly digest</p>
+              <p className="text-xs text-muted-foreground">
+                A monthly summary of your company's numbers. You can also change this
+                from a company dashboard.
+              </p>
+            </div>
+            <Switch
+              checked={monthlyDigestOn}
+              disabled={prefsLoading || !notificationPrefs || updateNotificationPrefs.isPending}
+              onCheckedChange={handleMonthlyDigestChange}
+              data-testid="switch-monthly-digest"
             />
           </div>
         </CardContent>
