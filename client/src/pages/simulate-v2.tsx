@@ -31,6 +31,10 @@ interface SimulationResult {
   // Set only after the owner creates a public link (POST .../share).
   shareToken?: string;
   summary: {
+    /** Share of months with cash > 0 in this ONE simulated run (not a probability). */
+    monthsSolventPct?: number;
+    survivedHorizon?: boolean;
+    /** Deprecated alias of monthsSolventPct, kept for stored runs. */
     survivalProbability: number;
     fundingProbability: number;
     finalCash: number;
@@ -46,6 +50,7 @@ interface SimulationResult {
     cash_balance: number;
     monthly_revenue: number;
     monthly_burn: number;
+    net_burn?: number;
     runway_months: number;
     headcount: number;
     customers: number;
@@ -151,7 +156,7 @@ export default function SimulateV2Page() {
     onSuccess: (data: SimulationResult) => {
       setResult(data);
       setSelectedMonth(null);
-      toast({ title: 'Simulation complete', description: `Survival probability: ${data.summary.survivalProbability}%` });
+      toast({ title: 'Simulation complete', description: `Cash positive in ${monthsSolvent(data.summary).toFixed(0)}% of simulated months` });
     },
     onError: (err: Error) => {
       toast({ title: 'Simulation failed', description: err.message, variant: 'destructive' });
@@ -596,20 +601,25 @@ function SimulationLoading() {
 }
 
 
+function monthsSolvent(summary: Partial<SimulationResult['summary']> | undefined | null): number {
+  return summary?.monthsSolventPct ?? summary?.survivalProbability ?? 0;
+}
+
 function SummaryCards({ summary, report }: { summary: SimulationResult['summary']; report: SimulationResult['report'] }) {
   const ratingColor = report?.ratingColor || 'green';
-  const survivalColor = summary.survivalProbability >= 70 ? 'text-green-500' :
-    summary.survivalProbability >= 40 ? 'text-yellow-500' : 'text-red-500';
+  const solvent = monthsSolvent(summary);
+  const survivalColor = solvent >= 70 ? 'text-green-500' :
+    solvent >= 40 ? 'text-yellow-500' : 'text-red-500';
 
   return (
     <div className="grid grid-cols-4 gap-3" data-testid="summary-cards">
       <Card>
         <CardContent className="pt-4 pb-3">
-          <div className="text-xs text-muted-foreground mb-1">Survival</div>
+          <div className="text-xs text-muted-foreground mb-1">Months solvent</div>
           <div className={cn("text-2xl font-bold font-mono", survivalColor)}>
-            {summary.survivalProbability.toFixed(0)}%
+            {solvent.toFixed(0)}%
           </div>
-          <div className="text-xs text-muted-foreground">probability</div>
+          <div className="text-xs text-muted-foreground">of months in this run</div>
         </CardContent>
       </Card>
       <Card>
@@ -692,8 +702,8 @@ function TimelineView({ timeline, events, selectedMonth, onSelectMonth }: {
                   {formatCurrencyAbbrev(snap.monthly_revenue)}
                 </span>
                 <span className="font-mono">
-                  <span className="text-muted-foreground">Burn </span>
-                  {formatCurrencyAbbrev(snap.monthly_burn)}
+                  <span className="text-muted-foreground">Net burn </span>
+                  {formatCurrencyAbbrev(snap.net_burn ?? snap.monthly_burn)}
                 </span>
                 <span className="font-mono">
                   <span className="text-muted-foreground">Runway </span>
@@ -839,7 +849,7 @@ function ChartsView({ timeline, trajectories }: {
     month: `M${s.month}`,
     cash: Math.round(s.cash_balance),
     revenue: Math.round(s.monthly_revenue),
-    burn: Math.round(s.monthly_burn),
+    burn: Math.round(s.net_burn ?? s.monthly_burn),
     runway: Math.min(s.runway_months, 60),
     customers: s.customers,
     headcount: s.headcount,
@@ -939,12 +949,12 @@ export function SharedSimulationPage() {
           <div className="text-center">
             <div className={cn(
               "text-6xl font-bold font-mono mb-2",
-              data.summary?.survivalProbability >= 70 ? 'text-green-500' :
-              data.summary?.survivalProbability >= 40 ? 'text-yellow-500' : 'text-red-500'
+              monthsSolvent(data.summary) >= 70 ? 'text-green-500' :
+              monthsSolvent(data.summary) >= 40 ? 'text-yellow-500' : 'text-red-500'
             )}>
-              {data.summary?.survivalProbability?.toFixed(0) || 0}%
+              {monthsSolvent(data.summary).toFixed(0)}%
             </div>
-            <p className="text-lg text-muted-foreground mb-4">Survival Probability</p>
+            <p className="text-lg text-muted-foreground mb-4">of simulated months with cash above zero</p>
             {report.headline && <p className="text-sm max-w-lg mx-auto">{report.headline}</p>}
           </div>
         </CardContent>

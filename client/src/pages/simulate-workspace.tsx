@@ -77,7 +77,7 @@ interface BiasResponse {
 }
 import { useCurrency } from '@/hooks/useCurrency';
 import { WhatIfExplorer, StressTestPanel, ReverseStressTest, TornadoChart } from '@/components/simulation';
-import { calculateSensitivity, calculateRunway, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
+import { calculateSensitivity, calculateRunway, calculateWhatIfImpact, financialStateFromMetrics, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
 import { useScenarios } from '@/api/hooks';
 import { ActualVsSimulatedComparison, MultiMetricComparison } from '@/components/ActualVsSimulatedComparison';
 
@@ -98,20 +98,7 @@ function WorkspaceLoading() {
 }
 
 function buildFinancialState(metrics: any): FinancialState {
-  const totalExpenses = metrics.totalMonthlyExpenses ?? metrics.burnRate ?? 0;
-  return {
-    cashBalance: metrics.cashOnHand ?? 0,
-    monthlyRevenue: metrics.mrr ?? 0,
-    monthlyBurn: metrics.burnRate ?? totalExpenses,
-    growthRate: metrics.monthlyGrowthRate ?? 10,
-    churnRate: metrics.churnRatePct ?? 5,
-    grossMargin: metrics.grossMarginPct ?? 70,
-    opex: totalExpenses * 0.3,
-    payroll: totalExpenses * 0.5,
-    otherCosts: totalExpenses * 0.2,
-    cac: metrics.cac ?? 500,
-    ltv: metrics.ltv ?? 5000,
-  };
+  return financialStateFromMetrics(metrics);
 }
 
 function PredictionAccuracySection({ companyId }: { companyId: number }) {
@@ -1557,7 +1544,11 @@ function AgentSimulationConsole() {
   const initCash = baseMetrics?.cashOnHand ?? 500000;
   const initBurn = baseMetrics?.burnRate ?? 80000;
   const currentCash = liveState?.cash ?? initCash;
-  const currentBurn = liveState?.burn_rate ?? initBurn;
+  // The engine's burn_rate is GROSS spend (cash += mrr - burn_rate); the card
+  // shows NET burn like the dashboard.
+  const currentBurn = liveState
+    ? Math.max(0, (liveState.burn_rate ?? 0) - (liveState.mrr ?? 0))
+    : initBurn;
   const currentRunway = liveState?.runway_months ?? (initBurn > 0 ? initCash / initBurn : 0);
   const currentMrr = liveState?.mrr ?? baseMetrics?.mrr ?? 50000;
   const currentCustomers = liveState?.customers ?? 50;
