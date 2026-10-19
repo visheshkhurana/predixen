@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.request
 from typing import Any, Mapping, Optional
@@ -112,11 +113,47 @@ def lead_distinct_id(email: str) -> str:
     return f"lead:{digest}"
 
 
-def sanitize_distinct_id(value: object) -> Optional[str]:
-    """Accept a browser distinct_id. Reject blanks, emails, and over-long ids.
+# Account ids are decimal (browser identify sends String(userId)) or the old
+# server form user:<digits>. Neither is an anonymous browser id.
+_USER_SCOPED_ID = re.compile(r"^(?:user:)?\d+$", re.IGNORECASE)
 
-    An invalid value becomes None so the caller can fall back. It must not
-    fail the lead or signup request.
+
+def _numeric_user_id(value: str) -> Optional[int]:
+    if not _USER_SCOPED_ID.fullmatch(value):
+        return None
+    digits = value.split(":", 1)[1] if ":" in value else value
+    try:
+        return int(digits)
+    except ValueError:
+        return None
+
+
+def _user_id_exists(user_id: int) -> bool:
+    """True when this primary key is a user, or when that cannot be checked.
+
+    An alias of an id we could not prove is free is refused. Anonymous browser
+    ids never reach this lookup.
+    """
+    try:
+        from server.core.db import SessionLocal
+        from server.models.user import User
+
+        db = SessionLocal()
+        try:
+            return db.query(User.id).filter(User.id == int(user_id)).first() is not None
+        finally:
+            db.close()
+    except Exception:
+        logger.warning("[posthog] could not check distinct id %s against users; refusing it", user_id)
+        return True
+
+
+def sanitize_distinct_id(value: object) -> Optional[str]:
+    """Accept an anonymous browser distinct_id.
+
+    Reject blanks, emails, over-long ids, all-digit ids, ``user:<digits>``,
+    and any string that is an existing user's id. An invalid value becomes
+    None so the caller can fall back. It must not fail the lead or signup.
     """
     if not isinstance(value, str):
         return None
@@ -126,6 +163,22 @@ def sanitize_distinct_id(value: object) -> Optional[str]:
     if "@" in cleaned:
         return None
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in cleaned):
+        return None
+    user_id = _numeric_user_id(cleaned)
+    if user_id is not None:
+        # All-digit and user:<digits> are account ids. When that row exists,
+        # the string belongs to someone else and must not be aliased here.
+        _user_id_exists(user_id)
+        return None
+    return cleaned
+
+
+def _account_distinct_id(value: object) -> Optional[str]:
+    """The canonical id browser identify uses: the decimal user id."""
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned.isdigit() or len(cleaned) > 20:
         return None
     return cleaned
 
@@ -183,7 +236,9 @@ def alias(*, previous_id: str, distinct_id: str) -> bool:
     Person processing stays on so the merge is applied.
     """
     previous = sanitize_distinct_id(previous_id)
-    canonical = sanitize_distinct_id(distinct_id)
+    # The canonical id is the account, which is numeric. The anonymous-only
+    # sanitizer would reject it.
+    canonical = _account_distinct_id(distinct_id)
     if not previous or not canonical or previous == canonical:
         return False
     key = _api_key()

@@ -203,3 +203,51 @@ def test_sanitize_distinct_id_rejects_control_characters():
     assert posthog_svc.sanitize_distinct_id(None) is None
     assert posthog_svc.sanitize_distinct_id(7) is None
     assert posthog_svc.sanitize_distinct_id("anon-browser") == "anon-browser"
+
+
+def test_alias_refuses_when_42_belongs_to_another_user(monkeypatch):
+    """A browser id that is some other account must not be merged away.
+
+    "42" and "user:42" are that user's id. All-digit ids are refused even
+    when no row exists, because they are account ids, not anonymous ones.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from server.core import db as db_mod
+    from server.models.user import User
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    User.metadata.create_all(engine, tables=[User.__table__])
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    db.add(User(id=42, email="other@example.com", password_hash="x"))
+    db.commit()
+    db.close()
+    monkeypatch.setattr(db_mod, "SessionLocal", Session)
+
+    checked: list[int] = []
+    real_exists = posthog_svc._user_id_exists
+
+    def tracked(user_id: int) -> bool:
+        checked.append(user_id)
+        return real_exists(user_id)
+
+    monkeypatch.setattr(posthog_svc, "_user_id_exists", tracked)
+    _clear_posthog_env(monkeypatch)
+
+    with patch.object(posthog_svc.urllib.request, "urlopen") as urlopen:
+        assert posthog_svc.alias(previous_id="42", distinct_id="7") is False
+        assert posthog_svc.alias(previous_id="user:42", distinct_id="7") is False
+        assert posthog_svc.sanitize_distinct_id("42") is None
+        assert posthog_svc.sanitize_distinct_id("user:42") is None
+        assert posthog_svc.sanitize_distinct_id("999") is None
+        urlopen.assert_not_called()
+
+    assert 42 in checked
+    assert real_exists(42) is True
+    assert real_exists(999) is False
+    assert posthog_svc.sanitize_distinct_id("anon-browser") == "anon-browser"
