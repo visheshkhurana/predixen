@@ -41,16 +41,19 @@ export default function DemoRedirectPage() {
         (window as any).gtag('event', 'login', { method: 'demo' });
       }
 
-      try {
-        const companies = await api.companies.list();
-        if (companies && companies.length > 0) {
-          const demoCompany = companies.find((c: any) => c.name === 'TechFlow Analytics') || companies[0];
-          setCompanies(companies);
-          setCurrentCompany(demoCompany);
-        }
-      } catch {
-        console.warn('Failed to auto-select demo company');
+      // HAG-453: this used to swallow a failed or empty companies.list() and
+      // navigate anyway. The demo account was then logged in with no company
+      // selected, /overview's AuthenticatedRoute bounced it to /onboarding, and
+      // the visitor met a signup wall with no error and no retry — on the page
+      // that is the front door. Throwing hands the failure to the outer catch
+      // below, which shows "Try Again" and the /signup escape instead.
+      const companies = await api.companies.list();
+      if (!companies || companies.length === 0) {
+        throw new Error('The demo account has no company to open.');
       }
+      const demoCompany = companies.find((c: any) => c.name === 'TechFlow Analytics') || companies[0];
+      setCompanies(companies);
+      setCurrentCompany(demoCompany);
 
       toast({ title: 'Welcome to the demo!' });
       // /overview is the first screen the sample company has something to show.
