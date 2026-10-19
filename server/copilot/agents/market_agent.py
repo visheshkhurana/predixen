@@ -803,7 +803,7 @@ User question: {query}
 Provide a brief, actionable market insight (2-3 sentences) focused on competitive positioning or market opportunity. Be specific about what makes this company's position unique or what market gaps exist."""
         
         try:
-            response = self._call_llm(
+            response = await self._acall_llm(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=MARKET_SYSTEM_PROMPT,
                 task_type="strategy",

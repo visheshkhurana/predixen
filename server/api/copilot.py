@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Dict, Any, Optional, List, Literal
 from datetime import datetime
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
 from server.models.company import Company
+from server.core.company_access import get_user_company
 from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
@@ -17,6 +18,7 @@ from server.copilot.trust import (
     apply_not_available_guard,
     apply_not_available_guard_to_text,
     extract_available_metrics,
+    merge_available_metrics,
 )
 from server.copilot.prompt_injection_defense import PromptInjectionDefense
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
@@ -44,13 +46,7 @@ def get_context(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     context = build_context_pack(company, db)
     return context
@@ -62,13 +58,7 @@ def quick_simulate(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -132,13 +122,7 @@ def compare_decisions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -186,9 +170,20 @@ class CopilotContextRequest(BaseModel):
 
 
 class ConversationMessage(BaseModel):
-    """A message in conversation history."""
-    role: str
+    """A message in conversation history.
+
+    Only "user" and "assistant" turns reach the model. Anything else (notably
+    a client-supplied "system" turn, which would carry system-prompt authority)
+    is downgraded to "user".
+    """
+    role: Literal["user", "assistant"]
     content: str
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _restrict_role(cls, value: Any) -> str:
+        role = str(value or "").strip().lower()
+        return "assistant" if role == "assistant" else "user"
 
 
 class CopilotChatRequest(BaseModel):
@@ -513,7 +508,9 @@ async def _do_web_research(
             _logger.info("Perplexity not available, skipping web research")
             return None
 
-        result = client.search(
+        import asyncio
+        result = await asyncio.to_thread(
+            client.search,
             query=query,
             model="sonar",
             system_prompt="You are a financial research assistant. Provide concise, data-driven answers with specific numbers, benchmarks, and statistics relevant to startups and SaaS businesses. Focus on the most recent and reliable data.",
@@ -526,6 +523,22 @@ async def _do_web_research(
     except Exception as e:
         _logger.warning(f"Web research failed (non-critical): {e}")
         return None
+
+
+def _guard_available_metrics(db: Session, company_id: int, truth_scan: Optional[TruthScan]) -> Dict[str, Any]:
+    """Verified metrics for the grounding guard: truth scan + latest financial record."""
+    from server.models.financial import FinancialRecord
+    latest_record = None
+    try:
+        latest_record = db.query(FinancialRecord).filter(
+            FinancialRecord.company_id == company_id
+        ).order_by(FinancialRecord.period_end.desc()).first()
+    except Exception:
+        latest_record = None
+    return merge_available_metrics(
+        truth_scan.outputs_json if truth_scan else None,
+        latest_record,
+    )
 
 
 @router.post("/companies/{company_id}/quick-chat", response_model=QuickChatResponse)
@@ -542,15 +555,9 @@ async def copilot_quick_chat(
     """
     import logging
     _logger = logging.getLogger(__name__)
-    from server.lib.llm.llm_router import get_llm_router, TaskType
+    from server.lib.llm.llm_router import get_llm_router, TaskType, LLMBudgetExceeded
 
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
 
     try:
         from server.copilot.context_pack import build_context_pack
@@ -636,13 +643,24 @@ async def copilot_quick_chat(
             user_id=current_user.id
         )
 
-        result = llm_router.chat(
-            messages=messages,
-            task_type=TaskType.FINANCIAL_ANALYSIS,
-            system=system_prompt,
-            temperature=0.4,
-            max_tokens=2000,
-        )
+        import asyncio
+        try:
+            # Blocking provider call: run it in a worker thread so it does not
+            # stall the event loop (and every other request on this worker).
+            result = await asyncio.to_thread(
+                llm_router.chat,
+                messages=messages,
+                task_type=TaskType.FINANCIAL_ANALYSIS,
+                system=system_prompt,
+                temperature=0.4,
+                max_tokens=2000,
+            )
+        except LLMBudgetExceeded as budget_err:
+            return QuickChatResponse(
+                response=str(budget_err),
+                sources_used=[],
+                suggested_followups=[],
+            )
 
         response_text = result.get("content", "I wasn't able to generate a response. Please try again.")
 
@@ -650,9 +668,7 @@ async def copilot_quick_chat(
         truth_scan = db.query(TruthScan).filter(
             TruthScan.company_id == company_id
         ).order_by(TruthScan.created_at.desc()).first()
-        available_metrics = extract_available_metrics(
-            truth_scan.outputs_json if truth_scan else None
-        )
+        available_metrics = _guard_available_metrics(db, company_id, truth_scan)
         guarded = apply_not_available_guard_to_text(
             response_text,
             run_result.grounding_status,
@@ -872,13 +888,7 @@ async def copilot_chat(
     from server.copilot.prompt_templates import detect_response_mode, detect_clarification_needed, get_mode_instructions
     import uuid as uuid_lib
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     import asyncio
     try:
@@ -888,18 +898,25 @@ async def copilot_chat(
         )
     except asyncio.TimeoutError:
         _logger.warning(f"Copilot chat timed out for company {company_id}")
-        from server.schemas.canonical import CopilotChatResponse
         return CopilotChatResponse(
-            response="I'm taking longer than expected to analyze this. Please try asking again or simplify your question.",
-            follow_up_suggestions=["Can you rephrase that more specifically?"],
-            sources=[],
-            confidence=0.3,
-            response_metadata={}
+            executive_summary=[
+                "I'm taking longer than expected to analyze this. Please try asking again or simplify your question."
+            ],
+            company_snapshot=[],
+            assumptions=[],
+            risks=[],
+            next_questions=["Can you rephrase that more specifically?"],
+            confidence="Low",
+            intent_detected="timeout",
         )
     except HTTPException:
         raise
     except Exception as e:
         _logger.warning(f"Copilot chat first attempt failed for company {company_id}: {e}, retrying...")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         try:
             return await asyncio.wait_for(
                 _copilot_chat_inner(company_id, company, request, db, current_user),
@@ -911,11 +928,10 @@ async def copilot_chat(
         truth_scan_summary = []
         financial_snapshot = []
         try:
-            from server.models.truth_scan import TruthScanResult
             from server.models.financial import FinancialRecord
-            ts = db.query(TruthScanResult).filter(
-                TruthScanResult.company_id == company_id
-            ).order_by(TruthScanResult.created_at.desc()).first()
+            ts = db.query(TruthScan).filter(
+                TruthScan.company_id == company_id
+            ).order_by(TruthScan.created_at.desc()).first()
             if ts and ts.outputs_json:
                 outputs = ts.outputs_json
                 if outputs.get("revenue"):
@@ -937,7 +953,7 @@ async def copilot_chat(
 
             latest_fin = db.query(FinancialRecord).filter(
                 FinancialRecord.company_id == company_id
-            ).order_by(FinancialRecord.date.desc()).first()
+            ).order_by(FinancialRecord.period_end.desc()).first()
             if latest_fin and not financial_snapshot:
                 if latest_fin.revenue: financial_snapshot.append(f"Revenue: ${latest_fin.revenue:,.0f}/mo")
                 if latest_fin.mrr: financial_snapshot.append(f"MRR: ${latest_fin.mrr:,.0f}")
@@ -1327,9 +1343,7 @@ async def _copilot_chat_inner(
     if causal_drivers:
         output["causal_drivers"] = causal_drivers
 
-    available_metrics = extract_available_metrics(
-        truth_scan.outputs_json if truth_scan else None
-    )
+    available_metrics = _guard_available_metrics(db, company_id, truth_scan)
     run_outputs_for_guard = None
     if scenario_id_for_citation:
         guarded_run = fetchVerifiedRunResult(
@@ -1455,13 +1469,7 @@ async def submit_copilot_feedback(
     """
     from server.copilot.conversation_state import conversation_store
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     conv_state = conversation_store.get(company_id, current_user.id)
     conv_state.add_message(
@@ -1696,13 +1704,7 @@ def get_company_knowledge_base(
     """Get the Company Knowledge Base for a company."""
     from server.copilot.ckb_storage import CKBStorage
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     ckb_storage = CKBStorage(db)
     ckb = ckb_storage.get_ckb(company_id)
@@ -1724,13 +1726,7 @@ def update_ckb_section(
     """Update a specific section of the Company Knowledge Base."""
     from server.copilot.ckb_storage import CKBStorage
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     ckb_storage = CKBStorage(db)
     success = ckb_storage.update_ckb_section(company_id, section, data)
@@ -1767,13 +1763,7 @@ async def export_memo(
     from datetime import datetime
     import uuid as uuid_lib
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     ckb_storage = CKBStorage(db)
     ckb = ckb_storage.get_ckb(company_id)
