@@ -20,7 +20,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -52,6 +52,11 @@ class LeadCreate(BaseModel):
     runway_months: Optional[str] = Field(default=None, max_length=20)
     runway_date: Optional[str] = Field(default=None, max_length=40)
     monthly_burn: Optional[str] = Field(default=None, max_length=40)
+    # Explicit opt-in from a calculator. False is rejected; the server writes
+    # its own consent timestamp and does not trust the client clock.
+    consent: bool = False
+    consent_at: Optional[datetime] = None
+    source_page: str = Field(default="", max_length=200)
     # Browser PostHog distinct_id, when the page has one. Invalid values are
     # dropped so a bad client cannot 422 a real lead.
     distinct_id: Optional[str] = None
@@ -79,8 +84,11 @@ def _runway_email_html(data: LeadCreate) -> str:
       </table>
       <p style="margin:0 0 8px;color:#5b6472">This uses a simple linear model: cash divided by net burn,
       with revenue growing at the rate you entered. It assumes burn stays flat, which it rarely does.</p>
-      <p style="margin:0"><a href="https://founderconsole.ai/tools/runway-calculator"
+      <p style="margin:0 0 8px"><a href="https://founderconsole.ai/tools/runway-calculator"
          style="color:#2563eb">Adjust the numbers</a></p>
+      <p style="margin:0;color:#5b6472;font-size:13px">You asked for this result.
+      Monthly founder finance tips are pending and are not sent until you confirm.
+      Unsubscribe any time by emailing hello@founderconsole.ai.</p>
     </div>
     """
 
@@ -116,7 +124,38 @@ def _event_distinct_id(data: LeadCreate) -> tuple[str, str]:
     return _lead_distinct_id(str(data.email)), "email_hash"
 
 
-def _emit_lead_captured(data: LeadCreate, created: bool) -> None:
+# Resend here is a transactional sender (send_email). There is no
+# Contacts/Audiences double opt-in, and account verification tokens belong to
+# logged-in users, not calculator leads. Opt-ins are stored pending. Monthly
+# tips must not go out until consent_status is confirmed.
+MARKETING_OPT_IN_PENDING = "pending"
+MARKETING_OPT_IN_CONFIRMED = "confirmed"
+
+
+def lead_may_receive_founder_tips(lead) -> bool:
+    """True only after an explicit confirm. Pending consent is not enough."""
+    return bool(getattr(lead, "consent", False)) and (
+        getattr(lead, "consent_status", None) == MARKETING_OPT_IN_CONFIRMED
+    )
+
+
+def _request_host(request: Optional[Request]) -> str:
+    if request is None:
+        return ""
+    headers = getattr(request, "headers", None)
+    raw = ""
+    if headers is not None:
+        getter = getattr(headers, "get", None)
+        if getter is not None:
+            raw = getter("x-forwarded-host") or getter("host") or ""
+    host = str(raw).split(",")[0].strip()
+    if host:
+        return host
+    url = getattr(request, "url", None)
+    return str(getattr(url, "hostname", "") or "")
+
+
+def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None:
     """Server-side conversion event. Client trackFunnel after fetch is unproven.
 
     PostHog project 522965 has calculator_used / cta_click / signup_view but
@@ -135,7 +174,11 @@ def _emit_lead_captured(data: LeadCreate, created: bool) -> None:
             "source": location,
             "created": created,
             "distinct_id_source": distinct_id_source,
+            "host": host,
         }
+        page = (data.source_page or "").strip()
+        if page:
+            properties["source_page"] = page
         if data.runway_months:
             properties["runway_months"] = data.runway_months
         if data.plan:
@@ -153,17 +196,30 @@ def _emit_lead_captured(data: LeadCreate, created: bool) -> None:
 def create_lead(
     data: LeadCreate,
     background: BackgroundTasks,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """Capture an address. Idempotent on email.
+    """Capture an address. Idempotent on email. Requires consent.
 
     `Lead.email` is unique, so the previous version raised IntegrityError and
     returned a 500 the second time anyone submitted the same address — which is
     exactly what a person does when they are not sure the first click worked.
     A repeat submission now updates the existing row and reports success,
     because from the visitor's point of view it did succeed.
+
+    Consent has to be true and name the page. The row is stored
+    consent_status=pending. No double opt-in email is sent: see
+    MARKETING_OPT_IN_PENDING. The result email, when the runway fields are
+    present, is the result they asked for, not the monthly tips.
     """
+    if data.consent is not True:
+        raise HTTPException(status_code=400, detail="Consent is required")
+    source_page = (data.source_page or "").strip()
+    if not source_page:
+        raise HTTPException(status_code=400, detail="A source page is required")
+
     email = data.email.lower().strip()
+    host = _request_host(request)
     try:
         lead = db.query(Lead).filter(Lead.email == email).one_or_none()
         if lead is None:
@@ -183,6 +239,13 @@ def create_lead(
             lead.source = data.source
         if data.notes:
             lead.notes = data.notes
+        lead.consent = True
+        # Server clock. The client sends consent_at so the payload is explicit;
+        # a visitor's clock is not the record.
+        lead.consent_at = datetime.utcnow()
+        lead.source_page = source_page
+        if lead.consent_status != MARKETING_OPT_IN_CONFIRMED:
+            lead.consent_status = MARKETING_OPT_IN_PENDING
         lead.updated_at = datetime.utcnow()
 
         db.commit()
@@ -195,11 +258,16 @@ def create_lead(
     # Queued, not awaited: the visitor's request must not wait on Resend or
     # PostHog, and a provider outage must not turn a captured lead into a
     # visible failure.
-    background.add_task(_emit_lead_captured, data, created)
+    background.add_task(_emit_lead_captured, data, created, host)
     if data.runway_months and data.runway_date:
         background.add_task(_send_runway_email, data)
 
-    return {"status": "ok", "created": created}
+    return {
+        "status": "ok",
+        "created": created,
+        "consent": True,
+        "consent_status": lead.consent_status,
+    }
 
 
 @router.get("")
@@ -219,6 +287,10 @@ def list_leads(
             "plan": l.plan,
             "source": l.source,
             "notes": l.notes,
+            "consent": bool(l.consent),
+            "consent_at": l.consent_at.isoformat() if l.consent_at else None,
+            "source_page": l.source_page,
+            "consent_status": l.consent_status,
             "created_at": l.created_at.isoformat() if l.created_at else None,
         }
         for l in leads

@@ -5,6 +5,17 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from server.api.leads import LeadCreate, _emit_lead_captured, _lead_distinct_id, create_lead
+
+
+class _Headers(dict):
+    def get(self, key, default=None):
+        return super().get(key, default)
+
+
+class _Request:
+    def __init__(self, host="founderconsole.ai"):
+        self.headers = _Headers({"host": host})
+        self.url = type("U", (), {"hostname": host.split(":")[0]})()
 from server.services import posthog as posthog_svc
 
 
@@ -129,6 +140,8 @@ def test_create_lead_queues_capture_after_commit():
     data = LeadCreate(
         email="founder@example.com",
         source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
         runway_months="6",
         runway_date="March 2027",
     )
@@ -136,7 +149,7 @@ def test_create_lead_queues_capture_after_commit():
     db = MagicMock()
     db.query.return_value.filter.return_value.one_or_none.return_value = None
 
-    result = create_lead(data, background, db)
+    result = create_lead(data, background, _Request(), db)
 
     assert result["status"] == "ok"
     assert result["created"] is True
@@ -149,13 +162,15 @@ def test_create_lead_keeps_browser_distinct_id_for_the_queued_emit():
     data = LeadCreate(
         email="founder@example.com",
         source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
         distinct_id="anon-browser",
     )
     background = MagicMock()
     db = MagicMock()
     db.query.return_value.filter.return_value.one_or_none.return_value = None
 
-    create_lead(data, background, db)
+    create_lead(data, background, _Request(), db)
 
     emit_call = next(
         call for call in background.add_task.call_args_list if call.args[0] is _emit_lead_captured
@@ -165,12 +180,18 @@ def test_create_lead_keeps_browser_distinct_id_for_the_queued_emit():
 
 def test_create_lead_emits_on_repeat_submission():
     existing = MagicMock()
-    data = LeadCreate(email="founder@example.com", source="runway-calculator")
+    existing.consent_status = None
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
+    )
     background = MagicMock()
     db = MagicMock()
     db.query.return_value.filter.return_value.one_or_none.return_value = existing
 
-    result = create_lead(data, background, db)
+    result = create_lead(data, background, _Request(), db)
 
     assert result["created"] is False
     queued = [call.args[0] for call in background.add_task.call_args_list]
@@ -182,14 +203,19 @@ def test_create_lead_does_not_emit_when_commit_fails():
     from sqlalchemy.exc import SQLAlchemyError
     import pytest
 
-    data = LeadCreate(email="founder@example.com", source="runway-calculator")
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
+    )
     background = MagicMock()
     db = MagicMock()
     db.query.return_value.filter.return_value.one_or_none.return_value = None
     db.commit.side_effect = SQLAlchemyError("down")
 
     with pytest.raises(HTTPException) as exc:
-        create_lead(data, background, db)
+        create_lead(data, background, _Request(), db)
 
     assert exc.value.status_code == 503
     background.add_task.assert_not_called()

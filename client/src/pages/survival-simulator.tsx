@@ -1,5 +1,6 @@
 import { isSustainableRunway } from "@/lib/simulation/runwayFormat";
-import { useState, useEffect, type FormEvent } from "react";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useRef } from "react";
@@ -14,7 +15,7 @@ import {
   Rocket, TrendingUp, DollarSign, Users, AlertTriangle,
   Share2, ArrowRight, BarChart3, Shield, Target, ChevronDown,
   Zap, CheckCircle, UserPlus, Clock, Copy, Twitter, Linkedin,
-  Gauge, ArrowLeft, Download, Mail, Check, Loader2
+  Gauge, ArrowLeft, Download
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -23,8 +24,6 @@ import {
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 import { trackFunnel } from "@/lib/funnel";
-import { getBrowserDistinctId } from "@/lib/posthog";
-import { useViewedOnce } from "@/hooks/use-viewed-once";
 
 // 999 is the engine's "revenue covers costs" sentinel; never show "999mo".
 function runwayLabel(value: number, unit = "mo"): string {
@@ -519,110 +518,29 @@ function RecommendationsPanel({ recommendations }: { recommendations: SimResults
 }
 
 function EmailResultPanel({ results }: { results: SimResults }) {
-  // Same conversion as /tools/runway-calculator: one field, no account, the
-  // result in their inbox so they can forward it. Server /api/leads already
-  // stores the lead and queues lead_captured; we still track client-side
-  // after a 2xx, matching the calculator.
-  const [email, setEmail] = useState("");
-  const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
-  const leadFormRef = useViewedOnce("lead_form_viewed", {
-    location: "survival-simulator",
-  });
-
+  // Shown only after a simulation result exists. Same consent opt-in as the
+  // other public calculators. The runway fields still key the result email.
   const p50 = results.runway.p50;
   const monthlyBurn = results.inputs.monthly_expenses - results.inputs.monthly_revenue;
   const runwayDate = isSustainableRunway(p50) ? "Sustainable" : formatDate(p50);
 
-  async function handleEmailResult(e: FormEvent) {
-    e.preventDefault();
-    if (sendState === "sending" || !email.trim()) return;
-    setSendState("sending");
-    try {
-      const distinctId = await getBrowserDistinctId();
-      const res = await fetch("/api/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          source: "survival-simulator",
-          plan: "survival-simulator",
-          notes: `Grade ${results.grade.letter} (${results.grade.label}). Median runway ${runwayLabel(p50, " months")} (P10 ${runwayLabel(results.runway.p10, "")} – P90 ${runwayLabel(results.runway.p90, "")}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`,
-          // Server only queues the outbound email when these three are present.
-          runway_months: String(p50),
-          runway_date: runwayDate,
-          monthly_burn: formatCurrency(monthlyBurn) + "/mo",
-          ...(distinctId ? { distinct_id: distinctId } : {}),
-        }),
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      setSendState("done");
-      trackFunnel("lead_captured", {
-        location: "survival-simulator",
+  return (
+    <CalculatorEmailOptIn
+      className="border-zinc-800 bg-zinc-900/80"
+      inputClassName="bg-zinc-800 border-zinc-700"
+      source="survival-simulator"
+      sourcePage="/survival-simulator"
+      plan="survival-simulator"
+      notes={`Grade ${results.grade.letter} (${results.grade.label}). Median runway ${runwayLabel(p50, " months")} (P10 ${runwayLabel(results.runway.p10, "")} – P90 ${runwayLabel(results.runway.p90, "")}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`}
+      runwayMonths={String(p50)}
+      runwayDate={runwayDate}
+      monthlyBurn={formatCurrency(monthlyBurn) + "/mo"}
+      trackExtra={{
         runway_months: p50,
         grade: results.grade.letter,
         survival_12m: results.survival["12m"],
-      });
-    } catch {
-      // Deliberately not a toast. The visitor still has their result on screen.
-      setSendState("error");
-    }
-  }
-
-  return (
-    <Card className="border-zinc-800 bg-zinc-900/80" data-testid="email-result-panel">
-      <CardContent className="pt-6">
-        {sendState === "done" ? (
-          <div className="flex items-center gap-3 justify-center py-2" data-testid="text-email-sent">
-            <Check className="h-5 w-5 text-emerald-500 shrink-0" />
-            <p className="text-sm text-foreground">
-              Sent. Check your inbox for your survival summary.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-primary shrink-0" />
-              <h3 className="text-base font-semibold text-foreground" data-testid="text-email-heading">
-                Email me this result
-              </h3>
-            </div>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Your survival grade, median runway and 12-month odds, sent to you so you can
-              forward it to a co-founder or investor. No account needed.
-            </p>
-            <form ref={leadFormRef} onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <Input
-                type="email"
-                required
-                autoComplete="email"
-                inputMode="email"
-                placeholder="you@yourstartup.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="sm:flex-1 bg-zinc-800 border-zinc-700"
-                aria-label="Your email address"
-                data-testid="input-lead-email"
-              />
-              <Button type="submit" disabled={sendState === "sending"} data-testid="button-email-result">
-                {sendState === "sending" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending
-                  </>
-                ) : (
-                  "Send it to me"
-                )}
-              </Button>
-            </form>
-            {sendState === "error" && (
-              <p className="mt-2 text-sm text-destructive" data-testid="text-email-error">
-                That did not go through. Try again in a moment.
-              </p>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+      }}
+    />
   );
 }
 
