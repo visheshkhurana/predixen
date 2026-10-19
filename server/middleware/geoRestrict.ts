@@ -10,6 +10,7 @@
 //   GEO_ALLOWED_COUNTRIES=US,IN,GB extra/override allowlist (ISO-3166 alpha-2)
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
+import { getAuthCookie, verifySessionToken } from "./requireAuth";
 
 const DEFAULT_ALLOWED = ["US", "IN"];
 
@@ -150,13 +151,21 @@ function isPrivateAddress(ip: string): boolean {
   return false;
 }
 
-/** Left-most public address in X-Forwarded-For, else the socket address. */
+/**
+ * Right-most public address in X-Forwarded-For, else the socket address.
+ *
+ * The Railway edge APPENDS the address it saw, so the right end of the chain is
+ * the only part a client cannot write. Reading from the left let anyone pick
+ * their country by sending their own X-Forwarded-For (same fix as the rate
+ * limiter's _get_identifier). Trailing private hops are internal proxies and
+ * are skipped.
+ */
 export function clientIp(req: Request): string {
   const xff = req.headers["x-forwarded-for"];
-  const chain =
-    typeof xff === "string" ? xff.split(",") : Array.isArray(xff) ? xff : [];
-  for (const hop of chain) {
-    const ip = hop.trim().replace(/^\[|\]$/g, "").replace(/^::ffff:/, "");
+  const chain = (typeof xff === "string" ? [xff] : Array.isArray(xff) ? xff : [])
+    .flatMap((v) => v.split(","));
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const ip = chain[i].trim().replace(/^\[|\]$/g, "").replace(/^::ffff:/, "");
     if (ip && !isPrivateAddress(ip)) return ip;
   }
   const direct = (req.socket?.remoteAddress || "").replace(/^::ffff:/, "");
@@ -164,12 +173,9 @@ export function clientIp(req: Request): string {
 }
 
 function hasSessionCookie(req: Request): boolean {
-  // Presence check only — the real verification lives in requireAuth. An
-  // existing customer travelling abroad should reach the app; a forged cookie
-  // buys nothing beyond the marketing pages, which are public anyway.
-  const cookie = req.headers["cookie"];
-  if (typeof cookie !== "string") return false;
-  return /(?:^|;)\s*auth_token=/.test(cookie);
+  // An existing customer travelling abroad should reach the app, but only on
+  // a session that verifies — a bare `auth_token=anything` is not a pass.
+  return verifySessionToken(getAuthCookie(req.headers["cookie"])) !== null;
 }
 
 function blockedPage(country: string): string {

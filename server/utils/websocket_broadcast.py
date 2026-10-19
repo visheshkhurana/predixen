@@ -45,15 +45,17 @@ async def broadcast_simulation_update(
     scenario_id: int,
     status: str,
     progress: Optional[float] = None,
-    results: Optional[Dict[str, Any]] = None
+    results: Optional[Dict[str, Any]] = None,
+    company_id: Optional[int] = None,
 ) -> bool:
-    """Broadcast simulation status updates to connected WebSocket clients."""
+    """Broadcast simulation status updates to the scenario's company's WebSocket clients."""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{NODE_SERVER_URL}/internal/broadcast/simulation",
                 json={
                     "scenarioId": scenario_id,
+                    "companyId": company_id,
                     "status": status,
                     "progress": progress,
                     "results": results

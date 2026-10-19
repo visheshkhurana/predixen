@@ -8,6 +8,9 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 
+HSTS_VALUE = "max-age=63072000; includeSubDomains; preload"
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Middleware that adds security headers to every HTTP response."""
 
@@ -19,7 +22,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: blob: https:",
-        "connect-src 'self' https://*.sentry.io https://*.ingest.sentry.io https://api.openai.com https://*.replit.dev wss://*.replit.dev https://us.i.posthog.com https://us.posthog.com",
+        "connect-src 'self' https://*.sentry.io https://*.ingest.sentry.io https://api.openai.com https://us.i.posthog.com https://us.posthog.com",
         "frame-ancestors 'none'",
         "base-uri 'self'",
         "form-action 'self'",
@@ -49,10 +52,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Disable old XSS filter (rely on CSP instead)
         response.headers["X-XSS-Protection"] = "0"
 
-        # HSTS  enforce HTTPS for 1 year, include subdomains
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains; preload"
-        )
+        # HSTS  enforce HTTPS for 2 years, include subdomains (matches the
+        # Express gateway, server/middleware/securityHeaders.ts)
+        response.headers["Strict-Transport-Security"] = HSTS_VALUE
 
         # Control referrer information
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"

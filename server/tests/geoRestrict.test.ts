@@ -14,6 +14,10 @@ import { readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { geoRestrict } from "../middleware/geoRestrict";
+import { signJwt, inOneHour } from "./helpers/jwt";
+
+const GEO_SECRET = "test-secret-geo";
+process.env.SECRET_KEY = GEO_SECRET;
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -186,9 +190,22 @@ test("still blocks a real browser from a disallowed country", async () => {
 });
 
 test("never locks out an existing signed-in user abroad", async () => {
+  const token = signJwt({ sub: "7", exp: inOneHour() }, GEO_SECRET);
+  assert.equal(
+    await status("/overview", { "x-forwarded-for": IP.china, cookie: `auth_token=${token}` }),
+    200,
+  );
+});
+
+test("a cookie that does not verify is not a pass", async () => {
   assert.equal(
     await status("/overview", { "x-forwarded-for": IP.china, cookie: "auth_token=a.b.c" }),
-    200,
+    403,
+  );
+  const forged = signJwt({ sub: "7", exp: inOneHour() }, "wrong-secret");
+  assert.equal(
+    await status("/overview", { "x-forwarded-for": IP.china, cookie: `auth_token=${forged}` }),
+    403,
   );
 });
 
@@ -242,9 +259,15 @@ test("fails open on private, missing and malformed addresses", async () => {
   assert.equal(await status("/", { "x-forwarded-for": "not-an-ip" }), 200);
 });
 
-test("reads the client from the left of a proxy chain", async () => {
+test("reads the client from the right of a proxy chain, skipping internal hops", async () => {
   assert.equal(await status("/", { "x-forwarded-for": `${IP.china}, 10.0.0.5` }), 403);
   assert.equal(await status("/", { "x-forwarded-for": `${IP.us}, 10.0.0.5` }), 200);
+});
+
+test("a client-supplied X-Forwarded-For prefix cannot pick the country", async () => {
+  // The edge appends the real address; whatever the client sent sits to its left.
+  assert.equal(await status("/", { "x-forwarded-for": `${IP.us}, ${IP.china}` }), 403);
+  assert.equal(await status("/", { "x-forwarded-for": `${IP.china}, ${IP.us}` }), 200);
 });
 
 test("the kill switch disables the gate", async () => {

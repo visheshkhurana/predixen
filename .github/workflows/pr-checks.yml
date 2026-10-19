@@ -130,6 +130,21 @@ jobs:
       - name: signup CTAs open the register tab
         run: npx tsx server/tests/signup-cta-register-tab.test.ts
 
+      - name: websocket auth and company scoping
+        run: npx tsx --test server/tests/websocket-auth.test.ts
+
+      - name: notion routes are owner-only
+        run: npx tsx --test server/tests/notion-routes-admin.test.ts
+
+      - name: security headers policy
+        run: npx tsx --test server/tests/security-headers.test.ts
+
+      - name: final error handler and favicon alias
+        run: npx tsx --test server/tests/http-hygiene.test.ts
+
+      - name: cookie-auth origin check
+        run: npx tsx --test server/tests/origin-check.test.ts
+
       - name: sitemap.xml is generated, not hand-edited
         run: |
           npm run generate:sitemap
