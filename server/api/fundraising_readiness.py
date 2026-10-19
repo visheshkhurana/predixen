@@ -82,9 +82,13 @@ def _compute_readiness(
     if ts_growth == 0:
         ts_growth = extract_metric_value(metrics.get("monthly_growth_rate"), 0)
     fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
+    # Both sources are already percentages: the truth scan writes
+    # revenue_growth_mom as ((latest - prev) / prev) * 100 or copies
+    # FinancialRecord.mom_growth, and every mom_growth writer (manual entry,
+    # csv_import, excel/pdf extractors, seeds) stores percent. The old
+    # magnitude guess `abs(growth) < 1 -> x100` turned a real 0.8% MoM into
+    # 80% and scored it as top-quartile growth.
     growth_pct = ts_growth if ts_growth != 0 else fr_growth
-    if abs(growth_pct) < 1:
-        growth_pct = growth_pct * 100
 
     ts_ltv_cac = extract_metric_value(metrics.get("ltv_cac_ratio"), 0)
     fr_ltv_cac = float(latest_record.ltv_cac_ratio) if latest_record and latest_record.ltv_cac_ratio else 0
