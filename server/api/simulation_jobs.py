@@ -50,8 +50,13 @@ def _get_owned_scenario(db: Session, scenario_id: int, user: User) -> Scenario:
 
 
 def _accessible_company_ids(db: Session, user: User):
-    """Company ids the caller can see, or None for platform admins (no filter)."""
-    if getattr(user, "is_platform_admin", False) or getattr(user, "role", "") == "admin":
+    """Company ids the caller can see, or None for the platform owner (no filter).
+
+    A company role of "admin" is not platform access. #161 removed that
+    meaning: only the platform-admin flag (master session or the verified
+    ADMIN_MASTER_EMAIL account) may list every tenant's jobs.
+    """
+    if getattr(user, "is_platform_admin", False) is True:
         return None
     ids = {c.id for c in db.query(Company.id).filter(Company.user_id == user.id).all()}
     try:

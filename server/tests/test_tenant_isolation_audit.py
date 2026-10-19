@@ -95,11 +95,21 @@ def test_job_listing_is_scoped_to_callers_companies():
 
 
 def test_platform_admin_job_listing_is_unscoped():
-    admin = SimpleNamespace(id=9, email="a@example.com", is_platform_admin=True, role="admin")
+    admin = SimpleNamespace(id=9, email="a@example.com", is_platform_admin=True, role="user")
     db = MagicMock()
     resp = _client(sim_api.router, db, admin).get("/api/simulations/jobs")
     assert resp.status_code == 200, resp.text
     db.query.return_value.join.assert_not_called()
+
+
+def test_company_admin_role_does_not_list_every_tenant():
+    """role == 'admin' is a company role, not a platform-wide bypass."""
+    company_admin = SimpleNamespace(id=4, email="ops@example.com", is_platform_admin=False, role="admin")
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = [SimpleNamespace(id=7)]
+    resp = _client(sim_api.router, db, company_admin).get("/api/simulations/jobs")
+    assert resp.status_code == 200, resp.text
+    db.query.return_value.join.assert_called_once()
 
 
 # --- suggestions -----------------------------------------------------------
