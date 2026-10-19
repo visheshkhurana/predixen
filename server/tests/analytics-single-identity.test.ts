@@ -209,7 +209,11 @@ test("successful lead creates emit lead_captured on the server", () => {
   assert.match(leads, /background\.add_task\(_emit_lead_captured,/);
   assert.match(leads, /posthog_capture\(\s*"lead_captured"/);
   assert.match(leads, /"browser"/);
-  assert.match(leads, /"email_hash"/);
+  assert.match(leads, /"anonymous"/);
+  assert.match(leads, /optin:/);
+  // The address and a hash of it must not be the PostHog distinct_id.
+  assert.doesNotMatch(leads, /"email_hash"/);
+  assert.doesNotMatch(leads, /return _lead_distinct_id\(/);
   assert.match(posthog, /\/capture\//);
   assert.match(posthog, /refusing/);
   assert.doesNotMatch(posthog, /\.identify\(/);
@@ -219,12 +223,15 @@ test("successful lead creates emit lead_captured on the server", () => {
 test("lead forms and signup pass the browser distinct_id when they have one", () => {
   const runway = readFileSync("client/src/pages/runway-calculator.tsx", "utf8");
   const survival = readFileSync("client/src/pages/survival-simulator.tsx", "utf8");
+  const optIn = readFileSync("client/src/components/marketing/CalculatorEmailOptIn.tsx", "utf8");
   const auth = readFileSync("client/src/pages/auth.tsx", "utf8");
   const api = readFileSync("client/src/api/client.ts", "utf8");
+  // Both calculators post through the shared opt-in, which attaches the id.
   for (const page of [runway, survival]) {
-    assert.match(page, /getBrowserDistinctId\(/);
-    assert.match(page, /distinct_id:\s*distinctId/);
+    assert.match(page, /CalculatorEmailOptIn/);
   }
+  assert.match(optIn, /getBrowserDistinctId\(/);
+  assert.match(optIn, /distinct_id:\s*distinctId/);
   assert.match(auth, /getBrowserDistinctId\(/);
   assert.match(auth, /api\.auth\.register\([^)]*distinctId/);
   assert.match(auth, /params\.set\(\s*['"]distinct_id['"]/);
@@ -251,16 +258,20 @@ test("the survival simulator sends the same lead fields the email is keyed off",
   // runway_date are present. Source must be survival-simulator so these leads
   // stay distinguishable from calculator ones.
   const page = readFileSync("client/src/pages/survival-simulator.tsx", "utf8");
+  const optIn = readFileSync("client/src/components/marketing/CalculatorEmailOptIn.tsx", "utf8");
   const api = readFileSync("server/api/leads.py", "utf8");
-  assert.match(page, /source:\s*"survival-simulator"/);
-  assert.match(page, /plan:\s*"survival-simulator"/);
-  assert.match(page, /trackFunnel\(\s*"lead_captured"/);
+  assert.match(page, /source="survival-simulator"/);
+  assert.match(page, /plan="survival-simulator"/);
+  assert.match(page, /runwayMonths=/);
+  assert.match(page, /runwayDate=/);
+  assert.match(page, /monthlyBurn=/);
+  assert.match(optIn, /trackFunnel\(\s*"lead_captured"/);
   for (const field of ["runway_months", "runway_date", "monthly_burn"]) {
-    assert.match(page, new RegExp(`${field}:`), `survival-sim must send ${field}`);
+    assert.match(optIn, new RegExp(`${field}:`), `opt-in must send ${field}`);
     assert.match(api, new RegExp(field), `server must accept ${field}`);
   }
-  assert.match(page, /data-testid="input-lead-email"/);
-  assert.match(page, /data-testid="button-email-result"/);
+  assert.match(optIn, /data-testid="input-lead-email"/);
+  assert.match(optIn, /data-testid="button-email-result"/);
   const resultsIdx = page.indexOf("{results && (");
   const emailIdx = page.indexOf("<EmailResultPanel results={results} />");
   assert.ok(resultsIdx !== -1 && emailIdx > resultsIdx, "email capture must render inside the results block");
@@ -271,9 +282,13 @@ test("the calculator sends the fields the runway email is keyed off", () => {
   // runway_date are present. The UI promises "check your inbox" the moment the
   // POST succeeds, so if the client stops sending these the page starts lying.
   const page = readFileSync("client/src/pages/runway-calculator.tsx", "utf8");
+  const optIn = readFileSync("client/src/components/marketing/CalculatorEmailOptIn.tsx", "utf8");
   const api = readFileSync("server/api/leads.py", "utf8");
+  assert.match(page, /runwayMonths=/);
+  assert.match(page, /runwayDate=/);
+  assert.match(page, /monthlyBurn=/);
   for (const field of ["runway_months", "runway_date", "monthly_burn"]) {
-    assert.match(page, new RegExp(`${field}:`), `client must send ${field}`);
+    assert.match(optIn, new RegExp(`${field}:`), `opt-in must send ${field}`);
     assert.match(api, new RegExp(field), `server must accept ${field}`);
   }
   assert.match(api, /if data\.runway_months and data\.runway_date:/);
