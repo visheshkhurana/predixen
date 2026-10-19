@@ -80,7 +80,7 @@ export function useSubscribe() {
         const err = await res.json().catch(() => ({ detail: 'Could not start checkout' }));
         throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not start checkout');
       }
-      return res.json() as Promise<{ checkout_url?: string; message?: string }>;
+      return res.json() as Promise<{ checkout_url?: string; portal_url?: string; message?: string; changed?: boolean }>;
     },
   });
 }
