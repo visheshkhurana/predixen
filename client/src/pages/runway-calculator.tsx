@@ -481,7 +481,7 @@ export default function RunwayCalculatorPage() {
               </p>
               <Button asChild className="mt-4" data-testid="button-signup-prompt">
                 <Link
-                  href="/auth?tab=register"
+                  href="/signup"
                   onClick={() =>
                     trackFunnel("signup_prompt_click", {
                       location: "runway-calculator",
@@ -567,7 +567,7 @@ export default function RunwayCalculatorPage() {
               confidence bands — so you know your true runway probability.
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
-              <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "runway-calculator" })}>
+              <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "runway-calculator" })}>
                 Connect Your Real Data
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -626,7 +626,7 @@ export default function RunwayCalculatorPage() {
               While this free calculator provides a useful estimate, FounderConsole goes much further. It creates a digital twin of your company — a live financial model that updates automatically as new data flows in. You can run what-if scenarios (what happens if we hire two engineers next month? what if our largest customer churns?) and see the impact on your runway distribution instantly. The AI Copilot can analyze your financials and proactively alert you when your runway drops below safe thresholds, giving you more time to react.
             </p>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              All features are free during the public beta. Connect your data, run your first simulation, and get a defensible runway forecast in under five minutes — no spreadsheets required.
+              FounderConsole is free — all features, no credit card. Connect your data, run your first simulation, and get a defensible runway forecast in under five minutes — no spreadsheets required.
             </p>
 
             <h3 className="text-xl font-semibold text-foreground mt-8 mb-3" data-testid="text-seo-heading-faq">

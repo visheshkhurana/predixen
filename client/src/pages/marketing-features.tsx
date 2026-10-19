@@ -218,11 +218,11 @@ export default function MarketingFeaturesPage() {
             Start using FounderConsole today
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
-            Every feature is free while we're in early access — no credit card required. Connect your data and get your first forecast in under 5 minutes.
+            FounderConsole is free — all features, no credit card. Connect your data and get your first forecast in under 5 minutes.
           </p>
           <div className="mt-6">
             <Button size="lg" asChild data-testid="button-features-get-started">
-              <Link href="/auth?tab=register">
+              <Link href="/signup">
                 Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>

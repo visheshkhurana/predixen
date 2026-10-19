@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import json
 
 from server.core.db import get_db
-from server.core.security import get_current_user, is_master_user, log_audit
+from server.core.security import get_current_user, is_master_user, log_audit, revoke_all_sessions
 from server.core.config import settings
 from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite, LLMAuditLog, EvalRun, TeamMember
 from server.models.financial import FinancialRecord
@@ -249,6 +249,7 @@ def suspend_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     user.is_active = False
+    revoke_all_sessions(db, user.id)
     db.commit()
     
     log_action(
@@ -526,6 +527,7 @@ def suspend_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     user.is_active = False
+    revoke_all_sessions(db, user.id)
     db.commit()
     
     log_action(

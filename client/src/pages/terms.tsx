@@ -52,25 +52,19 @@ export default function TermsOfServicePage() {
           </ul>
         </Section>
 
-        <Section icon={CreditCard} title="Subscriptions & Billing" testId="section-billing">
+        <Section icon={CreditCard} title="Pricing" testId="section-billing">
           <ul className="list-disc pl-5 space-y-1.5">
-            <li><strong className="text-foreground">Plans:</strong> The Service offers a Free plan and paid subscription plans (currently Starter, Growth, and Scale), billed monthly or annually. Current pricing and plan features are shown on our <a href="/pricing" className="text-indigo-400 hover:underline">pricing page</a> and in-app.</li>
-            <li><strong className="text-foreground">Free trial:</strong> New accounts may start a one-time 30-day free trial with full feature access. No payment method is required to start a trial. When the trial ends, your account reverts to the Free plan unless you subscribe.</li>
-            <li><strong className="text-foreground">Payment:</strong> Payments are processed securely by Stripe. We do not store your full card or payment details on our servers.</li>
-            <li><strong className="text-foreground">Renewal:</strong> Subscriptions renew automatically at the end of each billing period (monthly or annual) until cancelled. Charges may be converted to your local currency at the prevailing exchange rate.</li>
-            <li><strong className="text-foreground">Cancellation:</strong> You may cancel at any time through the in-app billing portal. Cancellation takes effect at the end of the current billing period; you keep paid access until then.</li>
-            <li><strong className="text-foreground">Refunds:</strong> If you are unhappy with your first subscription payment, contact us within 14 days of that payment for a full refund. Renewal payments and partial billing periods are otherwise non-refundable, except where required by law.</li>
-            <li><strong className="text-foreground">Plan changes:</strong> Upgrades take effect immediately with prorated billing handled by Stripe; downgrades take effect at the next billing period.</li>
-            <li><strong className="text-foreground">Price changes:</strong> We may change prices with at least 30 days' notice by email; changes apply from your next billing period after the notice period.</li>
-            <li><strong className="text-foreground">Failed payments:</strong> If a renewal payment fails, we may retry it and may downgrade or suspend paid features until payment succeeds.</li>
-            <li><strong className="text-foreground">Founding accounts:</strong> Accounts created before our paid plans launched retain complimentary access at our discretion; we will give at least 30 days' notice before changing this.</li>
+            <li><strong className="text-foreground">Free:</strong> The Service is free to use. Every feature is available to every account, with no paid plans, no trial period and no payment method required. See our <a href="/pricing" className="text-indigo-400 hover:underline">pricing page</a>.</li>
+            <li><strong className="text-foreground">Fair use:</strong> We may apply rate limits or usage safeguards to protect the Service from abuse or excessive automated use. These are not plan limits and apply equally to every account.</li>
+            <li><strong className="text-foreground">Existing subscriptions:</strong> If you bought a paid subscription before the Service became free, you can cancel it at any time through the billing portal; payments are processed by Stripe and we do not store your full card details. Contact us if you believe you were charged after the Service became free.</li>
+            <li><strong className="text-foreground">Changes:</strong> If we ever introduce paid features, we will give at least 30 days' notice by email, and nothing will be charged without your explicit agreement.</li>
           </ul>
         </Section>
 
         <Section icon={AlertTriangle} title="Service Disclaimer" testId="section-beta">
           <ul className="list-disc pl-5 space-y-1.5">
             <li>The Service is under active development and may contain bugs, errors, or incomplete functionality.</li>
-            <li>Features may be added, modified, or removed; material changes affecting paid plans will be communicated with reasonable notice.</li>
+            <li>Features may be added, modified, or removed; material changes will be communicated with reasonable notice.</li>
             <li>Data loss, while unlikely, is possible. We maintain backups, but recommend keeping your own copies of critical financial records.</li>
             <li>AI-generated insights, simulations, and recommendations are informational only and should not be the sole basis for financial, investment, or business decisions. FounderConsole does not provide financial, legal, or investment advice.</li>
           </ul>

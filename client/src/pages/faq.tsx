@@ -27,7 +27,7 @@ const faqSections = [
       {
         question: "Is FounderConsole free?",
         answer:
-          "Yes — FounderConsole is completely free while we're in early access. Every feature is unlocked and no credit card is required. The plans on our pricing page (Starter $29, Growth $49, Scale $99 per month) are our planned pricing for when we exit early access; we'll give plenty of notice before anything changes.",
+          "Yes — FounderConsole is free. Every feature is unlocked, there are no usage caps, and no credit card is required. There is one plan: Free — all features, no credit card.",
       },
       {
         question: "What is a startup digital twin?",
@@ -62,7 +62,7 @@ const faqSections = [
       {
         question: "How many simulations can I run?",
         answer:
-          "Each Monte Carlo simulation runs 100 to 10,000 iterations depending on your settings. While we're in early access you can run unlimited scenarios, compare them side by side, and version your work over time.",
+          "Each Monte Carlo simulation runs 100 to 10,000 iterations depending on your settings. You can run unlimited scenarios, compare them side by side, and version your work over time.",
       },
     ],
   },
@@ -92,12 +92,12 @@ const faqSections = [
       {
         question: "Do I need to pay anything right now?",
         answer:
-          "No. Everything is free while we're in early access — every feature is unlocked, with no credit card required. We'll announce paid plans well in advance before anything changes.",
+          "No. FounderConsole is free — every feature is unlocked, with no credit card required and no trial that runs out.",
       },
       {
-        question: "What will the paid plans cost later?",
+        question: "Are there paid plans or usage limits?",
         answer:
-          "Our planned pricing is Starter $29/month (50 simulations, 100 copilot messages, 2 connectors, Truth Scan, benchmarks), Growth $49/month (up to 3 companies, unlimited simulations and copilot, 10 connectors, Fundraising OS, board deck export), and Scale $99/month (unlimited companies and connectors, AI-agent Flight Simulator, Digital Twin, Investor Room, and cross-company intelligence). None of this is active yet — it's what we intend to charge once we exit early access.",
+          "No. There are no paid tiers and no plan limits — unlimited companies, simulations, copilot messages and data connectors, plus the Flight Simulator, Digital Twin, Investor Room, Fundraising OS and document generator. Fair-use rate limits apply only to protect the service from abuse.",
       },
       {
         question: "Do you offer enterprise pricing?",

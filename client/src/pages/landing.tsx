@@ -74,7 +74,7 @@ const landingFaqs = [
   },
   {
     q: "Is FounderConsole free?",
-    a: "Yes. FounderConsole is free while in early access — every feature unlocked, no credit card required. Planned pricing for when early access ends: Free, Starter ($29), Growth ($49), or Scale ($99) per month, with plenty of notice before paid plans begin.",
+    a: "Yes. FounderConsole is free — all features, no credit card. There are no paid tiers, no trial clock and no usage caps on companies, simulations or copilot messages.",
   },
   {
     q: "How does FounderConsole help with fundraising?",
@@ -102,41 +102,21 @@ const landingFaqs = [
   },
 ];
 
+// FounderConsole is free: one plan, every feature, no limits.
 const pricingTiers = [
   {
     name: "Free",
     price: "$0",
-    period: "",
-    description: "Explore the platform at your own pace.",
-    features: ["1 company", "3 simulations / month", "10 copilot messages / month", "CSV upload & manual entry", "Basic dashboard"],
-    highlighted: false,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Starter",
-    price: "$29",
-    period: "/month",
-    description: "For early-stage founders finding their footing.",
-    features: ["50 simulations / month", "100 copilot messages / month", "2 data connectors", "Truth Scan & Stress Tests", "Industry benchmarks"],
-    highlighted: false,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Growth",
-    price: "$49",
-    period: "/month",
-    description: "For scaling startups that decide weekly.",
-    features: ["Up to 3 companies", "Unlimited simulations & copilot", "10 data connectors", "Fundraising OS & cap table", "Board deck export"],
+    period: "forever",
+    description: "All features, no credit card.",
+    features: [
+      "Every feature unlocked",
+      "Unlimited companies, simulations & copilot",
+      "All data connectors",
+      "Fundraising OS, cap table & investor room",
+      "Board deck, docs & PDF export",
+    ],
     highlighted: true,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Scale",
-    price: "$99",
-    period: "/month",
-    description: "Full power for serious founders.",
-    features: ["Unlimited companies & connectors", "Flight Simulator (AI agents)", "Digital Twin & Investor Room", "Hiring Planner", "Cross-company intelligence"],
-    highlighted: false,
     cta: "Get Started Free",
   },
 ];
@@ -237,14 +217,14 @@ function Hero() {
               asChild
               data-testid="button-hero-start-simulation"
             >
-              <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "hero" })}>
+              <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "hero" })}>
                 Start Simulation
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </Magnetic>
           <Button size="lg" variant="outline" className="h-12 px-8 text-base backdrop-blur" asChild data-testid="button-hero-view-demo">
-            <Link href="/demo">View Demo</Link>
+            <Link href="/demo/enter">View Demo</Link>
           </Button>
         </motion.div>
         {/*
@@ -283,7 +263,7 @@ function Hero() {
           transition={{ delay: 0.9 }}
           className="mt-4 text-xs text-muted-foreground"
         >
-          Free during early access · No credit card required
+          Free — all features, no credit card
         </motion.p>
       </motion.div>
 
@@ -634,14 +614,13 @@ function PricingPreview() {
       <div className="mx-auto max-w-6xl px-4 py-20 md:py-24">
         <div className="text-center mb-14">
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground" data-testid="text-pricing-heading">
-            Simple, transparent pricing
+            Free. All of it.
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Everything is free while we&apos;re in early access — every feature unlocked, no credit card
-            required. The plans below are our planned pricing for when early access ends.
+            One plan: Free — all features, no credit card. No tiers, no trial, no usage caps.
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 gap-6 max-w-md mx-auto">
           {pricingTiers.map((tier, i) => (
             <motion.div
               key={tier.name}
@@ -655,11 +634,6 @@ function PricingPreview() {
               }`}
               data-testid={`card-pricing-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
             >
-              {tier.highlighted && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 shadow-md shadow-primary/20" data-testid="badge-popular">
-                  Most Popular
-                </Badge>
-              )}
               <h3 className="text-xl font-semibold text-foreground">{tier.name}</h3>
               <div className="flex items-baseline gap-1 mt-2">
                 <span className="text-4xl font-bold text-foreground">{tier.price}</span>
@@ -680,7 +654,7 @@ function PricingPreview() {
                 variant={tier.highlighted ? "default" : "outline"}
                 data-testid={`button-pricing-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: `pricing-${tier.name.toLowerCase()}` })}>
+                <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: `pricing-${tier.name.toLowerCase()}` })}>
                   {tier.cta}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
@@ -690,7 +664,7 @@ function PricingPreview() {
         </div>
         <p className="mt-6 text-center text-xs text-muted-foreground">
           <Link href="/pricing" className="text-primary hover:underline">
-            View full pricing details
+            What's included
           </Link>
         </p>
       </div>
@@ -783,7 +757,7 @@ export default function LandingPage() {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Free during early access with every feature unlocked — no credit card required. Planned paid plans from $29/month.",
+          description: "Free — all features, no credit card.",
         },
         featureList:
           "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
@@ -856,14 +830,14 @@ export default function LandingPage() {
                   asChild
                   data-testid="button-bottom-start-trial"
                 >
-                  <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "footer-cta" })}>
+                  <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "footer-cta" })}>
                     Get Started Free
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
               </Magnetic>
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">Free during early access · No credit card required.</p>
+            <p className="mt-4 text-xs text-muted-foreground">Free — all features, no credit card.</p>
           </motion.div>
         </div>
       </section>

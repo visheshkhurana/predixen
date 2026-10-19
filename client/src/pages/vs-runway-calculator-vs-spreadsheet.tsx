@@ -125,7 +125,7 @@ export default function VsRunwayCalculatorVsSpreadsheetPage() {
                 <td className="py-3 pr-4 font-medium text-foreground">Cost</td>
                 <td className="py-3 pr-4">Free if you already have it</td>
                 <td className="py-3 pr-4">Free, no account</td>
-                <td className="py-3">Every feature is free during early access</td>
+                <td className="py-3">Free — all features, no credit card</td>
               </tr>
             </tbody>
           </table>
@@ -200,7 +200,7 @@ export default function VsRunwayCalculatorVsSpreadsheetPage() {
           <Link href="/features" className="text-primary hover:underline" data-testid="link-vs-features">
             features
           </Link>
-          , and every feature is free during early access — see{" "}
+          , and FounderConsole is free — all features, no credit card — see{" "}
           <Link href="/pricing" className="text-primary hover:underline" data-testid="link-vs-pricing">
             pricing
           </Link>
@@ -241,7 +241,7 @@ export default function VsRunwayCalculatorVsSpreadsheetPage() {
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-vs-auth">
-            <Link href="/auth?tab=register">
+            <Link href="/signup">
               Get started free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

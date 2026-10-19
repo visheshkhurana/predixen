@@ -110,11 +110,11 @@ export default function HowItWorksPage() {
           <Link href="/pricing" className="text-primary hover:underline" data-testid="link-hiw-pricing">
             pricing
           </Link>{" "}
-          (every feature is free during early access).
+          (FounderConsole is free — all features, no credit card).
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-hiw-auth">
-            <Link href="/auth?tab=register">
+            <Link href="/signup">
               Get started free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

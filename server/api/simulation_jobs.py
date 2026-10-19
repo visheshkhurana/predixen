@@ -14,14 +14,14 @@ from server.models.company import Company
 from server.models.simulation_job import SimulationJob, ScenarioVersion, SensitivityAnalysis, SimulationJobStatus
 from server.models.truth_scan import TruthDataset, TruthScanUpload
 from server.simulate.enhanced_monte_carlo import (
-    run_enhanced_monte_carlo, 
+    run_enhanced_monte_carlo,
     run_sensitivity_analysis,
     compute_scenario_diff,
-    EnhancedSimulationInputs,
     SimulationConfig,
     ScenarioEvent,
     DistributionParams
 )
+from server.simulate.baseline import MissingBaseline, enhanced_inputs_from_scenario
 
 # Prefix deliberately excludes /api. Express proxies /api/* to this app
 # with pathRewrite {"^/api": ""} (server/index.ts), so a prefix of
@@ -150,24 +150,8 @@ def _execute_simulation_job(job_id: str, db: Session):
         
         events = parse_events(events_json)
         
-        inputs = EnhancedSimulationInputs(
-            baseline_revenue=inputs_json.get("baseline_revenue", 100000),
-            baseline_growth_rate=inputs_json.get("baseline_growth_rate", 5),
-            gross_margin=inputs_json.get("gross_margin", 70),
-            opex=inputs_json.get("opex", 20000),
-            payroll=inputs_json.get("payroll", 50000),
-            other_costs=inputs_json.get("other_costs", 10000),
-            cash_balance=inputs_json.get("cash_balance", 500000),
-            churn_rate=inputs_json.get("churn_rate", 5),
-            pricing_change_pct=inputs_json.get("pricing_change_pct", 0),
-            growth_uplift_pct=inputs_json.get("growth_uplift_pct", 0),
-            burn_reduction_pct=inputs_json.get("burn_reduction_pct", 0),
-            fundraise_month=inputs_json.get("fundraise_month"),
-            fundraise_amount=inputs_json.get("fundraise_amount", 0),
-            gross_margin_delta_pct=inputs_json.get("gross_margin_delta_pct", 0),
-            events=events
-        )
-        
+        inputs = enhanced_inputs_from_scenario(db, scenario, inputs_json=inputs_json, events=events)
+
         result = run_enhanced_monte_carlo(inputs, config)
         result["scenarioId"] = scenario.id
         result["jobId"] = job_id
@@ -341,24 +325,11 @@ async def run_sensitivity_analysis_endpoint(
     
     events = parse_events(events_json)
     
-    inputs = EnhancedSimulationInputs(
-        baseline_revenue=inputs_json.get("baseline_revenue", 100000),
-        baseline_growth_rate=inputs_json.get("baseline_growth_rate", 5),
-        gross_margin=inputs_json.get("gross_margin", 70),
-        opex=inputs_json.get("opex", 20000),
-        payroll=inputs_json.get("payroll", 50000),
-        other_costs=inputs_json.get("other_costs", 10000),
-        cash_balance=inputs_json.get("cash_balance", 500000),
-        churn_rate=inputs_json.get("churn_rate", 5),
-        pricing_change_pct=inputs_json.get("pricing_change_pct", 0),
-        growth_uplift_pct=inputs_json.get("growth_uplift_pct", 0),
-        burn_reduction_pct=inputs_json.get("burn_reduction_pct", 0),
-        fundraise_month=inputs_json.get("fundraise_month"),
-        fundraise_amount=inputs_json.get("fundraise_amount", 0),
-        gross_margin_delta_pct=inputs_json.get("gross_margin_delta_pct", 0),
-        events=events
-    )
-    
+    try:
+        inputs = enhanced_inputs_from_scenario(db, scenario, inputs_json=inputs_json, events=events)
+    except MissingBaseline as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     result = run_sensitivity_analysis(
         inputs=inputs,
         config=config,

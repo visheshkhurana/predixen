@@ -1,4 +1,10 @@
-"""Subscription checking and feature gating middleware."""
+"""Subscription lookup and (now inert) feature gating.
+
+FounderConsole is free for everyone (see ``server.core.plans.FREE_FOR_ALL``):
+``check_feature_access`` always allows and ``PaywallMiddleware`` passes every
+request through. ``get_user_subscription`` still reports any legacy paid Stripe
+subscription so the billing portal stays reachable for those customers.
+"""
 import logging
 import re
 from datetime import datetime, timedelta
@@ -20,23 +26,47 @@ logger = logging.getLogger(__name__)
 
 # NOTE: FastAPI sees paths WITHOUT the /api prefix (Express strips it when
 # proxying), but keep the prefix optional so this works in both contexts.
+#
+# HAG-265: six of these patterns matched NO live route, and one of them was the
+# only pattern naming a feature at all. They are listed in the order the old
+# map had them, with the dead six replaced by the routes that actually exist:
+#
+#   companies/\d+/copilot        -> companies/\d+/chat
+#   companies/\d+/simulations    -> companies/\d+/simulate + /simulation/
+#   companies/\d+/truth-scan     -> companies/\d+/truth/ + /truth-scan/
+#   export/board-deck            -> companies/\d+/board-export/
+#   companies/\d+/digital-twin   -> companies/\d+/twin/
+#   doc-generator/               -> companies/\d+/doc-generator/
+#
+# The two that mattered most: `POST /companies/{company_id}/chat` is the main
+# Copilot call and was named by no pattern, and `POST /scenarios/{scenario_id}/simulate`
+# is what the product's own scenario page calls -- the `/simulation/` patterns
+# cover the v2 family, which `/scenarios` does not use.
+#
+# Scenario ids are matched as `[^/]+` rather than `\d+`: `/scenarios/shared/{share_uuid}`
+# is a live route, so an id is not always numeric.
 ROUTE_FEATURE_MAP: List[tuple] = [
-    (re.compile(r"^(?:/api)?/companies/\d+/copilot"), Feature.COPILOT),
+    (re.compile(r"^(?:/api)?/companies/\d+/chat"), Feature.COPILOT),
     (re.compile(r"^(?:/api)?/companies/\d+/quick-chat"), Feature.COPILOT),
-    (re.compile(r"^(?:/api)?/companies/\d+/simulations"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/companies/\d+/simulate"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/companies/\d+/simulation/"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/scenarios/[^/]+/simulate"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/scenarios/[^/]+/simulation/latest"), Feature.SIMULATIONS),
     (re.compile(r"^(?:/api)?/simulation/"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/simulations/"), Feature.SIMULATIONS),
     (re.compile(r"^(?:/api)?/simulator/"), Feature.FLIGHT_SIMULATOR),
     (re.compile(r"^(?:/api)?/simulation-copilot/"), Feature.SIMULATIONS),
-    (re.compile(r"^(?:/api)?/companies/\d+/truth-scan"), Feature.TRUTH_SCAN),
+    (re.compile(r"^(?:/api)?/companies/\d+/truth/"), Feature.TRUTH_SCAN),
+    (re.compile(r"^(?:/api)?/truth-scan/"), Feature.TRUTH_SCAN),
     (re.compile(r"^(?:/api)?/connectors/"), Feature.DATA_CONNECTORS),
     (re.compile(r"^(?:/api)?/companies/\d+/fundraising"), Feature.FUNDRAISING_OS),
     (re.compile(r"^(?:/api)?/companies/\d+/cap-table"), Feature.CAP_TABLE),
-    (re.compile(r"^(?:/api)?/export/board-deck"), Feature.BOARD_DECK),
+    (re.compile(r"^(?:/api)?/companies/\d+/board-export/"), Feature.BOARD_DECK),
     (re.compile(r"^(?:/api)?/companies/\d+/hiring"), Feature.HIRING_PLANNER),
-    (re.compile(r"^(?:/api)?/companies/\d+/digital-twin"), Feature.DIGITAL_TWIN),
+    (re.compile(r"^(?:/api)?/companies/\d+/twin/"), Feature.DIGITAL_TWIN),
     (re.compile(r"^(?:/api)?/companies/\d+/ai-graphics"), Feature.AI_GRAPHICS),
     (re.compile(r"^(?:/api)?/companies/\d+/investor-room"), Feature.INVESTOR_ROOM),
-    (re.compile(r"^(?:/api)?/doc-generator/"), Feature.DOCUMENT_GENERATOR),
+    (re.compile(r"^(?:/api)?/companies/\d+/doc-generator/"), Feature.DOCUMENT_GENERATOR),
 ]
 
 EXEMPT_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -115,10 +145,10 @@ def get_user_subscription(db: Session, user_id: int) -> dict:
         return {
             "plan": PlanTier.FREE,
             "effective_plan": PlanTier.FREE,
-            "status": "none",
+            "status": "free",
             "is_trial": False,
             "trial_days_remaining": 0,
-            "is_active": False,
+            "is_active": True,
             "has_payment_method": False,
             "grandfathered": False,
         }
@@ -174,151 +204,24 @@ def get_user_subscription(db: Session, user_id: int) -> dict:
 
 
 def start_trial(db: Session, user_id: int) -> dict:
-    now = datetime.utcnow()
-    trial_end = now + timedelta(days=TRIAL_DURATION_DAYS)
-
-    existing = db.execute(
-        text("SELECT id, trial_start, trial_end, status FROM subscriptions WHERE user_id = :uid ORDER BY created_at DESC LIMIT 1"),
-        {"uid": user_id}
-    ).fetchone()
-
-    if existing:
-        prev_trial_start = existing[1]
-        prev_trial_end = existing[2]
-        prev_status = existing[3]
-
-        if prev_trial_start is not None:
-            raise ValueError("You have already used your free trial.")
-
-        if prev_status == "active":
-            raise ValueError("You already have an active subscription.")
-
-        db.execute(
-            text("""
-                UPDATE subscriptions 
-                SET plan = :plan, status = 'trialing', 
-                    trial_start = :start, trial_end = :end,
-                    updated_at = :now
-                WHERE id = :sid
-            """),
-            {"plan": TRIAL_PLAN, "start": now, "end": trial_end, "now": now, "sid": existing[0]}
-        )
-    else:
-        db.execute(
-            text("""
-                INSERT INTO subscriptions (user_id, plan, status, trial_start, trial_end, monthly_price, created_at, updated_at)
-                VALUES (:uid, :plan, 'trialing', :start, :end, 0, :now, :now)
-            """),
-            {"uid": user_id, "plan": TRIAL_PLAN, "start": now, "end": trial_end, "now": now}
-        )
-    db.commit()
-
-    return {
-        "plan": TRIAL_PLAN,
-        "status": "trialing",
-        "is_trial": True,
-        "trial_days_remaining": TRIAL_DURATION_DAYS,
-        "trial_end": trial_end.isoformat(),
-        "is_active": True,
-    }
+    """Trials are gone: FounderConsole is free, so there is nothing to trial."""
+    raise ValueError("FounderConsole is free — there is no trial to start.")
 
 
 def check_feature_access(feature: str):
-    def dependency(
-        current_user=Depends(get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        if hasattr(current_user, 'is_master') and current_user.is_master:
-            return True
-
-        sub = get_user_subscription(db, current_user.id)
-        effective_plan = sub["effective_plan"]
-
-        if has_feature(effective_plan, feature):
-            return True
-
-        min_plan = minimum_plan_for_feature(feature)
-        feature_label = FEATURE_LABELS.get(feature, feature)
-        plan_name = PLAN_DETAILS.get(min_plan, {}).get("name", min_plan) if min_plan else "a paid plan"
-
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": "feature_locked",
-                "feature": feature,
-                "feature_label": feature_label,
-                "required_plan": min_plan,
-                "required_plan_name": plan_name,
-                "current_plan": effective_plan,
-                "message": f"{feature_label} requires the {plan_name} plan or higher.",
-            }
-        )
+    """FastAPI dependency kept for compatibility. Every user has every feature."""
+    def dependency(current_user=Depends(get_current_user)):
+        return True
     return dependency
 
 
 class PaywallMiddleware(BaseHTTPMiddleware):
+    """Inert: FounderConsole is free, so no route is gated by plan.
+
+    ``PAYWALL_ENABLED`` is deliberately ignored — flipping it must not lock
+    users out of a product that is advertised as free. ``ROUTE_FEATURE_MAP``
+    is kept as documentation of what used to be gated.
+    """
+
     async def dispatch(self, request: Request, call_next):
-        import os
-        if os.getenv("PAYWALL_ENABLED", "false").lower() != "true":
-            return await call_next(request)
-
-        path = request.url.path
-        method = request.method
-
-        if method in EXEMPT_METHODS:
-            return await call_next(request)
-
-        required_feature = None
-        for pattern, feature in ROUTE_FEATURE_MAP:
-            if pattern.search(path):
-                required_feature = feature
-                break
-
-        if required_feature is None:
-            return await call_next(request)
-
-        user_id = None
-        try:
-            from server.core.security import decode_token, AUTH_COOKIE_NAME
-            token = request.cookies.get(AUTH_COOKIE_NAME)
-            if token:
-                payload = decode_token(token)
-                user_id = payload.get("sub") if payload else None
-        except Exception:
-            pass
-
-        if not user_id:
-            return await call_next(request)
-
-        db = SessionLocal()
-        try:
-            sub = get_user_subscription(db, int(user_id))
-            effective_plan = sub.get("effective_plan", PlanTier.FREE)
-            plan_features = PLAN_DETAILS.get(effective_plan, PLAN_DETAILS[PlanTier.FREE])["features"]
-
-            if required_feature in plan_features:
-                return await call_next(request)
-
-            min_plan = _required_plan_for_feature(required_feature)
-            feature_label = FEATURE_LABELS.get(required_feature, required_feature)
-            plan_name = PLAN_DETAILS.get(min_plan, {}).get("name", min_plan) if min_plan else "a paid plan"
-
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "detail": {
-                        "error": "feature_locked",
-                        "feature": required_feature,
-                        "feature_label": feature_label,
-                        "required_plan": min_plan,
-                        "required_plan_name": plan_name,
-                        "current_plan": effective_plan,
-                        "message": f"{feature_label} requires the {plan_name} plan or higher.",
-                    }
-                }
-            )
-        except Exception as e:
-            logger.warning(f"Paywall middleware error: {e}")
-            return await call_next(request)
-        finally:
-            db.close()
+        return await call_next(request)

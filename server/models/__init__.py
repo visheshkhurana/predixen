@@ -81,6 +81,7 @@ from server.models.lead import Lead
 from server.models.scenario_template import ScenarioTemplate
 from server.models.simulation_accuracy import SimulationAccuracy, CalibrationBias
 from server.models.agent_simulation import AgentSimulationRun
+from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
 
 __all__ = [
     "User",
@@ -180,4 +181,6 @@ __all__ = [
     "SimulationAccuracy",
     "CalibrationBias",
     "AgentSimulationRun",
+    "RevokedAccessToken",
+    "UserSessionCutoff",
 ]

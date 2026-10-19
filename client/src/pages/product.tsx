@@ -8,14 +8,14 @@ export default function ProductPage() {
   useSEO({
     title: "Product — Financial Intelligence for Startup Founders | FounderConsole",
     description:
-      "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free during early access.",
+      "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free, all features, no credit card.",
     path: "/product",
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "WebPage",
       name: "FounderConsole Product",
       description:
-        "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free during early access.",
+        "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free, all features, no credit card.",
       url: "https://founderconsole.ai/product",
       isPartOf: { "@type": "WebSite", name: "FounderConsole", url: "https://founderconsole.ai" },
     },
@@ -61,10 +61,10 @@ export default function ProductPage() {
         </ul>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tight text-foreground">
-          Free during early access
+          Free — all features, no credit card
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Every feature is free while we are in early access — no credit card required. Planned paid tiers after early access are on the{" "}
+          Every feature is free for every account — no tiers, no trial, no credit card. Details are on the{" "}
           <Link href="/pricing" className="text-primary hover:underline" data-testid="link-product-pricing">
             pricing
           </Link>{" "}
@@ -95,7 +95,7 @@ export default function ProductPage() {
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-product-auth">
-            <Link href="/auth?tab=register">
+            <Link href="/signup">
               Get started free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

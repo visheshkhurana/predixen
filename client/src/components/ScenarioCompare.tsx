@@ -169,10 +169,10 @@ export function ScenarioCompare() {
                 </p>
                 <div className="mt-4 flex gap-3">
                   <Button asChild data-testid="button-scenario-get-started">
-                    <Link href="/auth?tab=register">Get Started Free</Link>
+                    <Link href="/signup">Get Started Free</Link>
                   </Button>
                   <Button variant="outline" asChild data-testid="button-scenario-watch-demo">
-                    <Link href="/demo">See the Demo</Link>
+                    <Link href="/demo/enter">Live Demo</Link>
                   </Button>
                 </div>
               </CardContent>

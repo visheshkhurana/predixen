@@ -100,7 +100,7 @@ export default function AlternativesPage() {
           <Link href="/features" className="text-primary hover:underline" data-testid="link-alt-features">
             features
           </Link>
-          . Every feature is free during early access — see{" "}
+          . FounderConsole is free — all features, no credit card — see{" "}
           <Link href="/pricing" className="text-primary hover:underline" data-testid="link-alt-pricing">
             pricing
           </Link>
@@ -127,7 +127,7 @@ export default function AlternativesPage() {
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-alt-auth">
-            <Link href="/auth?tab=register">
+            <Link href="/signup">
               Get started free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

@@ -361,7 +361,7 @@ export default function DefaultAlivePage() {
                   <div className="mt-4 flex flex-wrap gap-3">
                     <Button asChild data-testid="button-da-cta">
                       <Link
-                        href="/auth?tab=register"
+                        href="/signup"
                         onClick={() => trackFunnel("cta_click", { location: "default-alive" })}
                       >
                         Run it on your real numbers

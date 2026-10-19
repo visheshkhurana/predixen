@@ -16,6 +16,8 @@ export interface SubscriptionData {
   trial_duration_days: number;
   grandfathered?: boolean;
   payments_enabled?: boolean;
+  free_mode?: boolean;
+  legacy_paid_subscription?: boolean;
 }
 
 export interface PlanData {
@@ -47,43 +49,9 @@ export function usePlans() {
   });
 }
 
-export function useStartTrial() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/billing/start-trial', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Failed to start trial' }));
-        throw new Error(typeof err.detail === 'string' ? err.detail : 'Failed to start trial');
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
-    },
-  });
-}
-
-export function useSubscribe() {
-  return useMutation({
-    mutationFn: async ({ planId, interval = 'monthly' }: { planId: string; interval?: 'monthly' | 'annual' }) => {
-      const res = await fetch(`/api/billing/subscribe/${planId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ interval }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Could not start checkout' }));
-        throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not start checkout');
-      }
-      return res.json() as Promise<{ checkout_url?: string; message?: string }>;
-    },
-  });
-}
+// FounderConsole is free: there is no trial to start and no plan to buy, so the
+// start-trial / subscribe hooks are gone (the endpoints return 410). The
+// billing portal hook stays for subscriptions bought before the switch.
 
 export function useBillingPortal() {
   return useMutation({
@@ -101,10 +69,7 @@ export function useBillingPortal() {
   });
 }
 
-export function useFeatureAccess(feature: string) {
-  const { data: sub } = useSubscription();
-  if (!sub) return { hasAccess: true, isLoading: true };
-
-  const hasAccess = sub.is_active;
-  return { hasAccess, isLoading: false, subscription: sub };
+export function useFeatureAccess(_feature: string) {
+  // Every user has every feature.
+  return { hasAccess: true, isLoading: false };
 }
