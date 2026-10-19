@@ -369,7 +369,7 @@ Verified company data:
 Provide a brief review (3-4 sentences): are the findings trustworthy? Any red flags?"""
 
         try:
-            response = self._call_llm(
+            response = await self._acall_llm(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=REVIEW_SYSTEM_PROMPT,
                 task_type="financial_analysis",

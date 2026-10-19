@@ -37,6 +37,56 @@ from server.lib.llm.openrouter_client import OpenRouterClient, get_openrouter_cl
 logger = logging.getLogger(__name__)
 
 
+class LLMBudgetExceeded(RuntimeError):
+    """The company's configured AI budget (ai_agent_budgets) is used up."""
+
+
+class _ThreadSafeSession:
+    """Serializes access to a SQLAlchemy Session shared across worker threads.
+
+    Copilot agents now run their blocking LLM calls via asyncio.to_thread, so
+    several provider clients can write audit logs on the request's session at
+    once. A Session is not thread-safe; route every method call through one
+    lock. Attribute reads pass straight through.
+    """
+
+    def __init__(self, session):
+        import threading
+        object.__setattr__(self, "_session", session)
+        object.__setattr__(self, "_lock", threading.RLock())
+
+    def __getattr__(self, name):
+        attr = getattr(self._session, name)
+        if not callable(attr):
+            return attr
+        lock = self._lock
+
+        def locked(*args, **kwargs):
+            with lock:
+                return attr(*args, **kwargs)
+
+        return locked
+
+    def __setattr__(self, name, value):
+        setattr(self._session, name, value)
+
+
+def _estimate_cost_usd(model_id: Optional[str], result: Dict[str, Any]) -> float:
+    """Best-effort USD cost from a provider result's usage block."""
+    try:
+        config = MODELS.get(model_id or "") or MODELS.get(str(result.get("model") or ""))
+        usage = result.get("usage") or {}
+        if config is None or not isinstance(usage, dict):
+            return 0.0
+        tokens_in = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+        tokens_out = usage.get("completion_tokens") or usage.get("output_tokens") or 0
+        return (float(tokens_in) / 1000.0) * config.cost_per_1k_input + (
+            float(tokens_out) / 1000.0
+        ) * config.cost_per_1k_output
+    except Exception:
+        return 0.0
+
+
 class TaskType(str, Enum):
     """Task types for intelligent model routing."""
     FINANCIAL_ANALYSIS = "financial_analysis"
@@ -277,8 +327,13 @@ class LLMRouter:
         default_provider: Provider = Provider.GEMINI,
         use_classifier: bool = True
     ):
+        # Agents call chat() from worker threads concurrently; see _ThreadSafeSession.
+        if db_session is not None and not isinstance(db_session, _ThreadSafeSession):
+            db_session = _ThreadSafeSession(db_session)
         self.db_session = db_session
         self.company_id = company_id
+        # Budget row (ai_agent_budgets.agent_name) this router's spend counts against.
+        self.budget_agent = "router"
         self.user_id = user_id
         self.pii_mode = pii_mode
         self.default_provider = default_provider
@@ -485,7 +540,8 @@ class LLMRouter:
             Dict with 'content', 'citations', 'usage', 'model', 'provider'
         """
         normalized_model = model.replace("perplexity-", "")
-        
+        self._check_budget()
+
         perplexity = self.perplexity_client
         if perplexity is None:
             logger.warning("Perplexity not available, falling back to GPT-4o")
@@ -506,6 +562,33 @@ class LLMRouter:
             **kwargs
         )
     
+    def _check_budget(self) -> Optional[Dict[str, Any]]:
+        """Refuse the call when a configured AI budget is used up.
+
+        A no-op (returns None) without a company or without a budget row for
+        it — budgets are opt-in via ai_agent_budgets.
+        """
+        if not self.company_id:
+            return None
+        from server.copilot.ai_governance import check_budget
+        status = check_budget(self.company_id, self.budget_agent)
+        if status.get("budget") is None:
+            return None
+        if not status.get("within_budget", True):
+            raise LLMBudgetExceeded(
+                "This workspace has reached its AI usage budget. "
+                "Raise the budget or wait for it to reset."
+            )
+        return status
+
+    def _record_spend(self, budget_status: Optional[Dict[str, Any]], model_id: str, result: Dict[str, Any]) -> None:
+        if budget_status is None:
+            return
+        cost = _estimate_cost_usd(model_id, result)
+        if cost > 0:
+            from server.copilot.ai_governance import record_budget_usage_if_configured
+            record_budget_usage_if_configured(self.company_id, self.budget_agent, cost)
+
     def get_model_info(self, model_id: str) -> Optional[ModelConfig]:
         """Get information about a model."""
         return MODELS.get(model_id)
@@ -531,6 +614,8 @@ class LLMRouter:
         JSON (response_format) calls only try OpenAI, since the other providers
         can't honor the requested schema.
         """
+        budget_status = self._check_budget()
+
         if model is None:
             model = self.get_model_for_task(task_type) if task_type else "gemini-2.5-flash"
         if model not in MODELS:
@@ -564,6 +649,7 @@ class LLMRouter:
                 )
                 if candidate != model:
                     logger.info(f"LLM fallback succeeded: {model} -> {candidate}")
+                self._record_spend(budget_status, candidate, result)
                 return result
             except Exception as e:
                 last_error = e

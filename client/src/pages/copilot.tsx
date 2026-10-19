@@ -1563,17 +1563,10 @@ Type **help** for a full list of what I can do.`,
           conversation_history: recentHistory
         };
 
-        let res: Response;
-        try {
-          res = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
-        } catch (firstErr: any) {
-          if (firstErr?.status === 500 || firstErr?.message?.includes('500')) {
-            await new Promise(r => setTimeout(r, 2000));
-            res = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
-          } else {
-            throw firstErr;
-          }
-        }
+        // No client-side retry: the server already retries a failed chat once
+        // and then returns a data fallback. Retrying a 5xx here re-ran the
+        // whole multi-agent pipeline up to 4 times per message.
+        const res: Response = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
         
         const response = await res.json() as CopilotApiResponse;
         
