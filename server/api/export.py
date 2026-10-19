@@ -1,10 +1,8 @@
 """
-Export API endpoints for PDF generation and shareable links.
+Export API endpoints for PDF generation.
 """
 
-import uuid
-import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -25,22 +23,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/export", tags=["export"])
 
 
-class ShareLinkRequest(BaseModel):
-    """Request to create a shareable link."""
-    resource_type: str  # scenario, simulation, dashboard
-    resource_id: int
-    expires_in_days: int = 7
-    access_level: str = "view"  # view, comment
-
-
-class ShareLinkResponse(BaseModel):
-    """Response with shareable link details."""
-    share_id: str
-    share_url: str
-    expires_at: str
-    access_level: str
-
-
 class PDFExportRequest(BaseModel):
     """Request to export PDF."""
     resource_type: str  # dashboard, scenario, simulation, report
@@ -48,15 +30,6 @@ class PDFExportRequest(BaseModel):
     include_charts: bool = True
     include_tables: bool = True
     include_summary: bool = True
-
-
-share_links_cache: Dict[str, Dict[str, Any]] = {}
-
-
-def generate_share_id(resource_type: str, resource_id: int, user_id: int) -> str:
-    """Generate a unique share ID."""
-    data = f"{resource_type}-{resource_id}-{user_id}-{uuid.uuid4()}"
-    return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 
 def verify_resource_ownership(
@@ -97,159 +70,6 @@ def verify_resource_ownership(
         return True, company
     
     return False, None
-
-
-@router.post("/share", response_model=ShareLinkResponse)
-async def create_share_link(
-    request: ShareLinkRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Create a shareable link for a resource (scenario, simulation, or dashboard).
-    
-    Only the resource owner can create share links.
-    The link can be shared with collaborators who can view or comment on the resource.
-    """
-    if request.resource_type not in ["scenario", "simulation", "dashboard"]:
-        raise HTTPException(status_code=400, detail="Invalid resource type")
-    
-    is_authorized, resource = verify_resource_ownership(
-        db, request.resource_type, request.resource_id, current_user
-    )
-    
-    if resource is None:
-        raise HTTPException(status_code=404, detail=f"{request.resource_type.capitalize()} not found")
-    
-    if not is_authorized:
-        raise HTTPException(
-            status_code=403, 
-            detail="You don't have permission to share this resource"
-        )
-    
-    share_id = generate_share_id(
-        request.resource_type, 
-        request.resource_id, 
-        current_user.id
-    )
-    expires_at = datetime.utcnow() + timedelta(days=request.expires_in_days)
-    
-    share_links_cache[share_id] = {
-        "resource_type": request.resource_type,
-        "resource_id": request.resource_id,
-        "created_by": current_user.id,
-        "expires_at": expires_at.isoformat(),
-        "access_level": request.access_level,
-    }
-    
-    base_url = "https://founderconsole.replit.app"
-    share_url = f"{base_url}/share/{share_id}"
-    
-    logger.info(f"Share link created: {share_id} for {request.resource_type}/{request.resource_id} by user {current_user.id}")
-    
-    return ShareLinkResponse(
-        share_id=share_id,
-        share_url=share_url,
-        expires_at=expires_at.isoformat(),
-        access_level=request.access_level,
-    )
-
-
-@router.get("/share/{share_id}")
-async def get_shared_resource(
-    share_id: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Access a shared resource via share link.
-    
-    Returns the resource data if the link is valid and not expired.
-    Note: This endpoint is intentionally accessible without authentication
-    to allow sharing with external collaborators.
-    """
-    if share_id not in share_links_cache:
-        raise HTTPException(status_code=404, detail="Share link not found or expired")
-    
-    share_data = share_links_cache[share_id]
-    
-    expires_at = datetime.fromisoformat(share_data["expires_at"])
-    if datetime.utcnow() > expires_at:
-        del share_links_cache[share_id]
-        raise HTTPException(status_code=410, detail="Share link has expired")
-    
-    resource_type = share_data["resource_type"]
-    resource_id = share_data["resource_id"]
-    
-    if resource_type == "scenario":
-        resource = db.query(Scenario).filter(Scenario.id == resource_id).first()
-        if not resource:
-            raise HTTPException(status_code=404, detail="Resource no longer exists")
-        return {
-            "type": "scenario",
-            "data": {
-                "id": resource.id,
-                "name": resource.name,
-                "description": resource.description,
-                "inputs": resource.inputs_json,
-                "created_at": resource.created_at.isoformat() if resource.created_at else None,
-            },
-            "access_level": share_data["access_level"],
-        }
-    
-    elif resource_type == "simulation":
-        resource = db.query(SimulationRun).filter(SimulationRun.id == resource_id).first()
-        if not resource:
-            raise HTTPException(status_code=404, detail="Resource no longer exists")
-        return {
-            "type": "simulation",
-            "data": {
-                "id": resource.id,
-                "scenario_id": resource.scenario_id,
-                "n_sims": resource.n_sims,
-                "status": resource.status,
-                "outputs": resource.outputs_json,
-                "created_at": resource.created_at.isoformat() if resource.created_at else None,
-            },
-            "access_level": share_data["access_level"],
-        }
-    
-    elif resource_type == "dashboard":
-        resource = db.query(Company).filter(Company.id == resource_id).first()
-        if not resource:
-            raise HTTPException(status_code=404, detail="Resource no longer exists")
-        return {
-            "type": "dashboard",
-            "data": {
-                "id": resource.id,
-                "name": resource.name,
-                "industry": resource.industry,
-            },
-            "access_level": share_data["access_level"],
-        }
-    
-    raise HTTPException(status_code=400, detail="Invalid resource type")
-
-
-@router.delete("/share/{share_id}")
-async def revoke_share_link(
-    share_id: str,
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Revoke a shareable link.
-    Only the creator of the share link can revoke it.
-    """
-    if share_id not in share_links_cache:
-        raise HTTPException(status_code=404, detail="Share link not found")
-    
-    share_data = share_links_cache[share_id]
-    if share_data["created_by"] != current_user.id:
-        raise HTTPException(status_code=403, detail="You can only revoke your own share links")
-    
-    del share_links_cache[share_id]
-    logger.info(f"Share link revoked: {share_id} by user {current_user.id}")
-    
-    return {"success": True, "message": "Share link revoked"}
 
 
 @router.post("/pdf")

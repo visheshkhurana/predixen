@@ -1,7 +1,10 @@
 import asyncio
 import json
 import logging
+import threading
+import time
 import traceback
+from collections import OrderedDict
 from typing import Optional
 from datetime import datetime
 
@@ -22,7 +25,47 @@ from server.services.simulation.types import CompanyState, AgentAction
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["simulation-v2"])
 
-_results_store: dict = {}
+class _ResultStore:
+    """Bounded, expiring, owner-scoped cache of finished runs.
+
+    Process-local: with several workers a GET can land on a worker that did not
+    run the simulation and answer 404. The full result is already streamed in
+    the run's "complete" event, so this is only a short-lived convenience.
+    """
+
+    def __init__(self, max_items: int = 200, ttl_seconds: float = 6 * 3600):
+        self.max_items = max_items
+        self.ttl_seconds = ttl_seconds
+        self._items: "OrderedDict[str, tuple[float, int, dict]]" = OrderedDict()
+        self._lock = threading.Lock()
+
+    def put(self, simulation_id: str, owner_user_id: int, result: dict) -> None:
+        with self._lock:
+            self._items[simulation_id] = (time.monotonic(), owner_user_id, result)
+            self._items.move_to_end(simulation_id)
+            self._evict()
+
+    def get(self, simulation_id: str, owner_user_id: int) -> Optional[dict]:
+        with self._lock:
+            self._evict()
+            entry = self._items.get(simulation_id)
+            if entry is None or entry[1] != owner_user_id:
+                return None
+            return entry[2]
+
+    def _evict(self) -> None:
+        cutoff = time.monotonic() - self.ttl_seconds
+        while self._items:
+            key, (stored_at, _, _) = next(iter(self._items.items()))
+            if stored_at >= cutoff and len(self._items) <= self.max_items:
+                break
+            self._items.popitem(last=False)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+
+_results_store = _ResultStore()
 
 
 class SimulationV2Request(BaseModel):
@@ -136,7 +179,7 @@ async def run_simulation_v2_sse(
                 "input_provenance": input_provenance,
             }
 
-            _results_store[result.simulation_id] = complete_data
+            _results_store.put(result.simulation_id, current_user.id, complete_data)
 
             await event_queue.put(_sse_event("complete", {"result": complete_data}))
         except asyncio.TimeoutError:
@@ -179,7 +222,8 @@ async def get_simulation_v2_result(
     simulation_id: str,
     current_user: User = Depends(get_current_user),
 ):
-    result = _results_store.get(simulation_id)
+    # Another user's id answers 404, same as an unknown one.
+    result = _results_store.get(simulation_id, current_user.id)
     if not result:
         raise HTTPException(status_code=404, detail="Simulation not found")
     return result

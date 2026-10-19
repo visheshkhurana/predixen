@@ -147,7 +147,9 @@ def get_header_html(subtitle: str = "") -> str:
 
 
 def get_footer_html(unsubscribe_url: str = None) -> str:
-    unsub_url = unsubscribe_url or f"{APP_URL}/unsubscribe"
+    # Without a recipient there is no token; the send path stamps a real
+    # per-user link over this placeholder (see stamp_unsubscribe_footer).
+    unsub_url = unsubscribe_url or f"{PREFERENCES_URL}#unsubscribe"
     return f"""
     <tr>
         <td style="padding: 0 40px;" class="body-content">
@@ -595,7 +597,7 @@ def render_text_only_update_template(
     </p>
     <p style="margin: 32px 0 0 0; font-size: 13px; color: {COLORS['muted_light']};">— The FounderConsole Team</p>
     <p style="margin: 16px 0 0 0; font-size: 12px; color: {COLORS['muted_light']};">
-        <a href="{APP_URL}/unsubscribe" style="color: {COLORS['muted_light']}; text-decoration: underline;">Unsubscribe</a> &middot;
+        <a href="{PREFERENCES_URL}#unsubscribe" style="color: {COLORS['muted_light']}; text-decoration: underline;">Unsubscribe</a> &middot;
         <a href="{PREFERENCES_URL}" style="color: {COLORS['muted_light']}; text-decoration: underline;">Email Preferences</a>
     </p>
     {tracking_pixel}
