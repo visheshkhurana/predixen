@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from server.core.db import get_db
 from server.core.config import settings
-from server.core.security import create_access_token, set_auth_cookie, set_refresh_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE
+from server.core.security import create_access_token, set_auth_cookie, set_refresh_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, revoke_all_sessions
 from server.models.user import User, RefreshToken
 from server.services.posthog import sanitize_distinct_id
 
@@ -92,13 +92,12 @@ def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: 
                 # session minted from it) is discarded rather than kept alongside.
                 logger.warning(
                     "OAuth link to unverified password account user_id=%s: "
-                    "clearing password and revoking refresh tokens", user.id,
+                    "clearing password and revoking sessions", user.id,
                 )
                 user.password_hash = None
-                db.query(RefreshToken).filter(
-                    RefreshToken.user_id == user.id,
-                    RefreshToken.revoked == False,  # noqa: E712
-                ).update({RefreshToken.revoked: True}, synchronize_session=False)
+                # Before commit, so a token minted from the planted password
+                # cannot be used once this link is durable.
+                revoke_all_sessions(db, user.id)
             user.oauth_provider = provider
             user.oauth_id = oauth_id
         # Only reached with an email the provider has verified (see callback).
