@@ -28,7 +28,7 @@ do not reopen these.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,11 @@ def track_event(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # plan_quota_* rows are the monthly allowance. A client must not write
+    # them through this endpoint and burn or invent usage.
+    if data.event_name.startswith("plan_quota_"):
+        raise HTTPException(status_code=400, detail="That event name is reserved.")
+
     event = AnalyticsEvent(
         event_name=data.event_name,
         user_id=current_user.id,

@@ -190,6 +190,7 @@ def _assert_limit(response, limit_key: str):
     assert "temporarily unavailable" not in message
     assert "session" not in message
     assert "expired" not in message
+    assert "the month resets at 00:00 utc (04:00 gst)." in message
     assert response.status_code != 403
 
 
@@ -327,7 +328,7 @@ def free_client(monkeypatch):
 
     monkeypatch.setattr("server.api.copilot._copilot_chat_inner", _copilot_ok)
 
-    from server.api import auth, companies, copilot, simulation_v2, simulations, truth_scan
+    from server.api import auth, companies, copilot, events, simulation_v2, simulations, truth_scan
     from server.core.db import get_db
     from server.core.subscription import PaywallMiddleware
 
@@ -339,6 +340,7 @@ def free_client(monkeypatch):
     app.include_router(simulations.router)
     app.include_router(simulation_v2.router)
     app.include_router(copilot.router)
+    app.include_router(events.router)
 
     @app.post("/connectors/probe")
     def connectors_probe():
@@ -470,3 +472,53 @@ def test_fresh_free_account_can_scan_simulate_and_chat_within_limits(free_client
     _assert_limit(eleventh, "max_copilot_messages_per_month")
     assert _limit_detail(eleventh)["max"] == 10
     assert _limit_detail(eleventh)["used"] == 10
+
+
+def test_post_events_cannot_write_plan_quota_names(free_client):
+    client, Session, _captured = free_client
+    from server.core.security import AUTH_COOKIE_NAME
+    from server.models.analytics_event import AnalyticsEvent
+
+    signup = client.post(
+        "/auth/register",
+        json={
+            "email": "quota-events@example.com",
+            "password": "free-plan-1",
+            "name": "Quota Events",
+        },
+    )
+    assert signup.status_code == 200, signup.text
+    token = signup.json()["access_token"]
+    user_id = signup.json()["user_id"]
+    client.cookies.set(AUTH_COOKIE_NAME, token)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    reserved = client.post(
+        "/events",
+        json={"event_name": "plan_quota_simulation", "meta": {"forged": True}},
+        headers=headers,
+    )
+    assert reserved.status_code == 400, reserved.text
+    assert "reserved" in reserved.text.lower()
+
+    also = client.post(
+        "/events",
+        json={"event_name": "plan_quota_copilot"},
+        headers=headers,
+    )
+    assert also.status_code == 400, also.text
+
+    allowed = client.post(
+        "/events",
+        json={"event_name": "page_viewed", "meta": {"path": "/pricing"}},
+        headers=headers,
+    )
+    assert allowed.status_code == 200, allowed.text
+
+    db = Session()
+    names = [
+        row[0]
+        for row in db.query(AnalyticsEvent.event_name).filter(AnalyticsEvent.user_id == user_id).all()
+    ]
+    db.close()
+    assert names == ["page_viewed"]
