@@ -75,6 +75,19 @@ class OAuthLinkError(Exception):
     """An OAuth identity that must not be attached to the matching account."""
 
 
+def _flag_internal_or_test_person(user: User) -> None:
+    """Returning Google sign-in. New accounts are flagged from signup_completed."""
+    try:
+        from server.services.posthog import sync_internal_or_test_person
+
+        sync_internal_or_test_person(user.id, user.email)
+    except Exception:
+        logger.warning(
+            "[oauth] posthog internal-user flag failed for user_id=%s",
+            getattr(user, "id", None),
+        )
+
+
 def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: str,
                                display_name: str = None, avatar_url: str = None,
                                anonymous_distinct_id: str | None = None) -> User:
@@ -108,6 +121,7 @@ def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: 
             user.avatar_url = avatar_url
         db.commit()
         db.refresh(user)
+        _flag_internal_or_test_person(user)
         return user
 
     user = User(

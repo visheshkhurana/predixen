@@ -17,6 +17,7 @@ from typing import Any, Optional
 from server.services.posthog import alias as posthog_alias
 from server.services.posthog import capture as posthog_capture
 from server.services.posthog import lead_distinct_id, sanitize_distinct_id, user_distinct_id
+from server.services.posthog import sync_internal_or_test_person
 
 logger = logging.getLogger(__name__)
 
@@ -53,18 +54,29 @@ def emit_signup_completed(
         if not user_id or not method:
             return False
         distinct_id = user_distinct_id(user_id)
-        sent = bool(
-            posthog_capture(
-                "signup_completed",
-                distinct_id,
-                {"method": method, "user_id": user_id},
+        sent = False
+        try:
+            sent = bool(
+                posthog_capture(
+                    "signup_completed",
+                    distinct_id,
+                    {"method": method, "user_id": user_id},
+                )
             )
-        )
+        except Exception:
+            logger.exception("[activation] could not emit signup_completed")
         _alias_signup_identities(
             distinct_id=distinct_id,
             email=email,
             anonymous_distinct_id=anonymous_distinct_id,
         )
+        # After alias, so the canonical person (not the anonymous one) gets
+        # the flag. A capture failure must not skip it. Email is classified
+        # inside sync and is not a property.
+        try:
+            sync_internal_or_test_person(user_id, email)
+        except Exception:
+            logger.exception("[activation] could not flag internal or test user")
         return sent
     except Exception:
         logger.exception("[activation] could not emit signup_completed")

@@ -59,15 +59,16 @@ def test_signup_uses_browser_id_and_aliases_lead_and_anonymous():
 
     with patch("server.services.activation.posthog_capture") as capture:
         with patch("server.services.activation.posthog_alias") as alias:
-            assert (
-                emit_signup_completed(
-                    user_id=7,
-                    method="email",
-                    email="Founder@Example.com",
-                    anonymous_distinct_id="anon-browser",
+            with patch("server.services.activation.sync_internal_or_test_person"):
+                assert (
+                    emit_signup_completed(
+                        user_id=7,
+                        method="email",
+                        email="Founder@Example.com",
+                        anonymous_distinct_id="anon-browser",
+                    )
+                    is True
                 )
-                is True
-            )
             capture.assert_called_once_with(
                 "signup_completed",
                 "7",
@@ -93,15 +94,16 @@ def test_signup_alias_failure_still_reports_capture():
         with patch(
             "server.services.activation.posthog_alias", side_effect=RuntimeError("down")
         ):
-            assert (
-                emit_signup_completed(
-                    user_id=7,
-                    method="email",
-                    email="founder@example.com",
-                    anonymous_distinct_id="anon-browser",
+            with patch("server.services.activation.sync_internal_or_test_person"):
+                assert (
+                    emit_signup_completed(
+                        user_id=7,
+                        method="email",
+                        email="founder@example.com",
+                        anonymous_distinct_id="anon-browser",
+                    )
+                    is True
                 )
-                is True
-            )
 
 
 def test_sample_company_never_emits_founder_activated():

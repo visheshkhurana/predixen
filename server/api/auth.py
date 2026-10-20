@@ -49,6 +49,27 @@ def parse_user_agent(user_agent: str) -> dict:
     
     return {"device_type": device_type, "browser": browser, "os": os}
 
+def _flag_posthog_internal_user(
+    user_id: int,
+    email: str,
+    *,
+    is_platform_admin: bool = False,
+) -> None:
+    """Person flag for an identified account. Never raises, never logs the address."""
+    try:
+        from server.services.posthog import sync_internal_or_test_person
+
+        sync_internal_or_test_person(
+            user_id,
+            email,
+            is_platform_admin=is_platform_admin,
+        )
+    except Exception:
+        auth_logger.warning(
+            "posthog internal-user flag failed for user_id=%s", user_id
+        )
+
+
 def log_login_attempt(db: Session, email: str, user_id: int = None, success: bool = True, 
                       failure_reason: str = None, request: Request = None):
     """Log a login attempt to the database."""
@@ -278,7 +299,10 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
-    
+    _flag_posthog_internal_user(
+        user.id, user.email, is_platform_admin=is_platform_admin
+    )
+
     return TokenResponse(
         access_token=access_token,
         user_id=user.id,
@@ -354,7 +378,8 @@ def admin_login(req: LoginRequest, request: Request, response: Response, db: Ses
     log_login_attempt(db, user.email, user.id, success=True, request=request)
     
     access_token = _issue_tokens(response, db, user.id)
-    
+    _flag_posthog_internal_user(user.id, user.email, is_platform_admin=True)
+
     return TokenResponse(
         access_token=access_token,
         user_id=user.id,
