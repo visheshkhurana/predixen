@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useFounderStore } from '@/store/founderStore';
 import { useQuery } from '@tanstack/react-query';
+import { backoffMsFor429, readBodyRetryAfter } from '@/lib/rateLimitBackoff';
 
 export type MetricSource = 'reported' | 'computed' | 'estimated';
 
@@ -94,12 +95,30 @@ const EMPTY_METRICS: FinancialMetrics = {
   warnings: [],
 };
 
+function statusError(status: number, statusText: string): Error {
+  const error = new Error(`${status} ${statusText}`);
+  (error as Error & { status?: number }).status = status;
+  return error;
+}
+
 async function fetchJson(url: string): Promise<any> {
-  const res = await fetch(url, { credentials: 'include' });
+  const init: RequestInit = { credentials: 'include' };
+  let res = await fetch(url, init);
+  if (res.status === 429) {
+    const delay = backoffMsFor429(res.headers.get('Retry-After'), await readBodyRetryAfter(res));
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    res = await fetch(url, init);
+  }
   if (!res.ok) {
-    throw new Error(`${res.status} ${res.statusText}`);
+    throw statusError(res.status, res.statusText);
   }
   return res.json();
+}
+
+function retryUnlessRateLimited(failureCount: number, error: unknown): boolean {
+  const status = (error as { status?: number })?.status;
+  if (status === 429 || status === 401 || status === 403 || status === 404) return false;
+  return failureCount < 3;
 }
 
 export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: boolean; isStale: boolean; isPartiallyDegraded: boolean; lastUpdated: number | null } {
@@ -114,18 +133,20 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     gcTime: 5 * 60_000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
-    retry: 3,
-    retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 5000),
+    retry: retryUnlessRateLimited,
   });
 
+  // Same query key as useTruthScan. A second key (`truth-latest`) used to
+  // fetch this URL again on every dashboard and health-check load.
   const { data: truthScan, isError: truthError } = useQuery<any>({
-    queryKey: ['truth-latest', companyId],
+    queryKey: ['truth', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/truth/latest`),
     enabled: !!companyId,
     staleTime: 60_000,
     gcTime: 5 * 60_000,
     refetchOnMount: true,
-    retry: 1,
+    refetchOnWindowFocus: false,
+    retry: retryUnlessRateLimited,
   });
 
   const { data: backendBaseline, isError: baselineError } = useQuery<any>({
@@ -135,7 +156,8 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     staleTime: 60_000,
     gcTime: 5 * 60_000,
     refetchOnMount: true,
-    retry: 1,
+    refetchOnWindowFocus: false,
+    retry: retryUnlessRateLimited,
   });
 
   const allQueriesFailed = computedError && truthError && baselineError;

@@ -52,12 +52,19 @@ class Settings(BaseSettings):
     # CORS configuration - comma-separated list of allowed origins
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
 
-    # Rate limiting configuration (requests per minute)
+    # Rate limiting configuration (requests per minute unless noted).
+    # RATE_LIMIT_API stays the anonymous / ordinary-write cap. Signed-in reads
+    # use RATE_LIMIT_READ so a normal page (about 10-20 calls) can be opened
+    # several times a minute. RATE_LIMIT_READ_BURST is requests per 10 seconds.
     RATE_LIMIT_AUTH: int = int(os.getenv("RATE_LIMIT_AUTH", "5"))
     RATE_LIMIT_ADMIN_LOGIN: int = int(os.getenv("RATE_LIMIT_ADMIN_LOGIN", "3"))  # Stricter for admin
     RATE_LIMIT_API: int = int(os.getenv("RATE_LIMIT_API", "60"))
+    RATE_LIMIT_READ: int = int(os.getenv("RATE_LIMIT_READ", "480"))
+    RATE_LIMIT_READ_BURST: int = int(os.getenv("RATE_LIMIT_READ_BURST", "120"))
     RATE_LIMIT_UPLOAD: int = int(os.getenv("RATE_LIMIT_UPLOAD", "10"))
     RATE_LIMIT_SIMULATION: int = int(os.getenv("RATE_LIMIT_SIMULATION", "10"))
+    RATE_LIMIT_LLM: int = int(os.getenv("RATE_LIMIT_LLM", "20"))
+    RATE_LIMIT_EMAIL: int = int(os.getenv("RATE_LIMIT_EMAIL", "5"))
 
     # Database connection pool settings
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
