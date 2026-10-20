@@ -43,9 +43,9 @@ export type CalculatorEmailOptInProps = {
 /**
  * Public calculator email capture.
  *
- * POST /api/leads with consent=true currently returns 503, so the box is
- * hidden. Set this to true once those saves succeed. Calculator results do
- * not read this flag and stay on screen either way.
+ * Consent-true POST /api/leads saves succeed, so the box is shown. Set this
+ * to false to hide it again. Calculator results do not read this flag and
+ * stay on screen either way.
  */
 export const CALCULATOR_EMAIL_CAPTURE_ENABLED: boolean = true;
 
