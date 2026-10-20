@@ -397,10 +397,7 @@ async def run_simulation(
     
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
-
-    from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
-    reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION, company_id=company_id)
-
+    
     base_financials = Financials(
         cashBalance=float(state.cash_balance or 0),
         monthlyBurn=float(state.monthly_burn or 0),

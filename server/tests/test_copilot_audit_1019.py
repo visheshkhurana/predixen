@@ -119,15 +119,6 @@ class _Query:
     def first(self):
         return self.result
 
-    def scalar(self):
-        # Monthly plan-quota count. This fake has no usage rows.
-        return 0
-
-
-class _NoRow:
-    def fetchone(self):
-        return None
-
 
 class _FakeDB:
     def __init__(self, by_model):
@@ -136,16 +127,6 @@ class _FakeDB:
 
     def query(self, model):
         return _Query(self.by_model.get(getattr(model, "__name__", ""), None))
-
-    def execute(self, *a, **k):
-        # Subscription lookup. No row means the Free plan.
-        return _NoRow()
-
-    def add(self, *a, **k):
-        return None
-
-    def commit(self):
-        return None
 
     def rollback(self):
         self.rollbacks += 1
