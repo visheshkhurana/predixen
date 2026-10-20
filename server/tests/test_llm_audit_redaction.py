@@ -176,6 +176,8 @@ def test_image_generator_audit_hashes_redacted_prompt(db, monkeypatch):
 
     assert result["audit_log_id"] is not None
     assert result["image_base64"] == "aW1hZ2U="
+    sent = json.dumps(http.post.call_args.kwargs["json"])
+    assert EMAIL not in sent and PHONE not in sent
     full_prompt = f"{STYLE_PREFIXES['professional']}{RAW}"
     row = _row(db)
     _assert_redacted_prompt(row, full_prompt)
@@ -250,3 +252,154 @@ def test_openrouter_audit_row_persists_redacted(db, session_factory, monkeypatch
         assert saved.input_chars_original == len(raw)
     finally:
         fresh.close()
+
+
+def test_image_generator_redaction_failure_never_sends_or_stores_raw_prompt(db, monkeypatch):
+    """A redaction error must refuse the call. The raw prompt is not sent or stored."""
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_BASE_URL", "https://openai.invalid")
+    secret = "board-leak@example.com"
+    prompt = f"Investor slide for {secret}"
+    http = _mock_http({"data": [{"b64_json": "aW1hZ2U="}]})
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("redactor down")
+
+    with patch("server.lib.llm.image_generator.httpx.Client", return_value=http), patch(
+        "server.lib.privacy.pii_redactor.redact_text", side_effect=_boom
+    ):
+        from server.lib.llm.image_generator import NanoBananaImageGenerator
+
+        client = NanoBananaImageGenerator(db_session=db, company_id=3, user_id=4)
+        result = client.generate_image(prompt, style="minimal", aspect_ratio="1:1")
+
+    assert http.post.call_count == 0
+    assert secret not in json.dumps(http.mock_calls, default=str)
+    body = json.dumps(result)
+    assert secret not in body
+    assert prompt not in body
+    assert result["image_base64"] is None
+    assert result["prompt_used"] is None
+    assert "redaction failed" in (result.get("error") or "")
+
+    db.expire_all()
+    rows = db.query(LLMAuditLog).all()
+    assert rows == []
+    pending = " ".join(json.dumps(obj.__dict__, default=str) for obj in db.new)
+    assert secret not in pending
+    assert prompt not in pending
+
+
+def test_smart_chat_redacts_query_and_context_before_gemini(db, monkeypatch):
+    """POST /llm/smart-chat must not send or audit a raw email from the query or context."""
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.api import llm as llm_api
+    from server.core.db import get_db
+    from server.core.security import get_current_user
+    from server.lib.llm.gemini_client import truncate_preview
+    from server.lib.llm.intent_classifier import CLASSIFIER_SYSTEM_PROMPT
+
+    query_email = "founder.query@example.com"
+    context_email = "ada.context@example.com"
+    query = f"Summarize the board notes for {query_email}"
+    context = f"The founder inbox is {context_email} and the round is quiet."
+
+    monkeypatch.setenv("AI_INTEGRATIONS_GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("AI_INTEGRATIONS_GEMINI_BASE_URL", "https://gemini.invalid")
+    for key in (
+        "PERPLEXITY_API_KEY",
+        "OPENAI_API_KEY",
+        "AI_INTEGRATIONS_OPENAI_API_KEY",
+        "AI_INTEGRATIONS_OPENAI_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "AI_INTEGRATIONS_ANTHROPIC_API_KEY",
+        "AI_INTEGRATIONS_ANTHROPIC_BASE_URL",
+        "AI_INTEGRATIONS_OPENROUTER_API_KEY",
+        "AI_INTEGRATIONS_OPENROUTER_BASE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    classification = json.dumps(
+        {
+            "primary_intent": "general_chat",
+            "confidence": 0.91,
+            "secondary_intent": None,
+            "requires_web_search": False,
+            "requires_real_time": False,
+            "complexity": "low",
+            "reasoning": "simple question",
+        }
+    )
+    http = _mock_http(
+        {
+            "candidates": [{"content": {"parts": [{"text": classification}]}}],
+            "usageMetadata": {"promptTokenCount": 11, "candidatesTokenCount": 7},
+        }
+    )
+
+    raw_classifier = f"{CLASSIFIER_SYSTEM_PROMPT}\nContext: {context}\n\nQuery: {query}"
+    redacted_classifier = _redacted(raw_classifier)
+    redacted_query = _redacted(query)
+    assert query_email not in redacted_classifier
+    assert context_email not in redacted_classifier
+    assert redacted_classifier != raw_classifier
+
+    app = FastAPI()
+    app.include_router(llm_api.router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=9)
+
+    with patch("server.lib.llm.gemini_client.httpx.Client", return_value=http):
+        response = TestClient(app).post(
+            "/llm/smart-chat",
+            json={"query": query, "context": context},
+        )
+
+    assert response.status_code == 200, response.text
+    assert query_email not in response.text
+    assert context_email not in response.text
+
+    payloads = [json.dumps(call.kwargs.get("json", {})) for call in http.post.call_args_list]
+    assert len(payloads) >= 2
+    sent = "\n".join(payloads)
+    assert query_email not in sent
+    assert context_email not in sent
+    classifier_payloads = [body for body in payloads if "Context:" in body]
+    assert len(classifier_payloads) == 1
+    assert _redacted(context) in classifier_payloads[0]
+    assert _redacted(query) in sent
+
+    db.expire_all()
+    rows = db.query(LLMAuditLog).all()
+    by_hash = {row.prompt_hash: row for row in rows}
+    classifier_row = by_hash.get(_hash(redacted_classifier))
+    assert classifier_row is not None
+    assert classifier_row.prompt_hash != _hash(raw_classifier)
+    assert classifier_row.redacted_prompt_preview == truncate_preview(redacted_classifier)
+    assert classifier_row.pii_mode == "standard"
+    assert query_email not in (classifier_row.redacted_prompt_preview or "")
+    assert context_email not in (classifier_row.redacted_prompt_preview or "")
+
+    query_row = by_hash.get(_hash(redacted_query))
+    assert query_row is not None
+    assert query_row.prompt_hash != _hash(query)
+    assert query_row.redacted_prompt_preview == redacted_query
+    assert query_email not in (query_row.redacted_prompt_preview or "")
+
+    for row in rows:
+        stored = " ".join(
+            [
+                row.prompt_hash,
+                row.redacted_prompt_preview or "",
+                row.redacted_output_preview or "",
+                json.dumps(row.pii_findings_json),
+            ]
+        )
+        assert query_email not in stored
+        assert context_email not in stored
+        assert row.prompt_hash != _hash(raw_classifier)
+        assert row.prompt_hash != _hash(query)

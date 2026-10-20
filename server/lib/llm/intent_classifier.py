@@ -9,6 +9,8 @@ from typing import Optional, Dict, Any, List, Tuple
 from enum import Enum
 from dataclasses import dataclass
 
+from server.lib.privacy.pii_redactor import redact_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,11 +137,15 @@ class IntentClassifier:
         self,
         db_session=None,
         company_id: Optional[int] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        pii_mode: str = "standard",
     ):
         self.db = db_session
         self.company_id = company_id
         self.user_id = user_id
+        # Classification is on the smart-chat path. "off" would send the raw
+        # query and context to Gemini and hash that raw text in the audit row.
+        self.pii_mode = pii_mode if pii_mode in ("standard", "strict") else "standard"
         self._gemini_client = None
     
     @property
@@ -152,7 +158,7 @@ class IntentClassifier:
                     db_session=self.db,
                     company_id=self.company_id,
                     user_id=self.user_id,
-                    pii_mode="off"
+                    pii_mode=self.pii_mode,
                 )
             except (ValueError, ImportError) as e:
                 logger.warning(f"Gemini not available for classification: {e}")
@@ -280,9 +286,13 @@ class IntentClassifier:
             return self._keyword_classify(query)
         
         try:
-            user_message = f"Query: {query}"
+            # Redact the query and the context before they are composed into
+            # the classifier prompt. GeminiClient redacts again at send time.
+            safe_query = redact_text(query or "", mode=self.pii_mode).redacted_text
+            user_message = f"Query: {safe_query}"
             if context:
-                user_message = f"Context: {context}\n\nQuery: {query}"
+                safe_context = redact_text(context, mode=self.pii_mode).redacted_text
+                user_message = f"Context: {safe_context}\n\nQuery: {safe_query}"
             
             messages = [
                 {"role": "system", "content": CLASSIFIER_SYSTEM_PROMPT},
@@ -347,11 +357,13 @@ class IntentClassifier:
 def get_intent_classifier(
     db_session=None,
     company_id: Optional[int] = None,
-    user_id: Optional[int] = None
+    user_id: Optional[int] = None,
+    pii_mode: str = "standard",
 ) -> IntentClassifier:
     """Factory function to create an intent classifier."""
     return IntentClassifier(
         db_session=db_session,
         company_id=company_id,
-        user_id=user_id
+        user_id=user_id,
+        pii_mode=pii_mode,
     )

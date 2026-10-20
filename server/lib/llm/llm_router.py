@@ -453,7 +453,8 @@ class LLMRouter:
             self._intent_classifier = IntentClassifier(
                 db_session=self.db_session,
                 company_id=self.company_id,
-                user_id=self.user_id
+                user_id=self.user_id,
+                pii_mode=self.pii_mode,
             )
         return self._intent_classifier
     
