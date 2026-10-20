@@ -180,28 +180,33 @@ def excel_to_text(file_path: str, max_rows: int = 100) -> str:
         raise ValueError(f"Could not read Excel file: {str(e)}")
 
 
-def extract_metrics_with_openai(excel_text: str) -> Dict[str, Any]:
+def extract_metrics_with_openai(
+    excel_text: str,
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Use OpenAI to extract financial metrics from Excel text."""
+    from server.lib.llm.openai_client import open_audited_openai
+
     try:
         _, base_url = resolve_openai_credentials()
-        client = get_openai_client()
-        
-        response = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a financial analyst AI that extracts structured data from spreadsheets and financial reports. Always respond with valid JSON only, no markdown formatting."
-                },
-                {
-                    "role": "user",
-                    "content": EXCEL_EXTRACTION_PROMPT + excel_text[:20000]  # Limit text length
-                }
-            ],
-            **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
-            timeout=60,
-        )
-        
+        with open_audited_openai(company_id=company_id, user_id=user_id) as client:
+            response = client.chat.completions.create(
+                model="gpt-5",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a financial analyst AI that extracts structured data from spreadsheets and financial reports. Always respond with valid JSON only, no markdown formatting."
+                    },
+                    {
+                        "role": "user",
+                        "content": EXCEL_EXTRACTION_PROMPT + excel_text[:20000]  # Limit text length
+                    }
+                ],
+                **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
+                timeout=60,
+            )
+
         content = response.choices[0].message.content
         
         if not content:
@@ -468,31 +473,36 @@ def parse_income_statement(file_path: str, fx_rate: Optional[float] = None) -> D
         return {'metrics': {}, 'error': str(e)}
 
 
-def generate_ai_summary(metrics: Dict[str, Any]) -> str:
+def generate_ai_summary(
+    metrics: Dict[str, Any],
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> str:
     """Generate AI summary of the extracted metrics."""
+    from server.lib.llm.openai_client import open_audited_openai
+
     try:
         _, base_url = resolve_openai_credentials()
-        client = get_openai_client()
-        
-        metrics_text = "\n".join([f"- {k}: {v:,.2f}" if isinstance(v, float) else f"- {k}: {v}" 
+        metrics_text = "\n".join([f"- {k}: {v:,.2f}" if isinstance(v, float) else f"- {k}: {v}"
                                    for k, v in metrics.items() if v is not None])
-        
-        response = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a financial analyst. Provide a brief 2-3 sentence summary of the company's financial health based on the metrics provided."
-                },
-                {
-                    "role": "user",
-                    "content": f"Summarize these financial metrics:\n{metrics_text}"
-                }
-            ],
-            **chat_sampling_params(base_url, max_tokens=200, temperature=0.3),
-            timeout=30,
-        )
-        
+
+        with open_audited_openai(company_id=company_id, user_id=user_id) as client:
+            response = client.chat.completions.create(
+                model="gpt-5",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a financial analyst. Provide a brief 2-3 sentence summary of the company's financial health based on the metrics provided."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Summarize these financial metrics:\n{metrics_text}"
+                    }
+                ],
+                **chat_sampling_params(base_url, max_tokens=200, temperature=0.3),
+                timeout=30,
+            )
+
         return response.choices[0].message.content or ""
         
     except Exception as e:
@@ -759,7 +769,13 @@ def parse_income_statement_canonical(file_path: str, fx_rate: Optional[float] = 
         return {'success': False, 'error': str(e)}
 
 
-def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB, use_canonical: bool = True) -> Dict[str, Any]:
+def process_termina_excel(
+    file_path: str,
+    max_size_mb: float = MAX_EXCEL_SIZE_MB,
+    use_canonical: bool = True,
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Process a Termina Excel export and extract financial metrics.
     
     Uses a two-stage approach:
@@ -795,7 +811,9 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
         
         try:
             excel_text = excel_to_text(file_path)
-            ai_metrics = extract_metrics_with_openai(excel_text)
+            ai_metrics = extract_metrics_with_openai(
+                excel_text, company_id=company_id, user_id=user_id
+            )
             
             # Normalize expense fields
             expense_fields = ['cogs', 'opex', 'payroll', 'sales_and_marketing', 'other_opex', 
@@ -852,7 +870,9 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
     validated_metrics, validation_warnings, suggested_corrections = validate_excel_metrics(metrics)
     
     # Generate summary
-    summary = parsed.get('ai_metrics', {}).get('summary') or generate_ai_summary(metrics)
+    summary = parsed.get('ai_metrics', {}).get('summary') or generate_ai_summary(
+        metrics, company_id=company_id, user_id=user_id
+    )
     
     baseline_data = {
         "monthly_revenue": metrics.get("revenue"),

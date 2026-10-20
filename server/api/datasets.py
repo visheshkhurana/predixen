@@ -344,7 +344,9 @@ async def upload_termina_pdf(
             tmp_path = tmp_file.name
         
         try:
-            result = process_termina_pdf(tmp_path)
+            result = process_termina_pdf(
+                tmp_path, company_id=company_id, user_id=current_user.id
+            )
         finally:
             os.unlink(tmp_path)
         
@@ -438,7 +440,9 @@ async def upload_termina_excel(
             tmp_path = tmp_file.name
         
         try:
-            result = process_termina_excel(tmp_path)
+            result = process_termina_excel(
+                tmp_path, company_id=company_id, user_id=current_user.id
+            )
         finally:
             os.unlink(tmp_path)
         
