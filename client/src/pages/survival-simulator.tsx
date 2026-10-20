@@ -531,7 +531,8 @@ function RecommendationsPanel({ recommendations }: { recommendations: SimResults
 
 function EmailResultPanel({ results }: { results: SimResults }) {
   // Shown only after a simulation result exists. Same consent opt-in as the
-  // other public calculators. The runway fields still key the result email.
+  // other public calculators. resultByEmail stays false: this page does not
+  // send the result, so the offer must not promise an inbox.
   const p50 = results.runway.p50;
   const monthlyBurn = results.inputs.monthly_expenses - results.inputs.monthly_revenue;
 
@@ -542,6 +543,7 @@ function EmailResultPanel({ results }: { results: SimResults }) {
       source="survival-simulator"
       sourcePage="/survival-simulator"
       plan="survival-simulator"
+      resultByEmail={false}
       notes={`Grade ${results.grade.letter} (${results.grade.label}). Median runway ${runwayLabel(p50, " months")} (P10 ${runwayLabel(results.runway.p10, "")} – P90 ${runwayLabel(results.runway.p90, "")}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`}
       runwayMonths={leadNumber(p50)}
       runwayDate={leadIsoDate(p50)}
