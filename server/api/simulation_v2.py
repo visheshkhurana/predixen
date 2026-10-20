@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
+from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
 from server.models import User
 from server.lib.llm.openai_client import get_openai_client
 from server.services.simulation.engine import SimulationEngine
@@ -127,10 +128,13 @@ def build_simulation_v2_state(normalized: dict) -> tuple[CompanyState, dict, int
 async def run_simulation_v2_sse(
     request: SimulationV2Request,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     client = get_openai_client()
     if not client:
         raise HTTPException(status_code=503, detail="LLM service not configured")
+
+    reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION)
 
     normalized, input_provenance = inputs_for_simulation_request(request)
     initial_state, scenario_params, total_rounds = build_simulation_v2_state(normalized)
