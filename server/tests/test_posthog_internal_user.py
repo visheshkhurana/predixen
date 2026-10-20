@@ -12,7 +12,10 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import logging
+
 import pytest
+from fastapi import BackgroundTasks
 
 from server.core.config import settings
 from server.services import posthog as posthog_svc
@@ -104,7 +107,12 @@ def _assert_flagged(sent: list[tuple[str, str]], email: str, distinct_id: str) -
     _assert_no_address(sent, email)
 
 
-def _login(email: str):
+def _drain(tasks: BackgroundTasks) -> None:
+    for task in list(tasks.tasks):
+        task.func(*task.args, **task.kwargs)
+
+
+def _login(email: str, *, tasks: BackgroundTasks | None = None, drain: bool = True):
     from server.api.auth import LoginRequest, login
 
     user = SimpleNamespace(
@@ -120,13 +128,43 @@ def _login(email: str):
     request = MagicMock()
     request.client.host = "127.0.0.1"
     request.headers.get.return_value = ""
+    tasks = tasks or BackgroundTasks()
     with patch("server.api.auth.verify_password", return_value=True):
-        return login(
+        result = login(
             LoginRequest(email=email, password="password1"),
             request,
             MagicMock(),
+            tasks,
             db,
         )
+    if drain:
+        _drain(tasks)
+    return result
+
+
+@pytest.mark.parametrize("failure", [TimeoutError("timed out"), RuntimeError("posthog down")])
+def test_login_returns_when_posthog_post_raises_or_times_out(failure, caplog):
+    """Sign-in returns the token before PostHog runs. A raise or timeout is logged, not raised."""
+    tasks = BackgroundTasks()
+    timeouts: list[float] = []
+
+    def fake_urlopen(req, timeout=2):
+        timeouts.append(timeout)
+        raise failure
+
+    with caplog.at_level(logging.ERROR):
+        with patch.object(posthog_svc.urllib.request, "urlopen", side_effect=fake_urlopen):
+            result = _login("x@example.com", tasks=tasks, drain=False)
+            assert result.access_token
+            assert result.user_id == 9
+            assert timeouts == []
+            assert len(tasks.tasks) == 1
+            _drain(tasks)
+
+    assert timeouts
+    assert all(timeout <= 2 for timeout in timeouts)
+    assert "capture failed" in caplog.text
+    assert "x@example.com" not in caplog.text
 
 
 @pytest.mark.parametrize(

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import timedelta, datetime
@@ -65,9 +65,25 @@ def _flag_posthog_internal_user(
             is_platform_admin=is_platform_admin,
         )
     except Exception:
-        auth_logger.warning(
+        auth_logger.exception(
             "posthog internal-user flag failed for user_id=%s", user_id
         )
+
+
+def _schedule_internal_user_flag(
+    background_tasks: BackgroundTasks,
+    user_id: int,
+    email: str,
+    *,
+    is_platform_admin: bool = False,
+) -> None:
+    """Queue the PostHog $set so the token response does not wait on the network."""
+    background_tasks.add_task(
+        _flag_posthog_internal_user,
+        user_id,
+        email,
+        is_platform_admin=is_platform_admin,
+    )
 
 
 def log_login_attempt(db: Session, email: str, user_id: int = None, success: bool = True, 
@@ -267,7 +283,13 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
     )
 
 @router.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+def login(
+    req: LoginRequest,
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     user = db.query(User).filter(User.email == req.email).first()
     if not user or not verify_password(req.password, user.password_hash):
         log_login_attempt(db, req.email, user.id if user else None, success=False,
@@ -299,8 +321,11 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
-    _flag_posthog_internal_user(
-        user.id, user.email, is_platform_admin=is_platform_admin
+    _schedule_internal_user_flag(
+        background_tasks,
+        user.id,
+        user.email,
+        is_platform_admin=is_platform_admin,
     )
 
     return TokenResponse(
@@ -314,7 +339,13 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
 
 
 @router.post("/admin/login", response_model=TokenResponse)
-def admin_login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+def admin_login(
+    req: LoginRequest,
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """Admin-only login endpoint with master credentials support."""
     
     admin_email_config = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
@@ -378,7 +409,9 @@ def admin_login(req: LoginRequest, request: Request, response: Response, db: Ses
     log_login_attempt(db, user.email, user.id, success=True, request=request)
     
     access_token = _issue_tokens(response, db, user.id)
-    _flag_posthog_internal_user(user.id, user.email, is_platform_admin=True)
+    _schedule_internal_user_flag(
+        background_tasks, user.id, user.email, is_platform_admin=True
+    )
 
     return TokenResponse(
         access_token=access_token,

@@ -331,6 +331,11 @@ def _account_distinct_id(value: object) -> Optional[str]:
     return cleaned
 
 
+# Sign-in schedules this after the token is returned. A hung PostHog must
+# not hold a worker. Two seconds is the cap; failures are logged and dropped.
+_POST_TIMEOUT_SECONDS = 2
+
+
 def _post(payload: dict, event_name: str) -> bool:
     try:
         req = urllib.request.Request(
@@ -339,7 +344,7 @@ def _post(payload: dict, event_name: str) -> bool:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=_POST_TIMEOUT_SECONDS) as resp:
             status = getattr(resp, "status", 200)
             return 200 <= int(status) < 300
     except (urllib.error.URLError, TimeoutError, OSError, ValueError):
