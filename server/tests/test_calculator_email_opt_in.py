@@ -7,6 +7,7 @@ only a transactional sender here, with no lead double opt-in to reuse.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -197,7 +198,8 @@ def test_forwarded_host_is_what_gets_queued():
     db = _db_for_new_lead()
     request = _Request(host="internal:8000", forwarded="founderconsole.ai, proxy.internal")
 
-    create_lead(data, background, request, db)
+    with patch.dict(os.environ, {"LEAD_RUNWAY_EMAIL_ENABLED": "true"}):
+        create_lead(data, background, request, db)
 
     emit = next(call for call in background.add_task.call_args_list if call.args[0] is _emit_lead_captured)
     assert emit.args[3] == "founderconsole.ai"
@@ -283,6 +285,89 @@ def test_post_route_stores_consent_and_emits_host():
     assert lead.consent_status == "pending"
     assert capture.call_args.args[0] == "lead_captured"
     assert capture.call_args.args[2]["host"] == "founderconsole.ai"
+
+
+_RUNWAY_POST = {
+    "email": "runway-flag@example.com",
+    "source": "runway-calculator",
+    "source_page": "/tools/runway-calculator",
+    "plan": "runway-calculator",
+    "consent": True,
+    "runway_months": "4",
+    "runway_date": "2027-03-01",
+    "monthly_burn": "40000",
+}
+
+
+def _runway_post_client(db):
+    app = FastAPI()
+    from server.api.leads import router
+
+    app.include_router(router)
+
+    def _override():
+        yield db
+
+    app.dependency_overrides[get_db] = _override
+    return TestClient(app)
+
+
+def test_consent_post_saves_lead_without_runway_email_when_flag_unset(monkeypatch):
+    monkeypatch.delenv("LEAD_RUNWAY_EMAIL_ENABLED", raising=False)
+    db = _db_for_new_lead()
+    client = _runway_post_client(db)
+    called = []
+
+    async def fake_send(data):
+        called.append(data)
+
+    with patch("server.api.leads._send_runway_email", fake_send), patch(
+        "server.api.leads.posthog_capture"
+    ):
+        response = client.post(
+            "/leads",
+            json=_RUNWAY_POST,
+            headers={"x-forwarded-for": "203.0.113.21, 100.64.0.8"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"status": "ok"}
+    db.commit.assert_called_once()
+    lead = db.add.call_args.args[0]
+    assert isinstance(lead, Lead)
+    assert lead.email == "runway-flag@example.com"
+    assert lead.consent is True
+    assert lead.source_page == "/tools/runway-calculator"
+    assert called == []
+
+
+def test_consent_post_calls_runway_email_when_flag_is_true(monkeypatch):
+    monkeypatch.setenv("LEAD_RUNWAY_EMAIL_ENABLED", "true")
+    db = _db_for_new_lead()
+    client = _runway_post_client(db)
+    called = []
+
+    async def fake_send(data):
+        called.append(data)
+
+    with patch("server.api.leads._send_runway_email", fake_send), patch(
+        "server.api.leads.posthog_capture"
+    ):
+        response = client.post(
+            "/leads",
+            json=_RUNWAY_POST,
+            headers={"x-forwarded-for": "203.0.113.22, 100.64.0.8"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"status": "ok"}
+    db.commit.assert_called_once()
+    lead = db.add.call_args.args[0]
+    assert lead.email == "runway-flag@example.com"
+    assert lead.consent is True
+    assert len(called) == 1
+    assert called[0].runway_months == "4"
+    assert called[0].runway_date == "2027-03-01"
 
 
 def test_post_route_rejects_consent_false():

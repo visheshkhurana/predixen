@@ -443,6 +443,7 @@ export default function RunwayCalculatorPage() {
             source="runway-calculator"
             sourcePage="/tools/runway-calculator"
             plan="runway-calculator"
+            resultByEmail={false}
             notes={`Runway ${results.runwayMonths >= 36 ? "36+" : results.runwayMonths} months (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`}
             runwayMonths={leadNumber(results.runwayMonths)}
             runwayDate={leadIsoDate(results.runwayMonths)}
