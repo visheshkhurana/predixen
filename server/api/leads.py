@@ -320,6 +320,59 @@ def lead_may_receive_founder_tips(lead) -> bool:
     )
 
 
+# Plan strings the public lead forms submit. Billing tiers are not lead plans.
+# A request value outside this set is dropped from lead_captured.
+LEAD_CAPTURED_PLANS = frozenset(
+    {
+        "burn-multiple",
+        "default-alive",
+        "dilution",
+        "ltv-cac",
+        "runway-calculator",
+        "survival-simulator",
+    }
+)
+
+# Public paths that render a lead form. Anything else, including a query string
+# or a calculator result stuffed into the field, is replaced with the token below.
+LEAD_CAPTURED_SOURCE_PAGES = frozenset(
+    {
+        "/default-alive",
+        "/survival-simulator",
+        "/tools/burn-multiple",
+        "/tools/dilution",
+        "/tools/ltv-cac",
+        "/tools/runway-calculator",
+    }
+)
+LEAD_CAPTURED_SOURCE_PAGE_OTHER = "other"
+
+# Founder financials and other calculator outputs. The result email and the
+# lead row keep what they already store. lead_captured never copies these keys.
+_LEAD_CAPTURED_RESULT_KEYS = frozenset(
+    {
+        "monthly_burn",
+        "notes",
+        "runway_date",
+        "runway_months",
+    }
+)
+
+
+def _allowed_plan(value: object, markers: tuple[str, ...]) -> str:
+    text = _scrub_email(value, markers).strip()
+    if text in LEAD_CAPTURED_PLANS:
+        return text
+    return ""
+
+
+def _allowed_source_page(value: object, markers: tuple[str, ...]) -> str:
+    text = _scrub_email(value, markers).strip()
+    if text in LEAD_CAPTURED_SOURCE_PAGES:
+        return text
+    return LEAD_CAPTURED_SOURCE_PAGE_OTHER
+
+
 def _request_host(request: Optional[Request]) -> str:
     if request is None:
         return ""
@@ -345,7 +398,11 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
     committed so a successful POST always emits, independent of the browser.
     The distinct_id is the browser one when the page sent a safe id. Otherwise
     it is a random opt-in id. The address and any hash of it are stripped from
-    the id and from every property. Does not call identify or reset anyone.
+    the id and from every property. runway_months and the other calculator
+    results are not properties. plan is included only when it is in
+    LEAD_CAPTURED_PLANS. source_page is included only when it is in
+    LEAD_CAPTURED_SOURCE_PAGES; every other value is "other". Does not call
+    identify or reset anyone.
     """
     try:
         markers = _email_markers(str(data.email))
@@ -359,16 +416,13 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
             "created": created,
             "distinct_id_source": distinct_id_source,
             "host": _scrub_email(host, markers),
+            "source_page": _allowed_source_page(data.source_page, markers),
         }
-        page = _scrub_email((data.source_page or "").strip(), markers)
-        if page:
-            properties["source_page"] = page
-        runway = _scrub_email(data.runway_months, markers)
-        if runway:
-            properties["runway_months"] = runway
-        plan = _scrub_email(data.plan, markers)
+        plan = _allowed_plan(data.plan, markers)
         if plan:
             properties["plan"] = plan
+        for key in _LEAD_CAPTURED_RESULT_KEYS:
+            properties.pop(key, None)
         posthog_capture(
             "lead_captured",
             distinct_id,

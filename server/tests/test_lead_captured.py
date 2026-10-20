@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from server.api.leads import LeadCreate, _emit_lead_captured, _lead_distinct_id, create_lead
+from server.api.leads import (
+    LEAD_CAPTURED_PLANS,
+    LEAD_CAPTURED_SOURCE_PAGE_OTHER,
+    LEAD_CAPTURED_SOURCE_PAGES,
+    LeadCreate,
+    _emit_lead_captured,
+    _lead_distinct_id,
+    create_lead,
+)
 
 
 class _Headers(dict):
@@ -49,12 +59,15 @@ def test_distinct_id_is_stable_and_not_the_email():
     assert "founder@example.com" not in a
 
 
-def test_emit_mirrors_location_source_and_runway():
+def test_emit_mirrors_location_and_source_without_runway():
     data = LeadCreate(
         email="founder@example.com",
         source="runway-calculator",
         plan="runway-calculator",
+        source_page="/tools/runway-calculator",
         runway_months="4",
+        runway_date="2027-03-01",
+        monthly_burn="40000",
     )
     with patch("server.api.leads.posthog_capture") as capture:
         _emit_lead_captured(data, created=True)
@@ -66,7 +79,11 @@ def test_emit_mirrors_location_source_and_runway():
         assert "founder@example.com" not in distinct_id
         assert properties["location"] == "runway-calculator"
         assert properties["source"] == "runway-calculator"
-        assert properties["runway_months"] == "4"
+        assert properties["plan"] == "runway-calculator"
+        assert properties["source_page"] == "/tools/runway-calculator"
+        assert "runway_months" not in properties
+        assert "runway_date" not in properties
+        assert "monthly_burn" not in properties
         assert properties["created"] is True
         assert properties["distinct_id_source"] == "anonymous"
 
@@ -230,3 +247,168 @@ def test_create_lead_does_not_emit_when_commit_fails():
 
     assert exc.value.status_code == 503
     background.add_task.assert_not_called()
+
+
+def test_emitted_properties_never_contain_runway_months():
+    notes = "Cash 100000, net burn 40000, runway 4 months until 2027-03-01"
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        plan="runway-calculator",
+        runway_months="4",
+        runway_date="2027-03-01",
+        monthly_burn="40000",
+        notes=notes,
+    )
+    with patch("server.api.leads.posthog_capture") as capture:
+        _emit_lead_captured(data, created=True)
+    properties = capture.call_args.args[2]
+    assert {"runway_months", "runway_date", "monthly_burn", "notes"}.isdisjoint(properties)
+    values = {str(value) for value in properties.values()}
+    assert {"4", "2027-03-01", "40000", notes, "100000"}.isdisjoint(values)
+    blob = " ".join(values)
+    assert "runway_months" not in blob
+    assert "40000" not in blob
+    assert "2027-03-01" not in blob
+
+
+def test_emit_drops_unknown_plan():
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        plan="enterprise-secret",
+        runway_months="9",
+    )
+    with patch("server.api.leads.posthog_capture") as capture:
+        _emit_lead_captured(data, created=True)
+    properties = capture.call_args.args[2]
+    assert "plan" not in properties
+    assert "enterprise-secret" not in " ".join(str(value) for value in properties.values())
+    assert "runway_months" not in properties
+
+    numbered = LeadCreate(
+        email="founder@example.com",
+        source="website",
+        source_page="/tools/runway-calculator",
+        plan="18",
+    )
+    with patch("server.api.leads.posthog_capture") as capture:
+        _emit_lead_captured(numbered, created=True)
+    assert "plan" not in capture.call_args.args[2]
+
+
+def test_emit_normalizes_unknown_source_page():
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator?runway_months=4&cash=100000",
+        plan="runway-calculator",
+        runway_months="4",
+    )
+    with patch("server.api.leads.posthog_capture") as capture:
+        _emit_lead_captured(data, created=True)
+    properties = capture.call_args.args[2]
+    assert properties["source_page"] == LEAD_CAPTURED_SOURCE_PAGE_OTHER
+    assert "runway_months" not in properties["source_page"]
+    assert "100000" not in properties["source_page"]
+    assert "?" not in properties["source_page"]
+
+    for page in (
+        "https://founderconsole.ai/tools/runway-calculator",
+        "/tools/runway-calculator/",
+        "/admin/leads",
+        "/tools/not-a-calculator",
+    ):
+        leaked = LeadCreate(
+            email="founder@example.com",
+            source="website",
+            source_page=page,
+            plan="not-a-plan",
+        )
+        with patch("server.api.leads.posthog_capture") as capture:
+            _emit_lead_captured(leaked, created=False)
+        sent = capture.call_args.args[2]
+        assert sent["source_page"] == "other"
+        assert page not in sent["source_page"]
+        assert "plan" not in sent
+
+
+def test_emit_keeps_each_known_lead_form_plan_and_path():
+    for plan, page in (
+        ("runway-calculator", "/tools/runway-calculator"),
+        ("burn-multiple", "/tools/burn-multiple"),
+        ("dilution", "/tools/dilution"),
+        ("ltv-cac", "/tools/ltv-cac"),
+        ("default-alive", "/default-alive"),
+        ("survival-simulator", "/survival-simulator"),
+    ):
+        data = LeadCreate(
+            email="founder@example.com",
+            source=plan,
+            source_page=f"  {page}  ",
+            plan=plan,
+            runway_months="12",
+            monthly_burn="25000",
+        )
+        with patch("server.api.leads.posthog_capture") as capture:
+            _emit_lead_captured(data, created=True)
+        properties = capture.call_args.args[2]
+        assert properties["plan"] == plan
+        assert properties["source_page"] == page
+        assert "runway_months" not in properties
+        assert "25000" not in {str(value) for value in properties.values()}
+
+
+def test_allow_lists_match_the_lead_form_pages():
+    root = Path(__file__).resolve().parents[2] / "client" / "src"
+    plans: set[str] = set()
+    pages: set[str] = set()
+    for path in root.rglob("*.tsx"):
+        text = path.read_text()
+        if "CalculatorEmailOptIn" not in text:
+            continue
+        plans.update(re.findall(r'\bplan="([^"]+)"', text))
+        pages.update(re.findall(r'\bsourcePage="([^"]+)"', text))
+    assert plans == set(LEAD_CAPTURED_PLANS)
+    assert pages == set(LEAD_CAPTURED_SOURCE_PAGES)
+    assert LEAD_CAPTURED_SOURCE_PAGE_OTHER not in LEAD_CAPTURED_SOURCE_PAGES
+
+
+def test_successful_save_queues_exactly_one_lead_captured():
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator?cash=900000",
+        plan="not-a-real-plan",
+        consent=True,
+        runway_months="6",
+        runway_date="2027-03-01",
+        monthly_burn="40000",
+        notes="runway 6 months",
+    )
+    background = MagicMock()
+    db = MagicMock()
+    db.query.return_value.filter.return_value.one_or_none.return_value = None
+
+    result = create_lead(data, background, _Request(), db)
+
+    assert result == {"status": "ok"}
+    db.commit.assert_called_once()
+    lead = db.add.call_args.args[0]
+    assert lead.source_page == "/tools/runway-calculator?cash=900000"
+    assert lead.plan == "not-a-real-plan"
+    assert lead.notes == "runway 6 months"
+    queued = [call.args[0] for call in background.add_task.call_args_list]
+    assert queued.count(_emit_lead_captured) == 1
+    emit_call = next(call for call in background.add_task.call_args_list if call.args[0] is _emit_lead_captured)
+
+    with patch("server.api.leads.posthog_capture") as capture:
+        _emit_lead_captured(*emit_call.args[1:])
+    capture.assert_called_once()
+    assert capture.call_args.args[0] == "lead_captured"
+    properties = capture.call_args.args[2]
+    assert "runway_months" not in properties
+    assert "plan" not in properties
+    assert properties["source_page"] == "other"
