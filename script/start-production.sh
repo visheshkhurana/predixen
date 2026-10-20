@@ -2,7 +2,7 @@
 set -e
 
 echo "[prod] Starting FastAPI backend..."
-python -m uvicorn server.main:asgi_app --host 0.0.0.0 --port 8001 --no-proxy-headers &
+python -m uvicorn server.main:app --host 0.0.0.0 --port 8001 &
 FASTAPI_PID=$!
 
 # Wait for FastAPI to be ready

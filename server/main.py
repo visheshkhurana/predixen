@@ -561,11 +561,3 @@ def health():
     }
 
 print(f"[main.py] Module load complete (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
-
-# Outermost ASGI wrapper. Start uvicorn as server.main:asgi_app with
-# --no-proxy-headers. A second proxy-headers wrap outside this class would
-# rewrite the peer before it is recorded, and X-Real-IP would no longer be
-# trusted only from Express.
-from server.middleware.peer import RecordPeer
-
-asgi_app = RecordPeer(app)

@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
-import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -365,15 +364,6 @@ export default function LtvCacPage() {
                   )}
                 </CardContent>
               </Card>
-
-              <CalculatorEmailOptIn
-                source="ltv-cac"
-                sourcePage="/tools/ltv-cac"
-                plan="ltv-cac"
-                resultByEmail={false}
-                visible={result.outcome !== "invalid" && result.ltv !== null}
-                notes={`LTV ${result.ltv === null ? "n/a" : formatCurrency(result.ltv)}, CAC ${result.cac === null ? "n/a" : formatCurrency(result.cac)}, ratio ${result.ratio === null ? "n/a" : `${result.ratio.toFixed(2)}x`}.`}
-              />
 
               <Card>
                 <CardHeader>

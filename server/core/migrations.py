@@ -1029,50 +1029,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_agent_simulation_runs_table(engine)
     ensure_subscription_trial_columns(engine)
     ensure_lifecycle_email_tables(engine)
-    ensure_lead_consent_columns(engine)
     logger.info("Database migrations completed successfully")
-
-
-def ensure_lead_consent_columns(engine: Engine) -> None:
-    """Consent fields on leads. Idempotent; existing rows stay unconsented.
-
-    create_all does not add columns to a table that already exists, and
-    calculator opt-in has to survive a deploy onto the current leads table.
-    Postgres accepts ADD COLUMN IF NOT EXISTS. The SQLite builds used in tests
-    do not, so those check PRAGMA table_info and add only what is missing.
-    """
-    is_sqlite = engine.dialect.name == "sqlite"
-    columns = (
-        ("consent", "INTEGER NOT NULL DEFAULT 0" if is_sqlite else "BOOLEAN NOT NULL DEFAULT FALSE"),
-        ("consent_at", "TIMESTAMP"),
-        ("source_page", "VARCHAR(200)"),
-        ("consent_status", "VARCHAR(20)"),
-    )
-    with engine.connect() as conn:
-        existing: set[str] = set()
-        if is_sqlite:
-            try:
-                rows = conn.execute(text("PRAGMA table_info(leads)")).fetchall()
-            except Exception as e:
-                logger.debug("leads table is missing, skipping consent columns: %s", e)
-                return
-            existing = {row[1] for row in rows}
-            if not existing:
-                return
-        for name, col_type in columns:
-            if is_sqlite and name in existing:
-                continue
-            statement = (
-                f"ALTER TABLE leads ADD COLUMN {name} {col_type}"
-                if is_sqlite
-                else f"ALTER TABLE leads ADD COLUMN IF NOT EXISTS {name} {col_type}"
-            )
-            try:
-                conn.execute(text(statement))
-            except Exception as e:
-                logger.debug("leads.%s may already exist or the table is missing: %s", name, e)
-        conn.commit()
-    logger.info("Lead consent columns migration complete")
 
 
 def ensure_currency_tables(engine: Engine) -> None:
