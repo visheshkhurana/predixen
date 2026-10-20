@@ -102,20 +102,26 @@ class OpenRouterClient:
         if not self.db:
             return None
         try:
+            # Real llm_audit_logs columns only. Hash and preview redacted text;
+            # the raw prompt is stored as a character count.
+            redacted_text = redaction_result.redacted_text if redaction_result else ""
+            findings = list(redaction_result.findings) if redaction_result and redaction_result.findings else []
+            redacted_output = redact_text(output or "", self.pii_mode)
             log = LLMAuditLog(
                 company_id=self.company_id,
                 user_id=self.user_id,
-                provider="openrouter",
-                model=model,
                 endpoint=endpoint,
-                prompt_hash=compute_prompt_hash(original_input),
-                prompt_preview=truncate_preview(original_input),
-                response_preview=truncate_preview(output),
+                model=model,
+                pii_mode=self.pii_mode,
+                prompt_hash=compute_prompt_hash(redacted_text),
+                input_chars_original=len(original_input or ""),
+                input_chars_redacted=len(redacted_text),
+                pii_findings_json=findings,
+                redacted_prompt_preview=truncate_preview(redacted_text),
+                redacted_output_preview=truncate_preview(redacted_output.redacted_text),
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 latency_ms=latency_ms,
-                pii_detected=len(redaction_result.findings) > 0 if redaction_result else False,
-                pii_types=[f.get("type", "") if isinstance(f, dict) else getattr(f, "entity_type", "") for f in (redaction_result.findings if redaction_result and redaction_result.findings else [])],
                 created_at=datetime.utcnow(),
             )
             self.db.add(log)
@@ -146,26 +152,22 @@ class OpenRouterClient:
         start_time = time.time()
         resolved_model = self._resolve_model(model)
 
-        redaction_result = None
-        if self.pii_mode != "off":
-            redacted_messages = []
-            all_findings = []
-            for msg in messages:
-                if msg.get("content"):
-                    result = redact_text(msg["content"])
-                    all_findings.extend(result.findings)
-                    redacted_messages.append({**msg, "content": result.redacted_text})
-                else:
-                    redacted_messages.append(msg)
-            redaction_result = RedactionResult(
-                redacted_text=redacted_messages[-1].get("content", "") if redacted_messages else "",
-                findings=all_findings,
-            )
-            messages = redacted_messages
+        original_input = "\n".join([(m.get("content") or "") for m in messages])
+        redacted_messages = []
+        all_findings = []
+        for msg in messages:
+            content = msg.get("content") or ""
+            result = redact_text(content, self.pii_mode)
+            all_findings.extend(result.findings)
+            redacted_messages.append({**msg, "content": result.redacted_text})
+        redaction_result = RedactionResult(
+            redacted_text="\n".join([(m.get("content") or "") for m in redacted_messages]),
+            findings=all_findings,
+        )
 
         body = {
             "model": resolved_model,
-            "messages": messages,
+            "messages": redacted_messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
@@ -188,8 +190,8 @@ class OpenRouterClient:
         audit_log = self._create_audit_log(
             endpoint="chat/completions",
             model=resolved_model,
-            original_input=messages[-1].get("content", "") if messages else "",
-            redaction_result=redaction_result or RedactionResult(redacted_text="", findings=[]),
+            original_input=original_input,
+            redaction_result=redaction_result,
             output=content,
             tokens_in=usage.get("prompt_tokens"),
             tokens_out=usage.get("completion_tokens"),

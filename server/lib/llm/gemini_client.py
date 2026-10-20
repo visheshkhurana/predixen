@@ -92,17 +92,20 @@ class GeminiClient:
             return None
             
         try:
+            # Hash and preview the redacted prompt only. The raw prompt is kept as a length.
+            redacted_output = redact_text(response_preview or "", self.pii_mode)
             audit_log = LLMAuditLog(
                 company_id=self.company_id,
                 user_id=self.user_id,
                 endpoint=endpoint,
                 model=model,
-                prompt_hash=compute_prompt_hash(original_input),
+                pii_mode=self.pii_mode,
+                prompt_hash=compute_prompt_hash(redaction_result.redacted_text),
                 input_chars_original=len(original_input),
                 input_chars_redacted=len(redaction_result.redacted_text),
                 pii_findings_json={"count": len(redaction_result.findings), "status": status, "error": error_message},
                 redacted_prompt_preview=truncate_preview(redaction_result.redacted_text),
-                redacted_output_preview=truncate_preview(response_preview),
+                redacted_output_preview=truncate_preview(redacted_output.redacted_text),
                 latency_ms=latency_ms,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
