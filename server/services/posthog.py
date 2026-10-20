@@ -5,6 +5,10 @@ There is no PostHog Python SDK in this repo. Browser identify
 for a logged-in user must use that same distinct_id. Signup also sends
 $create_alias so a pre-signup lead or anonymous id joins that person.
 
+Internal and test accounts are marked with the person property
+``$internal_or_test_user``. The address used to decide that stays on the
+server; it is not a PostHog property.
+
 A failed send must never raise — the product action already succeeded by the
 time this runs, and a visitor cannot do anything with a telemetry error.
 """
@@ -103,6 +107,145 @@ def user_distinct_id(user_id: int) -> str:
     return str(user_id)
 
 
+# Local-part prefix used by apply-flow smoke accounts.
+_SMOKE_LOCAL_PREFIX = "apply-smoke+"
+# RFC 2606 documentation domain. Real founders do not sign up here.
+_TEST_EMAIL_DOMAINS = frozenset({"example.com"})
+# Demo login special-cased in auth, the demo seed, and the client.
+_INTERNAL_ACCOUNT_EMAILS = frozenset({"demo@founderconsole.ai"})
+
+
+def _normalized_email(email: object) -> Optional[tuple[str, str, str]]:
+    """Return (address, local part, domain), lowercased, or None.
+
+    The pieces stay in this process. Nothing here is a PostHog property.
+    """
+    if not isinstance(email, str):
+        return None
+    normalized = email.strip().lower()
+    if not normalized or any(ch.isspace() for ch in normalized):
+        return None
+    local, sep, domain = normalized.rpartition("@")
+    if not sep or not local or not domain:
+        return None
+    return normalized, local, domain
+
+
+def _admin_master_email() -> str:
+    """Existing platform-admin address from settings. Not a new env var."""
+    try:
+        from server.core.config import settings
+
+        return (settings.ADMIN_MASTER_EMAIL or "").strip().lower()
+    except Exception:
+        return ""
+
+
+def is_internal_or_test_account(
+    email: Optional[str] = None,
+    *,
+    is_platform_admin: bool = False,
+    is_master: bool = False,
+) -> bool:
+    """True when PostHog should treat this account as internal or test.
+
+    Smoke addresses (``apply-smoke+...``), ``@example.com``, the demo
+    account, the configured platform-admin address, and the existing
+    platform-admin / master flags. A company role such as admin or owner
+    is a customer role and does not qualify.
+
+    The address is an input to this boolean only.
+    """
+    if is_platform_admin or is_master:
+        return True
+    parsed = _normalized_email(email)
+    if parsed is None:
+        return False
+    full, local, domain = parsed
+    if local.startswith(_SMOKE_LOCAL_PREFIX):
+        return True
+    if domain in _TEST_EMAIL_DOMAINS:
+        return True
+    if full in _INTERNAL_ACCOUNT_EMAILS:
+        return True
+    admin = _admin_master_email()
+    return bool(admin) and full == admin
+
+
+# Cohort 429335 ("Internal / Test users") is an exact match on this person
+# property. It matches only when the property is set. The value has to be
+# JSON boolean true — the string "true" is a different value, and false is
+# not sent for everyone else.
+_INTERNAL_OR_TEST_USER: bool = True
+
+
+def set_internal_or_test_person(distinct_id: str) -> bool:
+    """Set ``$internal_or_test_user`` on the person. Never raises.
+
+    Signup capture forces ``$process_person_profile`` off, so this is its
+    own ``$set`` and person processing stays on. The body is boolean true
+    and the numeric distinct id — no address and no domain.
+    """
+    try:
+        if not isinstance(distinct_id, str):
+            return False
+        cleaned = distinct_id.strip()
+        if not cleaned or "@" in cleaned:
+            return False
+        key = _api_key()
+        if not key:
+            return False
+        # bool, not str. json.dumps emits `true`, which is what the cohort matches.
+        value: bool = _INTERNAL_OR_TEST_USER
+        if type(value) is not bool or value is not True:
+            return False
+        payload = {
+            "api_key": key,
+            "event": "$set",
+            "distinct_id": cleaned,
+            "properties": {
+                "$lib": "founderconsole-server",
+                "$process_person_profile": True,
+                "$set": {"$internal_or_test_user": value},
+            },
+        }
+        return _post(payload, "$set")
+    except Exception:
+        logger.exception("[posthog] could not set internal-user flag")
+        return False
+
+
+def sync_internal_or_test_person(
+    user_id: int,
+    email: Optional[str] = None,
+    *,
+    is_platform_admin: bool = False,
+    is_master: bool = False,
+) -> bool:
+    """Flag an internal or test account. A normal founder sends nothing.
+
+    ``email`` is classified here and is not forwarded. Returns True only
+    when a ``$set`` was handed to the network.
+    """
+    try:
+        if not is_internal_or_test_account(
+            email,
+            is_platform_admin=is_platform_admin,
+            is_master=is_master,
+        ):
+            return False
+        try:
+            uid = int(user_id)
+        except (TypeError, ValueError):
+            return False
+        if uid <= 0:
+            return False
+        return set_internal_or_test_person(user_distinct_id(uid))
+    except Exception:
+        logger.exception("[posthog] could not flag internal or test user")
+        return False
+
+
 def lead_distinct_id(email: str) -> str:
     """Stable fallback when the browser distinct_id was not sent.
 
@@ -188,6 +331,11 @@ def _account_distinct_id(value: object) -> Optional[str]:
     return cleaned
 
 
+# Sign-in schedules this after the token is returned. A hung PostHog must
+# not hold a worker. Two seconds is the cap; failures are logged and dropped.
+_POST_TIMEOUT_SECONDS = 2
+
+
 def _post(payload: dict, event_name: str) -> bool:
     try:
         req = urllib.request.Request(
@@ -196,7 +344,7 @@ def _post(payload: dict, event_name: str) -> bool:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=_POST_TIMEOUT_SECONDS) as resp:
             status = getattr(resp, "status", 200)
             return 200 <= int(status) < 300
     except (urllib.error.URLError, TimeoutError, OSError, ValueError):
