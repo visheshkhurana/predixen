@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
 import { trackFunnel } from "@/lib/funnel";
+import { metaTrack } from "@/lib/metaPixel";
 import { getBrowserDistinctId } from "@/lib/posthog";
 import { cn } from "@/lib/utils";
 import { Check, Loader2, Mail } from "lucide-react";
@@ -112,6 +113,9 @@ function CalculatorEmailOptInForm({
         ...trackExtra,
         host: window.location.host,
       });
+      // Only after the row is saved. No-op unless the marketing shell
+      // already loaded fbq. The address stays in the POST body.
+      metaTrack("Lead", { content_name: source });
     } catch {
       // The result is still on screen. Ask them to try again, nothing else.
       setSendState("error");

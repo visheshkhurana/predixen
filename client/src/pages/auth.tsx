@@ -11,7 +11,6 @@ import { useFounderStore } from '@/store/founderStore';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, TrendingUp, Shield, Zap, Loader2, ArrowRight, BarChart3, Brain, Target, ChevronRight, Sparkles } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
-import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
 import { getBrowserDistinctId } from '@/lib/posthog';
 import {
@@ -34,7 +33,6 @@ const identifyUser = (userId: number, email: string) => {
 // trackFunnel so GA4 / PostHog / X stay in sync. Keep the GA4 recommended
 // `sign_up` name alongside `signup_completed` (the product-bet event).
 const trackSignup = (userId: number, email: string, method = 'email') => {
-  metaTrack('CompleteRegistration', { method });
   trackFunnel('signup_completed', { method, user_id: userId });
   trackFunnel('sign_up', { method, user_id: userId });
 };
