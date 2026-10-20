@@ -1,9 +1,11 @@
 """Campaign parameters sent with a lead or a signup.
 
-Values are trimmed and capped at the leads column width. This module does
-not read the request IP and does not backfill existing rows.
+Values are trimmed and capped at the leads column width. An address is
+dropped, not stored. This module does not read the request IP and does not
+backfill existing rows.
 """
 
+import re
 from typing import Mapping, Optional
 
 ATTRIBUTION_MAX_LENGTH = 200
@@ -27,11 +29,18 @@ LEAD_UTM_COLUMNS = (
 )
 
 
+# Same rule as the client cleaner: any '@' or an address-shaped token.
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+
 def clean_attribution_value(value: object, limit: int = ATTRIBUTION_MAX_LENGTH) -> Optional[str]:
     if not isinstance(value, str):
         return None
     text = "".join(ch for ch in value.strip() if ord(ch) >= 32 and ord(ch) != 127)
     if not text:
+        return None
+    # Drop the whole value. A campaign parameter is not a place to keep an address.
+    if "@" in text or _EMAIL_RE.search(text):
         return None
     return text[:limit]
 

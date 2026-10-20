@@ -14,6 +14,7 @@ import {
   readStoredAttribution,
   type AttributionStorage,
 } from "../../client/src/lib/attribution";
+import { registerSuperProperties, takeQueuedPostHogCalls } from "../../client/src/lib/posthog";
 import { flushPostHogQueue, type QueuedPostHogCall } from "../../client/src/lib/posthog-queue";
 
 const attributionSrc = readFileSync("client/src/lib/attribution.ts", "utf8");
@@ -162,4 +163,29 @@ test("register flushes after unsetting keys this session does not have", () => {
 
 test("readFirstTouchAttribution is a no-op without a browser window", () => {
   assert.deepEqual(readFirstTouchAttribution(), {});
+});
+
+test("utm_term=jane@x.com never reaches super properties or storage", () => {
+  takeQueuedPostHogCalls();
+  const storage = memoryStorage();
+  const captured = captureFirstTouch(storage, "?utm_term=jane@x.com&utm_source=google");
+  assert.equal(captured.utm_source, "google");
+  assert.equal(captured.utm_term, undefined);
+  const stored = storage.data[ATTRIBUTION_STORAGE_KEY];
+  assert.equal(stored.includes("jane@x.com"), false);
+  assert.equal(stored.includes("@"), false);
+
+  const unset = ATTRIBUTION_KEYS.filter((key) => !captured[key]);
+  registerSuperProperties(captured, unset);
+  const queued = takeQueuedPostHogCalls();
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].kind, "register");
+  const blob = JSON.stringify(queued[0]);
+  assert.equal(blob.includes("jane@x.com"), false);
+  assert.equal(blob.includes("@"), false);
+  if (queued[0].kind === "register") {
+    assert.equal(queued[0].properties.utm_term, undefined);
+    assert.equal(queued[0].properties.utm_source, "google");
+    assert.ok(queued[0].unset?.includes("utm_term"));
+  }
 });

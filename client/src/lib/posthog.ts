@@ -270,4 +270,9 @@ export function registerSuperProperties(
   pending.push(call);
 }
 
+/** Test seam: the calls waiting to become PostHog super properties. */
+export function takeQueuedPostHogCalls(): QueuedPostHogCall[] {
+  return pending.splice(0, pending.length);
+}
+
 export const isPostHogEnabled = () => !!POSTHOG_KEY;

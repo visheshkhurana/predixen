@@ -27,6 +27,9 @@ export const ATTRIBUTION_STORAGE_KEY = "fc_first_touch_attribution";
 /** Matches leads.utm_* VARCHAR(200). Longer click ids are truncated to fit. */
 export const ATTRIBUTION_MAX_LENGTH = 200;
 
+/** An address must not be stored or registered, even inside a campaign value. */
+const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+
 export type AttributionStorage = {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -36,6 +39,8 @@ export function cleanAttributionValue(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const text = value.trim().replace(/[\u0000-\u001f\u007f]/g, "");
   if (!text) return null;
+  // Drop the whole value. A campaign parameter is not a place to keep an address.
+  if (text.includes("@") || EMAIL_RE.test(text)) return null;
   return text.slice(0, ATTRIBUTION_MAX_LENGTH);
 }
 

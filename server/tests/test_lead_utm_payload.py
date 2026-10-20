@@ -128,6 +128,48 @@ def test_lead_captured_includes_attribution_and_drops_an_address():
     assert "203.0.113.50" not in str(properties)
 
 
+def test_utm_term_email_never_reaches_lead_columns():
+    """utm_term=jane@x.com is dropped before it can be written to a leads column."""
+    address = "jane@x.com"
+    data = _consented(
+        utm_term=address,
+        utm_source=address,
+        utm_medium=address,
+        utm_campaign=address,
+    )
+    assert data.utm_term is None
+    assert data.utm_source is None
+    assert data.utm_medium is None
+    assert data.utm_campaign is None
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.one_or_none.return_value = None
+    create_lead(data, MagicMock(), _Request(), db)
+
+    lead = db.add.call_args.args[0]
+    assert isinstance(lead, Lead)
+    assert lead.utm_source is None
+    assert lead.utm_medium is None
+    assert lead.utm_campaign is None
+    assert address not in str(lead.__dict__)
+
+
+def test_signup_event_drops_utm_term_email():
+    """utm_term=jane@x.com must not be a property on the activation signup event."""
+    with patch("server.services.activation.posthog_capture") as capture:
+        assert emit_signup_completed(
+            user_id=7,
+            method="email",
+            attribution={"utm_term": "jane@x.com", "utm_source": "newsletter"},
+        )
+    properties = capture.call_args.args[2]
+    assert properties["method"] == "email"
+    assert properties["user_id"] == 7
+    assert properties["utm_source"] == "newsletter"
+    assert "utm_term" not in properties
+    assert "jane@x.com" not in str(properties)
+
+
 def test_signup_payload_is_on_signup_completed_and_not_required():
     req = RegisterRequest(
         email="founder@example.com",
