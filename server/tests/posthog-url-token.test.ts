@@ -231,7 +231,7 @@ test("before_send keeps non-pageview names and does not drop events", () => {
   assert.equal(clean?.properties?.$current_url, "https://founderconsole.ai/pricing");
 });
 
-test("gtag page_location and page_referrer drop query and hash", () => {
+test("gtag page_location and page_referrer drop secrets and the hash", () => {
   for (const page of TOKEN_PAGES) {
     const fields = gtagPageFields(page.href, page.href);
     assert.equal(fields.page_location, `https://founderconsole.ai${page.pathname}`);
@@ -242,8 +242,35 @@ test("gtag page_location and page_referrer drop query and hash", () => {
     "https://founderconsole.ai/?utm_source=x",
     "https://google.com/search?q=runway#top",
   );
-  assert.equal(utm.page_location, "https://founderconsole.ai/");
+  assert.equal(utm.page_location, "https://founderconsole.ai/?utm_source=x");
   assert.equal(utm.page_referrer, "https://google.com/search");
+});
+
+test("GA landing keeps utm_source and drops token; PostHog URL stays origin+path", () => {
+  const href = "https://founderconsole.ai/?utm_source=x&token=y";
+  const fields = gtagPageFields(href, "https://ads.example/click?utm_source=x&token=y#ad");
+  assert.equal(fields.page_location, "https://founderconsole.ai/?utm_source=x");
+  assert.equal(fields.page_referrer, "https://ads.example/click?utm_source=x");
+  assert.equal(JSON.stringify(fields).includes("token"), false);
+  assert.equal(JSON.stringify(fields).includes("#"), false);
+
+  const kept = gtagPageFields(
+    "https://founderconsole.ai/pricing?code=abc&utm_medium=cpc&utm_source=x&utm_campaign=spring&utm_term=runway&utm_content=hero&gclid=g&fbclid=f&token=y#section",
+  );
+  assert.equal(
+    kept.page_location,
+    "https://founderconsole.ai/pricing?utm_source=x&utm_medium=cpc&utm_campaign=spring&utm_term=runway&utm_content=hero&gclid=g&fbclid=f",
+  );
+
+  const sent = beforeSendPostHog({
+    event: "$pageview",
+    properties: { $current_url: href, utm_source: "x" },
+  });
+  assert.equal(sent?.event, "$pageview");
+  assert.equal(sent?.properties?.$current_url, "https://founderconsole.ai/");
+  assert.equal(sent?.properties?.utm_source, "x");
+  assert.equal(JSON.stringify(sent?.properties).includes("token"), false);
+  assert.equal(JSON.stringify(sent?.properties).includes("utm_source=x"), false);
 });
 
 test("PostHog init uses before_send and still emits $pageview", () => {
@@ -253,11 +280,15 @@ test("PostHog init uses before_send and still emits $pageview", () => {
   assert.match(posthogLib, /event:\s*"\$pageview"/);
 });
 
-test("every gtag config and page hit sets page_location to origin+pathname", () => {
+test("every gtag config and page hit sets a filtered page_location", () => {
   const indexHtml = readFileSync("client/index.html", "utf8");
-  assert.match(indexHtml, /page_location:\s*location\.origin\s*\+\s*location\.pathname/);
-  assert.match(indexHtml, /page_referrer:\s*pageReferrer/);
-  assert.match(indexHtml, /u\.origin\s*\+\s*u\.pathname/);
+  assert.match(indexHtml, /function fcGaUrl\(raw\)/);
+  for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"]) {
+    assert.match(indexHtml, new RegExp(key));
+  }
+  assert.match(indexHtml, /page_location:\s*fcGaUrl\(location\.href\)/);
+  assert.match(indexHtml, /page_referrer:\s*fcGaUrl\(document\.referrer/);
+  assert.doesNotMatch(indexHtml, /page_location:\s*location\.href/);
   assert.doesNotMatch(indexHtml, /gtag\(\s*'config'\s*,\s*'G-NJKW0TGC4C'\s*\)/);
 
   const files = [

@@ -7,24 +7,28 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      // page_view must not include ?token= / ?code= / #hash. Same rule as
-      // client/src/lib/analytics-url.ts gtagPageFields.
-      gtag('config', 'G-NJKW0TGC4C', (function () {
-        var ref = document.referrer || '';
-        var pageReferrer = '';
-        if (ref) {
-          try {
-            var u = new URL(ref);
-            pageReferrer = u.origin + u.pathname;
-          } catch (e) {
-            pageReferrer = ref.split('?')[0].split('#')[0];
+      // Same allow-list as client/src/lib/analytics-url.ts GA_QUERY_ALLOW.
+      // Keep campaign params. Drop token, code, every other param, and the hash.
+      function fcGaUrl(raw) {
+        if (!raw) return '';
+        var allow = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid'];
+        try {
+          var u = new URL(raw, location.origin);
+          var kept = new URLSearchParams();
+          for (var i = 0; i < allow.length; i++) {
+            var value = u.searchParams.get(allow[i]);
+            if (value) kept.append(allow[i], value);
           }
+          var search = kept.toString();
+          return u.origin + u.pathname + (search ? '?' + search : '');
+        } catch (e) {
+          return String(raw).split('#')[0].split('?')[0];
         }
-        return {
-          page_location: location.origin + location.pathname,
-          page_referrer: pageReferrer
-        };
-      })());
+      }
+      gtag('config', 'G-NJKW0TGC4C', {
+        page_location: fcGaUrl(location.href),
+        page_referrer: fcGaUrl(document.referrer || '')
+      });
     </script>
     <!-- PostHog is initialized once, from client/src/lib/posthog.ts (initPostHog).
          An inline array.js snippet used to live here as well, which meant two

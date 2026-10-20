@@ -5,9 +5,23 @@
  * $current_url, $referrer, $initial_* url/referrer, $set/$set_once, and
  * session-replay href. GA4 does the same for page_location / page_referrer.
  *
- * Strip those from every URL property on every path. Campaign keys
- * (utm_*, fbclid, gclid) are a separate first-touch capture and stay.
+ * PostHog URL properties are reduced to origin + pathname on every path.
+ * Campaign keys (utm_*, fbclid, gclid) stay as their own event properties.
+ *
+ * GA4 page_location and page_referrer keep an allow-list of campaign query
+ * params and drop every other param and the hash.
  */
+
+/** Kept on GA page_location / page_referrer. Everything else in the query is dropped. */
+export const GA_QUERY_ALLOW = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "gclid",
+  "fbclid",
+] as const;
 
 export type PostHogBeforeSendEvent = {
   event: string;
@@ -61,24 +75,41 @@ export function stripQueryAndHash(value: string): string {
   }
 }
 
+/**
+ * GA page URL: origin + pathname, plus allow-listed campaign params.
+ * token, code, and every other param are removed. The hash is removed.
+ */
+export function gaPageUrl(value: string): string {
+  if (typeof value !== "string" || value.length === 0) return value;
+  try {
+    const url = new URL(value, "https://founderconsole.ai");
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return stripQueryAndHash(value);
+    }
+    const kept = new URLSearchParams();
+    for (const key of GA_QUERY_ALLOW) {
+      const param = url.searchParams.get(key);
+      if (param) kept.append(key, param);
+    }
+    const search = kept.toString();
+    const path = url.pathname || "/";
+    const query = search ? `?${search}` : "";
+    const absolute = /^[a-z][a-z0-9+.-]*:/i.test(value);
+    if (absolute) return url.origin + path + query;
+    if (value.startsWith("//")) return `//${url.host}${path}${query}`;
+    return path + query;
+  } catch {
+    return stripQueryAndHash(value);
+  }
+}
+
 export function gtagPageFields(
   pageUrl: string,
   referrer = "",
 ): { page_location: string; page_referrer: string } {
-  let page_location = pageUrl;
-  try {
-    const url = new URL(pageUrl, "https://founderconsole.ai");
-    if (url.protocol === "http:" || url.protocol === "https:") {
-      page_location = url.origin + url.pathname;
-    } else {
-      page_location = stripQueryAndHash(pageUrl);
-    }
-  } catch {
-    page_location = stripQueryAndHash(pageUrl);
-  }
   return {
-    page_location,
-    page_referrer: referrer ? stripQueryAndHash(referrer) : "",
+    page_location: gaPageUrl(pageUrl),
+    page_referrer: referrer ? gaPageUrl(referrer) : "",
   };
 }
 

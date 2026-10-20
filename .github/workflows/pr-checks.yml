@@ -64,6 +64,9 @@ jobs:
       - name: gtag must not receive user_email
         run: npx tsx --test server/tests/no-gtag-user-email.test.ts
 
+      - name: PostHog URL token strip
+        run: npx tsx --test server/tests/posthog-url-token.test.ts
+
       - name: lead-form-viewed tests
         run: npx tsx server/tests/lead-form-viewed.test.ts
 
