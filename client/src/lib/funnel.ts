@@ -1,3 +1,4 @@
+import { withGtagPage } from './analytics-url';
 import { trackEvent as posthogTrack } from './posthog';
 import { trackXConversion } from './xads';
 
@@ -16,7 +17,7 @@ import { trackXConversion } from './xads';
  */
 export function trackFunnel(name: string, params: Record<string, unknown> = {}) {
   if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('event', name, params);
+    (window as any).gtag('event', name, withGtagPage(params));
   }
   posthogTrack(name, params as Record<string, any>);
   trackXConversion(name, params);

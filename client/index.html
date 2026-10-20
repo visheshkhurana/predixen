@@ -7,7 +7,24 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-NJKW0TGC4C');
+      // page_view must not include ?token= / ?code= / #hash. Same rule as
+      // client/src/lib/analytics-url.ts gtagPageFields.
+      gtag('config', 'G-NJKW0TGC4C', (function () {
+        var ref = document.referrer || '';
+        var pageReferrer = '';
+        if (ref) {
+          try {
+            var u = new URL(ref);
+            pageReferrer = u.origin + u.pathname;
+          } catch (e) {
+            pageReferrer = ref.split('?')[0].split('#')[0];
+          }
+        }
+        return {
+          page_location: location.origin + location.pathname,
+          page_referrer: pageReferrer
+        };
+      })());
     </script>
     <!-- PostHog is initialized once, from client/src/lib/posthog.ts (initPostHog).
          An inline array.js snippet used to live here as well, which meant two

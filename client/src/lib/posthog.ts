@@ -1,3 +1,4 @@
+import { beforeSendPostHog } from "./analytics-url";
 import { flushPostHogQueue, type PostHogClient, type QueuedPostHogCall } from "./posthog-queue";
 
 // PostHog client tokens are public by design (they ship in the JS bundle).
@@ -66,6 +67,11 @@ async function loadAndInit(): Promise<PostHogSdk | null> {
       session_recording: {
         maskAllInputs: true,
       },
+      // sanitize_properties logs on every event in posthog-js 1.438+.
+      // before_send strips ?query and #hash from URL properties on every path
+      // so verify / unsubscribe / reset / oauth tokens never leave the browser.
+      // Event names, including $pageview, are unchanged. utm_* stays.
+      before_send: beforeSendPostHog,
     });
     client = sdk;
     flushPostHogQueue(sdk, pending);
