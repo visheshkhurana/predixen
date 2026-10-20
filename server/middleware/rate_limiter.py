@@ -391,12 +391,14 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 logger.error(f"Middleware error: {exc}")
                 return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
-        # Count leads before the database and before the route. The consent
-        # 400 is the string create_lead raises after its own counter, and a
-        # body that fails validation never enters that function. Either way
-        # this cap has to answer first. The database counter fails open, which
-        # dropped the limit whenever the insert threw.
+        # Count every POST /leads before the database and before the route
+        # reads the body. Consent-true and consent-false share this key. A
+        # 400 from create_lead, and a 422 from Pydantic, both happen only
+        # after this counter has already recorded the request. The database
+        # counter fails open, so the in-process window is what answers when
+        # the insert throws.
         if category == "leads":
+            logger.info("lead bucket key=%s", identifier)
             blocked, retry_after = lead_window_limited(identifier, limit=int(limit))
             if blocked:
                 return self._too_many(identifier, category, limit, retry_after)

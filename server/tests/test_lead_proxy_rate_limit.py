@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -26,8 +27,9 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.testclient import TestClient
 
 from server.middleware.peer import RecordPeer
 from server.middleware.rate_limiter import (
@@ -269,6 +271,57 @@ def test_lead_window_blocks_the_ninth_when_the_database_fails_open():
     assert json.loads(blocked.body)["detail"].startswith("Rate limit exceeded")
     assert other.status_code == 400
     assert calls["n"] == 9
+
+
+def test_nine_consent_true_posts_are_limited_before_the_handler(caplog):
+    """Consent-true posts use the same bucket and never reach the handler on the 9th."""
+    from server.api.leads import LeadCreate
+
+    app = FastAPI()
+    app.add_middleware(RateLimiterMiddleware)
+    calls = {"n": 0}
+
+    # This module uses postponed annotations, so a local LeadCreate hint is a
+    # string and FastAPI would treat it as a query param. Bind the real model
+    # before the route is registered.
+    def create(data: LeadCreate):
+        calls["n"] += 1
+        if data.consent is not True:
+            raise HTTPException(status_code=400, detail="Consent is required")
+        if not (data.source_page or "").strip():
+            raise HTTPException(status_code=400, detail="A source page is required")
+        return {"status": "ok"}
+
+    create.__annotations__ = {"data": LeadCreate}
+    app.post("/leads")(create)
+
+    def allow_db(self, key, endpoint, limit):
+        return (True, max(limit - 1, 0), 0)
+
+    false_body = {"email": "a@example.com", "consent": False}
+    true_body = {
+        "email": "a@example.com",
+        "consent": True,
+        "source_page": "/runway-calculator",
+    }
+    with patch("server.middleware.rate_limiter._LEAD_HITS", {}), patch.object(
+        RateLimiterMiddleware, "_check_rate_limit", allow_db
+    ), caplog.at_level(logging.INFO, logger="server.middleware.rate_limiter"):
+        client = TestClient(app)
+        statuses = [client.post("/leads", json=false_body).status_code for _ in range(4)]
+        statuses += [client.post("/leads", json=true_body).status_code for _ in range(4)]
+        ninth = client.post("/leads", json=true_body)
+        statuses.append(ninth.status_code)
+
+    assert statuses == [400, 400, 400, 400, 200, 200, 200, 200, 429]
+    assert calls["n"] == 8
+    assert ninth.json()["detail"].startswith("Rate limit exceeded")
+    keys = [
+        rec.message.split("lead bucket key=", 1)[1]
+        for rec in caplog.records
+        if rec.message.startswith("lead bucket key=")
+    ]
+    assert keys == ["testclient"] * 9
 
 
 def test_string_window_start_is_not_a_fail_open():
