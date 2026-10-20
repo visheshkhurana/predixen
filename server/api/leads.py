@@ -347,6 +347,29 @@ LEAD_CAPTURED_SOURCE_PAGES = frozenset(
 )
 LEAD_CAPTURED_SOURCE_PAGE_OTHER = "other"
 
+# Lead-form source slugs, plus the server default for a hand-entered address.
+# location and source on lead_captured are this set or "other".
+LEAD_CAPTURED_SOURCES = frozenset(
+    {
+        "burn-multiple",
+        "default-alive",
+        "dilution",
+        "ltv-cac",
+        "runway-calculator",
+        "survival-simulator",
+        "website",
+    }
+)
+
+# Public site hostnames. x-forwarded-host is caller-controlled, so anything
+# else — another app host, a port, a phone number — is "other".
+LEAD_CAPTURED_HOSTS = frozenset(
+    {
+        "founderconsole.ai",
+        "www.founderconsole.ai",
+    }
+)
+
 # Founder financials and other calculator outputs. The result email and the
 # lead row keep what they already store. lead_captured never copies these keys.
 _LEAD_CAPTURED_RESULT_KEYS = frozenset(
@@ -371,6 +394,37 @@ def _allowed_source_page(value: object, markers: tuple[str, ...]) -> str:
     if text in LEAD_CAPTURED_SOURCE_PAGES:
         return text
     return LEAD_CAPTURED_SOURCE_PAGE_OTHER
+
+
+def _allowed_source(value: object, markers: tuple[str, ...]) -> str:
+    """location and source. Empty stays the website default; anything unknown is other."""
+    raw = "" if value is None else str(value).strip()
+    if not raw:
+        raw = "website"
+    text = _scrub_email(raw, markers, "")
+    if text in LEAD_CAPTURED_SOURCES:
+        return text
+    return LEAD_CAPTURED_SOURCE_PAGE_OTHER
+
+
+def _allowed_host(value: object, markers: tuple[str, ...]) -> str:
+    text = _scrub_email(value, markers).strip()
+    if text in LEAD_CAPTURED_HOSTS:
+        return text
+    return LEAD_CAPTURED_SOURCE_PAGE_OTHER
+
+
+def _without_utm(value: object) -> object:
+    """Drop every utm_* key. Campaign params are not lead_captured properties."""
+    if isinstance(value, dict):
+        return {
+            key: _without_utm(item)
+            for key, item in value.items()
+            if not str(key).lower().startswith("utm_")
+        }
+    if isinstance(value, list):
+        return [_without_utm(item) for item in value]
+    return value
 
 
 def _request_host(request: Optional[Request]) -> str:
@@ -400,13 +454,14 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
     it is a random opt-in id. The address and any hash of it are stripped from
     the id and from every property. runway_months and the other calculator
     results are not properties. plan is included only when it is in
-    LEAD_CAPTURED_PLANS. source_page is included only when it is in
-    LEAD_CAPTURED_SOURCE_PAGES; every other value is "other". Does not call
-    identify or reset anyone.
+    LEAD_CAPTURED_PLANS. source and location are a LEAD_CAPTURED_SOURCES value
+    or "other". source_page is a LEAD_CAPTURED_SOURCE_PAGES value or "other".
+    host is a LEAD_CAPTURED_HOSTS value or "other". utm_* keys are never
+    properties. Does not call identify or reset anyone.
     """
     try:
         markers = _email_markers(str(data.email))
-        location = _scrub_email((data.source or "website").strip() or "website", markers, "website") or "website"
+        location = _allowed_source(data.source, markers)
         distinct_id, distinct_id_source = _event_distinct_id(data)
         if _mentions_email(distinct_id, markers):
             distinct_id, distinct_id_source = f"optin:{uuid.uuid4().hex}", "anonymous"
@@ -415,7 +470,7 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
             "source": location,
             "created": created,
             "distinct_id_source": distinct_id_source,
-            "host": _scrub_email(host, markers),
+            "host": _allowed_host(host, markers),
             "source_page": _allowed_source_page(data.source_page, markers),
         }
         plan = _allowed_plan(data.plan, markers)
@@ -423,6 +478,7 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
             properties["plan"] = plan
         for key in _LEAD_CAPTURED_RESULT_KEYS:
             properties.pop(key, None)
+        properties = _without_utm(properties)
         posthog_capture(
             "lead_captured",
             distinct_id,

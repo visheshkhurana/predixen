@@ -7,9 +7,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from server.api.leads import (
+    LEAD_CAPTURED_HOSTS,
     LEAD_CAPTURED_PLANS,
     LEAD_CAPTURED_SOURCE_PAGE_OTHER,
     LEAD_CAPTURED_SOURCE_PAGES,
+    LEAD_CAPTURED_SOURCES,
     LeadCreate,
     _emit_lead_captured,
     _lead_distinct_id,
@@ -365,15 +367,161 @@ def test_allow_lists_match_the_lead_form_pages():
     root = Path(__file__).resolve().parents[2] / "client" / "src"
     plans: set[str] = set()
     pages: set[str] = set()
+    sources: set[str] = set()
     for path in root.rglob("*.tsx"):
         text = path.read_text()
         if "CalculatorEmailOptIn" not in text:
             continue
         plans.update(re.findall(r'\bplan="([^"]+)"', text))
         pages.update(re.findall(r'\bsourcePage="([^"]+)"', text))
+        sources.update(re.findall(r'\bsource="([^"]+)"', text))
     assert plans == set(LEAD_CAPTURED_PLANS)
     assert pages == set(LEAD_CAPTURED_SOURCE_PAGES)
+    assert sources == set(LEAD_CAPTURED_PLANS)
+    assert set(LEAD_CAPTURED_SOURCES) == sources | {"website"}
+    assert LEAD_CAPTURED_HOSTS == frozenset({"founderconsole.ai", "www.founderconsole.ai"})
     assert LEAD_CAPTURED_SOURCE_PAGE_OTHER not in LEAD_CAPTURED_SOURCE_PAGES
+
+
+def test_emit_replaces_arbitrary_source_with_other():
+    for raw in ("555-123-4567", "Jane Founder", "utm_source=newsletter"):
+        data = LeadCreate(
+            email="founder@example.com",
+            source=raw,
+            source_page="/tools/runway-calculator",
+            plan="runway-calculator",
+        )
+        with patch("server.api.leads.posthog_capture") as capture:
+            _emit_lead_captured(data, created=True, host="founderconsole.ai")
+        properties = capture.call_args.args[2]
+        assert properties["source"] == "other"
+        assert properties["location"] == "other"
+        assert raw not in properties["source"]
+        assert raw not in properties["location"]
+        assert raw not in " ".join(str(value) for value in properties.values())
+
+
+def test_emit_keeps_website_and_the_six_lead_form_sources():
+    for source in (
+        "website",
+        "runway-calculator",
+        "burn-multiple",
+        "dilution",
+        "ltv-cac",
+        "default-alive",
+        "survival-simulator",
+    ):
+        data = LeadCreate(
+            email="founder@example.com",
+            source=f"  {source}  ",
+            source_page="/tools/runway-calculator",
+        )
+        with patch("server.api.leads.posthog_capture") as capture:
+            _emit_lead_captured(data, created=True, host="www.founderconsole.ai")
+        properties = capture.call_args.args[2]
+        assert properties["source"] == source
+        assert properties["location"] == source
+        assert properties["host"] == "www.founderconsole.ai"
+
+
+def test_emit_restricts_host_to_the_public_site():
+    data = LeadCreate(
+        email="founder@example.com",
+        source="website",
+        source_page="/tools/runway-calculator",
+    )
+    for host in ("founderconsole.ai", "www.founderconsole.ai"):
+        with patch("server.api.leads.posthog_capture") as capture:
+            _emit_lead_captured(data, created=True, host=host)
+        assert capture.call_args.args[2]["host"] == host
+
+    for host in (
+        "app.founderconsole.ai",
+        "staging.founderconsole.ai",
+        "localhost",
+        "localhost:5000",
+        "founderconsole.ai:443",
+        "FOUNDERCONSOLE.AI",
+        "evil.example",
+        "555-0100",
+        "Jane Founder",
+    ):
+        with patch("server.api.leads.posthog_capture") as capture:
+            _emit_lead_captured(data, created=True, host=host)
+        sent = capture.call_args.args[2]
+        assert sent["host"] == "other"
+        assert host not in sent["host"]
+        assert host not in " ".join(str(value) for value in sent.values())
+
+
+def test_lead_captured_properties_never_include_utm_keys():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.api.leads import get_db, router
+
+    utm = {
+        "utm_source": "newsletter",
+        "utm_medium": "email",
+        "utm_campaign": "spring-2026",
+        "utm_content": "hero-cta",
+        "utm_term": "runway-months",
+    }
+    existing = MagicMock()
+    existing.consent_status = None
+    for key, value in utm.items():
+        setattr(existing, key, value)
+    existing.tags = {"utm_source": "newsletter", "utm_campaign": "spring-2026"}
+    db = MagicMock()
+    db.query.return_value.filter.return_value.one_or_none.return_value = existing
+
+    app = FastAPI()
+    app.include_router(router)
+
+    def _override():
+        yield db
+
+    app.dependency_overrides[get_db] = _override
+    client = TestClient(app)
+    with patch("server.api.leads.posthog_capture") as capture:
+        response = client.post(
+            "/leads",
+            params=utm,
+            json={
+                "email": "utm-lead@example.com",
+                "source": "runway-calculator",
+                "source_page": "/tools/runway-calculator?utm_source=newsletter&utm_campaign=spring-2026",
+                "plan": "runway-calculator",
+                "consent": True,
+                "notes": "utm_source=newsletter utm_campaign=spring-2026",
+                **utm,
+            },
+            headers={"x-forwarded-host": "founderconsole.ai"},
+        )
+
+    assert response.status_code == 200, response.text
+    capture.assert_called_once()
+    assert capture.call_args.args[0] == "lead_captured"
+    properties = capture.call_args.args[2]
+
+    def _assert_no_utm(value: object) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                assert not str(key).lower().startswith("utm_")
+                _assert_no_utm(item)
+        elif isinstance(value, list):
+            for item in value:
+                _assert_no_utm(item)
+
+    _assert_no_utm(properties)
+    blob = " ".join(str(value) for value in properties.values())
+    for value in (*utm.values(), "utm_source", "utm_campaign", "utm_medium"):
+        assert value not in blob
+    assert existing.utm_source == "newsletter"
+    assert existing.utm_campaign == "spring-2026"
+    assert properties["host"] == "founderconsole.ai"
+    assert properties["source"] == "runway-calculator"
+    assert properties["source_page"] == "other"
 
 
 def test_successful_save_queues_exactly_one_lead_captured():

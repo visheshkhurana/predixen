@@ -126,7 +126,9 @@ def test_posthog_capture_omits_email_and_every_hash_of_it():
     assert body["event"] == "lead_captured"
     assert body["distinct_id"].startswith("optin:")
     assert body["properties"]["distinct_id_source"] == "anonymous"
-    assert body["properties"]["location"] == "website"
+    assert body["properties"]["location"] == "other"
+    assert body["properties"]["source"] == "other"
+    assert body["properties"]["host"] == "other"
     assert body["properties"]["source_page"] == "other"
     assert markers[1] not in body["properties"]["source_page"]
     assert "plan" not in body["properties"]
