@@ -21,6 +21,7 @@ import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
+import { withGtagPage } from "@/lib/analytics-url";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
 import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
@@ -238,7 +239,7 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   useEffect(() => {
     if (user?.id && user?.email) {
       if ((window as any).gtag) {
-        (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(user.id) });
+        (window as any).gtag('config', 'G-NJKW0TGC4C', withGtagPage({ user_id: String(user.id) }));
       }
     }
   }, [user]);

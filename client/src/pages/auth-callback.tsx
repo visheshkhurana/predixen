@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { useFounderStore } from '@/store/founderStore';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/api/client';
+import { withGtagPage } from '@/lib/analytics-url';
 import { trackFunnel } from '@/lib/funnel';
 import { Loader2 } from 'lucide-react';
 
@@ -53,8 +54,8 @@ export default function AuthCallback() {
     });
 
     if (typeof window !== 'undefined' && (window as any).gtag) {
-      (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: userId });
-      (window as any).gtag('event', 'login', { method: 'oauth' });
+      (window as any).gtag('config', 'G-NJKW0TGC4C', withGtagPage({ user_id: userId }));
+      (window as any).gtag('event', 'login', withGtagPage({ method: 'oauth' }));
     }
 
     (async () => {

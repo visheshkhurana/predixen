@@ -3,6 +3,7 @@ import { useLocation, Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { api, ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
+import { withGtagPage } from '@/lib/analytics-url';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw, UserPlus } from 'lucide-react';
 
@@ -36,8 +37,8 @@ export default function DemoRedirectPage() {
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
 
       if (typeof window !== 'undefined' && (window as any).gtag) {
-        (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(result.user_id) });
-        (window as any).gtag('event', 'login', { method: 'demo' });
+        (window as any).gtag('config', 'G-NJKW0TGC4C', withGtagPage({ user_id: String(result.user_id) }));
+        (window as any).gtag('event', 'login', withGtagPage({ method: 'demo' }));
       }
 
       // HAG-453: this used to swallow a failed or empty companies.list() and

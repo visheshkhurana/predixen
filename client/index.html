@@ -7,7 +7,44 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-NJKW0TGC4C');
+      // Same allow-list as client/src/lib/analytics-url.ts GA_QUERY_ALLOW.
+      // campaignValueHasEmail matches analytics-url.ts: decoded "@" or "%40".
+      // Keep those campaign params. Drop token, code, fbclid, the hash, and
+      // any allowed value that looks like an email.
+      function campaignValueHasEmail(value) {
+        var current = value;
+        for (var i = 0; i < 5; i++) {
+          var decoded;
+          try {
+            decoded = decodeURIComponent(current);
+          } catch (e) {
+            break;
+          }
+          if (decoded === current) break;
+          current = decoded;
+        }
+        return current.indexOf('@') !== -1 || /%40/i.test(current);
+      }
+      function fcGaUrl(raw) {
+        if (!raw) return '';
+        var allow = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid'];
+        try {
+          var u = new URL(raw, location.origin);
+          var kept = new URLSearchParams();
+          for (var i = 0; i < allow.length; i++) {
+            var value = u.searchParams.get(allow[i]);
+            if (value && !campaignValueHasEmail(value)) kept.append(allow[i], value);
+          }
+          var search = kept.toString();
+          return u.origin + u.pathname + (search ? '?' + search : '');
+        } catch (e) {
+          return String(raw).split('#')[0].split('?')[0];
+        }
+      }
+      gtag('config', 'G-NJKW0TGC4C', {
+        page_location: fcGaUrl(location.href),
+        page_referrer: fcGaUrl(document.referrer || '')
+      });
     </script>
     <!-- PostHog is initialized once, from client/src/lib/posthog.ts (initPostHog).
          An inline array.js snippet used to live here as well, which meant two
