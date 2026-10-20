@@ -337,13 +337,11 @@ def _request_host(request: Optional[Request]) -> str:
 
 
 def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None:
-    """Server-side conversion event. Client trackFunnel after fetch is unproven.
+    """The only lead_captured. Queued once after the row commits.
 
-    PostHog project 522965 has calculator_used / cta_click / signup_view but
-    zero lead_captured over 90d, even though the calculator chunk still calls
-    trackFunnel("lead_captured") after a 2xx. Fire here after the row is
-    committed so a successful POST always emits, independent of the browser.
-    The distinct_id is the browser one when the page sent a safe id. Otherwise
+    The browser sends lead_form_submitted with location and host. It does not
+    send lead_captured, so a successful save is not double-counted. The
+    distinct_id is the browser one when the page sent a safe id. Otherwise
     it is a random opt-in id. The address and any hash of it are stripped from
     the id and from every property. Does not call identify or reset anyone.
     """

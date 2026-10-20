@@ -19,10 +19,8 @@ the three things that make this one measurable and honest:
   2. its click is emitted as `cta_click` with a location no other call site
      uses, or the hero's clicks are indistinguishable from the signup button's
      and the experiment cannot be read;
-  3. the "input submitted" half of the required instrumentation already exists
-     as `calculator_used` in runway-calculator.tsx, and HAG-245 forbids touching
-     that file while #88 is open — so this pins both lines and proves they are
-     still exactly as they were.
+  3. the "input submitted" half is `calculator_used` on the runway calculator,
+     once per page load, from the first input event.
 
 The claims assertion reads the whole visible line through `visible_text()`, not
 between tag boundaries: the JSX joining the prompt to its link is `{" "}`, which
@@ -146,15 +144,12 @@ def test_the_cta_can_be_driven_by_the_qa_lab():
     assert 'data-testid="text-hero-calculator-prompt"' in hero
 
 
-def test_the_input_submitted_half_is_already_instrumented_and_unchanged():
-    # The card asked for two events: CTA click and input submitted. The second
-    # already exists, fires once per session on the first edit away from the
-    # defaults, and is in a file HAG-245 fences off while #88 is open. So it is
-    # pinned rather than written.
+def test_the_input_submitted_half_fires_once_on_the_first_input():
+    # calculator_used is the "someone actually used the tool" step. It fires
+    # once per page load from the first input event, with the calculator name.
     src = read(CALCULATOR)
-    assert 'trackFunnel("calculator_used", { calculator: "runway" })' in src
-    assert "if (usageTracked.current) return;" in src, "the once-per-session guard moved"
-    assert "if (!touched) return;" in src, "the 'input actually changed' guard moved"
+    assert 'useCalculatorUsedOnce("runway")' in src
+    assert "onInput={onCalculatorInput}" in src
 
 
 def test_the_hero_copy_was_not_rewritten():

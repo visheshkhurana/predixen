@@ -1,3 +1,4 @@
+import { publicEventProperties } from './calculator-analytics';
 import { trackEvent as posthogTrack } from './posthog';
 import { trackXConversion } from './xads';
 
@@ -12,14 +13,35 @@ import { trackXConversion } from './xads';
  * instrumented — some steps reported to one network and not another, with no
  * way to tell from the outside which. Add networks here, not at call sites.
  *
+ * PostHog goes first, in its own try. gtag used to run before it with no
+ * guard, so a throw from the Google tag skipped the capture entirely and the
+ * caller's catch treated a saved lead as a failed one.
+ *
+ * publicEventProperties is an allow-list and it runs before any destination.
+ * The same filtered object is what PostHog, gtag, and X receive. Calculator
+ * result numbers never leave this function.
+ *
  * Safe no-op when a destination isn't loaded (ad-blockers, SSR, no pixel id).
  */
 export function trackFunnel(name: string, params: Record<string, unknown> = {}) {
-  if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('event', name, params);
+  const safe = publicEventProperties(params);
+  try {
+    posthogTrack(name, safe);
+  } catch (err) {
+    console.debug('[funnel] PostHog capture failed', name, err);
   }
-  posthogTrack(name, params as Record<string, any>);
-  trackXConversion(name, params);
+  try {
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag('event', name, safe);
+    }
+  } catch (err) {
+    console.debug('[funnel] gtag failed', name, err);
+  }
+  try {
+    trackXConversion(name, safe);
+  } catch (err) {
+    console.debug('[funnel] x conversion failed', name, err);
+  }
 }
 
 const FOUNDER_ACTIVATED_KEY = 'fc_founder_activated';

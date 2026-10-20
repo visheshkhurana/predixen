@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import {
@@ -14,6 +14,7 @@ import { useSEO } from "@/lib/seo";
 import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { founderFaqs } from "@/data/founder-faqs";
 import { trackFunnel } from "@/lib/funnel";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
 import {
   ArrowRight,
@@ -87,18 +88,12 @@ export default function RunwayCalculatorPage() {
   const expenses = toNumber(expensesText);
   const growthRate = toNumber(growthText);
 
-  // Fire once, the first time a visitor changes any input away from the
-  // pre-filled example.
-  //
-  // Page views told us nothing useful: 28 people viewed this page and 26 never
-  // touched it, which is invisible if the only event is the CTA click at the
-  // bottom. This is the step that separates "landed here" from "actually asked
-  // the question", and it is the signal ad platforms should optimise toward —
-  // waiting for signups gives them almost no data to learn from.
-  const usageTracked = useRef(false);
+  // Once per page load, on the first input event. Page views do not say
+  // whether anyone asked the question.
+  const onCalculatorInput = useCalculatorUsedOnce("runway");
 
   // The prompt further down is only for the visitor who actually ran the
-  // numbers. The 26-of-28 who bounce off the pre-filled example keep the free
+  // numbers. The ones who bounce off the pre-filled example keep the free
   // tool and nothing else. It starts false, so the prompt is also absent from
   // the prerendered HTML and costs the crawlers nothing.
   const [hasRunNumbers, setHasRunNumbers] = useState(false);
@@ -107,17 +102,15 @@ export default function RunwayCalculatorPage() {
   });
 
   useEffect(() => {
-    if (usageTracked.current) return;
+    if (hasRunNumbers) return;
     const touched =
       cash !== DEFAULTS.cash ||
       revenue !== DEFAULTS.revenue ||
       expenses !== DEFAULTS.expenses ||
       growthRate !== DEFAULTS.growthRate;
     if (!touched) return;
-    usageTracked.current = true;
     setHasRunNumbers(true);
-    trackFunnel("calculator_used", { calculator: "runway" });
-  }, [cash, revenue, expenses, growthRate]);
+  }, [cash, revenue, expenses, growthRate, hasRunNumbers]);
 
   const results = useMemo(() => {
     const monthlyBurn = expenses - revenue;
@@ -210,7 +203,7 @@ export default function RunwayCalculatorPage() {
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12">
           <div className="grid gap-8 lg:grid-cols-5">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6" onInput={onCalculatorInput}>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -452,7 +445,6 @@ export default function RunwayCalculatorPage() {
               runwayMonths={leadNumber(results.runwayMonths)}
               runwayDate={leadIsoDate(results.runwayMonths)}
               monthlyBurn={leadNumber(results.monthlyBurn)}
-              trackExtra={{ runway_months: results.runwayMonths }}
             />
           </div>
         </section>

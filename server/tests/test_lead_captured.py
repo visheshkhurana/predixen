@@ -148,6 +148,36 @@ def test_capture_swallows_network_errors():
         assert posthog_svc.capture("lead_captured", "lead:abc") is False
 
 
+def test_successful_save_queues_exactly_one_lead_captured():
+    """A committed save, new or repeat, queues lead_captured once and nothing else named that."""
+    background = MagicMock()
+    db = MagicMock()
+    db.query.return_value.filter.return_value.one_or_none.return_value = None
+    data = LeadCreate(
+        email="founder@example.com",
+        source="runway-calculator",
+        source_page="/tools/runway-calculator",
+        consent=True,
+        runway_months="6",
+        runway_date="2027-03-01",
+    )
+
+    assert create_lead(data, background, _Request(), db) == {"status": "ok"}
+    emits = [call for call in background.add_task.call_args_list if call.args[0] is _emit_lead_captured]
+    assert len(emits) == 1
+
+    existing = MagicMock()
+    existing.consent_status = None
+    repeat_background = MagicMock()
+    repeat_db = MagicMock()
+    repeat_db.query.return_value.filter.return_value.one_or_none.return_value = existing
+    assert create_lead(data, repeat_background, _Request(), repeat_db) == {"status": "ok"}
+    repeat_emits = [
+        call for call in repeat_background.add_task.call_args_list if call.args[0] is _emit_lead_captured
+    ]
+    assert len(repeat_emits) == 1
+
+
 def test_create_lead_queues_capture_after_commit():
     data = LeadCreate(
         email="founder@example.com",
