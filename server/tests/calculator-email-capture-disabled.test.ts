@@ -53,19 +53,29 @@ function installDom() {
     }));
   if (g.document?.createElement) return;
   const node = () => ({
+    style: {},
     setAttribute() {},
+    getAttribute() {
+      return null;
+    },
     appendChild() {},
+    removeChild() {},
     remove() {},
+    addEventListener() {},
+    removeEventListener() {},
+    classList: { add() {}, remove() {}, contains() { return false; } },
     className: "",
     type: "",
     text: "",
     async: false,
     src: "",
+    ownerDocument: null as unknown,
   });
-  g.document = {
+  const documentMock = {
     title: "",
+    documentElement: node(),
     head: { appendChild() {}, removeChild() {} },
-    body: { appendChild() {} },
+    body: { appendChild() {}, removeChild() {} },
     createElement: node,
     querySelector() {
       return null;
@@ -77,6 +87,7 @@ function installDom() {
       return [{ parentNode: { insertBefore() {} } }];
     },
   };
+  g.document = documentMock;
 }
 
 const PAGES: { file: string; path: string; resultTestId: string }[] = [
