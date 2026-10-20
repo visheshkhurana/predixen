@@ -332,3 +332,24 @@ def test_simulation_v2_call_is_redacted_and_audited(llm_sink, monkeypatch):
     assert logs[0].user_id == user.id
     assert logs[0].endpoint == "chat.completions"
     assert any(finding.get("type") == "email" for finding in (logs[0].pii_findings_json or []))
+
+
+def test_simulation_v2_closes_session_when_body_setup_fails(llm_sink, monkeypatch):
+    """A failure after SessionLocal() opens must close the session.
+
+    The posted body reaches the handler. inputs_for_simulation_request then
+    rejects it. That used to leak the audit session.
+    """
+    db = RecordingDB()
+    monkeypatch.setattr(simulation_v2, "SessionLocal", lambda: db)
+
+    def _reject_malformed(request):
+        assert request.total_rounds == 6
+        raise ValueError("malformed simulation body")
+
+    monkeypatch.setattr(simulation_v2, "inputs_for_simulation_request", _reject_malformed)
+
+    client = _client(db, _free_user(3))
+    with pytest.raises(ValueError, match="malformed simulation body"):
+        client.post("/simulation/v2/run", json={"total_rounds": 6, "unexpected": "junk"})
+    assert db.closed is True
