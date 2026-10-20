@@ -13,8 +13,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import React from "react";
+import TestRenderer from "react-test-renderer";
+import { Route, Router, Switch } from "wouter";
+import { memoryLocation } from "wouter/memory-location";
 import {
   beforeSendPostHog,
+  bindSessionRecordingClient,
   createRecordingRuntime,
   type RecordingRuntime,
   type SessionRecordingControls,
@@ -23,6 +28,7 @@ import {
   surfaceForPath,
   syncSessionRecording,
 } from "../../client/src/lib/sessionRecording";
+import { SessionRecordingSync } from "../../client/src/components/SessionRecordingSync.tsx";
 
 const posthogLib = readFileSync("client/src/lib/posthog.ts", "utf8");
 const recordingLib = readFileSync("client/src/lib/sessionRecording.ts", "utf8");
@@ -103,7 +109,13 @@ test("init disables autocapture and session recording, and masks text", () => {
 });
 
 test("SPA route changes sync recording, and named events are not gated", () => {
-  assert.match(app, /syncSessionRecording\(location\)/);
+  const routerSrc = app.slice(app.indexOf("function Router()"), app.indexOf("function CopilotDrawer"));
+  const layoutSrc = app.slice(app.indexOf("function AppLayout("), app.indexOf("function AnimatedRouteWrapper"));
+  const syncSrc = readFileSync("client/src/components/SessionRecordingSync.tsx", "utf8");
+  // Replay follows the route switch, not the shell that bails out for signup and onboarding.
+  assert.match(routerSrc, /<SessionRecordingSync>[\s\S]*<Switch>/);
+  assert.match(syncSrc, /syncSessionRecording\(location\)/);
+  assert.doesNotMatch(layoutSrc, /syncSessionRecording/);
   assert.match(app, /useEffect\(\(\) => \{\s*trackPageView\(location\);/);
 
   const trackPage = posthogLib.slice(
@@ -264,4 +276,83 @@ test("calculator query strings are stripped from PostHog URL properties", () => 
   assert.equal(frames[0].data.href, "https://founderconsole.ai/survival-simulator");
   assert.equal(frames[0].data.width, 1200);
   assert.deepEqual(frames[1].data.node, { id: 1 });
+});
+
+test("route sync above the switch stops recording on /signup and does not restart it on /onboarding", async () => {
+  const savedWindow = (globalThis as { window?: unknown }).window;
+  const store = new Map<string, string>([["cookie-consent", "accepted"]]);
+  const localStorage = {
+    getItem(key: string) {
+      return store.has(key) ? store.get(key)! : null;
+    },
+    setItem(key: string, value: string) {
+      store.set(key, value);
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    clear() {
+      store.clear();
+    },
+  };
+  const windowMock = { localStorage };
+  (globalThis as { window?: unknown }).window = windowMock;
+
+  const calls: string[] = [];
+  bindSessionRecordingClient({
+    startSessionRecording() {
+      calls.push("start");
+    },
+    stopSessionRecording() {
+      calls.push("stop");
+    },
+  });
+  // bind applies the default core surface before the first route is known.
+  calls.length = 0;
+
+  const { hook, navigate } = memoryLocation({ path: "/" });
+  let tree: TestRenderer.ReactTestRenderer | undefined;
+  try {
+    await TestRenderer.act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          Router,
+          { hook },
+          React.createElement(
+            SessionRecordingSync,
+            null,
+            React.createElement(
+              Switch,
+              null,
+              React.createElement(Route, { path: "/signup" }, "signup"),
+              React.createElement(Route, { path: "/onboarding" }, "onboarding"),
+              React.createElement(Route, { path: "/" }, "home"),
+            ),
+          ),
+        ),
+      );
+    });
+
+    assert.equal(tree?.toJSON(), "home");
+    assert.equal(calls.at(-1), "start");
+
+    await TestRenderer.act(async () => {
+      navigate("/signup");
+    });
+    assert.equal(tree?.toJSON(), "signup");
+    assert.equal(calls.at(-1), "stop");
+    const afterSignup = calls.length;
+
+    await TestRenderer.act(async () => {
+      navigate("/onboarding");
+    });
+    assert.equal(tree?.toJSON(), "onboarding");
+    assert.ok(calls.length > afterSignup);
+    assert.deepEqual(calls.slice(afterSignup), ["stop"]);
+    assert.ok(!calls.slice(afterSignup).includes("start"));
+  } finally {
+    tree?.unmount();
+    bindSessionRecordingClient(null);
+    (globalThis as { window?: unknown }).window = savedWindow;
+  }
 });

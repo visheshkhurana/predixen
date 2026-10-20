@@ -21,7 +21,8 @@ import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
-import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent, syncSessionRecording } from "@/lib/posthog";
+import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
+import { SessionRecordingSync } from "@/components/SessionRecordingSync";
 import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
 import {
@@ -310,6 +311,7 @@ function PublicOrAuthHome() {
 
 function Router() {
   return (
+    <SessionRecordingSync>
     <ErrorBoundary
       onError={(error) => {
         // Log to console with context
@@ -619,6 +621,7 @@ function Router() {
       </Switch>
       </Suspense>
     </ErrorBoundary>
+    </SessionRecordingSync>
   );
 }
 
@@ -844,7 +847,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     trackPageView(location);
-    syncSessionRecording(location);
   }, [location]);
 
   // Identify on sign-in; reset ONLY on an actual sign-out.
