@@ -134,10 +134,12 @@ export function initPostHog() {
 }
 
 export function identifyUser(userId: number, email: string, role?: string) {
+  // Callers still pass email. PostHog gets the numeric id as distinct_id and role only.
+  void email;
   dispatch({
     kind: "identify",
     distinctId: String(userId),
-    traits: { email, role: role || "viewer" },
+    traits: { role: role || "viewer" },
   });
 }
 
