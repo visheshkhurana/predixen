@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/sheet";
 import { FCLogo } from "@/components/FCLogo";
 import { MarketingBackground } from "@/components/marketing/MarketingBackground";
-import { metaPageView } from "@/lib/metaPixel";
 import { setTrackingSurface } from "@/lib/consentTracking";
 import { trackFunnel } from "@/lib/funnel";
 import { aiCitation } from "@/data/ai-citation";
@@ -85,10 +84,6 @@ function NavLink({ href, label, onClick }: { href: string; label: string; onClic
 function Header() {
   const [open, setOpen] = useState(false);
   const [location] = useLocation();
-
-  useEffect(() => {
-    metaPageView();
-  }, [location]);
 
   useEffect(() => {
     window.scrollTo(0, 0);

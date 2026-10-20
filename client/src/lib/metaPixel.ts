@@ -3,12 +3,16 @@
  *
  * The pixel script is not injected here. client/src/lib/consentTracking.ts
  * is the only loader, and it injects the pixel only on marketing pages after
- * cookie-consent === "accepted". Calling these helpers from the core app
- * (billing, and any route outside MarketingLayout) must not fetch the script.
+ * cookie-consent === "accepted". These helpers also no-op on the core surface
+ * even if the script was installed earlier in the session.
  */
+
+import { getTrackingSurface, hasTrackingConsent, readCookieConsent } from "./consentTracking";
 
 function pixelReady(): boolean {
   if (typeof window === "undefined") return false;
+  if (getTrackingSurface() !== "marketing") return false;
+  if (!hasTrackingConsent(readCookieConsent())) return false;
   const w = window as unknown as {
     __fcConsentMetaPixel?: boolean;
     fbq?: (...args: unknown[]) => void;
