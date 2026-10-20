@@ -8,16 +8,21 @@
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       // Same allow-list as client/src/lib/analytics-url.ts GA_QUERY_ALLOW.
-      // Keep campaign params. Drop token, code, every other param, and the hash.
+      // campaignValueHasEmail matches analytics-url.ts: decoded "@" or "%40".
+      // Keep those campaign params. Drop token, code, fbclid, the hash, and
+      // any allowed value that looks like an email.
+      function campaignValueHasEmail(value) {
+        return value.indexOf('@') !== -1 || /%40/i.test(value);
+      }
       function fcGaUrl(raw) {
         if (!raw) return '';
-        var allow = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid'];
+        var allow = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid'];
         try {
           var u = new URL(raw, location.origin);
           var kept = new URLSearchParams();
           for (var i = 0; i < allow.length; i++) {
             var value = u.searchParams.get(allow[i]);
-            if (value) kept.append(allow[i], value);
+            if (value && !campaignValueHasEmail(value)) kept.append(allow[i], value);
           }
           var search = kept.toString();
           return u.origin + u.pathname + (search ? '?' + search : '');

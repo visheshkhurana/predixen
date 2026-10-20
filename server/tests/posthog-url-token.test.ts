@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   beforeSendPostHog,
+  campaignValueHasEmail,
   gtagPageFields,
   type PostHogBeforeSendEvent,
 } from "../../client/src/lib/analytics-url";
@@ -259,7 +260,7 @@ test("GA landing keeps utm_source and drops token; PostHog URL stays origin+path
   );
   assert.equal(
     kept.page_location,
-    "https://founderconsole.ai/pricing?utm_source=x&utm_medium=cpc&utm_campaign=spring&utm_term=runway&utm_content=hero&gclid=g&fbclid=f",
+    "https://founderconsole.ai/pricing?utm_source=x&utm_medium=cpc&utm_campaign=spring&utm_term=runway&utm_content=hero&gclid=g",
   );
 
   const sent = beforeSendPostHog({
@@ -273,6 +274,31 @@ test("GA landing keeps utm_source and drops token; PostHog URL stays origin+path
   assert.equal(JSON.stringify(sent?.properties).includes("utm_source=x"), false);
 });
 
+test("GA drops fbclid and email-like campaign values", () => {
+  assert.equal(campaignValueHasEmail("a@b.com"), true);
+  assert.equal(campaignValueHasEmail("a%40b.com"), true);
+  assert.equal(campaignValueHasEmail("newsletter"), false);
+
+  assert.equal(
+    gtagPageFields("https://founderconsole.ai/?fbclid=z").page_location,
+    "https://founderconsole.ai/",
+  );
+  assert.equal(
+    gtagPageFields("https://founderconsole.ai/?utm_source=a@b.com&utm_medium=x").page_location,
+    "https://founderconsole.ai/?utm_medium=x",
+  );
+  assert.equal(
+    gtagPageFields("https://founderconsole.ai/?utm_source=a%40b.com&utm_medium=x").page_location,
+    "https://founderconsole.ai/?utm_medium=x",
+  );
+  const referrer = gtagPageFields(
+    "https://founderconsole.ai/?utm_medium=x",
+    "https://ads.example/?utm_source=a%40b.com&utm_medium=x",
+  );
+  assert.equal(referrer.page_location, "https://founderconsole.ai/?utm_medium=x");
+  assert.equal(referrer.page_referrer, "https://ads.example/?utm_medium=x");
+});
+
 test("PostHog init uses before_send and still emits $pageview", () => {
   const posthogLib = readFileSync("client/src/lib/posthog.ts", "utf8");
   assert.match(posthogLib, /before_send:\s*beforeSendPostHog/);
@@ -282,10 +308,22 @@ test("PostHog init uses before_send and still emits $pageview", () => {
 
 test("every gtag config and page hit sets a filtered page_location", () => {
   const indexHtml = readFileSync("client/index.html", "utf8");
+  const analytics = readFileSync("client/src/lib/analytics-url.ts", "utf8");
   assert.match(indexHtml, /function fcGaUrl\(raw\)/);
-  for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"]) {
-    assert.match(indexHtml, new RegExp(key));
+  assert.match(indexHtml, /function campaignValueHasEmail\(value\)/);
+  assert.match(analytics, /export function campaignValueHasEmail/);
+  const allow = indexHtml.match(/var allow = \[([^\]]*)\]/);
+  const gaAllow = analytics.match(/export const GA_QUERY_ALLOW = \[([\s\S]*?)\] as const/);
+  assert.ok(allow, "index.html allow-list");
+  assert.ok(gaAllow, "GA_QUERY_ALLOW");
+  for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid"]) {
+    assert.match(allow[1], new RegExp(key));
+    assert.match(gaAllow[1], new RegExp(key));
   }
+  assert.doesNotMatch(allow[1], /fbclid/);
+  assert.doesNotMatch(gaAllow[1], /fbclid/);
+  assert.match(indexHtml, /%40/);
+  assert.match(analytics, /%40/);
   assert.match(indexHtml, /page_location:\s*fcGaUrl\(location\.href\)/);
   assert.match(indexHtml, /page_referrer:\s*fcGaUrl\(document\.referrer/);
   assert.doesNotMatch(indexHtml, /page_location:\s*location\.href/);

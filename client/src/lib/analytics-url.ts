@@ -9,10 +9,14 @@
  * Campaign keys (utm_*, fbclid, gclid) stay as their own event properties.
  *
  * GA4 page_location and page_referrer keep an allow-list of campaign query
- * params and drop every other param and the hash.
+ * params and drop every other param and the hash. fbclid is not on that list.
+ * An allowed value that looks like an email is dropped too.
  */
 
-/** Kept on GA page_location / page_referrer. Everything else in the query is dropped. */
+/**
+ * Kept on GA page_location / page_referrer. Everything else in the query is
+ * dropped. fbclid is intentionally absent.
+ */
 export const GA_QUERY_ALLOW = [
   "utm_source",
   "utm_medium",
@@ -20,8 +24,17 @@ export const GA_QUERY_ALLOW = [
   "utm_term",
   "utm_content",
   "gclid",
-  "fbclid",
 ] as const;
+
+/**
+ * PR #186 cleanAttributionValue drops a campaign value that contains "@".
+ * That helper is not on main. URLSearchParams decodes %40 into @; a value
+ * that is still encoded (%40) is treated the same way. index.html's
+ * campaignValueHasEmail must stay identical to this check.
+ */
+export function campaignValueHasEmail(value: string): boolean {
+  return value.includes("@") || /%40/i.test(value);
+}
 
 export type PostHogBeforeSendEvent = {
   event: string;
@@ -89,7 +102,8 @@ export function gaPageUrl(value: string): string {
     const kept = new URLSearchParams();
     for (const key of GA_QUERY_ALLOW) {
       const param = url.searchParams.get(key);
-      if (param) kept.append(key, param);
+      if (!param || campaignValueHasEmail(param)) continue;
+      kept.append(key, param);
     }
     const search = kept.toString();
     const path = url.pathname || "/";
