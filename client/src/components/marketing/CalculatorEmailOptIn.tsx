@@ -41,6 +41,15 @@ export type CalculatorEmailOptInProps = {
 };
 
 /**
+ * Public calculator email capture.
+ *
+ * POST /api/leads with consent=true currently returns 503, so the box is
+ * hidden. Set this to true once those saves succeed. Calculator results do
+ * not read this flag and stay on screen either way.
+ */
+export const CALCULATOR_EMAIL_CAPTURE_ENABLED: boolean = false;
+
+/**
  * Consent capture for a public calculator result.
  *
  * The box starts unchecked. Submit stays disabled until it is checked, and
@@ -48,7 +57,12 @@ export type CalculatorEmailOptInProps = {
  * are stored pending: there is no Resend double opt-in for leads, so this
  * form does not tell the visitor they are subscribed.
  */
-export function CalculatorEmailOptIn({
+export function CalculatorEmailOptIn(props: CalculatorEmailOptInProps) {
+  if (!CALCULATOR_EMAIL_CAPTURE_ENABLED) return null;
+  return <CalculatorEmailOptInForm {...props} />;
+}
+
+function CalculatorEmailOptInForm({
   source,
   sourcePage,
   plan,
