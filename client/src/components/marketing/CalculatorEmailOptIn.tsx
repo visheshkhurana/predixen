@@ -5,7 +5,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
-import { publicEventProperties } from "@/lib/calculator-analytics";
 import { trackFunnel } from "@/lib/funnel";
 import { getBrowserDistinctId } from "@/lib/posthog";
 import { cn } from "@/lib/utils";
@@ -15,10 +14,8 @@ import { Check, Loader2, Mail } from "lucide-react";
 export const CALCULATOR_OPT_IN_LABEL =
   "Email me this result + monthly founder finance tips";
 
-type TrackValue = string | number | boolean | null | undefined;
-
 export type CalculatorEmailOptInProps = {
-  /** Short lead source, also the lead_captured location. */
+  /** Short lead source. Reported as lead_form_submitted location. */
   source: string;
   /** Public path the result was shown on. Stored as source_page. */
   sourcePage: string;
@@ -27,8 +24,6 @@ export type CalculatorEmailOptInProps = {
   runwayMonths?: string;
   runwayDate?: string;
   monthlyBurn?: string;
-  /** Extra lead_captured properties. host is always added after these. */
-  trackExtra?: Record<string, TrackValue>;
   /** False until the calculator is showing a result. */
   visible?: boolean;
   /**
@@ -71,7 +66,6 @@ function CalculatorEmailOptInForm({
   runwayMonths,
   runwayDate,
   monthlyBurn,
-  trackExtra,
   visible = true,
   resultByEmail = true,
   className,
@@ -116,13 +110,12 @@ function CalculatorEmailOptInForm({
     if (!saved) return;
     setSendState("done");
     // After the save, not inside its try: a telemetry throw must not flip a
-    // saved lead back to the error state, and must not skip PostHog.
-    // publicEventProperties drops the address and any other PII.
-    trackFunnel("lead_captured", publicEventProperties({
+    // saved lead back to the error state. The conversion event stays on the
+    // server. This form event is location and host only.
+    trackFunnel("lead_form_submitted", {
       location: source,
-      ...trackExtra,
       host: window.location.host,
-    }));
+    });
   }
 
   if (!visible) return null;

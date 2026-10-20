@@ -15,8 +15,11 @@ import { trackXConversion } from './xads';
  *
  * PostHog goes first, in its own try. gtag used to run before it with no
  * guard, so a throw from the Google tag skipped the capture entirely and the
- * caller's catch treated a saved lead as a failed one. Addresses and other
- * PII are stripped before any network sees the payload.
+ * caller's catch treated a saved lead as a failed one.
+ *
+ * publicEventProperties is an allow-list and it runs before any destination.
+ * The same filtered object is what PostHog, gtag, and X receive. Calculator
+ * result numbers never leave this function.
  *
  * Safe no-op when a destination isn't loaded (ad-blockers, SSR, no pixel id).
  */

@@ -138,8 +138,11 @@ def test_client_posts_the_address_in_the_body_not_the_url():
     assert "?email" not in src
     assert "searchParams" not in src
     assert "URLSearchParams" not in src
-    event = src.split('trackFunnel("lead_captured"', 1)[1].split(");", 1)[0]
+    assert "lead_captured" not in src
+    event = src.split('trackFunnel("lead_form_submitted"', 1)[1].split(");", 1)[0]
     assert "email" not in event
+    assert "trackExtra" not in event
+    assert "runway_months" not in event
 
 
 def test_result_email_links_do_not_carry_the_address():

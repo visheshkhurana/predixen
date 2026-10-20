@@ -445,7 +445,6 @@ export default function RunwayCalculatorPage() {
               runwayMonths={leadNumber(results.runwayMonths)}
               runwayDate={leadIsoDate(results.runwayMonths)}
               monthlyBurn={leadNumber(results.monthlyBurn)}
-              trackExtra={{ runway_months: results.runwayMonths }}
             />
           </div>
         </section>

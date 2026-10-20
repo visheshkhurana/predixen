@@ -549,11 +549,6 @@ function EmailResultPanel({ results }: { results: SimResults }) {
       runwayMonths={leadNumber(p50)}
       runwayDate={leadIsoDate(p50)}
       monthlyBurn={leadNumber(monthlyBurn)}
-      trackExtra={{
-        runway_months: p50,
-        grade: results.grade.letter,
-        survival_12m: results.survival["12m"],
-      }}
     />
   );
 }

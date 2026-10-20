@@ -201,9 +201,8 @@ test("founder_activated is gated on is_sample and wired on first real success", 
 });
 
 test("successful lead creates emit lead_captured on the server", () => {
-  // Client trackFunnel("lead_captured") after fetch is in the live calculator
-  // chunk but PostHog 522965 has never ingested the event. The conversion
-  // must fire from POST /api/leads after the row is committed.
+  // The conversion fires once from POST /api/leads after the row is committed.
+  // The browser sends lead_form_submitted instead, so the two are not the same event.
   const leads = readFileSync("server/api/leads.py", "utf8");
   const posthog = readFileSync("server/services/posthog.py", "utf8");
   assert.match(leads, /background\.add_task\(_emit_lead_captured,/);
@@ -265,7 +264,8 @@ test("the survival simulator sends the same lead fields the email is keyed off",
   assert.match(page, /runwayMonths=/);
   assert.match(page, /runwayDate=/);
   assert.match(page, /monthlyBurn=/);
-  assert.match(optIn, /trackFunnel\(\s*"lead_captured"/);
+  assert.match(optIn, /trackFunnel\(\s*"lead_form_submitted"/);
+  assert.doesNotMatch(optIn, /lead_captured/);
   for (const field of ["runway_months", "runway_date", "monthly_burn"]) {
     assert.match(optIn, new RegExp(`${field}:`), `opt-in must send ${field}`);
     assert.match(api, new RegExp(field), `server must accept ${field}`);
