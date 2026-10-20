@@ -239,4 +239,40 @@ export function trackEvent(event: string, properties?: Record<string, any>) {
   dispatch({ kind: "capture", event, properties });
 }
 
+/**
+ * Super properties for every later event. `unset` drops keys this session
+ * does not have, so a previous visit's campaign does not stick in
+ * localStorage after a landing URL with no parameters.
+ *
+ * Queued, not loaded. The pageview / idle init flushes this before the
+ * first event. Calling ensureClient here would pull posthog-js forward of
+ * that path on every document.
+ */
+export function registerSuperProperties(
+  properties: Record<string, string>,
+  unset: readonly string[] = [],
+) {
+  if (!POSTHOG_KEY) return;
+  const present: Record<string, string> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (typeof value === "string" && value.length > 0) present[key] = value;
+  }
+  const presentKeys = new Set(Object.keys(present));
+  const call: QueuedPostHogCall = {
+    kind: "register",
+    properties: present,
+    unset: unset.filter((key) => !presentKeys.has(key)),
+  };
+  if (client) {
+    flushPostHogQueue(client, [call]);
+    return;
+  }
+  pending.push(call);
+}
+
+/** Test seam: the calls waiting to become PostHog super properties. */
+export function takeQueuedPostHogCalls(): QueuedPostHogCall[] {
+  return pending.splice(0, pending.length);
+}
+
 export const isPostHogEnabled = () => !!POSTHOG_KEY;
