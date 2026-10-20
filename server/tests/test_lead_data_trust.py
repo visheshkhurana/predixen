@@ -193,7 +193,8 @@ def test_result_email_sends_only_after_the_consent_check():
     assert EMAIL not in called[0]["html_content"]
 
 
-def test_consent_row_commits_before_the_email_task_is_queued():
+def test_consent_row_commits_before_the_email_task_is_queued(monkeypatch):
+    monkeypatch.setenv("LEAD_RUNWAY_EMAIL_ENABLED", "true")
     order = []
     db = _db()
     db.commit.side_effect = lambda: order.append("commit")

@@ -19,6 +19,7 @@ disclosure of every address collected.
 import hashlib
 import html
 import logging
+import os
 import re
 import threading
 import time
@@ -181,12 +182,22 @@ def consent_is_recorded(email: str) -> bool:
         db.close()
 
 
+def _runway_email_enabled() -> bool:
+    """Off unless LEAD_RUNWAY_EMAIL_ENABLED is exactly the string true.
+
+    Unset, empty, "True", and "1" all stay off. A deploy does not have to
+    change its environment to stop the result email.
+    """
+    return os.environ.get("LEAD_RUNWAY_EMAIL_ENABLED") == "true"
+
+
 async def _send_runway_email(data: LeadCreate) -> None:
     """Best-effort. A failure here must never surface to the visitor.
 
     Consent has to be on the committed row before this talks to Resend. The
     message is the calculator result, not an LLM prompt, and its links do not
-    carry the address.
+    carry the address. create_lead queues this only when
+    _runway_email_enabled() is true.
     """
     if not consent_is_recorded(str(data.email)):
         logger.warning("[leads] not sending the result email; consent is not recorded")
@@ -385,9 +396,10 @@ def create_lead(
     Consent has to be true and name the page. The row is stored
     consent_status=pending. No double opt-in email is sent: see
     MARKETING_OPT_IN_PENDING. The result email is the result they asked for,
-    not the monthly tips. It is queued only when runway_months and runway_date
-    are present, only after the consent row commits, and the sender checks
-    that row again before Resend. Burn multiple, dilution, LTV/CAC, and
+    not the monthly tips. It is queued only when LEAD_RUNWAY_EMAIL_ENABLED is
+    exactly "true" and runway_months and runway_date are present, only after
+    the consent row commits, and the sender checks that row again before
+    Resend. The flag defaults off. Burn multiple, dilution, LTV/CAC, and
     default-alive do not queue a message. The public body is always
     {"status": "ok"}. The address is not sent to an LLM.
     """
@@ -441,7 +453,7 @@ def create_lead(
     # PostHog, and a provider outage must not turn a captured lead into a
     # visible failure.
     background.add_task(_emit_lead_captured, data, created, host)
-    if data.runway_months and data.runway_date:
+    if _runway_email_enabled() and data.runway_months and data.runway_date:
         background.add_task(_send_runway_email, data)
 
     # One body for a new row, a pending row, and a confirmed row. created and
