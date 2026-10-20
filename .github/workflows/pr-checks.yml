@@ -64,6 +64,9 @@ jobs:
       - name: lead-form-viewed tests
         run: npx tsx server/tests/lead-form-viewed.test.ts
 
+      - name: meta pixel Lead and CompleteRegistration
+        run: npx tsx server/tests/meta-pixel.test.ts
+
       - name: simulation v2 client payload tests
         run: npx tsx server/tests/simulation-v2-client-payload.test.ts
 

@@ -4,6 +4,7 @@ import { useFounderStore } from '@/store/founderStore';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/api/client';
 import { trackFunnel } from '@/lib/funnel';
+import { metaTrack } from '@/lib/metaPixel';
 import { Loader2 } from 'lucide-react';
 
 export default function AuthCallback() {
@@ -69,7 +70,9 @@ export default function AuthCallback() {
           // First-success OAuth path: a new account has no company yet.
           // Returning Google users already have a company and must not
           // re-fire signup_completed. Server also emits on user-row create.
+          // The callback URL carries the address; the pixel does not.
           trackFunnel('signup_completed', { method: 'google', user_id: parseInt(userId) });
+          metaTrack('CompleteRegistration', { method: 'google' });
           setLocation('/onboarding');
         } else {
           setLocation('/');
