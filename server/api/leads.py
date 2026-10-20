@@ -36,6 +36,12 @@ from server.api.admin import require_platform_admin
 from server.core.db import get_db
 from server.middleware.rate_limiter import client_ip, socket_host
 from server.models.lead import Lead
+from server.services.attribution import (
+    ATTRIBUTION_KEYS,
+    LEAD_UTM_COLUMNS,
+    attribution_properties,
+    clean_attribution_value,
+)
 from server.services.posthog import capture as posthog_capture
 from server.services.posthog import lead_distinct_id, sanitize_distinct_id
 
@@ -68,6 +74,20 @@ class LeadCreate(BaseModel):
     # Browser PostHog distinct_id, when the page has one. Invalid values are
     # dropped so a bad client cannot 422 a real lead.
     distinct_id: Optional[str] = None
+    # First-touch campaign from the landing URL. Empty and non-strings are
+    # dropped. Over-long values are truncated so a bad client cannot 422.
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    utm_content: Optional[str] = None
+    utm_term: Optional[str] = None
+    fbclid: Optional[str] = None
+    gclid: Optional[str] = None
+
+    @field_validator(*ATTRIBUTION_KEYS, mode="before")
+    @classmethod
+    def _clean_attribution(cls, value: object) -> Optional[str]:
+        return clean_attribution_value(value)
 
     @field_validator("distinct_id", mode="before")
     @classmethod
@@ -369,6 +389,12 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
         plan = _scrub_email(data.plan, markers)
         if plan:
             properties["plan"] = plan
+        for key, text in attribution_properties(
+            {key: getattr(data, key) for key in ATTRIBUTION_KEYS}
+        ).items():
+            cleaned = _scrub_email(text, markers)
+            if cleaned:
+                properties[key] = cleaned
         posthog_capture(
             "lead_captured",
             distinct_id,
@@ -376,6 +402,22 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
         )
     except Exception:
         logger.exception("[leads] could not emit lead_captured")
+
+
+def _set_first_touch_utm(lead, data: LeadCreate) -> None:
+    """Fill empty campaign columns. A later submit does not replace them.
+
+    Only utm_source, utm_medium, and utm_campaign are columns. The other
+    attribution fields stay on the request for the PostHog event.
+    """
+    for field in LEAD_UTM_COLUMNS:
+        incoming = getattr(data, field, None)
+        if not incoming:
+            continue
+        current = getattr(lead, field, None)
+        if isinstance(current, str) and current.strip():
+            continue
+        setattr(lead, field, incoming)
 
 
 @router.post("")
@@ -440,6 +482,7 @@ def create_lead(
         lead.source_page = source_page
         if lead.consent_status != MARKETING_OPT_IN_CONFIRMED:
             lead.consent_status = MARKETING_OPT_IN_PENDING
+        _set_first_touch_utm(lead, data)
         lead.updated_at = datetime.utcnow()
 
         db.commit()

@@ -260,6 +260,16 @@ async def _run_deferred_startup():
         except Exception as e:
             logger.warning(f"Could not ensure lead consent columns: {e}")
 
+        # Campaign columns. create_all does not alter an existing leads table,
+        # and production leaves RUN_MIGRATIONS off, so this is not behind that
+        # flag. Nullable VARCHAR(200), no default, no backfill.
+        try:
+            from server.core.migrations import ensure_lead_utm_columns
+            ensure_lead_utm_columns(engine)
+            logger.info("Ensured lead utm columns exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure lead utm columns: {e}")
+
         if settings.should_run_migrations:
             logger.info("Running migrations...")
             from server.core.migrations import run_migrations

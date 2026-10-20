@@ -21,6 +21,7 @@ import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
+import { captureFirstTouchAttribution } from "@/lib/attribution";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
 import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
@@ -1200,6 +1201,12 @@ function AnimatedRouteWrapper({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+// The document URL, once, before route effects can replace it. First touch
+// only: a later URL in this tab does not overwrite sessionStorage.
+if (typeof window !== "undefined") {
+  captureFirstTouchAttribution();
 }
 
 function App() {

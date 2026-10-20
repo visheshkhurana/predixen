@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
 import { trackFunnel } from "@/lib/funnel";
+import { readFirstTouchAttribution } from "@/lib/attribution";
 import { getBrowserDistinctId } from "@/lib/posthog";
 import { cn } from "@/lib/utils";
 import { Check, Loader2, Mail } from "lucide-react";
@@ -103,6 +104,7 @@ function CalculatorEmailOptInForm({
           ...(runwayDate ? { runway_date: runwayDate } : {}),
           ...(monthlyBurn ? { monthly_burn: monthlyBurn } : {}),
           ...(distinctId ? { distinct_id: distinctId } : {}),
+          ...readFirstTouchAttribution(),
         }),
       });
       if (!res.ok) throw new Error(String(res.status));
