@@ -99,12 +99,14 @@ function MetricCard({
   icon: Icon,
   trend,
   testId,
+  assumption,
 }: {
   label: string;
   value: string;
   icon: any;
   trend?: "up" | "down" | null;
   testId: string;
+  assumption?: boolean;
 }) {
   return (
     <Card className="bg-card/50 border-border/50" data-testid={testId}>
@@ -116,6 +118,11 @@ function MetricCard({
         </div>
         <div className="text-xl font-bold font-mono" data-testid={`${testId}-value`}>{value}</div>
         <div className="text-xs text-muted-foreground mt-1">{label}</div>
+        {assumption && (
+          <div className="text-[10px] uppercase tracking-wide text-amber-400/90 mt-0.5" data-testid={`${testId}-assumption`}>
+            Assumption
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -455,6 +462,7 @@ export default function DigitalTwinPage() {
   const derived = twinState?.derived_metrics || {};
   const risks = twinState?.risk_indicators || [];
   const hasCriticalRisk = risks.some((r: any) => r.severity === "critical");
+  const assumed = new Set<string>(twinState?.assumption_fields || fin.assumption_fields || []);
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto" data-testid="digital-twin-page">
@@ -493,13 +501,15 @@ export default function DigitalTwinPage() {
           value={formatCurrency(fin.cash_balance)}
           icon={DollarSign}
           testId="metric-cash"
+          assumption={assumed.has("cash_balance")}
         />
         <MetricCard
           label="Monthly Burn"
           value={formatCurrency(fin.monthly_burn)}
           icon={TrendingDown}
-          trend="down"
+          trend={fin.monthly_burn != null ? "down" : null}
           testId="metric-burn"
+          assumption={assumed.has("monthly_burn")}
         />
         <MetricCard
           label="Monthly Revenue"
@@ -507,6 +517,7 @@ export default function DigitalTwinPage() {
           icon={TrendingUp}
           trend={fin.revenue_growth_rate > 0 ? "up" : fin.revenue_growth_rate < 0 ? "down" : null}
           testId="metric-revenue"
+          assumption={assumed.has("revenue_monthly")}
         />
         <MetricCard
           label="Runway"
@@ -514,6 +525,7 @@ export default function DigitalTwinPage() {
           icon={Clock}
           trend={derived.runway_months != null && derived.runway_months < 6 ? "down" : null}
           testId="metric-runway"
+          assumption={assumed.has("runway_months")}
         />
       </div>
 
