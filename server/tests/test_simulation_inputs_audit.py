@@ -151,6 +151,15 @@ class _Query:
     def first(self):
         return self._result
 
+    def scalar(self):
+        # Monthly plan-quota count. This fake has no usage rows.
+        return 0
+
+
+class _NoRow:
+    def fetchone(self):
+        return None
+
 
 class _DB:
     def __init__(self, metrics, record=None):
@@ -161,6 +170,16 @@ class _DB:
         if model is TruthScan:
             return _Query(SimpleNamespace(outputs_json={"metrics": self.metrics}))
         return _Query(self.record)
+
+    def execute(self, *a, **k):
+        # Subscription lookup. No row means the Free plan.
+        return _NoRow()
+
+    def add(self, *a, **k):
+        return None
+
+    def commit(self):
+        return None
 
 
 def _copilot_run(monkeypatch, metrics):

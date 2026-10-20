@@ -66,7 +66,10 @@ def quick_simulate(
     
     if not truth_scan:
         raise HTTPException(status_code=400, detail="Run a truth scan first")
-    
+
+    from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
+    reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION, company_id=company.id)
+
     metrics = truth_scan.outputs_json.get("metrics", {})
     
     scenario_label = deltas.scenario_name or "Quick simulation"
@@ -591,6 +594,9 @@ async def copilot_quick_chat(
 
     company = get_user_company(db, company_id, current_user)
 
+    from server.core.plan_usage import PLAN_QUOTA_COPILOT, reserve_monthly_quota
+    reserve_monthly_quota(db, current_user, PLAN_QUOTA_COPILOT, company_id=company.id)
+
     try:
         from server.copilot.context_pack import build_context_pack
         from server.copilot.business_context import build_business_context, format_context_for_prompt
@@ -921,7 +927,10 @@ async def copilot_chat(
     import uuid as uuid_lib
     
     company = get_user_company(db, company_id, current_user)
-    
+
+    from server.core.plan_usage import PLAN_QUOTA_COPILOT, reserve_monthly_quota
+    reserve_monthly_quota(db, current_user, PLAN_QUOTA_COPILOT, company_id=company.id)
+
     import asyncio
     try:
         return await asyncio.wait_for(
