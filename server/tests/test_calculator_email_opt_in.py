@@ -7,6 +7,7 @@ only a transactional sender here, with no lead double opt-in to reuse.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -339,6 +340,36 @@ def test_consent_post_saves_lead_without_runway_email_when_flag_unset(monkeypatc
     assert lead.consent is True
     assert lead.source_page == "/tools/runway-calculator"
     assert called == []
+
+
+def test_runway_email_skip_logs_flag_off_without_the_address(monkeypatch, caplog):
+    monkeypatch.delenv("LEAD_RUNWAY_EMAIL_ENABLED", raising=False)
+    db = _db_for_new_lead()
+    client = _runway_post_client(db)
+    email = _RUNWAY_POST["email"]
+
+    with caplog.at_level(logging.INFO, logger="server.api.leads"), patch(
+        "server.api.leads.posthog_capture"
+    ):
+        response = client.post(
+            "/leads",
+            json=_RUNWAY_POST,
+            headers={"x-forwarded-for": "203.0.113.23, 100.64.0.8"},
+        )
+
+    assert response.status_code == 200, response.text
+    skip = [
+        rec
+        for rec in caplog.records
+        if rec.name == "server.api.leads" and rec.getMessage() == "runway email skipped: flag off"
+    ]
+    assert len(skip) == 1
+    assert skip[0].levelno == logging.INFO
+    assert skip[0].getMessage() == "runway email skipped: flag off"
+    assert email not in skip[0].getMessage()
+    local, _, domain = email.partition("@")
+    assert local not in skip[0].getMessage()
+    assert domain not in skip[0].getMessage()
 
 
 def test_consent_post_calls_runway_email_when_flag_is_true(monkeypatch):
