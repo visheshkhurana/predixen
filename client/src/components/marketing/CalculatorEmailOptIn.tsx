@@ -10,9 +10,16 @@ import { getBrowserDistinctId } from "@/lib/posthog";
 import { cn } from "@/lib/utils";
 import { Check, Loader2, Mail } from "lucide-react";
 
-/** The offer, verbatim. The checkbox starts unchecked. */
+/**
+ * Result-email offer. The checkbox starts unchecked. No public calculator
+ * uses this while the result mail stays off.
+ */
 export const CALCULATOR_OPT_IN_LABEL =
   "Email me this result + monthly founder finance tips";
+
+/** Tips-only offer. The checkbox starts unchecked. No result is emailed. */
+export const CALCULATOR_TIPS_ONLY_LABEL =
+  "We'll keep you posted with monthly founder finance tips";
 
 type TrackValue = string | number | boolean | null | undefined;
 
@@ -31,9 +38,9 @@ export type CalculatorEmailOptInProps = {
   /** False until the calculator is showing a result. */
   visible?: boolean;
   /**
-   * True when this page queues a result email. Burn multiple, dilution,
-   * LTV/CAC, and default-alive do not, so their success line must not
-   * promise an inbox.
+   * True only when this page queues a result email. None of the public
+   * calculators do, so the default is false: the offer and the success
+   * line must not promise an inbox.
    */
   resultByEmail?: boolean;
   className?: string;
@@ -72,10 +79,11 @@ function CalculatorEmailOptInForm({
   monthlyBurn,
   trackExtra,
   visible = true,
-  resultByEmail = true,
+  resultByEmail = false,
   className,
   inputClassName,
 }: CalculatorEmailOptInProps) {
+  const offerLabel = resultByEmail ? CALCULATOR_OPT_IN_LABEL : CALCULATOR_TIPS_ONLY_LABEL;
   const [email, setEmail] = useState("");
   const [consented, setConsented] = useState(false);
   const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
@@ -139,12 +147,13 @@ function CalculatorEmailOptInForm({
           <div className="flex items-center gap-2">
             <Mail className="h-4 w-4 text-primary shrink-0" />
             <h3 className="text-base font-semibold text-foreground" data-testid="text-email-heading">
-              {CALCULATOR_OPT_IN_LABEL}
+              {offerLabel}
             </h3>
           </div>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Your result, emailed so you can forward it, plus a short monthly
-            note on founder finance. No account needed.
+            {resultByEmail
+              ? "Your result, emailed so you can forward it, plus a short monthly note on founder finance. No account needed."
+              : "A short monthly note on founder finance. No account needed."}
           </p>
           <form ref={leadFormRef} onSubmit={handleEmailResult} className="mt-4 space-y-3">
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -184,7 +193,7 @@ function CalculatorEmailOptInForm({
                 className="mt-0.5"
               />
               <Label htmlFor={consentId} className="text-sm font-normal leading-snug">
-                {CALCULATOR_OPT_IN_LABEL}
+                {offerLabel}
               </Label>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed" data-testid="text-lead-privacy">
