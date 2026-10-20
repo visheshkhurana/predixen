@@ -15,6 +15,8 @@ RecordPeer with --no-proxy-headers, which is how index.ts spawns it.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -35,6 +37,7 @@ from server.middleware.peer import RecordPeer
 from server.middleware.rate_limiter import (
     RateLimiterMiddleware,
     client_ip,
+    lead_bucket_ref,
     lead_window_limited,
     socket_host,
 )
@@ -304,9 +307,15 @@ def test_nine_consent_true_posts_are_limited_before_the_handler(caplog):
         "consent": True,
         "source_page": "/runway-calculator",
     }
+    salt = "test-session-secret"
+    expected = hmac.new(salt.encode(), b"testclient", hashlib.sha256).hexdigest()[:12]
+    with patch.dict(os.environ, {"SESSION_SECRET": ""}):
+        assert lead_bucket_ref("203.0.113.10") == ""
     with patch("server.middleware.rate_limiter._LEAD_HITS", {}), patch.object(
         RateLimiterMiddleware, "_check_rate_limit", allow_db
-    ), caplog.at_level(logging.INFO, logger="server.middleware.rate_limiter"):
+    ), patch.dict(os.environ, {"SESSION_SECRET": salt}), caplog.at_level(
+        logging.INFO, logger="server.middleware.rate_limiter"
+    ):
         client = TestClient(app)
         statuses = [client.post("/leads", json=false_body).status_code for _ in range(4)]
         statuses += [client.post("/leads", json=true_body).status_code for _ in range(4)]
@@ -316,12 +325,14 @@ def test_nine_consent_true_posts_are_limited_before_the_handler(caplog):
     assert statuses == [400, 400, 400, 400, 200, 200, 200, 200, 429]
     assert calls["n"] == 8
     assert ninth.json()["detail"].startswith("Rate limit exceeded")
+    logged = " ".join(rec.message for rec in caplog.records)
+    assert "testclient" not in logged
     keys = [
         rec.message.split("lead bucket key=", 1)[1]
         for rec in caplog.records
         if rec.message.startswith("lead bucket key=")
     ]
-    assert keys == ["testclient"] * 9
+    assert keys == [expected] * 9
 
 
 def test_string_window_start_is_not_a_fail_open():

@@ -5,6 +5,8 @@ Uses PostgreSQL-backed persistent storage with fixed window algorithm.
 Stale entries are cleaned up by a background task every 5 minutes.
 """
 
+import hashlib
+import hmac
 import os
 import asyncio
 import ipaddress
@@ -160,6 +162,18 @@ def client_ip(headers, client_host: str = "") -> str:
     return ""
 
 
+def lead_bucket_ref(key: str) -> str:
+    """12 hex chars of HMAC-SHA256(SESSION_SECRET, key). Empty if there is no salt.
+
+    The lead log uses this so a bucket can be correlated without writing the
+    client address. SESSION_SECRET is the server secret; it is not logged.
+    """
+    salt = os.environ.get("SESSION_SECRET", "").strip()
+    if not salt or not key:
+        return ""
+    return hmac.new(salt.encode(), key.encode(), hashlib.sha256).hexdigest()[:12]
+
+
 def lead_window_limited(
     key: str,
     *,
@@ -281,8 +295,9 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         return client_ip(request.headers, socket_host(request)) or "unknown"
 
     def _too_many(self, identifier: str, category: str, limit, retry_after: int) -> JSONResponse:
+        shown = lead_bucket_ref(identifier) or "redacted"
         logger.warning(
-            f"Rate limit exceeded: {identifier} ({category}), "
+            f"Rate limit exceeded: {shown} ({category}), "
             f"retry_after={retry_after}s, limit={limit}/min"
         )
         return JSONResponse(
@@ -398,7 +413,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         # counter fails open, so the in-process window is what answers when
         # the insert throws.
         if category == "leads":
-            logger.info("lead bucket key=%s", identifier)
+            ref = lead_bucket_ref(identifier)
+            if ref:
+                logger.info("lead bucket key=%s", ref)
+            else:
+                logger.info("lead bucket counted")
             blocked, retry_after = lead_window_limited(identifier, limit=int(limit))
             if blocked:
                 return self._too_many(identifier, category, limit, retry_after)
