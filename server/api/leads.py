@@ -453,8 +453,11 @@ def create_lead(
     # PostHog, and a provider outage must not turn a captured lead into a
     # visible failure.
     background.add_task(_emit_lead_captured, data, created, host)
-    if _runway_email_enabled() and data.runway_months and data.runway_date:
-        background.add_task(_send_runway_email, data)
+    if data.runway_months and data.runway_date:
+        if _runway_email_enabled():
+            background.add_task(_send_runway_email, data)
+        else:
+            logger.info("runway email skipped: flag off")
 
     # One body for a new row, a pending row, and a confirmed row. created and
     # consent_status would tell a stranger whether this address is already
