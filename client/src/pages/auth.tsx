@@ -22,10 +22,9 @@ import {
 } from '@/lib/authFlow';
 
 
-const identifyUser = (userId: number, email: string) => {
+const identifyUser = (userId: number) => {
   if (typeof window !== 'undefined' && (window as any).gtag) {
     (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(userId) });
-    (window as any).gtag('set', 'user_properties', { user_email: email });
     (window as any).gtag('event', 'login', { method: 'email' });
   }
 };
@@ -235,7 +234,7 @@ export default function AuthPage({
     try {
       const result = await api.auth.login(loginForm.email, loginForm.password);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
+      identifyUser(result.user_id);
       await continueAfterLogin(!!result.is_platform_admin);
     } catch (err) {
       let description = 'An unexpected error occurred. Please try again.';
@@ -277,7 +276,7 @@ export default function AuthPage({
       const distinctId = await getBrowserDistinctId();
       const result = await api.auth.register(registerForm.email, registerForm.password, distinctId);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
+      identifyUser(result.user_id);
       trackSignup(result.user_id, result.email);
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
@@ -301,7 +300,7 @@ export default function AuthPage({
     try {
       const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
+      identifyUser(result.user_id);
       
       try {
         const companies = await api.companies.list();
