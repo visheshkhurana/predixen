@@ -1,7 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
-import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
+import {
+  CALCULATOR_EMAIL_CAPTURE_ENABLED,
+  CalculatorEmailOptIn,
+} from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -436,22 +439,24 @@ export default function RunwayCalculatorPage() {
         </section>
       )}
 
-      <section className="border-b" data-testid="section-email-opt-in">
-        <div className="mx-auto max-w-6xl px-4 py-12">
-          <CalculatorEmailOptIn
-            className="max-w-2xl mx-auto"
-            source="runway-calculator"
-            sourcePage="/tools/runway-calculator"
-            plan="runway-calculator"
-            resultByEmail={false}
-            notes={`Runway ${results.runwayMonths >= 36 ? "36+" : results.runwayMonths} months (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`}
-            runwayMonths={leadNumber(results.runwayMonths)}
-            runwayDate={leadIsoDate(results.runwayMonths)}
-            monthlyBurn={leadNumber(results.monthlyBurn)}
-            trackExtra={{ runway_months: results.runwayMonths }}
-          />
-        </div>
-      </section>
+      {CALCULATOR_EMAIL_CAPTURE_ENABLED && (
+        <section className="border-b" data-testid="section-email-opt-in">
+          <div className="mx-auto max-w-6xl px-4 py-12">
+            <CalculatorEmailOptIn
+              className="max-w-2xl mx-auto"
+              source="runway-calculator"
+              sourcePage="/tools/runway-calculator"
+              plan="runway-calculator"
+              resultByEmail={false}
+              notes={`Runway ${results.runwayMonths >= 36 ? "36+" : results.runwayMonths} months (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`}
+              runwayMonths={leadNumber(results.runwayMonths)}
+              runwayDate={leadIsoDate(results.runwayMonths)}
+              monthlyBurn={leadNumber(results.monthlyBurn)}
+              trackExtra={{ runway_months: results.runwayMonths }}
+            />
+          </div>
+        </section>
+      )}
 
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12 text-center">
