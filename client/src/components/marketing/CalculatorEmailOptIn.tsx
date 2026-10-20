@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
+import { publicEventProperties } from "@/lib/calculator-analytics";
 import { trackFunnel } from "@/lib/funnel";
 import { getBrowserDistinctId } from "@/lib/posthog";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,7 @@ function CalculatorEmailOptInForm({
     e.preventDefault();
     if (sendState === "sending" || !email.trim() || !consented) return;
     setSendState("sending");
+    let saved = false;
     try {
       const distinctId = await getBrowserDistinctId();
       const res = await fetch("/api/leads", {
@@ -106,16 +108,21 @@ function CalculatorEmailOptInForm({
         }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      setSendState("done");
-      trackFunnel("lead_captured", {
-        location: source,
-        ...trackExtra,
-        host: window.location.host,
-      });
+      saved = true;
     } catch {
       // The result is still on screen. Ask them to try again, nothing else.
       setSendState("error");
     }
+    if (!saved) return;
+    setSendState("done");
+    // After the save, not inside its try: a telemetry throw must not flip a
+    // saved lead back to the error state, and must not skip PostHog.
+    // publicEventProperties drops the address and any other PII.
+    trackFunnel("lead_captured", publicEventProperties({
+      location: source,
+      ...trackExtra,
+      host: window.location.host,
+    }));
   }
 
   if (!visible) return null;

@@ -79,62 +79,42 @@ test("client tool pages take title/description from the shared meta", () => {
   assert.ok(page("runway-by-industry").includes("...runwayIndustryPageMeta(industry)"));
 });
 
-function fakeTimers() {
-  let next = 1;
-  const pending = new Map<number, () => void>();
-  return {
-    setTimer: (fn: () => void) => {
-      const id = next++;
-      pending.set(id, fn);
-      return id as unknown as ReturnType<typeof setTimeout>;
-    },
-    clearTimer: (h: ReturnType<typeof setTimeout>) => {
-      pending.delete(h as unknown as number);
-    },
-    flush: () => {
-      const fns = [...pending.values()];
-      pending.clear();
-      fns.forEach((f) => f());
-    },
-    get size() {
-      return pending.size;
-    },
-  };
-}
-
-test("calculator_used fires once, after a pause, only with a result", () => {
-  const timers = fakeTimers();
+test("calculator_used fires once on the first input change, with the calculator name", () => {
   const events: Array<[string, Record<string, unknown>]> = [];
   const c = createCalculatorUsedController({
     calculator: "dilution",
     emit: (e, p) => events.push([e, p]),
-    setTimer: timers.setTimer,
-    clearTimer: timers.clearTimer,
   });
 
-  c.update(false, true); // defaults: nothing
-  assert.equal(timers.size, 0);
-  c.update(true, false); // edited, but no result
-  assert.equal(timers.size, 0);
-
-  c.update(true, true);
-  c.update(true, true); // keystrokes restart the timer
-  c.update(true, true);
-  assert.equal(timers.size, 1);
-  timers.flush();
+  c.update(false, false);
+  assert.equal(events.length, 0, "an untouched field is not a use");
+  c.onInputChange();
+  c.onInputChange();
+  c.update(true, false);
   assert.deepEqual(events, [["calculator_used", { calculator: "dilution" }]]);
-
-  c.update(true, true);
-  timers.flush();
-  assert.equal(events.length, 1, "once per page view");
 });
 
-test("every free tool wires calculator_used; survival run is tracked", () => {
-  for (const name of ["burn-multiple", "dilution", "ltv-cac", "runway-by-industry", "embed-survival"]) {
+test("every free tool wires calculator_used on the first input; survival run stays separate", () => {
+  const once: Record<string, string> = {
+    "burn-multiple": "burn-multiple",
+    dilution: "dilution",
+    "ltv-cac": "ltv-cac",
+    "runway-calculator": "runway",
+    "default-alive": "default-alive",
+    "survival-simulator": "survival-simulator",
+  };
+  for (const [name, calculator] of Object.entries(once)) {
+    assert.match(
+      page(name),
+      new RegExp(`useCalculatorUsedOnce\\(\\s*"${calculator}"\\s*\\)`),
+      name,
+    );
+  }
+  for (const name of ["runway-by-industry", "embed-survival"]) {
     assert.match(page(name), /useCalculatorUsed\(\s*\n?\s*"/, name);
   }
   const survival = page("survival-simulator");
   const onSuccess = survival.slice(survival.indexOf("onSuccess: (data) =>"), survival.indexOf("onError:"));
   assert.ok(onSuccess.includes('trackFunnel("survival_simulation_run"'));
-  assert.ok(onSuccess.includes('trackFunnel("calculator_used", { calculator: "survival-simulator" })'));
+  assert.equal(onSuccess.includes("calculator_used"), false);
 });

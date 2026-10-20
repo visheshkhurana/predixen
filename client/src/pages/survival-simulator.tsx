@@ -3,7 +3,7 @@ import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptI
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { useRef } from "react";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -140,12 +140,15 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
 }) {
   const [inputs, setInputs] = useState<SimInputs>(defaultInputs);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const onCalculatorInput = useCalculatorUsedOnce("survival-simulator");
 
-  const set = (key: keyof SimInputs, val: number | null) =>
+  const set = (key: keyof SimInputs, val: number | null) => {
+    onCalculatorInput();
     setInputs(prev => ({ ...prev, [key]: val }));
+  };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/80 backdrop-blur" data-testid="simulator-input-form">
+    <Card className="border-zinc-800 bg-zinc-900/80 backdrop-blur" data-testid="simulator-input-form" onInput={onCalculatorInput}>
       <CardHeader className="pb-4">
         <CardTitle className="text-xl flex items-center gap-2">
           <Target className="h-5 w-5 text-primary" />
@@ -822,7 +825,6 @@ export default function SurvivalSimulatorPage() {
     if (sharedResults) setResults(sharedResults);
   }, [sharedResults]);
 
-  const calculatorUsedTracked = useRef(false);
   const simulation = useMutation({
     mutationFn: async (inputs: SimInputs) => {
       const res = await fetch("/api/survival-sim/run", {
@@ -838,12 +840,7 @@ export default function SurvivalSimulatorPage() {
     },
     onSuccess: (data) => {
       setResults(data);
-      // Every completed run, plus the shared once-per-view calculator step.
       trackFunnel("survival_simulation_run", { calculator: "survival-simulator" });
-      if (!calculatorUsedTracked.current) {
-        calculatorUsedTracked.current = true;
-        trackFunnel("calculator_used", { calculator: "survival-simulator" });
-      }
       const count = incrementSimCount();
       if (count >= 2) setGated(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
