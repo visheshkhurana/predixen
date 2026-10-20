@@ -6,7 +6,8 @@
  * session-replay href. GA4 does the same for page_location / page_referrer.
  *
  * PostHog URL properties are reduced to origin + pathname on every path.
- * Campaign keys (utm_*, fbclid, gclid) stay as their own event properties.
+ * Campaign keys (utm_*, fbclid, gclid) stay as their own event properties
+ * unless the value looks like an email, in which case the property is dropped.
  *
  * GA4 page_location and page_referrer keep an allow-list of campaign query
  * params and drop every other param and the hash. fbclid is not on that list.
@@ -28,12 +29,23 @@ export const GA_QUERY_ALLOW = [
 
 /**
  * PR #186 cleanAttributionValue drops a campaign value that contains "@".
- * That helper is not on main. URLSearchParams decodes %40 into @; a value
- * that is still encoded (%40) is treated the same way. index.html's
- * campaignValueHasEmail must stay identical to this check.
+ * That helper is not on main. Decode percent-encoding until the value stops
+ * changing (at most 5 times) so %40, %2540, and %252540 all surface as "@".
+ * index.html's campaignValueHasEmail must stay identical to this check.
  */
 export function campaignValueHasEmail(value: string): boolean {
-  return value.includes("@") || /%40/i.test(value);
+  let current = value;
+  for (let i = 0; i < 5; i++) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(current);
+    } catch {
+      break;
+    }
+    if (decoded === current) break;
+    current = decoded;
+  }
+  return current.includes("@") || /%40/i.test(current);
 }
 
 export type PostHogBeforeSendEvent = {
@@ -152,6 +164,10 @@ function sanitizeNode(value: unknown): unknown {
   let changed = false;
   const next: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
+    if (typeof child === "string" && isAttributionKey(key) && campaignValueHasEmail(child)) {
+      changed = true;
+      continue;
+    }
     let updated = child;
     if (typeof child === "string" && isUrlKey(key)) {
       updated = stripQueryAndHash(child);

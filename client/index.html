@@ -12,7 +12,18 @@
       // Keep those campaign params. Drop token, code, fbclid, the hash, and
       // any allowed value that looks like an email.
       function campaignValueHasEmail(value) {
-        return value.indexOf('@') !== -1 || /%40/i.test(value);
+        var current = value;
+        for (var i = 0; i < 5; i++) {
+          var decoded;
+          try {
+            decoded = decodeURIComponent(current);
+          } catch (e) {
+            break;
+          }
+          if (decoded === current) break;
+          current = decoded;
+        }
+        return current.indexOf('@') !== -1 || /%40/i.test(current);
       }
       function fcGaUrl(raw) {
         if (!raw) return '';

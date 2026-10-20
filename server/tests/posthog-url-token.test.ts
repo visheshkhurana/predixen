@@ -277,6 +277,7 @@ test("GA landing keeps utm_source and drops token; PostHog URL stays origin+path
 test("GA drops fbclid and email-like campaign values", () => {
   assert.equal(campaignValueHasEmail("a@b.com"), true);
   assert.equal(campaignValueHasEmail("a%40b.com"), true);
+  assert.equal(campaignValueHasEmail("jane%252540acme.com"), true);
   assert.equal(campaignValueHasEmail("newsletter"), false);
 
   assert.equal(
@@ -297,6 +298,51 @@ test("GA drops fbclid and email-like campaign values", () => {
   );
   assert.equal(referrer.page_location, "https://founderconsole.ai/?utm_medium=x");
   assert.equal(referrer.page_referrer, "https://ads.example/?utm_medium=x");
+});
+
+test("before_send drops email attribution; GA allow-list stays", () => {
+  const plain = "jane@acme.com";
+  const encoded = "jane%252540acme.com";
+  const sent = beforeSendPostHog({
+    event: "$pageview",
+    properties: {
+      $current_url: "https://founderconsole.ai/?utm_source=jane@acme.com",
+      utm_source: plain,
+      utm_medium: "cpc",
+      gclid: encoded,
+      $set: { utm_source: plain, utm_campaign: "spring" },
+      $set_once: { $initial_utm_source: encoded, $initial_utm_medium: "email" },
+    },
+  });
+  assert.ok(sent);
+  assert.equal(sent.event, "$pageview");
+  const blob = JSON.stringify(sent.properties);
+  assert.equal(blob.includes(plain), false, blob);
+  assert.equal(blob.includes("252540"), false, blob);
+  assert.equal(blob.includes("@"), false, blob);
+  assert.equal(sent.properties?.utm_source, undefined);
+  assert.equal(sent.properties?.gclid, undefined);
+  assert.equal(sent.properties?.utm_medium, "cpc");
+  assert.equal((sent.properties?.$set as { utm_source?: string }).utm_source, undefined);
+  assert.equal((sent.properties?.$set as { utm_campaign?: string }).utm_campaign, "spring");
+  assert.equal(
+    (sent.properties?.$set_once as { $initial_utm_source?: string }).$initial_utm_source,
+    undefined,
+  );
+  assert.equal(
+    (sent.properties?.$set_once as { $initial_utm_medium?: string }).$initial_utm_medium,
+    "email",
+  );
+  assert.equal(sent.properties?.$current_url, "https://founderconsole.ai/");
+
+  assert.equal(
+    gtagPageFields("https://founderconsole.ai/?utm_source=x&token=y").page_location,
+    "https://founderconsole.ai/?utm_source=x",
+  );
+  assert.equal(
+    gtagPageFields("https://founderconsole.ai/?utm_source=a@b.com&utm_medium=x").page_location,
+    "https://founderconsole.ai/?utm_medium=x",
+  );
 });
 
 test("PostHog init uses before_send and still emits $pageview", () => {
@@ -324,6 +370,8 @@ test("every gtag config and page hit sets a filtered page_location", () => {
   assert.doesNotMatch(gaAllow[1], /fbclid/);
   assert.match(indexHtml, /%40/);
   assert.match(analytics, /%40/);
+  assert.match(indexHtml, /decodeURIComponent/);
+  assert.match(analytics, /decodeURIComponent/);
   assert.match(indexHtml, /page_location:\s*fcGaUrl\(location\.href\)/);
   assert.match(indexHtml, /page_referrer:\s*fcGaUrl\(document\.referrer/);
   assert.doesNotMatch(indexHtml, /page_location:\s*location\.href/);
