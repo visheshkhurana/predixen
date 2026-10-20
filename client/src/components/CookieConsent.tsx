@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Cookie } from 'lucide-react';
+import { COOKIE_CONSENT_EVENT, COOKIE_CONSENT_KEY } from '@/lib/consentTracking';
 
 export function CookieConsent() {
-  const [visible, setVisible] = useState(() => !localStorage.getItem('cookie-consent'));
+  const [visible, setVisible] = useState(() => !localStorage.getItem(COOKIE_CONSENT_KEY));
 
   if (!visible) return null;
 
   const handleChoice = (choice: 'accepted' | 'declined') => {
-    localStorage.setItem('cookie-consent', choice);
+    localStorage.setItem(COOKIE_CONSENT_KEY, choice);
+    // Same-tab listeners (the tracking loader) do not hear the storage event.
+    window.dispatchEvent(new Event(COOKIE_CONSENT_EVENT));
     setVisible(false);
   };
 

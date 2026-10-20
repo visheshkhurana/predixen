@@ -23,6 +23,7 @@ import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
 import { initXAds } from "@/lib/xads";
+import { installConsentTracking } from "@/lib/consentTracking";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
 import {
   DropdownMenu,
@@ -839,6 +840,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     initPostHog();
     initXAds();
+    installConsentTracking();
   }, []);
 
   useEffect(() => {
@@ -904,7 +906,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     marketingPrefixes.some((p) => currentPath.startsWith(p));
   
   if (!user || isStandalonePage) {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <CookieConsent />
+      </>
+    );
   }
   
   const getConfidenceBadge = () => {
