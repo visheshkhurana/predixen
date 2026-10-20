@@ -1,6 +1,6 @@
-// Public calculators hide the lead/email opt-in while POST /api/leads
-// (consent true) returns 503. The shared component is the only form, and
-// CALCULATOR_EMAIL_CAPTURE_ENABLED is the only switch. Results stay on screen.
+// Public calculators show the lead/email opt-in now that consent-true
+// POST /api/leads saves succeed. CALCULATOR_EMAIL_CAPTURE_ENABLED is the
+// only switch. Results stay on screen next to the form.
 //
 // Run: npx tsx server/tests/calculator-email-capture-disabled.test.ts
 import test from "node:test";
@@ -123,31 +123,34 @@ const PAGES: { file: string; path: string; resultTestId: string }[] = [
   },
 ];
 
-test("email capture is not rendered and calculator results still are", async () => {
+test("email capture renders alongside calculator results", async () => {
   installDom();
 
   const optInMod = await import("../../client/src/components/marketing/CalculatorEmailOptIn.tsx");
-  assert.equal(optInMod.CALCULATOR_EMAIL_CAPTURE_ENABLED, false);
+  assert.equal(optInMod.CALCULATOR_EMAIL_CAPTURE_ENABLED, true);
 
   let optIn!: TestRenderer.ReactTestRenderer;
   TestRenderer.act(() => {
     optIn = TestRenderer.create(
-      React.createElement(optInMod.CalculatorEmailOptIn, {
-        source: "runway-calculator",
-        sourcePage: "/tools/runway-calculator",
-        notes: "Runway 12 months",
-        visible: true,
-      }),
+      React.createElement(
+        Router,
+        { hook: memoryLocation({ path: "/tools/runway-calculator" }).hook },
+        React.createElement(optInMod.CalculatorEmailOptIn, {
+          source: "runway-calculator",
+          sourcePage: "/tools/runway-calculator",
+          notes: "Runway 12 months",
+          visible: true,
+        }),
+      ),
     );
   });
-  assert.equal(optIn.toJSON(), null, "the email capture box must not render");
-  assert.throws(() => optIn.root.findByProps({ "data-testid": "input-lead-email" }));
-  assert.throws(() => optIn.root.findByProps({ "data-testid": "email-result-panel" }));
-  assert.throws(() => optIn.root.findByProps({ "data-testid": "checkbox-lead-consent" }));
+  assert.ok(optIn.root.findByProps({ "data-testid": "input-lead-email" }));
+  assert.ok(optIn.root.findByProps({ "data-testid": "email-result-panel" }));
+  assert.ok(optIn.root.findByProps({ "data-testid": "checkbox-lead-consent" }));
 
   // Every calculator that shows the box does it through this one component,
   // and each still has its result markup. The form test id lives only in the
-  // shared component, which rendered nothing above.
+  // shared component, which rendered above.
   for (const page of PAGES) {
     const src = readFileSync(page.file, "utf8");
     assert.match(src, /CalculatorEmailOptIn/, `${page.path} must keep the shared opt-in`);
@@ -179,10 +182,9 @@ test("email capture is not rendered and calculator results still are", async () 
   assert.ok(page.root.findByProps({ "data-testid": "text-runway-date" }));
   assert.ok(page.root.findByProps({ "data-testid": "chart-runway" }));
 
+  assert.ok(page.root.findByProps({ "data-testid": "input-lead-email" }));
+  assert.ok(page.root.findByProps({ "data-testid": "section-email-opt-in" }));
   const rendered = JSON.stringify(page.toJSON());
-  assert.doesNotMatch(rendered, /input-lead-email/);
-  assert.doesNotMatch(rendered, /email-result-panel/);
-  assert.doesNotMatch(rendered, /checkbox-lead-consent/);
-  assert.doesNotMatch(rendered, /section-email-opt-in/);
-  assert.doesNotMatch(rendered, /Email me this result/);
+  assert.match(rendered, /input-lead-email/);
+  assert.match(rendered, /email-result-panel/);
 });
