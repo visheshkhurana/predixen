@@ -320,6 +320,176 @@ def lead_may_receive_founder_tips(lead) -> bool:
     )
 
 
+# Plan strings the public lead forms submit. Billing tiers are not lead plans.
+# A request value outside this set is dropped from lead_captured.
+LEAD_CAPTURED_PLANS = frozenset(
+    {
+        "burn-multiple",
+        "default-alive",
+        "dilution",
+        "ltv-cac",
+        "runway-calculator",
+        "survival-simulator",
+    }
+)
+
+# Public paths that render a lead form. Anything else, including a query string
+# or a calculator result stuffed into the field, is replaced with the token below.
+LEAD_CAPTURED_SOURCE_PAGES = frozenset(
+    {
+        "/default-alive",
+        "/survival-simulator",
+        "/tools/burn-multiple",
+        "/tools/dilution",
+        "/tools/ltv-cac",
+        "/tools/runway-calculator",
+    }
+)
+LEAD_CAPTURED_SOURCE_PAGE_OTHER = "other"
+
+# Lead-form source slugs, plus the server default for a hand-entered address.
+# location and source on lead_captured are this set or "other".
+LEAD_CAPTURED_SOURCES = frozenset(
+    {
+        "burn-multiple",
+        "default-alive",
+        "dilution",
+        "ltv-cac",
+        "runway-calculator",
+        "survival-simulator",
+        "website",
+    }
+)
+
+# Public site hostnames. x-forwarded-host is caller-controlled, so anything
+# else — another app host, a port, a phone number — is "other".
+LEAD_CAPTURED_HOSTS = frozenset(
+    {
+        "founderconsole.ai",
+        "www.founderconsole.ai",
+    }
+)
+
+# Keys lead_captured may send. A key outside this set is dropped, including
+# when a later edit copies another LeadCreate field onto the event.
+LEAD_CAPTURED_PROPERTIES = frozenset(
+    {
+        "created",
+        "distinct_id_source",
+        "host",
+        "location",
+        "plan",
+        "source",
+        "source_page",
+    }
+)
+
+# Founder financial figures. The result email and the lead row keep what they
+# already store. None of these are lead_captured properties: runway_months,
+# and any cash, burn, revenue, or runway figure, including the notes string
+# that quotes them.
+_LEAD_CAPTURED_FINANCIAL_KEYS = frozenset(
+    {
+        "arr",
+        "burn",
+        "burn_rate",
+        "cash",
+        "cash_balance",
+        "cash_on_hand",
+        "cash_remaining",
+        "expenses",
+        "gross_burn",
+        "growth",
+        "growth_rate",
+        "monthly_burn",
+        "monthly_expenses",
+        "monthly_revenue",
+        "mrr",
+        "net_burn",
+        "notes",
+        "revenue",
+        "runway",
+        "runway_date",
+        "runway_months",
+    }
+)
+
+
+def _allowed_plan(value: object, markers: tuple[str, ...]) -> str:
+    text = _scrub_email(value, markers).strip()
+    if text in LEAD_CAPTURED_PLANS:
+        return text
+    return ""
+
+
+def _allowed_source_page(value: object, markers: tuple[str, ...]) -> str:
+    text = _scrub_email(value, markers).strip()
+    if text in LEAD_CAPTURED_SOURCE_PAGES:
+        return text
+    return LEAD_CAPTURED_SOURCE_PAGE_OTHER
+
+
+def _allowed_source(value: object, markers: tuple[str, ...]) -> str:
+    """location and source. Empty stays the website default; anything unknown is other."""
+    raw = "" if value is None else str(value).strip()
+    if not raw:
+        raw = "website"
+    text = _scrub_email(raw, markers, "")
+    if text in LEAD_CAPTURED_SOURCES:
+        return text
+    return LEAD_CAPTURED_SOURCE_PAGE_OTHER
+
+
+def _allowed_host(value: object, markers: tuple[str, ...]) -> str:
+    text = _scrub_email(value, markers).strip()
+    if text in LEAD_CAPTURED_HOSTS:
+        return text
+    return LEAD_CAPTURED_SOURCE_PAGE_OTHER
+
+
+def _without_utm(value: object) -> object:
+    """Drop every utm_* key. Campaign params are not lead_captured properties."""
+    if isinstance(value, dict):
+        return {
+            key: _without_utm(item)
+            for key, item in value.items()
+            if not str(key).lower().startswith("utm_")
+        }
+    if isinstance(value, list):
+        return [_without_utm(item) for item in value]
+    return value
+
+
+def _is_financial_key(key: object) -> bool:
+    """True for a founder cash, burn, revenue, or runway figure."""
+    name = str(key).lower()
+    if name in _LEAD_CAPTURED_FINANCIAL_KEYS:
+        return True
+    # runway_months_p50, cashBalance, monthly-revenue, and the same shapes.
+    compact = re.sub(r"[^a-z0-9]", "", name)
+    stems = ("runway", "cash", "burn", "revenue")
+    return any(stem in compact for stem in stems)
+
+
+def _lead_captured_properties(value: object) -> dict:
+    """Keep only LEAD_CAPTURED_PROPERTIES. Financial keys never pass.
+
+    Nested objects are dropped. A dict under an allowed key could carry
+    cash, burn, revenue, or runway without those words being the top-level key.
+    """
+    if not isinstance(value, dict):
+        return {}
+    kept: dict = {}
+    for key, item in value.items():
+        name = str(key)
+        if name not in LEAD_CAPTURED_PROPERTIES or _is_financial_key(name):
+            continue
+        if isinstance(item, (dict, list)):
+            continue
+        kept[name] = item
+    return kept
+
+
 def _request_host(request: Optional[Request]) -> str:
     if request is None:
         return ""
@@ -345,11 +515,18 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
     committed so a successful POST always emits, independent of the browser.
     The distinct_id is the browser one when the page sent a safe id. Otherwise
     it is a random opt-in id. The address and any hash of it are stripped from
-    the id and from every property. Does not call identify or reset anyone.
+    the id and from every property. The only property keys are
+    LEAD_CAPTURED_PROPERTIES. runway_months and the other founder financial
+    figures — cash, burn, revenue, and runway — are not properties. plan is
+    included only when it is in LEAD_CAPTURED_PLANS. source and location are a
+    LEAD_CAPTURED_SOURCES value or "other". source_page is a
+    LEAD_CAPTURED_SOURCE_PAGES value or "other". host is a LEAD_CAPTURED_HOSTS
+    value or "other". utm_* keys are never properties. Does not call identify
+    or reset anyone.
     """
     try:
         markers = _email_markers(str(data.email))
-        location = _scrub_email((data.source or "website").strip() or "website", markers, "website") or "website"
+        location = _allowed_source(data.source, markers)
         distinct_id, distinct_id_source = _event_distinct_id(data)
         if _mentions_email(distinct_id, markers):
             distinct_id, distinct_id_source = f"optin:{uuid.uuid4().hex}", "anonymous"
@@ -358,17 +535,13 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
             "source": location,
             "created": created,
             "distinct_id_source": distinct_id_source,
-            "host": _scrub_email(host, markers),
+            "host": _allowed_host(host, markers),
+            "source_page": _allowed_source_page(data.source_page, markers),
         }
-        page = _scrub_email((data.source_page or "").strip(), markers)
-        if page:
-            properties["source_page"] = page
-        runway = _scrub_email(data.runway_months, markers)
-        if runway:
-            properties["runway_months"] = runway
-        plan = _scrub_email(data.plan, markers)
+        plan = _allowed_plan(data.plan, markers)
         if plan:
             properties["plan"] = plan
+        properties = _lead_captured_properties(_without_utm(properties))
         posthog_capture(
             "lead_captured",
             distinct_id,

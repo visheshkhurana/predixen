@@ -99,13 +99,16 @@ def _db():
 def test_posthog_capture_omits_email_and_every_hash_of_it():
     markers = _email_markers(EMAIL)
     short = markers[2]
+    notes = f"{EMAIL} Cash 500000, revenue 25000, burn 40000, runway 8"
     data = _consented(
         source=EMAIL,
         plan=f"lead:{short}",
-        notes=EMAIL,
+        notes=notes,
         source_page=f"/tools/{markers[1]}",
         distinct_id=f"lead:{short}",
         runway_months="4",
+        runway_date="2027-03-01",
+        monthly_burn="40000",
     )
     captured = {}
 
@@ -126,9 +129,25 @@ def test_posthog_capture_omits_email_and_every_hash_of_it():
     assert body["event"] == "lead_captured"
     assert body["distinct_id"].startswith("optin:")
     assert body["properties"]["distinct_id_source"] == "anonymous"
-    assert body["properties"]["location"] == "website"
-    assert "source_page" not in body["properties"]
+    assert body["properties"]["location"] == "other"
+    assert body["properties"]["source"] == "other"
+    assert body["properties"]["host"] == "other"
+    assert body["properties"]["source_page"] == "other"
+    assert markers[1] not in body["properties"]["source_page"]
     assert "plan" not in body["properties"]
+    for key in (
+        "runway_months",
+        "runway",
+        "runway_date",
+        "cash",
+        "burn",
+        "revenue",
+        "monthly_burn",
+        "notes",
+    ):
+        assert key not in body["properties"]
+    for token in ("500000", "25000", "40000", "2027-03-01", "cash 500000", notes.lower()):
+        assert token not in blob
 
 
 def test_client_posts_the_address_in_the_body_not_the_url():
