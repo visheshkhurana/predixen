@@ -113,3 +113,68 @@ def test_lead_consent_migration_is_idempotent_and_leaves_existing_rows_unconsent
     assert manual.consent_at is None
     assert manual.source_page is None
     assert manual.consent_status is None
+
+
+def test_startup_calls_ensure_lead_consent_columns_when_migrations_disabled(monkeypatch):
+    """Production defaults RUN_MIGRATIONS off. Startup still has to add the columns.
+
+    Executes the real `_run_deferred_startup` body from server/main.py with the
+    app's settings object. Importing server.main also builds the ASGI app, so
+    the function is loaded from that file directly.
+    """
+    import ast
+    import asyncio
+    import logging
+    from pathlib import Path
+    from unittest.mock import MagicMock
+
+    monkeypatch.setenv("RUN_MIGRATIONS", "false")
+    monkeypatch.setenv("CREATE_SCHEMA", "false")
+    monkeypatch.setenv("SEED_BENCHMARKS", "false")
+    monkeypatch.setenv("SEED_DEMO_DATA", "false")
+
+    from server.core.config import settings
+    import server.core.migrations as migrations
+
+    assert settings.should_run_migrations is False
+
+    calls = []
+
+    def _record(engine):
+        calls.append(engine)
+
+    def _migrations_must_not_run(engine):
+        raise AssertionError("run_migrations ran while should_run_migrations is false")
+
+    monkeypatch.setattr(migrations, "ensure_lead_consent_columns", _record)
+    monkeypatch.setattr(migrations, "run_migrations", _migrations_must_not_run)
+
+    def _drop_task(coro, *args, **kwargs):
+        coro.close()
+        return MagicMock()
+
+    monkeypatch.setattr(asyncio, "create_task", _drop_task)
+
+    main_path = Path(__file__).resolve().parents[1] / "main.py"
+    module = ast.parse(main_path.read_text())
+    startup = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_run_deferred_startup"
+    )
+    isolated = ast.Module(body=[startup], type_ignores=[])
+    ast.fix_missing_locations(isolated)
+    namespace = {
+        "settings": settings,
+        "logger": logging.getLogger("test.startup"),
+        "engine": object(),
+        "Base": object(),
+        "SessionLocal": lambda: MagicMock(),
+        "_startup_state": {"ready": False, "error": None},
+    }
+    exec(compile(isolated, str(main_path), "exec"), namespace)
+
+    asyncio.run(namespace["_run_deferred_startup"]())
+
+    assert namespace["_startup_state"]["error"] is None
+    assert calls == [namespace["engine"]]

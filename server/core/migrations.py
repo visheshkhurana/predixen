@@ -1095,7 +1095,10 @@ def _apply_lead_consent_ddl(
             try:
                 conn.execute(text(executable.strip().rstrip(";")))
             except Exception as e:
-                logger.debug("leads.%s may already exist or the table is missing: %s", name, e)
+                # Postgres aborts the transaction on the first failed statement,
+                # so a swallowed debug log hides that the rest of this batch did
+                # not apply.
+                logger.warning("leads.%s may already exist or the table is missing: %s", name, e)
         conn.commit()
     logger.info(done_message)
 
