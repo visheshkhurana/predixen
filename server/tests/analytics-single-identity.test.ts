@@ -160,10 +160,11 @@ test("signup_completed fires through trackFunnel and the server first-success pa
   assert.match(oauth, /emit_signup_completed\(\s*user_id=user\.id,\s*method="google"/);
   assert.match(oauth, /anonymous_distinct_id=anonymous_distinct_id/);
   assert.match(activation, /posthog_capture\(\s*"signup_completed"/);
-  // Browser identifyUser uses String(userId). A user:{id} prefix is a second person.
+  // Browser identifyUser sends the decimal user id. A user:{id} prefix is a second person.
   assert.match(activation, /user_distinct_id\(user_id\)/);
   assert.doesNotMatch(activation, /f"user:\{user_id\}"/);
-  assert.match(posthogLib, /distinctId:\s*String\(userId\)/);
+  assert.match(posthogLib, /const id = Number\(userId\);[\s\S]*distinctId:\s*String\(id\)/);
+  assert.doesNotMatch(posthogLib, /distinctId:\s*String\(userId\)/);
   assert.doesNotMatch(authApi, /emit_signup_completed.*login/i);
 });
 

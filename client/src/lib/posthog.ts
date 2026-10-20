@@ -133,12 +133,20 @@ export function initPostHog() {
   }
 }
 
+/** Clears calls queued before the SDK loads. Tests only. */
+export function takeQueuedPostHogCallsForTests(): QueuedPostHogCall[] {
+  return pending.splice(0, pending.length);
+}
+
 export function identifyUser(userId: number, email: string, role?: string) {
-  // Callers still pass email. PostHog gets the numeric id as distinct_id and role only.
+  // Callers still pass email. PostHog gets a finite numeric id as distinct_id and role only.
+  // Number(undefined) is NaN, so a session with no id never identifies as "undefined".
   void email;
+  const id = Number(userId);
+  if (!Number.isFinite(id)) return;
   dispatch({
     kind: "identify",
-    distinctId: String(userId),
+    distinctId: String(id),
     traits: { role: role || "viewer" },
   });
 }

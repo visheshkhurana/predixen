@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
+import { identifyUser, takeQueuedPostHogCallsForTests } from "../../client/src/lib/posthog";
 
 const EMAIL_KEYS = new Set(["email", "$email", "user_email"]);
 
@@ -263,11 +264,52 @@ test("identifyUser sends the numeric id and role only", () => {
   assert.ok(end > start);
   const fn = src.slice(start, end);
   assert.match(fn, /email:\s*string/, "signature keeps the email argument");
-  assert.match(fn, /distinctId:\s*String\(userId\)/);
+  assert.match(fn, /const id = Number\(userId\);/);
+  assert.match(fn, /if\s*\(\s*!Number\.isFinite\(id\)\s*\)\s*return;/);
+  assert.match(fn, /distinctId:\s*String\(id\)/);
+  assert.doesNotMatch(fn, /distinctId:\s*String\(userId\)/);
   assert.match(fn, /traits:\s*\{\s*role:\s*role\s*\|\|\s*["']viewer["']\s*\}/);
   const body = fn.slice(fn.indexOf("{"));
   assert.doesNotMatch(body, /\b(?:email|user_email|\$email)\s*(?:,|:|\})/);
   assert.deepEqual(findEmailLeaks("client/src/lib/posthog.ts", src), []);
+});
+
+test("identifyUser does not identify a non-finite user id", () => {
+  takeQueuedPostHogCallsForTests();
+  const missing = [
+    undefined,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    "undefined",
+    "not-a-number",
+  ];
+  for (const userId of missing) {
+    identifyUser(userId as unknown as number, "person@example.com", "owner");
+  }
+  assert.deepEqual(
+    takeQueuedPostHogCallsForTests(),
+    [],
+    "a missing id must not be queued as distinct_id \"undefined\"",
+  );
+
+  identifyUser(42, "person@example.com", "owner");
+  identifyUser("15" as unknown as number, "person@example.com");
+  const queued = takeQueuedPostHogCallsForTests();
+  assert.deepEqual(
+    queued.map((call) => (call.kind === "identify" ? { id: call.distinctId, traits: call.traits } : call)),
+    [
+      { id: "42", traits: { role: "owner" } },
+      { id: "15", traits: { role: "viewer" } },
+    ],
+  );
+  for (const call of queued) {
+    assert.equal(call.kind, "identify");
+    if (call.kind === "identify") {
+      assert.equal(call.distinctId.includes("undefined"), false);
+      assert.equal(Object.hasOwn(call.traits, "email"), false);
+    }
+  }
 });
 
 test("trackSignup keeps email on the signature and does not send it", () => {
