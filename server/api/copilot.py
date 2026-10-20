@@ -606,6 +606,10 @@ async def copilot_quick_chat(
             )
 
         sanitized_message = PromptInjectionDefense.sanitize_user_input(request.message)
+        # Same gate as the main /chat path: redact founder PII before any model
+        # sees the text. The router writes the llm_audit_logs row.
+        pii_mode = "standard"
+        redacted_message = redact_text(sanitized_message, mode=pii_mode).redacted_text
 
         context = build_context_pack(company, db)
         data_summary = _build_data_summary(context)
@@ -617,7 +621,7 @@ async def copilot_quick_chat(
         today_str = dt.utcnow().strftime("%B %d, %Y")
 
         web_research = await search_for_copilot(
-            message=sanitized_message,
+            message=redacted_message,
             company_industry=company.industry or "",
             company_stage=company.stage or "",
             company_name=company.name or "",
@@ -636,10 +640,10 @@ async def copilot_quick_chat(
         messages = []
         if request.conversation_history:
             for msg in request.conversation_history[-10:]:
-                # Also sanitize conversation history
                 sanitized_content = PromptInjectionDefense.sanitize_user_input(msg.content)
-                messages.append({"role": msg.role, "content": sanitized_content})
-        messages.append({"role": "user", "content": PromptInjectionDefense.wrap_user_message(sanitized_message)})
+                redacted_content = redact_text(sanitized_content, mode=pii_mode).redacted_text
+                messages.append({"role": msg.role, "content": redacted_content})
+        messages.append({"role": "user", "content": PromptInjectionDefense.wrap_user_message(redacted_message)})
 
         system_prompt = QUICK_CHAT_SYSTEM_PROMPT + f"\n\nToday's date: {today_str}\n\n--- COMPANY DATA ---\n{data_summary}\n--- END DATA ---"
 
@@ -669,10 +673,13 @@ async def copilot_quick_chat(
         if data_gaps:
             system_prompt += f"\n\n--- DATA GAPS ---\nThe following data is not yet available: {'; '.join(data_gaps)}\nMention relevant gaps when they would improve the analysis quality.\n--- END GAPS ---"
 
+        system_prompt = redact_text(system_prompt, mode=pii_mode).redacted_text
+
         llm_router = get_llm_router(
             db_session=db,
             company_id=company_id,
-            user_id=current_user.id
+            user_id=current_user.id,
+            pii_mode=pii_mode,
         )
 
         import asyncio

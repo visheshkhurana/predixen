@@ -13,11 +13,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from server.core.db import get_db
+from server.core.db import SessionLocal
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
 from server.models import User
-from server.lib.llm.openai_client import get_openai_client
+from server.lib.llm.openai_client import get_audited_client
 from server.services.simulation.engine import SimulationEngine
 from server.services.simulation.input_normalization import inputs_for_simulation_request
 from server.services.simulation.types import CompanyState, AgentAction, net_runway_months
@@ -123,101 +123,154 @@ def build_simulation_v2_state(normalized: dict) -> tuple[CompanyState, dict, int
     return initial_state, scenario_params, normalized["total_rounds"]
 
 
+def _simulation_company_id(db, user) -> Optional[int]:
+    """Best-effort company for the audit row. The run itself is user-scoped."""
+    try:
+        from server.models.company import Company
+        company = (
+            db.query(Company)
+            .filter(Company.user_id == user.id)
+            .order_by(Company.id.asc())
+            .first()
+        )
+        return company.id if company is not None else None
+    except Exception:
+        logger.warning("Could not resolve a company for the simulation audit row", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _audited_simulation_client(db, user):
+    """The same audited OpenAI client llm_router uses, with a thread-safe session.
+
+    Persona generation calls the client from a worker thread. A request Session
+    is not safe to share across those calls without the router's lock.
+    """
+    from server.lib.llm.llm_router import _ThreadSafeSession
+
+    return get_audited_client(
+        db_session=_ThreadSafeSession(db),
+        company_id=_simulation_company_id(db, user),
+        user_id=user.id,
+        pii_mode="standard",
+    )
+
+
 @router.post("/simulation/v2/run")
 async def run_simulation_v2_sse(
     request: SimulationV2Request,
     current_user: User = Depends(get_current_user),
 ):
-    client = get_openai_client()
-    if not client:
-        raise HTTPException(status_code=503, detail="LLM service not configured")
+    db = None
 
-    normalized, input_provenance = inputs_for_simulation_request(request)
-    initial_state, scenario_params, total_rounds = build_simulation_v2_state(normalized)
-
-    engine = SimulationEngine(llm_client=client, model="gpt-5-mini")
-
-    event_queue: asyncio.Queue = asyncio.Queue()
-
-    async def progress_callback(step: str, pct: int, msg: str):
-        await event_queue.put(_sse_event("progress", {"step": step, "pct": pct, "msg": msg}))
-
-    async def event_callback(action: AgentAction):
-        await event_queue.put(_sse_event("agent_event", {"data": action.to_dict()}))
-
-    async def run_engine():
+    def close_db():
+        if db is None:
+            return
         try:
-            result = await asyncio.wait_for(
-                engine.run_simulation(
-                    initial_state=initial_state,
-                    scenario_params=scenario_params,
-                    total_rounds=total_rounds,
-                    progress_callback=progress_callback,
-                    event_callback=event_callback,
-                ),
-                timeout=180.0,
-            )
+            db.close()
+        except Exception:
+            pass
 
-            for rnd in result.rounds:
-                await event_queue.put(_sse_event("round_complete", {
-                    "round": rnd["round"],
-                    "state": rnd["state"],
-                    "action_count": len(rnd["actions"]),
-                }))
-
-            agents_data = [a.to_dict() for a in result.config.agents]
-            await event_queue.put(_sse_event("agents_generated", {"agents": agents_data}))
-
-            complete_data = {
-                "simulation_id": result.simulation_id,
-                "status": result.status.value,
-                "total_rounds": result.config.total_rounds,
-                "total_actions": len(result.all_actions),
-                "initial_state": result.config.initial_state.to_dict(),
-                "final_state": result.final_state.to_dict(),
-                "report": result.report,
-                "rounds": result.rounds,
-                "all_actions": [a.to_dict() for a in result.all_actions],
-                "agents": agents_data,
-                "input_provenance": input_provenance,
-            }
-
-            _results_store.put(result.simulation_id, current_user.id, complete_data)
-
-            await event_queue.put(_sse_event("complete", {"result": complete_data}))
-        except asyncio.TimeoutError:
-            logger.warning("Flight Simulator timed out after 180s")
-            await event_queue.put(_sse_event("error", {"message": "Simulation timed out after 3 minutes. Try reducing the number of rounds or try again."}))
-        except Exception as e:
-            logger.error(f"Simulation engine error: {e}\n{traceback.format_exc()}")
-            await event_queue.put(_sse_event("error", {"message": str(e)}))
-        finally:
-            await event_queue.put(None)
-
-    async def event_generator():
-        task = asyncio.create_task(run_engine())
+    try:
+        db = SessionLocal()
         try:
-            while True:
-                event = await event_queue.get()
-                if event is None:
-                    break
-                yield event
-        except asyncio.CancelledError:
-            task.cancel()
-            raise
-        finally:
-            if not task.done():
+            client = _audited_simulation_client(db, current_user)
+        except ValueError:
+            raise HTTPException(status_code=503, detail="LLM service not configured")
+
+        normalized, input_provenance = inputs_for_simulation_request(request)
+        initial_state, scenario_params, total_rounds = build_simulation_v2_state(normalized)
+
+        engine = SimulationEngine(llm_client=client, model="gpt-5-mini")
+
+        event_queue: asyncio.Queue = asyncio.Queue()
+
+        async def progress_callback(step: str, pct: int, msg: str):
+            await event_queue.put(_sse_event("progress", {"step": step, "pct": pct, "msg": msg}))
+
+        async def event_callback(action: AgentAction):
+            await event_queue.put(_sse_event("agent_event", {"data": action.to_dict()}))
+
+        async def run_engine():
+            try:
+                result = await asyncio.wait_for(
+                    engine.run_simulation(
+                        initial_state=initial_state,
+                        scenario_params=scenario_params,
+                        total_rounds=total_rounds,
+                        progress_callback=progress_callback,
+                        event_callback=event_callback,
+                    ),
+                    timeout=180.0,
+                )
+
+                for rnd in result.rounds:
+                    await event_queue.put(_sse_event("round_complete", {
+                        "round": rnd["round"],
+                        "state": rnd["state"],
+                        "action_count": len(rnd["actions"]),
+                    }))
+
+                agents_data = [a.to_dict() for a in result.config.agents]
+                await event_queue.put(_sse_event("agents_generated", {"agents": agents_data}))
+
+                complete_data = {
+                    "simulation_id": result.simulation_id,
+                    "status": result.status.value,
+                    "total_rounds": result.config.total_rounds,
+                    "total_actions": len(result.all_actions),
+                    "initial_state": result.config.initial_state.to_dict(),
+                    "final_state": result.final_state.to_dict(),
+                    "report": result.report,
+                    "rounds": result.rounds,
+                    "all_actions": [a.to_dict() for a in result.all_actions],
+                    "agents": agents_data,
+                    "input_provenance": input_provenance,
+                }
+
+                _results_store.put(result.simulation_id, current_user.id, complete_data)
+
+                await event_queue.put(_sse_event("complete", {"result": complete_data}))
+            except asyncio.TimeoutError:
+                logger.warning("Flight Simulator timed out after 180s")
+                await event_queue.put(_sse_event("error", {"message": "Simulation timed out after 3 minutes. Try reducing the number of rounds or try again."}))
+            except Exception as e:
+                logger.error(f"Simulation engine error: {e}\n{traceback.format_exc()}")
+                await event_queue.put(_sse_event("error", {"message": str(e)}))
+            finally:
+                await event_queue.put(None)
+
+        async def event_generator():
+            task = asyncio.create_task(run_engine())
+            try:
+                while True:
+                    event = await event_queue.get()
+                    if event is None:
+                        break
+                    yield event
+            except asyncio.CancelledError:
                 task.cancel()
+                raise
+            finally:
+                if not task.done():
+                    task.cancel()
+                close_db()
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except Exception:
+        close_db()
+        raise
 
 
 @router.get("/simulation/v2/{simulation_id}")
