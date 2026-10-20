@@ -172,11 +172,18 @@ def is_internal_or_test_account(
     return bool(admin) and full == admin
 
 
+# Cohort 429335 ("Internal / Test users") is an exact match on this person
+# property. It matches only when the property is set. The value has to be
+# JSON boolean true — the string "true" is a different value, and false is
+# not sent for everyone else.
+_INTERNAL_OR_TEST_USER: bool = True
+
+
 def set_internal_or_test_person(distinct_id: str) -> bool:
     """Set ``$internal_or_test_user`` on the person. Never raises.
 
     Signup capture forces ``$process_person_profile`` off, so this is its
-    own ``$set`` and person processing stays on. The body is the boolean
+    own ``$set`` and person processing stays on. The body is boolean true
     and the numeric distinct id — no address and no domain.
     """
     try:
@@ -188,6 +195,10 @@ def set_internal_or_test_person(distinct_id: str) -> bool:
         key = _api_key()
         if not key:
             return False
+        # bool, not str. json.dumps emits `true`, which is what the cohort matches.
+        value: bool = _INTERNAL_OR_TEST_USER
+        if type(value) is not bool or value is not True:
+            return False
         payload = {
             "api_key": key,
             "event": "$set",
@@ -195,7 +206,7 @@ def set_internal_or_test_person(distinct_id: str) -> bool:
             "properties": {
                 "$lib": "founderconsole-server",
                 "$process_person_profile": True,
-                "$set": {"$internal_or_test_user": True},
+                "$set": {"$internal_or_test_user": value},
             },
         }
         return _post(payload, "$set")

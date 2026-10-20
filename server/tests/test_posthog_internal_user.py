@@ -82,14 +82,25 @@ def _flag_events(sent: list[tuple[str, str]]) -> list[dict]:
 
 
 def _assert_flagged(sent: list[tuple[str, str]], email: str, distinct_id: str) -> None:
+    """Cohort 429335 matches only when the person property is set to boolean true."""
     flagged = _flag_events(sent)
     assert len(flagged) == 1
     body = flagged[0]
     assert body["event"] == "$set"
     assert body["distinct_id"] == distinct_id
     assert body["properties"]["$process_person_profile"] is True
+    value = body["properties"]["$set"]["$internal_or_test_user"]
+    assert value is True
+    assert type(value) is bool
     assert body["properties"]["$set"] == {"$internal_or_test_user": True}
     assert set(body["properties"]) == {"$lib", "$process_person_profile", "$set"}
+    raws = [raw for _url, raw in sent if "$internal_or_test_user" in raw]
+    assert raws
+    for raw in raws:
+        # JSON boolean true. The string "true" and boolean false do not match.
+        assert '"$internal_or_test_user": true' in raw
+        assert '"$internal_or_test_user": "true"' not in raw
+        assert '"$internal_or_test_user": false' not in raw
     _assert_no_address(sent, email)
 
 
@@ -152,6 +163,8 @@ def test_normal_founder_signup_and_login_do_not_set_the_flag():
         assert emit_signup_completed(user_id=4, method="email", email=email) is True
     assert _flag_events(sent) == []
     assert "$internal_or_test_user" not in _blob(sent)
+    assert '"$internal_or_test_user": false' not in _blob(sent)
+    assert '"$internal_or_test_user": true' not in _blob(sent)
     _assert_no_address(sent, email)
 
     with _capture_posts() as sent:
