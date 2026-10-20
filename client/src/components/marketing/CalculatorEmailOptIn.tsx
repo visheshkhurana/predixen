@@ -113,8 +113,8 @@ function CalculatorEmailOptInForm({
         ...trackExtra,
         host: window.location.host,
       });
-      // Only after the row is saved. The address stays in the POST body
-      // and is not a pixel parameter.
+      // Only after the row is saved. No-op unless the marketing shell
+      // already loaded fbq. The address stays in the POST body.
       metaTrack("Lead", { content_name: source });
     } catch {
       // The result is still on screen. Ask them to try again, nothing else.

@@ -1,11 +1,14 @@
 /**
- * Meta (Facebook) Pixel.
+ * Meta (Facebook) Pixel — privacy-scoped loader.
  *
- * Enablement is a code constant, not an env var. `META_PIXEL_ENABLED` true
- * loads the pixel and lets `metaTrack` fire. False makes every helper a no-op.
+ * Loads only on public marketing pages, per the Privacy Policy.
+ * Never active inside the core app.
  *
- * Events carry a fresh `eventID` so a later Conversions API call can dedupe
- * against the browser event. Email and other personal data never go to fbq.
+ * Enablement is the code constant META_PIXEL_ENABLED, not an env var.
+ * The marketing shell is what installs fbq. metaTrack is a no-op when fbq
+ * is absent (a later change consent-gates that load) and a no-op on any
+ * core-app route. Each event that does fire gets an eventID for a later
+ * Conversions API dedupe. Email and other personal data are never sent.
  */
 
 /** Flip to false to silence the pixel without adding an env var. */
@@ -19,11 +22,62 @@ export const META_PIXEL_ID = "872167299140812";
 
 const PIXEL_ID = META_PIXEL_ID;
 
-let loaded = false;
+/**
+ * Public pages that render MarketingLayout. The pixel script is installed
+ * only from that shell. Auth, onboarding, billing, and the signed-in app
+ * are not in this set.
+ */
+const MARKETING_EXACT = new Set([
+  "/",
+  "/about",
+  "/ai-cfo",
+  "/alternatives",
+  "/blog",
+  "/compare",
+  "/contact",
+  "/customers",
+  "/default-alive",
+  "/demo",
+  "/faq",
+  "/features",
+  "/how-it-works",
+  "/pricing",
+  "/product",
+  "/security",
+  "/survival-simulator",
+  "/tools",
+  "/use-cases",
+]);
+
+const MARKETING_PREFIXES = ["/blog/", "/runway/", "/survival/", "/tools/", "/vs/"];
 
 /** True when the code constant says the pixel may fire. */
 export function isMetaPixelEnabled(): boolean {
   return META_PIXEL_ENABLED;
+}
+
+function currentPath(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const path = window.location?.pathname;
+    if (typeof path !== "string" || path.length === 0) return "";
+    return path.split("?")[0];
+  } catch {
+    return "";
+  }
+}
+
+/** True on a public marketing page. False inside the core app. */
+export function isMetaPixelSurface(pathname?: string): boolean {
+  const path = pathname ?? currentPath();
+  if (MARKETING_EXACT.has(path)) return true;
+  return MARKETING_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function fbqFn(): ((...args: unknown[]) => void) | null {
+  if (typeof window === "undefined") return null;
+  const fbq = (window as any).fbq;
+  return typeof fbq === "function" ? fbq : null;
 }
 
 const PII_KEYS = new Set([
@@ -86,8 +140,9 @@ export function createMetaEventId(): string {
 
 function ensureLoaded(): boolean {
   if (!isMetaPixelEnabled() || !PIXEL_ID) return false;
+  if (!isMetaPixelSurface()) return false;
   if (typeof window === "undefined" || typeof document === "undefined") return false;
-  if (loaded) return typeof (window as any).fbq === "function";
+  if (fbqFn()) return true;
   try {
     /* eslint-disable */
     (function (f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) {
@@ -102,40 +157,43 @@ function ensureLoaded(): boolean {
     })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
     /* eslint-enable */
     (window as any).fbq("init", PIXEL_ID);
-    loaded = true;
     return true;
   } catch {
     return false;
   }
 }
 
-function track(event: string, params?: Record<string, unknown>): string | null {
-  if (!ensureLoaded()) return null;
+function send(event: string, params?: Record<string, unknown>): string | null {
+  const fbq = fbqFn();
+  if (!fbq) return null;
   const eventId = createMetaEventId();
-  (window as any).fbq("track", event, metaPixelParams(params), { eventID: eventId });
+  fbq("track", event, metaPixelParams(params), { eventID: eventId });
   return eventId;
 }
 
-/** PageView on public marketing pages (call from MarketingLayout). */
+/** PageView on public marketing pages (call from MarketingLayout). Installs fbq. */
 export function metaPageView(): string | null {
   try {
-    return track("PageView");
+    if (!ensureLoaded()) return null;
+    return send("PageView");
   } catch {
     return null;
   }
 }
 
 /**
- * Standard or custom event (Lead, CompleteRegistration, Subscribe, ...).
- * Returns the event id passed as fbq `eventID`, or null when the pixel is off.
- * Personal fields in `params` are removed and never sent.
+ * Standard or custom event.
+ * No-op unless this is a marketing page and fbq is already loaded.
+ * Does not install the pixel. Personal fields in `params` are removed.
+ * Returns the event id passed as fbq `eventID`, or null when it does not fire.
  */
 export function metaTrack(
   event: string,
   params?: Record<string, unknown>,
 ): string | null {
   try {
-    return track(event, params);
+    if (!isMetaPixelEnabled() || !isMetaPixelSurface()) return null;
+    return send(event, params);
   } catch {
     return null;
   }

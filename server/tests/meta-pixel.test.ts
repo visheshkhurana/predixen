@@ -17,6 +17,7 @@ import {
   META_PIXEL_ID,
   createMetaEventId,
   isMetaPixelEnabled,
+  isMetaPixelSurface,
   metaPageView,
   metaPixelParams,
   metaTrack,
@@ -43,10 +44,26 @@ export async function load(url, context, nextLoad) {
 
 const EMAIL = "founder@startup.com";
 
+function setPath(pathname: string) {
+  const g = globalThis as any;
+  g.window = g;
+  g.location = {
+    pathname,
+    search: "",
+    host: "founderconsole.ai",
+    href: `https://founderconsole.ai${pathname}`,
+  };
+}
+
+function clearFbq() {
+  delete (globalThis as any).fbq;
+  delete (globalThis as any)._fbq;
+}
+
 function installDom() {
   const g = globalThis as any;
   g.window = g;
-  g.location = { host: "founderconsole.ai", href: "https://founderconsole.ai/tools/runway-calculator" };
+  setPath("/tools/runway-calculator");
   g.localStorage = {
     getItem(key: string) {
       if (String(key).includes("posthog")) return JSON.stringify({ distinct_id: "browser-1" });
@@ -118,11 +135,54 @@ test("enablement is a code constant set to true", () => {
   assert.doesNotMatch(src, /import\.meta\.env/);
   assert.doesNotMatch(src, /VITE_META_PIXEL/);
   assert.match(src, /eventID:\s*eventId/);
+  assert.match(src, /Loads only on public marketing pages, per the Privacy Policy/);
+  assert.match(src, /Never active inside the core app/);
 });
 
-test("metaTrack sends eventID and strips email and other PII", () => {
+const CORE_APP_ROUTES = [
+  "/overview",
+  "/simulate",
+  "/billing",
+  "/settings",
+  "/copilot",
+  "/onboarding",
+  "/auth",
+  "/auth/callback",
+  "/signup",
+];
+
+test("metaTrack is a no-op on core-app routes and when fbq is absent", () => {
   installDom();
-  assert.equal(isMetaPixelEnabled(), true);
+  clearFbq();
+  setPath("/tools/runway-calculator");
+  assert.equal(isMetaPixelSurface(), true);
+  assert.equal(metaTrack("Lead", { content_name: "runway-calculator", email: EMAIL }), null);
+  assert.equal((globalThis as any).fbq, undefined, "metaTrack must not install fbq");
+
+  const pageId = metaPageView();
+  assert.equal(typeof pageId, "string");
+  assert.equal(typeof (globalThis as any).fbq, "function");
+  const afterLoad = fbqCalls().length;
+
+  for (const route of CORE_APP_ROUTES) {
+    setPath(route);
+    assert.equal(isMetaPixelSurface(route), false, route);
+    const before = fbqCalls().length;
+    assert.equal(metaTrack("Lead", { email: EMAIL }), null, route);
+    assert.equal(metaTrack("CompleteRegistration", { method: "email" }), null, route);
+    assert.equal(metaPageView(), null, route);
+    assert.equal(fbqCalls().length, before, `${route} must not call fbq`);
+  }
+
+  setPath("/tools/runway-calculator");
+  assert.ok(fbqCalls().length >= afterLoad);
+});
+
+test("a loaded marketing pixel sends eventID and strips email", () => {
+  installDom();
+  clearFbq();
+  setPath("/pricing");
+  assert.equal(metaPageView() === null, false);
 
   const stripped = metaPixelParams({
     email: EMAIL,
@@ -132,10 +192,7 @@ test("metaTrack sends eventID and strips email and other PII", () => {
     content_name: "runway-calculator",
   });
   assert.deepEqual(stripped, { method: "email", content_name: "runway-calculator" });
-  assert.deepEqual(
-    metaPixelParams({ note: `reach me at ${EMAIL}` }),
-    {},
-  );
+  assert.deepEqual(metaPixelParams({ note: `reach me at ${EMAIL}` }), {});
 
   const first = metaTrack("Lead", {
     email: EMAIL,
@@ -144,14 +201,11 @@ test("metaTrack sends eventID and strips email and other PII", () => {
     content_name: "runway-calculator",
     note: `reach me at ${EMAIL}`,
   });
-  const second = metaTrack("CompleteRegistration", { method: "email", phone: "+15551212" });
-  const page = metaPageView();
+  const second = metaTrack("Lead", { content_name: "pricing" });
 
   assert.equal(typeof first, "string");
   assert.equal(typeof second, "string");
-  assert.equal(typeof page, "string");
   assert.notEqual(first, second);
-  assert.notEqual(second, page);
   assert.match(first!, /^[0-9a-f-]{36}$/i);
   assert.match(createMetaEventId(), /^[0-9a-f-]{36}$/i);
 
@@ -159,26 +213,17 @@ test("metaTrack sends eventID and strips email and other PII", () => {
   assert.deepEqual(init, ["init", META_PIXEL_ID]);
 
   const lead = tracks("Lead");
-  assert.equal(lead.length, 1);
+  assert.equal(lead.length, 2);
   assert.deepEqual(lead[0][2], { content_name: "runway-calculator" });
   assert.deepEqual(lead[0][3], { eventID: first });
   assertNoPii(lead[0]);
-
-  const signup = tracks("CompleteRegistration");
-  assert.equal(signup.length, 1);
-  assert.deepEqual(signup[0][2], { method: "email" });
-  assert.deepEqual(signup[0][3], { eventID: second });
-  assertNoPii(signup[0]);
-
-  const views = tracks("PageView");
-  assert.equal(views.length, 1);
-  assert.deepEqual(views[0][2], {});
-  assert.deepEqual(views[0][3], { eventID: page });
+  assertNoPii(lead[1]);
 });
 
-test("Lead fires only after /api/leads succeeds, and the pixel has no email", async () => {
+test("Lead fires only after /api/leads succeeds, and only if fbq is already loaded", async () => {
   installDom();
-  const before = tracks("Lead").length;
+  clearFbq();
+  setPath("/tools/runway-calculator");
   const { CalculatorEmailOptIn } = await import(
     "../../client/src/components/marketing/CalculatorEmailOptIn.tsx"
   );
@@ -214,7 +259,7 @@ test("Lead fires only after /api/leads succeeds, and the pixel has no email", as
     const body = JSON.parse(String(init?.body));
     assert.equal(body.email, EMAIL);
     assert.equal(body.consent, true);
-    if (posts === 1) return { ok: false, status: 500 };
+    if (posts === 1 || posts === 3) return { ok: false, status: 500 };
     return { ok: true, status: 200 };
   };
 
@@ -222,13 +267,54 @@ test("Lead fires only after /api/leads succeeds, and the pixel has no email", as
     await form.props.onSubmit({ preventDefault() {} });
   });
   assert.equal(posts, 1);
+  assert.equal((globalThis as any).fbq, undefined, "a failed save must not load the pixel");
+
+  // Success with no pixel installed: the row is saved, fbq stays absent.
+  const formUnloaded = tree.root.findByType("form");
+  await TestRenderer.act(async () => {
+    await formUnloaded.props.onSubmit({ preventDefault() {} });
+  });
+  assert.equal(posts, 2);
+  assert.equal((globalThis as any).fbq, undefined, "Lead must not install fbq");
+
+  // Fresh form, pixel already loaded by the marketing shell.
+  clearFbq();
+  setPath("/tools/runway-calculator");
+  assert.equal(typeof metaPageView(), "string");
+  const before = tracks("Lead").length;
+  let treeLoaded!: TestRenderer.ReactTestRenderer;
+  await TestRenderer.act(async () => {
+    treeLoaded = TestRenderer.create(
+      React.createElement(
+        Router,
+        { hook: memoryLocation({ path: "/tools/runway-calculator" }).hook },
+        React.createElement(CalculatorEmailOptIn, {
+          source: "runway-calculator",
+          sourcePage: "/tools/runway-calculator",
+          notes: "Runway 12 months",
+          visible: true,
+        }),
+      ),
+    );
+  });
+  const inputLoaded = treeLoaded.root.findByProps({ "data-testid": "input-lead-email" });
+  const consentLoaded = treeLoaded.root.findByProps({ "data-testid": "checkbox-lead-consent" });
+  await TestRenderer.act(async () => {
+    inputLoaded.props.onChange({ target: { value: EMAIL } });
+    consentLoaded.props.onCheckedChange(true);
+  });
+  const formLoaded = treeLoaded.root.findByType("form");
+  await TestRenderer.act(async () => {
+    await formLoaded.props.onSubmit({ preventDefault() {} });
+  });
+  assert.equal(posts, 3);
   assert.equal(tracks("Lead").length, before, "a failed save must not fire Lead");
 
-  const formAfterError = tree.root.findByType("form");
+  const formAfterError = treeLoaded.root.findByType("form");
   await TestRenderer.act(async () => {
     await formAfterError.props.onSubmit({ preventDefault() {} });
   });
-  assert.equal(posts, 2);
+  assert.equal(posts, 4);
   const leads = tracks("Lead");
   assert.equal(leads.length, before + 1);
   const fired = leads[leads.length - 1];
@@ -272,28 +358,19 @@ test("every /api/leads form fires Lead only on the success path", () => {
   }
 });
 
-test("signup completion fires CompleteRegistration without the address", () => {
+test("CompleteRegistration is not fired from auth or the core app", () => {
+  // No marketing-layout signup success page exists. /signup renders the auth
+  // form and then sends the new account to /onboarding. Drop the event here
+  // rather than fire it from /auth or /auth/callback.
+  const files = walk("client/src");
+  const hits = files.filter((file) =>
+    /CompleteRegistration/.test(readFileSync(file, "utf8")),
+  );
+  assert.deepEqual(hits, []);
   const auth = readFileSync("client/src/pages/auth.tsx", "utf8");
-  const signup = auth.slice(auth.indexOf("const trackSignup"), auth.indexOf("function AnimatedMetric"));
-  const call = signup.match(/metaTrack\(\s*['"]CompleteRegistration['"][\s\S]*?\);/)?.[0] ?? "";
-  assert.match(call, /\{\s*method\s*\}/);
-  assert.doesNotMatch(call, /email/);
-
-  const register = auth.slice(auth.indexOf("const handleRegister"), auth.indexOf("const handleDemoLogin"));
-  const saved = register.indexOf("await api.auth.register");
-  const tracked = register.indexOf("trackSignup(");
-  const catchAt = register.indexOf("} catch");
-  assert.ok(saved !== -1 && tracked > saved && tracked < catchAt);
-
-  const demo = auth.slice(auth.indexOf("const handleDemoLogin"), auth.indexOf("const handleSocialLogin"));
-  assert.doesNotMatch(demo, /metaTrack|trackSignup|CompleteRegistration/);
-
   const callback = readFileSync("client/src/pages/auth-callback.tsx", "utf8");
-  const pixel = callback.match(/metaTrack\(\s*['"]CompleteRegistration['"][\s\S]*?\);/)?.[0] ?? "";
-  assert.match(pixel, /method:\s*['"]google['"]/);
-  assert.doesNotMatch(pixel, /email/);
-  const after = callback.slice(callback.indexOf(pixel));
-  assert.doesNotMatch(after.slice(after.indexOf("} else {")), /metaTrack|CompleteRegistration/);
+  assert.doesNotMatch(auth, /metaTrack|metaPixel/);
+  assert.doesNotMatch(callback, /metaTrack|metaPixel/);
 });
 
 test("marketing layout does not boot a second pixel", () => {
