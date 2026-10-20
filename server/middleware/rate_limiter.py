@@ -7,6 +7,8 @@ Stale entries are cleaned up by a background task every 5 minutes.
 
 import os
 import asyncio
+import ipaddress
+import threading
 import time
 from typing import Tuple, Optional
 from fastapi import Request
@@ -19,6 +21,172 @@ import logging
 logger = logging.getLogger(__name__)
 
 _cleanup_task_started = False
+
+# Two trusted proxies sit in front of this process: Railway's public edge, then
+# the Express app. server/index.ts sets `trust proxy` to 1 and proxies /api to
+# FastAPI, so FastAPI's TCP peer is Express on loopback, not the visitor.
+#
+# The edge sets X-Real-IP to the client and replaces a caller-supplied value.
+# Express forwards that header unchanged. req.ip is the rightmost
+# X-Forwarded-For hop, which on Railway is the shared edge address, so it is
+# not the bucket. X-Real-IP is the client only when the socket peer is
+# loopback (127.0.0.1, ::1, or IPv4-mapped ::ffff:127.0.0.1) — the Express
+# proxy. A direct connection to this process (uvicorn binds every interface)
+# can put any address in X-Real-IP, and trusting it opens a fresh bucket per
+# request.
+#
+# Uvicorn's proxy-headers middleware rewrites scope["client"] from
+# X-Forwarded-For before the application runs, which hides the loopback peer.
+# server.main:asgi_app records the TCP peer on extensions["peer_host"] first.
+# Production starts uvicorn with --no-proxy-headers so that record is Express,
+# not the forwarded address. socket_host() reads it.
+#
+# When X-Real-IP is not trusted, take the client from X-Forwarded-For with
+# exactly two trusted hops. The chain is the header, left to right, plus the
+# socket peer. The two rightmost addresses are the proxies. The client is the
+# address immediately before them. A leftmost value the caller wrote is
+# untrusted and must not open a new bucket.
+TRUSTED_PROXY_HOPS = 2
+PEER_HOST_KEY = "peer_host"
+
+# In-process window for POST /leads. The PostgreSQL counter is shared across
+# processes when the database is up, and it fails open when it is not. This
+# window does not. One replica (railway.json numReplicas) is the production
+# shape; the database counter still applies when it succeeds.
+_LEAD_HITS: dict[str, list[float]] = {}
+_LEAD_LOCK = threading.Lock()
+
+_HEADER_NAMES = {
+    "x-real-ip": ("x-real-ip", "X-Real-IP", "X-Real-Ip"),
+    "x-forwarded-for": ("x-forwarded-for", "X-Forwarded-For", "X-Forwarded-for"),
+}
+
+
+def _header(headers, name: str) -> str:
+    if headers is None:
+        return ""
+    getter = getattr(headers, "get", None)
+    if not callable(getter):
+        return ""
+    for candidate in _HEADER_NAMES.get(name, (name,)):
+        try:
+            value = getter(candidate, None)
+        except TypeError:
+            value = getter(candidate)
+        if value:
+            return str(value).strip()
+    return ""
+
+
+def _canonical_ip(value: str) -> str:
+    text = (value or "").strip()
+    if not text or "@" in text:
+        return ""
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    if "%" in text:
+        text = text.split("%", 1)[0]
+    try:
+        return str(ipaddress.ip_address(text))
+    except ValueError:
+        return ""
+
+
+def _forwarded_ips(value: str) -> list[str]:
+    return [ip for ip in (_canonical_ip(part) for part in str(value or "").split(",")) if ip]
+
+
+def _is_loopback(value: str) -> bool:
+    text = _canonical_ip(value)
+    if not text:
+        return False
+    try:
+        addr = ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    if addr.is_loopback:
+        return True
+    # A dual-stack listener reports 127.0.0.1 as ::ffff:127.0.0.1. Python does
+    # not treat that as loopback; it is still the Express proxy on this host.
+    mapped = getattr(addr, "ipv4_mapped", None)
+    return bool(mapped is not None and mapped.is_loopback)
+
+
+def socket_host(request) -> str:
+    """TCP peer, not the address Uvicorn derived from X-Forwarded-For.
+
+    asgi_app stashes the peer before proxy headers run. A request that did not
+    pass through that wrapper (tests, a direct TestClient) falls back to
+    request.client.host, which is the peer when proxy headers are off.
+    """
+    scope = getattr(request, "scope", None)
+    if isinstance(scope, dict):
+        extensions = scope.get("extensions") or {}
+        if isinstance(extensions, dict):
+            peer = extensions.get(PEER_HOST_KEY)
+            if peer:
+                return str(peer)
+    client = getattr(request, "client", None)
+    host = getattr(client, "host", "") if client is not None else ""
+    return str(host or "")
+
+
+def client_ip(headers, client_host: str = "") -> str:
+    """Real client address for a rate-limit bucket. Never an email.
+
+    X-Real-IP is trusted only when client_host is loopback (Express).
+    Otherwise the bucket is the X-Forwarded-For entry in front of exactly
+    two trusted hops. See TRUSTED_PROXY_HOPS above.
+    """
+    if _is_loopback(client_host):
+        raw_real = _header(headers, "x-real-ip")
+        if raw_real and "," not in raw_real:
+            real = _canonical_ip(raw_real)
+            if real:
+                return real
+
+    chain = _forwarded_ips(_header(headers, "x-forwarded-for"))
+    socket_ip = _canonical_ip(client_host)
+    if socket_ip:
+        chain.append(socket_ip)
+    index = len(chain) - TRUSTED_PROXY_HOPS - 1
+    if index >= 0:
+        return chain[index]
+    if socket_ip:
+        return socket_ip
+    host = (client_host or "").strip()
+    if host and "@" not in host:
+        return host[:200]
+    return ""
+
+
+def lead_window_limited(
+    key: str,
+    *,
+    limit: int = 8,
+    window: float = 60.0,
+    now: Optional[float] = None,
+    store: Optional[dict] = None,
+) -> Tuple[bool, int]:
+    """True when this key is over the lead window. A rejected call does not count.
+
+    The database counter fails open. This one is what makes the 9th POST in a
+    minute a 429 when Postgres is down, and when the handler never runs because
+    body validation already failed.
+    """
+    bucket = _LEAD_HITS if store is None else store
+    stamp = time.monotonic() if now is None else now
+    with _LEAD_LOCK:
+        hits = [seen for seen in bucket.get(key, []) if stamp - seen < window]
+        if len(hits) >= limit:
+            bucket[key] = hits
+            retry = 1
+            if hits:
+                retry = max(1, int(window - (stamp - hits[0])) + 1)
+            return True, retry
+        hits.append(stamp)
+        bucket[key] = hits
+        return False, 0
 
 
 def _get_engine():
@@ -57,6 +225,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     - Simulation endpoints (expensive Monte Carlo)
     - General API endpoints
     - Health check endpoints (no limit)
+    - Public lead capture (POST /leads), tighter than the general API cap
     """
 
     AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password"}
@@ -64,6 +233,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     UPLOAD_PATHS = {"/csv-import", "/api/upload"}
     HEALTH_PATHS = {"/health", "/"}
     SIMULATION_PATHS = {"/api/simulations"}
+    # Express strips the /api prefix before FastAPI sees the request. Both
+    # forms are listed so a direct hit and a proxied hit share this cap.
+    # The number is a class constant. Lead capture does not read an environment variable.
+    LEAD_PATHS = {"/leads", "/api/leads"}
+    LEAD_RATE_LIMIT = 8
 
     WINDOW_SECONDS = 60
 
@@ -102,22 +276,33 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 logger.warning("Could not start rate limit cleanup task - no event loop")
 
     def _get_identifier(self, request: Request) -> str:
-        # The trusted Railway edge appends the real client IP as the LAST X-Forwarded-For
-        # entry (Express proxies without xfwd, so it isn't rewritten downstream). Using the
-        # last entry — not the first — stops clients from minting a fresh rate-limit bucket
-        # per request by injecting their own X-Forwarded-For header.
-        xff = request.headers.get("X-Forwarded-For")
-        if xff:
-            parts = [p.strip() for p in xff.split(",") if p.strip()]
-            if parts:
-                return parts[-1]
-        return request.client.host if request.client else "unknown"
+        # Same derivation as lead capture. X-Real-IP only from a loopback
+        # peer; otherwise the X-Forwarded-For slot in front of two trusted hops.
+        return client_ip(request.headers, socket_host(request)) or "unknown"
+
+    def _too_many(self, identifier: str, category: str, limit, retry_after: int) -> JSONResponse:
+        logger.warning(
+            f"Rate limit exceeded: {identifier} ({category}), "
+            f"retry_after={retry_after}s, limit={limit}/min"
+        )
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": f"Rate limit exceeded. Maximum {limit} requests per minute.",
+                "retry_after": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
 
     def _get_category(self, request: Request) -> Tuple[str, int]:
         path = request.url.path
 
         if path in self.HEALTH_PATHS:
             return ("health", float('inf'))
+
+        lead_path = path.rstrip("/") or path
+        if request.method == "POST" and lead_path in self.LEAD_PATHS:
+            return ("leads", self.LEAD_RATE_LIMIT)
 
         if path in self.ADMIN_AUTH_PATHS:
             return ("admin_auth", self.rate_limit_admin_login)
@@ -172,6 +357,10 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
             request_count, window_start = row[0], row[1]
 
+            # SQLite and some drivers return the timestamp as text. Reading
+            # tzinfo on a str throws, and the caller then fails open.
+            if isinstance(window_start, str):
+                window_start = datetime.fromisoformat(window_start)
             if window_start.tzinfo is None:
                 window_start = window_start.replace(tzinfo=timezone.utc)
 
@@ -202,6 +391,16 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 logger.error(f"Middleware error: {exc}")
                 return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+        # Count leads before the database and before the route. The consent
+        # 400 is the string create_lead raises after its own counter, and a
+        # body that fails validation never enters that function. Either way
+        # this cap has to answer first. The database counter fails open, which
+        # dropped the limit whenever the insert threw.
+        if category == "leads":
+            blocked, retry_after = lead_window_limited(identifier, limit=int(limit))
+            if blocked:
+                return self._too_many(identifier, category, limit, retry_after)
+
         try:
             allowed, remaining, retry_after = self._check_rate_limit(identifier, category, int(limit))
         except Exception as e:
@@ -209,18 +408,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             allowed, remaining, retry_after = True, int(limit), 0
 
         if not allowed:
-            logger.warning(
-                f"Rate limit exceeded: {identifier} ({category}), "
-                f"retry_after={retry_after}s, limit={limit}/min"
-            )
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "detail": f"Rate limit exceeded. Maximum {limit} requests per minute.",
-                    "retry_after": retry_after,
-                },
-                headers={"Retry-After": str(retry_after)},
-            )
+            return self._too_many(identifier, category, limit, retry_after)
 
         try:
             response = await call_next(request)

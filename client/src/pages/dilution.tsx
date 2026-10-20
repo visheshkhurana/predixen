@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -364,6 +365,15 @@ export default function DilutionPage() {
 
                 </CardContent>
               </Card>
+
+              <CalculatorEmailOptIn
+                source="dilution"
+                sourcePage="/tools/dilution"
+                plan="dilution"
+                resultByEmail={false}
+                visible={result.outcome !== "invalid"}
+                notes={`Dilution ${result.outcome}. Founder ${result.founderPct === null ? "n/a" : formatPct(result.founderPct)}, investor ${result.investorPct === null ? "n/a" : formatPct(result.investorPct)}.`}
+              />
 
               <Card>
                 <CardHeader>
