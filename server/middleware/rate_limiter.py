@@ -26,13 +26,14 @@ _cleanup_task_started = False
 # the Express app. server/index.ts sets `trust proxy` to 1 and proxies /api to
 # FastAPI, so FastAPI's TCP peer is Express on loopback, not the visitor.
 #
-# Express overwrites X-Real-IP with req.ip before the proxy hop and drops a
-# caller-supplied value. That header is the client only when the socket peer
-# is loopback — the Express proxy. A direct connection to this process (uvicorn
-# binds every interface) can put any address in X-Real-IP, and trusting it
-# opens a fresh bucket per request. Measured: a POST that sent X-Real-IP was
-# keyed on that header, so the 9th call in a minute was a new bucket and the
-# consent check answered 400 instead of 429.
+# The edge sets X-Real-IP to the client and replaces a caller-supplied value.
+# Express forwards that header unchanged. req.ip is the rightmost
+# X-Forwarded-For hop, which on Railway is the shared edge address, so it is
+# not the bucket. X-Real-IP is the client only when the socket peer is
+# loopback (127.0.0.1, ::1, or IPv4-mapped ::ffff:127.0.0.1) — the Express
+# proxy. A direct connection to this process (uvicorn binds every interface)
+# can put any address in X-Real-IP, and trusting it opens a fresh bucket per
+# request.
 #
 # Uvicorn's proxy-headers middleware rewrites scope["client"] from
 # X-Forwarded-For before the application runs, which hides the loopback peer.

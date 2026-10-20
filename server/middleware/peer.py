@@ -10,7 +10,8 @@ Production starts `uvicorn server.main:asgi_app --no-proxy-headers`. This
 wrapper stashes the peer, then applies the same rewrite Uvicorn used to
 apply itself, so the rest of the app still sees the forwarded scheme and
 client. The rate limiter reads extensions["peer_host"] and trusts X-Real-IP
-only when that peer is loopback — Express, which set the header from req.ip.
+only when that peer is loopback. Express forwards the edge-supplied header
+and does not replace it with req.ip.
 """
 
 from __future__ import annotations

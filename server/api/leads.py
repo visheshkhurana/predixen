@@ -222,10 +222,10 @@ def lead_client_key(request: Optional[Request]) -> str:
     """Client address for the lead bucket. Never an email.
 
     Delegates to client_ip. X-Real-IP counts only when the TCP peer is
-    loopback (Express, which overwrites that header with req.ip). Otherwise
-    the bucket is the X-Forwarded-For entry in front of exactly two trusted
-    hops. This store is separate from the middleware window so a request is
-    not counted twice.
+    loopback (Express on 127.0.0.1 or ::ffff:127.0.0.1). Express forwards
+    the edge-supplied header unchanged. Otherwise the bucket is the
+    X-Forwarded-For entry in front of exactly two trusted hops. This store
+    is separate from the middleware window so a request is not counted twice.
     """
     if request is None:
         return "unknown"

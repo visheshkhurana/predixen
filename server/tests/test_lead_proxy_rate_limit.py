@@ -2,14 +2,14 @@
 
 POST /api/leads is what the browser calls. Express mounts the proxy at /api
 and rewrites ^/api to empty, so FastAPI sees POST /leads. The consent 400 is
-produced on that route. The 9th call in a minute has to be 429 from
-RateLimiterMiddleware before the route runs, including when the caller spoofs
-X-Real-IP and the leftmost X-Forwarded-For entry.
+produced on that route. Express forwards X-Real-IP unchanged. With trust
+proxy 1, req.ip is the rightmost X-Forwarded-For hop, and on Railway that hop
+is the shared edge. Nine clients behind that edge must not share a bucket.
 
-The proxy process is the same shape as server/index.ts: trust proxy 1,
-pathRewrite {"^/api": ""}, and setProxyClientIp. Uvicorn is
-server-side RecordPeer with --no-proxy-headers, which is how index.ts spawns
-it. A direct non-loopback peer must ignore X-Real-IP.
+X-Real-IP is the bucket only when the TCP peer is loopback. A stand-in for
+Railway's edge, used only in these tests, overwrites a caller-supplied
+X-Real-IP and X-Forwarded-For before Express sees them. Uvicorn is
+RecordPeer with --no-proxy-headers, which is how index.ts spawns it.
 """
 
 from __future__ import annotations
@@ -38,28 +38,35 @@ from server.middleware.rate_limiter import (
 )
 
 REPO = Path(__file__).resolve().parents[2]
+EDGE = "152.233.10.4"
 PROXY_JS = r"""
 const express = require("express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const upstream = process.argv[2];
 const port = Number(process.argv[3]);
-
-function setProxyClientIp(proxyReq, req) {
-  const ip = req.ip || (req.socket && req.socket.remoteAddress) || "";
-  if (ip) proxyReq.setHeader("X-Real-IP", ip);
-  else proxyReq.removeHeader("X-Real-IP");
-}
+const EDGE = "152.233.10.4";
 
 const app = express();
 app.set("trust proxy", 1);
+
+// Test stand-in for Railway's public edge, which is in front of Express.
+// X-Edge-Client is the address that edge observed on its socket. Production
+// server/index.ts does not do this and does not rewrite X-Real-IP.
+app.use((req, _res, next) => {
+  const seen = req.headers["x-edge-client"];
+  if (seen) {
+    req.headers["x-real-ip"] = String(seen).split(",")[0].trim();
+    req.headers["x-forwarded-for"] = EDGE;
+    delete req.headers["x-edge-client"];
+  }
+  next();
+});
+
 const apiProxy = createProxyMiddleware({
   target: upstream,
   changeOrigin: true,
   pathRewrite: { "^/api": "" },
-  on: {
-    proxyReq: (proxyReq, req) => setProxyClientIp(proxyReq, req),
-  },
 });
 app.use("/api", (req, res, next) => apiProxy(req, res, next));
 app.get("/ready", (_req, res) => res.status(200).send("ok"));
@@ -157,16 +164,15 @@ class _Headers(dict):
         return super().get(key.lower(), super().get(key, default))
 
 
-def test_production_proxy_overwrites_x_real_ip_and_records_the_peer():
+def test_production_proxy_forwards_x_real_ip_and_records_the_peer():
     index = (REPO / "server/index.ts").read_text()
-    client_ip_ts = (REPO / "server/proxy/clientIp.ts").read_text()
     start = (REPO / "script/start-production.sh").read_text()
-    assert "setProxyClientIp(proxyReq, req)" in index
+    assert "setProxyClientIp" not in index
+    assert 'setHeader("X-Real-IP"' not in index
+    assert not (REPO / "server/proxy/clientIp.ts").exists()
     assert 'server.main:asgi_app' in index
     assert "--no-proxy-headers" in index
     assert 'pathRewrite' in index and '"^/api"' in index
-    assert 'proxyReq.setHeader("X-Real-IP", ip)' in client_ip_ts
-    assert "proxyReq.removeHeader(\"X-Real-IP\")" in client_ip_ts
     assert "server.main:asgi_app" in start
     assert "--no-proxy-headers" in start
     assert "asgi_app = RecordPeer(app)" in (REPO / "server/main.py").read_text()
@@ -296,90 +302,158 @@ def test_string_window_start_is_not_a_fail_open():
     assert retry_after >= 1
 
 
-def test_ninth_proxied_lead_is_429_even_when_consent_is_false(tmp_path):
-    node = _ensure_node_modules(Path("/tmp/lead-proxy-modules"))
-    api_port = _free_port()
-    proxy_port = _free_port()
-    script = tmp_path / "proxy.js"
-    script.write_text(PROXY_JS)
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(REPO) + os.pathsep + env.get("PYTHONPATH", "")
-    env["DATABASE_URL"] = f"sqlite:///{tmp_path}/leadlimit.db"
-    env["PYTHONUNBUFFERED"] = "1"
-    api_log = tmp_path / "api.log"
-    proxy_log = tmp_path / "proxy.log"
-    api_handle = api_log.open("w")
-    proxy_handle = proxy_log.open("w")
-    api = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "server.tests.test_lead_proxy_rate_limit:proxy_asgi",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(api_port),
-            "--no-proxy-headers",
-        ],
-        cwd=REPO,
-        env=env,
-        stdout=api_handle,
-        stderr=subprocess.STDOUT,
-    )
-    proxy = subprocess.Popen(
-        ["node", str(script), f"http://127.0.0.1:{api_port}", str(proxy_port)],
-        cwd=tmp_path,
-        env={**env, "NODE_PATH": str(node)},
-        stdout=proxy_handle,
-        stderr=subprocess.STDOUT,
-    )
-    try:
-        _wait_ready(f"http://127.0.0.1:{api_port}/health", api, "uvicorn")
-        _wait_ready(f"http://127.0.0.1:{proxy_port}/ready", proxy, "express")
-        url = f"http://127.0.0.1:{proxy_port}/api/leads"
-        client = "203.0.113.50"
+class _Proxy:
+    def __init__(self, tmp_path: Path):
+        self.tmp_path = tmp_path
+        self.api = None
+        self.proxy = None
+        self.api_handle = None
+        self.proxy_handle = None
+        self.url = ""
 
-        def lead(forwarded_for: str, real_ip: str, consent: bool):
-            return _post(
-                url,
-                {"email": "ada@example.com", "consent": consent, "source_page": "/tools/runway-calculator"},
-                {"X-Forwarded-For": forwarded_for, "X-Real-IP": real_ip},
+    def __enter__(self):
+        node = _ensure_node_modules(Path("/tmp/lead-proxy-modules"))
+        api_port = _free_port()
+        proxy_port = _free_port()
+        script = self.tmp_path / "proxy.js"
+        script.write_text(PROXY_JS)
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(REPO) + os.pathsep + env.get("PYTHONPATH", "")
+        env["DATABASE_URL"] = f"sqlite:///{self.tmp_path}/leadlimit.db"
+        env["PYTHONUNBUFFERED"] = "1"
+        self.api_log = self.tmp_path / "api.log"
+        self.proxy_log = self.tmp_path / "proxy.log"
+        self.api_handle = self.api_log.open("w")
+        self.proxy_handle = self.proxy_log.open("w")
+        self.api = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "server.tests.test_lead_proxy_rate_limit:proxy_asgi",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(api_port),
+                "--no-proxy-headers",
+            ],
+            cwd=REPO,
+            env=env,
+            stdout=self.api_handle,
+            stderr=subprocess.STDOUT,
+        )
+        self.proxy = subprocess.Popen(
+            ["node", str(script), f"http://127.0.0.1:{api_port}", str(proxy_port)],
+            cwd=self.tmp_path,
+            env={**env, "NODE_PATH": str(node)},
+            stdout=self.proxy_handle,
+            stderr=subprocess.STDOUT,
+        )
+        _wait_ready(f"http://127.0.0.1:{api_port}/health", self.api, "uvicorn")
+        _wait_ready(f"http://127.0.0.1:{proxy_port}/ready", self.proxy, "express")
+        self.url = f"http://127.0.0.1:{proxy_port}/api/leads"
+        return self
+
+    def __exit__(self, *args):
+        for proc in (self.proxy, self.api):
+            if proc is not None and proc.poll() is None:
+                proc.terminate()
+        for proc in (self.proxy, self.api):
+            if proc is None:
+                continue
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        if self.api_handle is not None:
+            self.api_handle.close()
+        if self.proxy_handle is not None:
+            self.proxy_handle.close()
+        return False
+
+    def logs(self) -> str:
+        api = self.api_log.read_text() if self.api_log.exists() else ""
+        proxy = self.proxy_log.read_text() if self.proxy_log.exists() else ""
+        return api + "\n" + proxy
+
+    def lead(self, headers: dict, consent: bool = False):
+        return _post(
+            self.url,
+            {"email": "ada@example.com", "consent": consent, "source_page": "/tools/runway-calculator"},
+            headers,
+        )
+
+
+def test_nine_clients_behind_one_edge_each_get_400(tmp_path):
+    """Distinct X-Real-IP values behind 152.233.10.4 do not share a bucket."""
+    with _Proxy(tmp_path) as proxy:
+        for n in range(9):
+            client = f"203.0.113.{10 + n}"
+            status, headers, body = proxy.lead(
+                {
+                    "X-Real-IP": client,
+                    "X-Forwarded-For": f"198.51.100.1, {EDGE}",
+                },
+                consent=False,
             )
-
-        for n in range(8):
-            status, headers, body = lead("1.2.3.4, " + client, "198.51.100.77", consent=(n % 2 == 0))
-            assert status == 400, (status, body, api_log.read_text(), proxy_log.read_text())
+            assert status == 400, (n, status, body, proxy.logs())
             assert json.loads(body)["detail"] == "Consent is required"
             assert _header(headers, "X-Seen-Path") == "/leads"
             assert _header(headers, "X-Real-IP-Seen") == client
             assert _header(headers, "X-Bucket-Key") == client
+            assert _header(headers, "X-Bucket-Key") != EDGE
             assert _header(headers, "X-RateLimit-Category") == "leads"
 
-        status, headers, body = lead("9.9.9.9, " + client, "198.51.100.99", consent=False)
-        assert status == 429, (status, body, api_log.read_text(), proxy_log.read_text())
+
+def test_edge_x_real_ip_keeps_the_ninth_on_one_bucket(tmp_path):
+    """A spoofed 9th POST is 429 when the edge sets X-Real-IP. Another network is 400."""
+    client = "203.0.113.50"
+    other = "198.51.100.20"
+    with _Proxy(tmp_path) as proxy:
+        for n in range(8):
+            status, headers, body = proxy.lead(
+                {
+                    "X-Edge-Client": client,
+                    "X-Real-IP": "198.51.100.77",
+                    "X-Forwarded-For": "1.2.3.4",
+                },
+                consent=(n % 2 == 0),
+            )
+            assert status == 400, (n, status, body, proxy.logs())
+            assert json.loads(body)["detail"] == "Consent is required"
+            assert _header(headers, "X-Seen-Path") == "/leads"
+            assert _header(headers, "X-Real-IP-Seen") == client
+            assert _header(headers, "X-Bucket-Key") == client
+            assert _header(headers, "X-Bucket-Key") != EDGE
+
+        status, headers, body = proxy.lead(
+            {
+                "X-Edge-Client": client,
+                "X-Real-IP": "203.0.113.250",
+                "X-Forwarded-For": "9.9.9.9, 198.51.100.8",
+            },
+            consent=False,
+        )
+        assert status == 429, (status, body, proxy.logs())
         payload = json.loads(body)
         assert "Rate limit exceeded" in payload["detail"]
         assert payload["detail"] != "Consent is required"
         assert _header(headers, "Retry-After")
         assert _header(headers, "X-Seen-Path") == ""
 
-        status, headers, body = lead("1.2.3.4, 203.0.113.99", "198.51.100.77", consent=False)
-        assert status == 400, (status, body)
+        status, headers, body = proxy.lead(
+            {
+                "X-Edge-Client": other,
+                "X-Real-IP": client,
+                "X-Forwarded-For": f"9.9.9.9, {EDGE}",
+            },
+            consent=False,
+        )
+        assert status == 400, (status, body, proxy.logs())
         assert json.loads(body)["detail"] == "Consent is required"
-        assert _header(headers, "X-Bucket-Key") == "203.0.113.99"
+        assert _header(headers, "X-Bucket-Key") == other
+        assert _header(headers, "X-Real-IP-Seen") == other
         assert _header(headers, "X-Seen-Path") == "/leads"
-    finally:
-        for proc in (proxy, api):
-            if proc.poll() is None:
-                proc.terminate()
-        for proc in (proxy, api):
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-        api_handle.close()
-        proxy_handle.close()
 
 
 def test_rejected_lead_does_not_consume_a_later_slot():

@@ -16,29 +16,22 @@ import { legacyRedirects } from "./middleware/legacyRedirects";
 import { aiAgentLog } from "./middleware/aiAgentLog";
 import { requestId } from "./middleware/requestId";
 import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
-import { setProxyClientIp } from "./proxy/clientIp";
 
 const app = express();
 app.disable("x-powered-by");
-// Railway terminates TLS and forwards the real client address in
-// X-Forwarded-For. Without this, req.ip is the proxy and every visitor looks
-// like the same private address.
-//
-// One hop, not "any": exactly one proxy fronts the app -- RAILWAY_DEPLOYMENT.md:
-// "Internet -> Railway edge (TLS) -> app container :5000". The edge APPENDS the
-// address it saw, so a caller that sends `X-Forwarded-For: 1.2.3.4` arrives as
-// `1.2.3.4, <real client>`. Under `true`, Express trusts every hop and req.ip
-// becomes the caller's own 1.2.3.4; under a count of 1 it is the address the
-// edge appended. Measured on this repo's express:
+// Express hop count, measured on this repo's express. `req.ip` is taken from
+// the socket peer and X-Forwarded-For. It is not read from X-Real-IP.
 //
 //   X-Forwarded-For: "1.2.3.4, 5.6.7.8"
-//   trust proxy=true -> req.ip=1.2.3.4   (forged)
-//   trust proxy=1    -> req.ip=5.6.7.8   (the appended hop)
-//   trust proxy=2    -> req.ip=1.2.3.4   (forged again)
+//   trust proxy=true -> req.ip=1.2.3.4
+//   trust proxy=1    -> req.ip=5.6.7.8   (rightmost hop)
+//   trust proxy=2    -> req.ip=1.2.3.4
 //
-// This assumes the single edge hop the deployment doc describes. A second
-// proxy in front (a CDN, say) would need its own count; adding one without
-// changing this line silently moves req.ip back to a caller-written entry.
+// On Railway that rightmost hop is the shared edge, not the visitor. A review
+// of the lead limiter put nine distinct clients behind 152.233.10.4 and
+// req.ip was 152.233.10.4 for every one of them. The count stays 1 so a
+// caller-written leftmost entry is not trusted if it ever arrives. Lead
+// capture does not use req.ip. The edge's X-Real-IP is forwarded unchanged.
 app.set("trust proxy", 1);
 
 /**
@@ -739,10 +732,11 @@ const apiProxy = createProxyMiddleware({
   pathRewrite: {
     "^/api": "",
   },
+  // X-Real-IP is the client address Railway's edge wrote. Do not replace it
+  // with req.ip: with trust proxy 1 that is the shared edge hop, and every
+  // visitor would share one lead bucket. http-proxy forwards the header as
+  // received. FastAPI trusts it only when the TCP peer is loopback.
   on: {
-    proxyReq: (proxyReq, req) => {
-      setProxyClientIp(proxyReq, req);
-    },
     proxyRes: (proxyRes, req) => {
       applyUpstreamRedirectRewrite(proxyRes, req, {
         upstreamOrigin: FASTAPI_URL,
