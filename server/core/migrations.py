@@ -1033,23 +1033,46 @@ def run_migrations(engine: Engine) -> None:
     logger.info("Database migrations completed successfully")
 
 
-def ensure_lead_consent_columns(engine: Engine) -> None:
-    """Consent fields on leads. Idempotent; existing rows stay unconsented.
+# #176 lead consent columns. Existing rows take consent FALSE from the
+# column default and NULL for the other three. No UPDATE and no backfill.
+# IF NOT EXISTS / IF EXISTS make a re-run a no-op when production has
+# already added the columns by hand.
+LEAD_CONSENT_UPGRADE_SQL = (
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent BOOLEAN NOT NULL DEFAULT FALSE;",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_at TIMESTAMP;",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_page VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_status VARCHAR(20);",
+)
 
-    create_all does not add columns to a table that already exists, and
-    calculator opt-in has to survive a deploy onto the current leads table.
-    Postgres accepts ADD COLUMN IF NOT EXISTS. The SQLite builds used in tests
-    do not, so those check PRAGMA table_info and add only what is missing.
+LEAD_CONSENT_DOWNGRADE_SQL = (
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent_at;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS source_page;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent_status;",
+)
+
+
+def _lead_consent_column(statement: str) -> str:
+    tokens = statement.replace(";", " ").split()
+    return tokens[tokens.index("EXISTS") + 1]
+
+
+def _apply_lead_consent_ddl(
+    engine: Engine,
+    statements: tuple[str, ...],
+    *,
+    adding: bool,
+    done_message: str,
+) -> None:
+    """Run the lead-consent DDL.
+
+    Postgres runs the statements as written. SQLite rejects IF NOT EXISTS and
+    IF EXISTS on ADD/DROP COLUMN, so tests skip columns that are already in
+    the desired state and execute the same definition without that clause.
     """
     is_sqlite = engine.dialect.name == "sqlite"
-    columns = (
-        ("consent", "INTEGER NOT NULL DEFAULT 0" if is_sqlite else "BOOLEAN NOT NULL DEFAULT FALSE"),
-        ("consent_at", "TIMESTAMP"),
-        ("source_page", "VARCHAR(200)"),
-        ("consent_status", "VARCHAR(20)"),
-    )
     with engine.connect() as conn:
-        existing: set[str] = set()
+        existing: set[str] | None = None
         if is_sqlite:
             try:
                 rows = conn.execute(text("PRAGMA table_info(leads)")).fetchall()
@@ -1059,20 +1082,49 @@ def ensure_lead_consent_columns(engine: Engine) -> None:
             existing = {row[1] for row in rows}
             if not existing:
                 return
-        for name, col_type in columns:
-            if is_sqlite and name in existing:
-                continue
-            statement = (
-                f"ALTER TABLE leads ADD COLUMN {name} {col_type}"
-                if is_sqlite
-                else f"ALTER TABLE leads ADD COLUMN IF NOT EXISTS {name} {col_type}"
-            )
+        for statement in statements:
+            name = _lead_consent_column(statement)
+            executable = statement
+            if existing is not None:
+                present = name in existing
+                if adding and present:
+                    continue
+                if not adding and not present:
+                    continue
+                executable = executable.replace(" IF NOT EXISTS", "").replace(" IF EXISTS", "")
             try:
-                conn.execute(text(statement))
+                conn.execute(text(executable.strip().rstrip(";")))
             except Exception as e:
-                logger.debug("leads.%s may already exist or the table is missing: %s", name, e)
+                # Postgres aborts the transaction on the first failed statement,
+                # so a swallowed debug log hides that the rest of this batch did
+                # not apply.
+                logger.warning("leads.%s may already exist or the table is missing: %s", name, e)
         conn.commit()
-    logger.info("Lead consent columns migration complete")
+    logger.info(done_message)
+
+
+def ensure_lead_consent_columns(engine: Engine) -> None:
+    """Consent fields on leads. Idempotent; existing rows stay unconsented.
+
+    create_all does not add columns to a table that already exists, and
+    calculator opt-in has to survive a deploy onto the current leads table.
+    """
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_CONSENT_UPGRADE_SQL,
+        adding=True,
+        done_message="Lead consent columns migration complete",
+    )
+
+
+def downgrade_lead_consent_columns(engine: Engine) -> None:
+    """Drop the four #176 lead consent columns. Idempotent. Not run at startup."""
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_CONSENT_DOWNGRADE_SQL,
+        adding=False,
+        done_message="Lead consent columns downgrade complete",
+    )
 
 
 def ensure_currency_tables(engine: Engine) -> None:

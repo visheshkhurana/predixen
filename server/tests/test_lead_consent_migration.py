@@ -1,0 +1,180 @@
+"""Startup migration for the leads consent columns added in #176.
+
+The upgrade is the four ADD COLUMN IF NOT EXISTS statements. Existing rows
+keep the column default (consent false) and NULL for the other three. A
+second run, and a run after the columns were added by hand, leave those
+values alone. Downgrade drops the four columns IF EXISTS and can run twice.
+"""
+
+from sqlalchemy import create_engine, inspect, text
+
+from server.core.migrations import (
+    LEAD_CONSENT_DOWNGRADE_SQL,
+    LEAD_CONSENT_UPGRADE_SQL,
+    downgrade_lead_consent_columns,
+    ensure_lead_consent_columns,
+)
+
+
+def _consent_row(engine, email: str):
+    with engine.connect() as conn:
+        return conn.execute(
+            text(
+                "SELECT consent, consent_at, source_page, consent_status "
+                "FROM leads WHERE email = :email"
+            ),
+            {"email": email},
+        ).one()
+
+
+def test_lead_consent_migration_is_idempotent_and_leaves_existing_rows_unconsented():
+    assert LEAD_CONSENT_UPGRADE_SQL == (
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent BOOLEAN NOT NULL DEFAULT FALSE;",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_at TIMESTAMP;",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_page VARCHAR(200);",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_status VARCHAR(20);",
+    )
+    assert LEAD_CONSENT_DOWNGRADE_SQL == (
+        "ALTER TABLE leads DROP COLUMN IF EXISTS consent;",
+        "ALTER TABLE leads DROP COLUMN IF EXISTS consent_at;",
+        "ALTER TABLE leads DROP COLUMN IF EXISTS source_page;",
+        "ALTER TABLE leads DROP COLUMN IF EXISTS consent_status;",
+    )
+    joined = "\n".join(LEAD_CONSENT_UPGRADE_SQL + LEAD_CONSENT_DOWNGRADE_SQL).upper()
+    assert "UPDATE" not in joined
+    assert "CONFIRMED" not in joined
+
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE leads (id INTEGER PRIMARY KEY, email VARCHAR)"))
+        conn.execute(text("INSERT INTO leads (email) VALUES ('existing@example.com')"))
+
+    ensure_lead_consent_columns(engine)
+    ensure_lead_consent_columns(engine)
+
+    row = _consent_row(engine, "existing@example.com")
+    assert row.consent in (False, 0)
+    assert row.consent_at is None
+    assert row.source_page is None
+    assert row.consent_status is None
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO leads (email, consent, consent_at, source_page, consent_status) "
+                "VALUES ('later@example.com', 1, '2020-01-01', '/keep', 'confirmed')"
+            )
+        )
+    ensure_lead_consent_columns(engine)
+    untouched = _consent_row(engine, "existing@example.com")
+    assert untouched.consent in (False, 0)
+    assert untouched.consent_at is None
+    assert untouched.source_page is None
+    assert untouched.consent_status is None
+    kept = _consent_row(engine, "later@example.com")
+    assert kept.consent in (True, 1)
+    assert kept.consent_status == "confirmed"
+    assert kept.source_page == "/keep"
+    assert kept.consent_at is not None
+
+    downgrade_lead_consent_columns(engine)
+    downgrade_lead_consent_columns(engine)
+    cols = {col["name"] for col in inspect(engine).get_columns("leads")}
+    assert {"consent", "consent_at", "source_page", "consent_status"}.isdisjoint(cols)
+
+    ensure_lead_consent_columns(engine)
+    restored = _consent_row(engine, "existing@example.com")
+    assert restored.consent in (False, 0)
+    assert restored.consent_at is None
+    assert restored.source_page is None
+    assert restored.consent_status is None
+
+    preset = create_engine("sqlite://")
+    with preset.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE leads (
+                    id INTEGER PRIMARY KEY,
+                    email VARCHAR,
+                    consent BOOLEAN NOT NULL DEFAULT FALSE,
+                    consent_at TIMESTAMP,
+                    source_page VARCHAR(200),
+                    consent_status VARCHAR(20)
+                )
+                """
+            )
+        )
+        conn.execute(text("INSERT INTO leads (email) VALUES ('manual@example.com')"))
+    ensure_lead_consent_columns(preset)
+    ensure_lead_consent_columns(preset)
+    manual = _consent_row(preset, "manual@example.com")
+    assert manual.consent in (False, 0)
+    assert manual.consent_at is None
+    assert manual.source_page is None
+    assert manual.consent_status is None
+
+
+def test_startup_calls_ensure_lead_consent_columns_when_migrations_disabled(monkeypatch):
+    """Production defaults RUN_MIGRATIONS off. Startup still has to add the columns.
+
+    Executes the real `_run_deferred_startup` body from server/main.py with the
+    app's settings object. Importing server.main also builds the ASGI app, so
+    the function is loaded from that file directly.
+    """
+    import ast
+    import asyncio
+    import logging
+    from pathlib import Path
+    from unittest.mock import MagicMock
+
+    monkeypatch.setenv("RUN_MIGRATIONS", "false")
+    monkeypatch.setenv("CREATE_SCHEMA", "false")
+    monkeypatch.setenv("SEED_BENCHMARKS", "false")
+    monkeypatch.setenv("SEED_DEMO_DATA", "false")
+
+    from server.core.config import settings
+    import server.core.migrations as migrations
+
+    assert settings.should_run_migrations is False
+
+    calls = []
+
+    def _record(engine):
+        calls.append(engine)
+
+    def _migrations_must_not_run(engine):
+        raise AssertionError("run_migrations ran while should_run_migrations is false")
+
+    monkeypatch.setattr(migrations, "ensure_lead_consent_columns", _record)
+    monkeypatch.setattr(migrations, "run_migrations", _migrations_must_not_run)
+
+    def _drop_task(coro, *args, **kwargs):
+        coro.close()
+        return MagicMock()
+
+    monkeypatch.setattr(asyncio, "create_task", _drop_task)
+
+    main_path = Path(__file__).resolve().parents[1] / "main.py"
+    module = ast.parse(main_path.read_text())
+    startup = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_run_deferred_startup"
+    )
+    isolated = ast.Module(body=[startup], type_ignores=[])
+    ast.fix_missing_locations(isolated)
+    namespace = {
+        "settings": settings,
+        "logger": logging.getLogger("test.startup"),
+        "engine": object(),
+        "Base": object(),
+        "SessionLocal": lambda: MagicMock(),
+        "_startup_state": {"ready": False, "error": None},
+    }
+    exec(compile(isolated, str(main_path), "exec"), namespace)
+
+    asyncio.run(namespace["_run_deferred_startup"]())
+
+    assert namespace["_startup_state"]["error"] is None
+    assert calls == [namespace["engine"]]
