@@ -370,12 +370,45 @@ LEAD_CAPTURED_HOSTS = frozenset(
     }
 )
 
-# Founder financials and other calculator outputs. The result email and the
-# lead row keep what they already store. lead_captured never copies these keys.
-_LEAD_CAPTURED_RESULT_KEYS = frozenset(
+# Keys lead_captured may send. A key outside this set is dropped, including
+# when a later edit copies another LeadCreate field onto the event.
+LEAD_CAPTURED_PROPERTIES = frozenset(
     {
+        "created",
+        "distinct_id_source",
+        "host",
+        "location",
+        "plan",
+        "source",
+        "source_page",
+    }
+)
+
+# Founder financial figures. The result email and the lead row keep what they
+# already store. None of these are lead_captured properties: runway_months,
+# and any cash, burn, revenue, or runway figure, including the notes string
+# that quotes them.
+_LEAD_CAPTURED_FINANCIAL_KEYS = frozenset(
+    {
+        "arr",
+        "burn",
+        "burn_rate",
+        "cash",
+        "cash_balance",
+        "cash_on_hand",
+        "cash_remaining",
+        "expenses",
+        "gross_burn",
+        "growth",
+        "growth_rate",
         "monthly_burn",
+        "monthly_expenses",
+        "monthly_revenue",
+        "mrr",
+        "net_burn",
         "notes",
+        "revenue",
+        "runway",
         "runway_date",
         "runway_months",
     }
@@ -427,6 +460,36 @@ def _without_utm(value: object) -> object:
     return value
 
 
+def _is_financial_key(key: object) -> bool:
+    """True for a founder cash, burn, revenue, or runway figure."""
+    name = str(key).lower()
+    if name in _LEAD_CAPTURED_FINANCIAL_KEYS:
+        return True
+    # runway_months_p50, cashBalance, monthly-revenue, and the same shapes.
+    compact = re.sub(r"[^a-z0-9]", "", name)
+    stems = ("runway", "cash", "burn", "revenue")
+    return any(stem in compact for stem in stems)
+
+
+def _lead_captured_properties(value: object) -> dict:
+    """Keep only LEAD_CAPTURED_PROPERTIES. Financial keys never pass.
+
+    Nested objects are dropped. A dict under an allowed key could carry
+    cash, burn, revenue, or runway without those words being the top-level key.
+    """
+    if not isinstance(value, dict):
+        return {}
+    kept: dict = {}
+    for key, item in value.items():
+        name = str(key)
+        if name not in LEAD_CAPTURED_PROPERTIES or _is_financial_key(name):
+            continue
+        if isinstance(item, (dict, list)):
+            continue
+        kept[name] = item
+    return kept
+
+
 def _request_host(request: Optional[Request]) -> str:
     if request is None:
         return ""
@@ -452,12 +515,14 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
     committed so a successful POST always emits, independent of the browser.
     The distinct_id is the browser one when the page sent a safe id. Otherwise
     it is a random opt-in id. The address and any hash of it are stripped from
-    the id and from every property. runway_months and the other calculator
-    results are not properties. plan is included only when it is in
-    LEAD_CAPTURED_PLANS. source and location are a LEAD_CAPTURED_SOURCES value
-    or "other". source_page is a LEAD_CAPTURED_SOURCE_PAGES value or "other".
-    host is a LEAD_CAPTURED_HOSTS value or "other". utm_* keys are never
-    properties. Does not call identify or reset anyone.
+    the id and from every property. The only property keys are
+    LEAD_CAPTURED_PROPERTIES. runway_months and the other founder financial
+    figures — cash, burn, revenue, and runway — are not properties. plan is
+    included only when it is in LEAD_CAPTURED_PLANS. source and location are a
+    LEAD_CAPTURED_SOURCES value or "other". source_page is a
+    LEAD_CAPTURED_SOURCE_PAGES value or "other". host is a LEAD_CAPTURED_HOSTS
+    value or "other". utm_* keys are never properties. Does not call identify
+    or reset anyone.
     """
     try:
         markers = _email_markers(str(data.email))
@@ -476,9 +541,7 @@ def _emit_lead_captured(data: LeadCreate, created: bool, host: str = "") -> None
         plan = _allowed_plan(data.plan, markers)
         if plan:
             properties["plan"] = plan
-        for key in _LEAD_CAPTURED_RESULT_KEYS:
-            properties.pop(key, None)
-        properties = _without_utm(properties)
+        properties = _lead_captured_properties(_without_utm(properties))
         posthog_capture(
             "lead_captured",
             distinct_id,

@@ -9,10 +9,12 @@ from unittest.mock import MagicMock, patch
 from server.api.leads import (
     LEAD_CAPTURED_HOSTS,
     LEAD_CAPTURED_PLANS,
+    LEAD_CAPTURED_PROPERTIES,
     LEAD_CAPTURED_SOURCE_PAGE_OTHER,
     LEAD_CAPTURED_SOURCE_PAGES,
     LEAD_CAPTURED_SOURCES,
     LeadCreate,
+    _LEAD_CAPTURED_FINANCIAL_KEYS,
     _emit_lead_captured,
     _lead_distinct_id,
     create_lead,
@@ -251,8 +253,53 @@ def test_create_lead_does_not_emit_when_commit_fails():
     background.add_task.assert_not_called()
 
 
+# Founder figures that must not be lead_captured keys. Tool slugs such as
+# runway-calculator and burn-multiple are allow-listed values, not these keys.
+_FOUNDER_FINANCIAL_KEYS = {
+    "arr",
+    "burn",
+    "burn_rate",
+    "cash",
+    "cash_balance",
+    "cash_on_hand",
+    "cash_remaining",
+    "expenses",
+    "gross_burn",
+    "growth",
+    "growth_rate",
+    "monthly_burn",
+    "monthly_expenses",
+    "monthly_revenue",
+    "mrr",
+    "net_burn",
+    "notes",
+    "revenue",
+    "runway",
+    "runway_date",
+    "runway_months",
+    "runway_months_p50",
+    "cashBalance",
+    "monthly-revenue",
+}
+
+
+def test_property_allow_list_excludes_founder_financials():
+    assert _FOUNDER_FINANCIAL_KEYS <= _LEAD_CAPTURED_FINANCIAL_KEYS | {
+        "runway_months_p50",
+        "cashBalance",
+        "monthly-revenue",
+    }
+    assert LEAD_CAPTURED_PROPERTIES.isdisjoint(_LEAD_CAPTURED_FINANCIAL_KEYS)
+    assert LEAD_CAPTURED_PROPERTIES.isdisjoint(_FOUNDER_FINANCIAL_KEYS)
+    for key in ("runway_months", "runway", "cash", "burn", "revenue"):
+        assert key not in LEAD_CAPTURED_PROPERTIES
+
+
 def test_emitted_properties_never_contain_runway_months():
-    notes = "Cash 100000, net burn 40000, runway 4 months until 2027-03-01"
+    notes = (
+        "Cash 100000, revenue 20000, expenses 60000, net burn 40000, "
+        "runway 4 months until 2027-03-01"
+    )
     data = LeadCreate(
         email="founder@example.com",
         source="runway-calculator",
@@ -266,13 +313,84 @@ def test_emitted_properties_never_contain_runway_months():
     with patch("server.api.leads.posthog_capture") as capture:
         _emit_lead_captured(data, created=True)
     properties = capture.call_args.args[2]
-    assert {"runway_months", "runway_date", "monthly_burn", "notes"}.isdisjoint(properties)
+    assert set(properties) <= set(LEAD_CAPTURED_PROPERTIES)
+    assert _FOUNDER_FINANCIAL_KEYS.isdisjoint(properties)
+    assert {"runway_months", "runway", "cash", "burn", "revenue", "notes"}.isdisjoint(properties)
     values = {str(value) for value in properties.values()}
-    assert {"4", "2027-03-01", "40000", notes, "100000"}.isdisjoint(values)
+    assert {"4", "2027-03-01", "40000", "20000", "60000", notes, "100000"}.isdisjoint(values)
     blob = " ".join(values)
-    assert "runway_months" not in blob
-    assert "40000" not in blob
-    assert "2027-03-01" not in blob
+    for token in (
+        "runway_months",
+        "runway_date",
+        "monthly_burn",
+        "cash_on_hand",
+        "monthly_revenue",
+        "net_burn",
+        "40000",
+        "20000",
+        "60000",
+        "100000",
+        "2027-03-01",
+        notes,
+    ):
+        assert token not in blob
+    assert properties["plan"] == "runway-calculator"
+    assert properties["source"] == "runway-calculator"
+
+
+def test_post_does_not_forward_founder_financial_fields():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.api.leads import get_db, router
+
+    notes = "Cash 500000, revenue 25000, burn 40000, runway 8 months"
+    db = MagicMock()
+    db.query.return_value.filter.return_value.one_or_none.return_value = None
+    app = FastAPI()
+    app.include_router(router)
+
+    def _override():
+        yield db
+
+    app.dependency_overrides[get_db] = _override
+    client = TestClient(app)
+    with patch("server.api.leads.posthog_capture") as capture:
+        response = client.post(
+            "/leads",
+            json={
+                "email": "figures@example.com",
+                "source": "runway-calculator",
+                "source_page": "/tools/runway-calculator",
+                "plan": "runway-calculator",
+                "consent": True,
+                "runway_months": "8",
+                "runway_date": "2027-06-01",
+                "monthly_burn": "40000",
+                "notes": notes,
+                "cash": "500000",
+                "burn": "40000",
+                "revenue": "25000",
+                "runway": "8",
+                "cash_on_hand": "500000",
+                "monthly_revenue": "25000",
+                "net_burn": "40000",
+            },
+            headers={"x-forwarded-host": "founderconsole.ai"},
+        )
+
+    assert response.status_code == 200, response.text
+    capture.assert_called_once()
+    properties = capture.call_args.args[2]
+    assert set(properties) <= set(LEAD_CAPTURED_PROPERTIES)
+    assert _FOUNDER_FINANCIAL_KEYS.isdisjoint(properties)
+    blob = " ".join(str(value) for value in properties.values())
+    for token in ("500000", "25000", "40000", "2027-06-01", notes, "runway_months", "cash", "revenue"):
+        assert token not in blob
+    assert properties["source"] == "runway-calculator"
+    assert properties["host"] == "founderconsole.ai"
+    lead = db.add.call_args.args[0]
+    assert lead.notes == notes
 
 
 def test_emit_drops_unknown_plan():
