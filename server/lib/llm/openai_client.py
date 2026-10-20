@@ -309,6 +309,88 @@ class AuditedOpenAIClient:
             )
             raise
 
+    @property
+    def chat(self):
+        """SDK-compatible entry the simulation engine already calls.
+
+        ``llm_client.chat.completions.create(...)`` redacts message text and
+        writes an llm_audit_logs row, then returns the raw provider response
+        so callers keep reading ``response.choices[0].message.content``.
+        """
+        return _AuditedChatNamespace(self)
+
+
+class _AuditedChatNamespace:
+    def __init__(self, audited: AuditedOpenAIClient):
+        self.completions = _AuditedCompletions(audited)
+
+
+class _AuditedCompletions:
+    def __init__(self, audited: AuditedOpenAIClient):
+        self._audited = audited
+
+    def create(self, **kwargs):
+        messages = list(kwargs.get("messages") or [])
+        model = kwargs.get("model", "gpt-5")
+        original_parts = []
+        redacted_messages = []
+        all_findings = []
+
+        for msg in messages:
+            content = msg.get("content", "") if isinstance(msg, dict) else ""
+            if isinstance(content, str):
+                redaction = redact_text(content, self._audited.pii_mode)
+                updated = dict(msg)
+                updated["content"] = redaction.redacted_text
+                redacted_messages.append(updated)
+                original_parts.append(content)
+                all_findings.extend(redaction.findings)
+            else:
+                redacted_messages.append(dict(msg) if isinstance(msg, dict) else msg)
+                original_parts.append("")
+
+        original_input = "\n".join(original_parts)
+        redacted_input = "\n".join(
+            m.get("content", "") if isinstance(m, dict) and isinstance(m.get("content"), str) else ""
+            for m in redacted_messages
+        )
+        combined = RedactionResult(redacted_text=redacted_input, findings=all_findings)
+        call_kwargs = dict(kwargs)
+        call_kwargs["messages"] = redacted_messages
+
+        start_time = time.time()
+        try:
+            response = self._audited.client.chat.completions.create(**call_kwargs)
+            latency_ms = int((time.time() - start_time) * 1000)
+            output_content = ""
+            try:
+                output_content = response.choices[0].message.content or ""
+            except Exception:
+                output_content = ""
+            usage = getattr(response, "usage", None)
+            self._audited._create_audit_log(
+                endpoint="chat.completions",
+                model=model,
+                original_input=original_input,
+                redaction_result=combined,
+                output=output_content,
+                tokens_in=getattr(usage, "prompt_tokens", None) if usage else None,
+                tokens_out=getattr(usage, "completion_tokens", None) if usage else None,
+                latency_ms=latency_ms,
+            )
+            return response
+        except Exception as e:
+            latency_ms = int((time.time() - start_time) * 1000)
+            self._audited._create_audit_log(
+                endpoint="chat.completions",
+                model=model,
+                original_input=original_input,
+                redaction_result=combined,
+                output=f"ERROR: {str(e)}",
+                latency_ms=latency_ms,
+            )
+            raise
+
 
 def get_audited_client(
     db_session=None,

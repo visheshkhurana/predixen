@@ -13,11 +13,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from server.core.db import get_db
+from server.core.db import SessionLocal
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
 from server.models import User
-from server.lib.llm.openai_client import get_openai_client
+from server.lib.llm.openai_client import get_audited_client
 from server.services.simulation.engine import SimulationEngine
 from server.services.simulation.input_normalization import inputs_for_simulation_request
 from server.services.simulation.types import CompanyState, AgentAction, net_runway_months
@@ -123,14 +123,63 @@ def build_simulation_v2_state(normalized: dict) -> tuple[CompanyState, dict, int
     return initial_state, scenario_params, normalized["total_rounds"]
 
 
+def _simulation_company_id(db, user) -> Optional[int]:
+    """Best-effort company for the audit row. The run itself is user-scoped."""
+    try:
+        from server.models.company import Company
+        company = (
+            db.query(Company)
+            .filter(Company.user_id == user.id)
+            .order_by(Company.id.asc())
+            .first()
+        )
+        return company.id if company is not None else None
+    except Exception:
+        logger.warning("Could not resolve a company for the simulation audit row", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _audited_simulation_client(db, user):
+    """The same audited OpenAI client llm_router uses, with a thread-safe session.
+
+    Persona generation calls the client from a worker thread. A request Session
+    is not safe to share across those calls without the router's lock.
+    """
+    from server.lib.llm.llm_router import _ThreadSafeSession
+
+    return get_audited_client(
+        db_session=_ThreadSafeSession(db),
+        company_id=_simulation_company_id(db, user),
+        user_id=user.id,
+        pii_mode="standard",
+    )
+
+
 @router.post("/simulation/v2/run")
 async def run_simulation_v2_sse(
     request: SimulationV2Request,
     current_user: User = Depends(get_current_user),
 ):
-    client = get_openai_client()
-    if not client:
+    db = SessionLocal()
+
+    def close_db():
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    try:
+        client = _audited_simulation_client(db, current_user)
+    except ValueError:
+        close_db()
         raise HTTPException(status_code=503, detail="LLM service not configured")
+    except Exception:
+        close_db()
+        raise
 
     normalized, input_provenance = inputs_for_simulation_request(request)
     initial_state, scenario_params, total_rounds = build_simulation_v2_state(normalized)
@@ -208,6 +257,7 @@ async def run_simulation_v2_sse(
         finally:
             if not task.done():
                 task.cancel()
+            close_db()
 
     return StreamingResponse(
         event_generator(),
