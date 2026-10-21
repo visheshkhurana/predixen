@@ -40,6 +40,7 @@ from server.services.pattern_aggregator import (
     aggregate_decision_patterns,
     get_relevant_patterns,
 )
+from server.services.data_anonymizer import get_opted_in_company_ids
 from server.services.peer_privacy import MIN_DISTINCT_PEERS, INSUFFICIENT_PEERS, opted_in
 
 A_REVENUE = 45123.0
@@ -106,6 +107,7 @@ def _add_company(
     industry: str = "saas",
     stage: str = "seed",
     sharing: bool = False,
+    sample: bool = False,
 ) -> Company:
     company = Company(
         user_id=user_id,
@@ -114,6 +116,7 @@ def _add_company(
         stage=stage,
         currency="USD",
         data_sharing_enabled=sharing,
+        metadata_json={"is_sample": True} if sample else {},
     )
     db.add(company)
     db.commit()
@@ -155,6 +158,7 @@ def _payloads(client: TestClient, company_id: int) -> dict:
         "summary": client.get(f"{base}/summary"),
         "strategies": client.get(f"{base}/strategies"),
         "ai-insights": client.get(f"{base}/ai-insights"),
+        "patterns": client.get(f"{base}/patterns"),
         "network": client.get(f"{base}/network"),
     }
     payloads = {}
@@ -270,6 +274,13 @@ def test_missing_sharing_flag_is_not_opt_in():
     assert opted_in(SimpleNamespace(data_sharing_enabled=None)) is False
     assert opted_in(SimpleNamespace(data_sharing_enabled=False)) is False
     assert opted_in(SimpleNamespace(data_sharing_enabled=True)) is True
+    assert opted_in(SimpleNamespace(data_sharing_enabled=True, is_sample=True)) is False
+    assert opted_in(SimpleNamespace(
+        data_sharing_enabled=True, metadata_json={"is_sample": True},
+    )) is False
+    assert opted_in(SimpleNamespace(
+        data_sharing_enabled=True, is_sample=False, metadata_json={"is_sample": False},
+    )) is True
 
 
 def test_fewer_than_five_opted_in_peers_yields_no_bands(db):
@@ -309,22 +320,29 @@ def test_fewer_than_five_opted_in_peers_yields_no_bands(db):
             p25_impact FLOAT DEFAULT 0,
             p75_impact FLOAT DEFAULT 0,
             contributing_companies INTEGER DEFAULT 0,
-            computed_at TIMESTAMP
+            computed_at TIMESTAMP,
+            metadata_json TEXT
         )
     """))
     db.execute(
         text("""
             INSERT INTO cross_company_patterns
                 (pattern_type, industry, stage, decision_type, sample_size,
-                 success_rate, median_impact, p25_impact, p75_impact, contributing_companies)
+                 success_rate, median_impact, p25_impact, p75_impact,
+                 contributing_companies, metadata_json)
             VALUES
                 ('benchmark', 'all', 'all', 'revenue_leak_marker', 2, 0,
-                 :median, :median, :median, 2),
+                 :median, :median, :median, 2, NULL),
                 ('benchmark', 'all', 'all', 'single_point_leak', 1, 0,
-                 :median, :median, :median, 8),
+                 :median, :median, :median, 8, NULL),
                 ('decision_outcome', 'all', 'all', 'hire_leak_marker', 2, 100,
-                 0, 0, 0, 2),
-                ('benchmark', 'all', 'all', 'burn', 6, 0, 40, 20, 60, 6)
+                 0, 0, 0, 2, NULL),
+                ('benchmark', 'all', 'all', 'legacy_stage_count', 9, 0,
+                 :median, :median, :median, 9, NULL),
+                ('benchmark', 'all', 'all', 'one_company_metric', 9, 0,
+                 :median, :median, :median, 9, '{"metric_companies": 1}'),
+                ('benchmark', 'all', 'all', 'burn', 6, 0,
+                 40, 20, 60, 9, '{"metric_companies": 6}')
         """),
         {"median": LEAK_MEDIAN},
     )
@@ -347,6 +365,13 @@ def test_fewer_than_five_opted_in_peers_yields_no_bands(db):
     assert "revenue_leak_marker" not in blob
     assert "single_point_leak" not in blob
     assert "hire_leak_marker" not in blob
+    assert "legacy_stage_count" not in blob
+    assert "one_company_metric" not in blob
+    stats = payloads["summary"]["graph_stats"]
+    assert "total_companies" not in stats
+    assert "total_decisions" not in stats
+    assert "total_financial_records" not in stats
+    assert "contributing_companies" not in stats
     for payload in payloads.values():
         _assert_numbers_absent(payload, [MAJOR_REVENUE, LEAK_MEDIAN, UNSHARED_REVENUE], "small cohort")
         _assert_no_peer_identity(payload, peer_ids, peer_names)
@@ -357,13 +382,18 @@ def test_fewer_than_five_opted_in_peers_yields_no_bands(db):
     assert payloads["similar"]["your_profile"]["name"] == "Company A"
 
     visible = get_relevant_patterns(db, industry="saas", stage="seed")
-    markers = {row["decision_type"] for row in visible}
+    markers = {row["decision_type"]: row for row in visible}
     assert "revenue_leak_marker" not in markers
     assert "single_point_leak" not in markers
     assert "hire_leak_marker" not in markers
+    assert "legacy_stage_count" not in markers
+    assert "one_company_metric" not in markers
     assert "burn" in markers
+    assert markers["burn"]["metric_companies"] >= MIN_DISTINCT_PEERS
+    assert isinstance(markers["burn"]["median_impact"], str)
+    assert "40" not in str(markers["burn"]["median_impact"])
     assert all(
-        (row["contributing_companies"] or 0) >= MIN_DISTINCT_PEERS
+        (row.get("metric_companies") or row.get("contributing_companies") or 0) >= MIN_DISTINCT_PEERS
         for row in visible
         if row["pattern_type"] in ("benchmark", "decision_outcome")
     )
@@ -536,3 +566,114 @@ def test_pattern_aggregator_suppresses_stats_below_five_companies(db):
     serialized = json.dumps({"patterns": patterns, "benchmarks": benchmarks})
     assert "ZZ-AGG-" not in serialized
     assert "company_id" not in serialized
+    for stage_stats in benchmarks["benchmarks"].values():
+        for metric_name, percentiles in stage_stats.items():
+            if not isinstance(percentiles, dict):
+                continue
+            for key in ("p25", "median", "p75"):
+                assert isinstance(percentiles[key], str)
+
+
+def test_opted_out_revenue_never_appears(db):
+    owner = _user(1)
+    company_a = _add_company(db, owner.id, "Company A", stage="seed", sharing=False)
+    _add_revenue(db, company_a.id, A_REVENUE)
+    opted_out = _add_company(db, 2, "ZZ-OPTED-OUT", stage="secret_stage", sharing=False)
+    _add_revenue(db, opted_out.id, B_REVENUE)
+    _add_decision(db, opted_out.id, "ZZ-SECRET-DECISION")
+
+    for i in range(MIN_DISTINCT_PEERS):
+        peer = _add_company(db, 100 + i, f"ZZ-PEER-MAJOR-{i}", stage=MAJOR_STAGE, sharing=True)
+        _add_revenue(db, peer.id, MAJOR_REVENUE)
+        _add_decision(db, peer.id)
+
+    payloads = _payloads(_client(db, owner), company_a.id)
+    patterns = aggregate_decision_patterns(db, exclude_company_id=company_a.id)
+    benchmarks = aggregate_benchmark_updates(db, exclude_company_id=company_a.id)
+    blob = json.dumps({"routes": payloads, "patterns": patterns, "benchmarks": benchmarks})
+    assert str(int(B_REVENUE)) not in blob
+    assert "ZZ-OPTED-OUT" not in blob
+    assert "ZZ-SECRET-DECISION" not in blob
+    assert "secret_stage" not in blob
+    _assert_numbers_present(payloads["similar"]["your_profile"], A_REVENUE)
+
+
+def test_sample_companies_are_excluded(db):
+    owner = _user(1)
+    company_a = _add_company(db, owner.id, "Company A", stage="seed")
+    _add_revenue(db, company_a.id, A_REVENUE)
+    sample_revenue = 654321.0
+    sample_ids = []
+    for i in range(6):
+        sample = _add_company(
+            db, 100 + i, f"ZZ-SAMPLE-{i}", stage=MAJOR_STAGE, sharing=True, sample=True,
+        )
+        _add_revenue(db, sample.id, sample_revenue)
+        _add_decision(db, sample.id, "ZZ-SAMPLE-DECISION")
+        sample_ids.append(sample.id)
+    for i in range(MIN_DISTINCT_PEERS - 1):
+        peer = _add_company(db, 200 + i, f"ZZ-REAL-{i}", stage=MAJOR_STAGE, sharing=True)
+        _add_revenue(db, peer.id, MAJOR_REVENUE)
+        _add_decision(db, peer.id)
+
+    assert get_opted_in_company_ids(db) == [] or set(sample_ids).isdisjoint(get_opted_in_company_ids(db))
+    opted = set(get_opted_in_company_ids(db, exclude_company_id=company_a.id))
+    assert set(sample_ids).isdisjoint(opted)
+    assert len(opted) == MIN_DISTINCT_PEERS - 1
+
+    payloads = _payloads(_client(db, owner), company_a.id)
+    benchmarks = aggregate_benchmark_updates(db, exclude_company_id=company_a.id)
+    blob = json.dumps({"routes": payloads, "benchmarks": benchmarks})
+    assert payloads["similar"]["reason"] == INSUFFICIENT_PEERS
+    assert str(int(sample_revenue)) not in blob
+    assert "ZZ-SAMPLE-" not in blob
+    assert "ZZ-SAMPLE-DECISION" not in blob
+    assert MAJOR_STAGE not in blob
+
+
+def test_calling_company_does_not_fill_out_the_cohort(db):
+    owner = _user(1)
+    company_a = _add_company(db, owner.id, "Company A", stage=MAJOR_STAGE, sharing=True)
+    _add_revenue(db, company_a.id, A_REVENUE)
+    _add_decision(db, company_a.id, "Hire an AE")
+    for i in range(MIN_DISTINCT_PEERS - 1):
+        peer = _add_company(db, 100 + i, f"ZZ-PEER-{i}", stage=MAJOR_STAGE, sharing=True)
+        _add_revenue(db, peer.id, MAJOR_REVENUE)
+        _add_decision(db, peer.id, "Hire an AE")
+
+    payloads = _payloads(_client(db, owner), company_a.id)
+    assert payloads["similar"]["reason"] == INSUFFICIENT_PEERS
+    assert payloads["patterns"]["reason"] == INSUFFICIENT_PEERS
+    assert payloads["strategies"]["strategies"] == []
+
+    held_out = aggregate_decision_patterns(db, exclude_company_id=company_a.id)
+    assert held_out["patterns"] == []
+    assert held_out["reason"] == INSUFFICIENT_PEERS
+
+    included = aggregate_decision_patterns(db)
+    assert included["patterns"]
+    assert all(row["contributing_companies"] >= MIN_DISTINCT_PEERS for row in included["patterns"])
+
+
+def test_other_company_intelligence_routes_are_denied(db):
+    user_a = _user(1)
+    company_a = _add_company(db, user_a.id, "Company A")
+    company_b = _add_company(db, 2, "Company B")
+    _add_revenue(db, company_a.id, A_REVENUE)
+    _add_revenue(db, company_b.id, B_REVENUE)
+    client = _client(db, user_a)
+    base = f"/companies/{company_b.id}/intelligence"
+    for path in (
+        "similar",
+        "summary",
+        "strategies",
+        "ai-insights",
+        "patterns",
+        "network",
+        "benchmarks",
+    ):
+        response = client.get(f"{base}/{path}")
+        assert response.status_code in (403, 404), f"{path}: {response.status_code} {response.text}"
+        assert str(int(B_REVENUE)) not in response.text
+    missing = client.get("/companies/999999/intelligence/similar")
+    assert missing.status_code == 404

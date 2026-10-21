@@ -92,12 +92,8 @@ class DecisionPatternEngine:
             from server.models.company_decision import CompanyDecision
             from server.models.financial import FinancialRecord
 
-            opted_in_ids = (
-                self.db.query(Company.id)
-                .filter(Company.data_sharing_enabled == True)
-                .all()
-            )
-            opted_in_set = {c.id for c in opted_in_ids}
+            from server.services.data_anonymizer import get_opted_in_company_ids
+            opted_in_set = set(get_opted_in_company_ids(self.db))
 
             if not opted_in_set:
                 return []
@@ -217,7 +213,7 @@ class DecisionPatternEngine:
             if similarity >= min_similarity:
                 similar_outcomes.append({**outcome, "similarity": similarity})
 
-        if len(similar_outcomes) < 3:
+        if len(similar_outcomes) < 5:
             return self._get_default_patterns(company_profile)
 
         type_stats = defaultdict(lambda: {

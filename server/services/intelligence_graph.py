@@ -31,6 +31,7 @@ from server.models.simulation_run import SimulationRun
 from server.models.scenario import Scenario
 from server.models.twin_event import TwinEvent
 from server.services.peer_privacy import (
+    INSUFFICIENT_PEERS,
     MIN_DISTINCT_PEERS,
     band_counts,
     empty_peer_view,
@@ -281,15 +282,26 @@ def find_similar_companies(
 
 
 def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
-    decisions = db.query(CompanyDecision).limit(500).all()
-    if not decisions:
-        return _default_decision_patterns()
+    from server.services.data_anonymizer import get_opted_in_company_ids
 
-    type_stats = defaultdict(lambda: {"total": 0, "accepted": 0, "rejected": 0, "high_confidence": 0})
+    peer_ids = get_opted_in_company_ids(db, exclude_company_id=company_id)
+    decisions = []
+    if peer_ids:
+        decisions = (
+            db.query(CompanyDecision)
+            .filter(CompanyDecision.company_id.in_(peer_ids))
+            .limit(500)
+            .all()
+        )
+
+    type_stats = defaultdict(lambda: {
+        "total": 0, "accepted": 0, "rejected": 0, "high_confidence": 0, "companies": set(),
+    })
 
     for d in decisions:
         dtype = _classify_decision_type(d.title)
         type_stats[dtype]["total"] += 1
+        type_stats[dtype]["companies"].add(d.company_id)
         if d.status in ("accepted", "implemented", "resolved", "completed", "decided"):
             type_stats[dtype]["accepted"] += 1
         elif d.status == "rejected":
@@ -299,6 +311,8 @@ def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
 
     patterns = []
     for dtype, stats in type_stats.items():
+        if len(stats["companies"]) < MIN_DISTINCT_PEERS:
+            continue
         acceptance_rate = (stats["accepted"] / stats["total"] * 100) if stats["total"] > 0 else 0
         patterns.append({
             "decision_type": dtype,
@@ -306,6 +320,7 @@ def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
             "acceptance_rate": round(acceptance_rate, 1),
             "high_confidence_count": stats["high_confidence"],
             "rejection_count": stats["rejected"],
+            "company_count": len(stats["companies"]),
         })
 
     patterns.sort(key=lambda p: p["total_count"], reverse=True)
@@ -330,8 +345,9 @@ def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
 
     return {
         "patterns": patterns[:8],
-        "total_decisions": sum(s["total"] for s in type_stats.values()),
+        "total_decisions": sum(p["total_count"] for p in patterns),
         "your_recent_decisions": recent,
+        "reason": None if patterns else INSUFFICIENT_PEERS,
     }
 
 
@@ -355,12 +371,20 @@ def get_strategy_insights(
     if not profile:
         return {"strategies": [], "peer_insights": []}
 
-    all_decisions = (
-        db.query(CompanyDecision)
-        .filter(CompanyDecision.status.in_(["accepted", "implemented", "resolved", "completed", "decided"]))
-        .limit(300)
-        .all()
-    )
+    from server.services.data_anonymizer import get_opted_in_company_ids
+
+    peer_ids = get_opted_in_company_ids(db, exclude_company_id=company_id)
+    all_decisions = []
+    if peer_ids:
+        all_decisions = (
+            db.query(CompanyDecision)
+            .filter(
+                CompanyDecision.company_id.in_(peer_ids),
+                CompanyDecision.status.in_(["accepted", "implemented", "resolved", "completed", "decided"]),
+            )
+            .limit(300)
+            .all()
+        )
 
     strategy_outcomes = defaultdict(lambda: {"count": 0, "high_conf": 0, "companies": set()})
     for d in all_decisions:
@@ -372,6 +396,8 @@ def get_strategy_insights(
 
     strategies = []
     for stype, data in strategy_outcomes.items():
+        if len(data["companies"]) < MIN_DISTINCT_PEERS:
+            continue
         strategies.append({
             "strategy": stype,
             "adoption_count": data["count"],
@@ -607,12 +633,37 @@ def get_cross_company_patterns(db: Session, company_id: int) -> Dict[str, Any]:
         return {"patterns": [], "source": "no_profile"}
 
     try:
-        from server.services.pattern_aggregator import get_relevant_patterns
-        patterns = get_relevant_patterns(
+        from server.services.pattern_aggregator import (
+            aggregate_benchmark_updates,
+            aggregate_decision_patterns,
+            get_relevant_patterns,
+        )
+        # Recompute without this company and without writing the global rows.
+        live = aggregate_decision_patterns(db, exclude_company_id=company_id)
+        benchmarks = aggregate_benchmark_updates(db, exclude_company_id=company_id)
+        patterns = []
+        for row in live.get("patterns") or []:
+            patterns.append({**row, "pattern_type": "decision_outcome"})
+        for stage, stats in (benchmarks.get("benchmarks") or {}).items():
+            for metric_name, percentiles in stats.items():
+                if metric_name == "sample_size" or not isinstance(percentiles, dict):
+                    continue
+                patterns.append({
+                    "pattern_type": "benchmark",
+                    "stage": stage,
+                    "decision_type": metric_name,
+                    "sample_size": percentiles.get("sample_size", 0),
+                    "contributing_companies": percentiles.get("companies", 0),
+                    "p25_impact": percentiles.get("p25"),
+                    "median_impact": percentiles.get("median"),
+                    "p75_impact": percentiles.get("p75"),
+                })
+        stored = get_relevant_patterns(
             db,
             industry=profile.get("industry", "unknown"),
             stage=profile.get("stage", "unknown"),
         )
+        patterns.extend(row for row in stored if row.get("pattern_type") == "research")
         if patterns:
             return {
                 "patterns": patterns,
@@ -639,18 +690,9 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
     strategies = get_strategy_insights(db, company_id, include_peer_benchmarks=False)
     cross_company = get_cross_company_patterns(db, company_id)
 
-    total_companies = db.query(func.count(Company.id)).scalar() or 0
-    total_decisions = db.query(func.count(CompanyDecision.id)).scalar() or 0
-    total_records = db.query(func.count(FinancialRecord.id)).scalar() or 0
     total_events = (
         db.query(func.count(TwinEvent.id))
         .filter(TwinEvent.company_id == company_id)
-        .scalar() or 0
-    )
-
-    contributing_companies = (
-        db.query(func.count(Company.id))
-        .filter(Company.data_sharing_enabled == True)
         .scalar() or 0
     )
 
@@ -664,12 +706,8 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
         "growth_benchmarks": None,
         "cross_company_patterns": cross_company,
         "graph_stats": {
-            "total_companies": total_companies,
-            "total_decisions": total_decisions,
-            "total_financial_records": total_records,
             "total_events": total_events,
             "similar_companies_found": peer_view["peer_count"],
-            "contributing_companies": contributing_companies,
         },
     }
 

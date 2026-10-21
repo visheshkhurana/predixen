@@ -6,6 +6,7 @@ opted-in companies to compute success rates, benchmark percentiles,
 and pattern intelligence. Privacy-first: only statistical aggregates
 are stored — no individual company data is exposed.
 """
+import json
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
@@ -18,17 +19,22 @@ from server.models.company import Company
 from server.models.company_decision import CompanyDecision
 from server.models.financial import FinancialRecord
 from server.services.data_anonymizer import (
+    _classify_burn_range,
+    _classify_revenue_range,
+    _classify_runway_range,
     anonymize_company_metrics,
     anonymize_decision_outcome,
     get_opted_in_company_ids,
 )
-from server.services.peer_privacy import INSUFFICIENT_PEERS, MIN_DISTINCT_PEERS
+from server.services.peer_privacy import INSUFFICIENT_PEERS, MIN_DISTINCT_PEERS, opted_in
 
 logger = logging.getLogger(__name__)
 
 
-def aggregate_decision_patterns(db: Session) -> Dict[str, Any]:
-    opted_in_ids = get_opted_in_company_ids(db)
+def aggregate_decision_patterns(
+    db: Session, exclude_company_id: Optional[int] = None
+) -> Dict[str, Any]:
+    opted_in_ids = get_opted_in_company_ids(db, exclude_company_id=exclude_company_id)
     if not opted_in_ids:
         return {
             "patterns": [],
@@ -52,9 +58,11 @@ def aggregate_decision_patterns(db: Session) -> Dict[str, Any]:
 
     for decision in decisions:
         cid = decision.company_id
+        if exclude_company_id is not None and cid == exclude_company_id:
+            continue
         if cid not in company_cache:
             company = db.query(Company).filter(Company.id == cid).first()
-            if not company:
+            if not company or not opted_in(company):
                 continue
             company_cache[cid] = {
                 "industry": (company.industry or "unknown").lower(),
@@ -92,7 +100,8 @@ def aggregate_decision_patterns(db: Session) -> Dict[str, Any]:
                 "contributing_companies": company_count,
             })
 
-    _store_patterns(db, patterns)
+    if exclude_company_id is None:
+        _store_patterns(db, patterns)
 
     return {
         "patterns": patterns,
@@ -103,8 +112,10 @@ def aggregate_decision_patterns(db: Session) -> Dict[str, Any]:
     }
 
 
-def aggregate_benchmark_updates(db: Session) -> Dict[str, Any]:
-    opted_in_ids = get_opted_in_company_ids(db)
+def aggregate_benchmark_updates(
+    db: Session, exclude_company_id: Optional[int] = None
+) -> Dict[str, Any]:
+    opted_in_ids = get_opted_in_company_ids(db, exclude_company_id=exclude_company_id)
     if not opted_in_ids:
         return {
             "benchmarks": {},
@@ -130,6 +141,8 @@ def aggregate_benchmark_updates(db: Session) -> Dict[str, Any]:
     })
 
     for rec, stage, industry in records:
+        if exclude_company_id is not None and rec.company_id == exclude_company_id:
+            continue
         key = (stage or "unknown").lower()
         rev = float(rec.revenue or 0)
         burn = float(rec.net_burn or 0) if hasattr(rec, "net_burn") and rec.net_burn else 0
@@ -151,20 +164,23 @@ def aggregate_benchmark_updates(db: Session) -> Dict[str, Any]:
         if len(data["companies"]) < MIN_DISTINCT_PEERS:
             continue
         stage_stats = {"sample_size": len(data["companies"])}
+        raw_metrics = {}
         for metric_name, pairs in (
             ("revenue", data["revenues"]),
             ("burn", data["burns"]),
             ("runway", data["runways"]),
             ("gross_margin", data["margins"]),
         ):
-            published = _publish_percentiles(pairs)
-            if published:
-                stage_stats[metric_name] = published
+            raw = _percentile_stats(pairs)
+            if not raw:
+                continue
+            raw_metrics[metric_name] = raw
+            stage_stats[metric_name] = _band_percentiles(metric_name, raw)
         if len(stage_stats) == 1:
             continue
         benchmarks[stage] = stage_stats
-
-    _store_benchmarks(db, benchmarks)
+        if exclude_company_id is None:
+            _store_benchmark_stage(db, stage, raw_metrics)
 
     return {
         "benchmarks": benchmarks,
@@ -187,7 +203,7 @@ def get_relevant_patterns(
             text("""
                 SELECT pattern_type, industry, stage, decision_type,
                        sample_size, success_rate, median_impact, p25_impact, p75_impact,
-                       contributing_companies, computed_at
+                       contributing_companies, computed_at, metadata_json
                 FROM cross_company_patterns
                 WHERE (industry = :industry OR industry = 'all')
                   AND (stage = :stage OR stage = 'all')
@@ -202,10 +218,26 @@ def get_relevant_patterns(
             pattern_type = r[0]
             contributing = r[9] or 0
             sample_size = r[4] or 0
-            if pattern_type in ("decision_outcome", "benchmark") and (
+            metric_companies = _metric_companies(r[11] if len(r) > 11 else None)
+            if pattern_type == "benchmark":
+                # Legacy rows stored a stage-level company count in
+                # contributing_companies, so one company's metric could pass.
+                # Trust only an explicit per-metric count.
+                if metric_companies is None or metric_companies < MIN_DISTINCT_PEERS:
+                    continue
+                if sample_size < MIN_DISTINCT_PEERS:
+                    continue
+                contributing = metric_companies
+            elif pattern_type == "decision_outcome" and (
                 contributing < MIN_DISTINCT_PEERS or sample_size < MIN_DISTINCT_PEERS
             ):
                 continue
+            median_impact, p25_impact, p75_impact = r[6], r[7], r[8]
+            if pattern_type == "benchmark":
+                metric_name = r[3] or "revenue"
+                median_impact = _band_published_value(metric_name, median_impact)
+                p25_impact = _band_published_value(metric_name, p25_impact)
+                p75_impact = _band_published_value(metric_name, p75_impact)
             published.append({
                 "pattern_type": pattern_type,
                 "industry": r[1],
@@ -213,10 +245,11 @@ def get_relevant_patterns(
                 "decision_type": r[3],
                 "sample_size": sample_size,
                 "success_rate": r[5],
-                "median_impact": r[6],
-                "p25_impact": r[7],
-                "p75_impact": r[8],
+                "median_impact": median_impact,
+                "p25_impact": p25_impact,
+                "p75_impact": p75_impact,
                 "contributing_companies": contributing,
+                "metric_companies": metric_companies,
                 "computed_at": r[10].isoformat() if hasattr(r[10], "isoformat") else (str(r[10]) if r[10] else None),
             })
         return published
@@ -295,8 +328,8 @@ def _classify_decision_type(title_lower: str) -> str:
     return "general"
 
 
-def _publish_percentiles(pairs: List[Any]) -> Optional[Dict[str, Any]]:
-    """Percentiles only when at least MIN_DISTINCT_PEERS companies contributed."""
+def _percentile_stats(pairs: List[Any]) -> Optional[Dict[str, Any]]:
+    """Numeric percentiles only when at least MIN_DISTINCT_PEERS companies contributed."""
     companies = {company_id for company_id, _value in pairs}
     values = [value for _company_id, value in pairs]
     if len(companies) < MIN_DISTINCT_PEERS or len(values) < MIN_DISTINCT_PEERS:
@@ -304,6 +337,51 @@ def _publish_percentiles(pairs: List[Any]) -> Optional[Dict[str, Any]]:
     stats = _compute_percentiles(values)
     stats["companies"] = len(companies)
     return stats
+
+
+def _band_published_value(metric: str, value: Any) -> str:
+    """Coarse band so a published percentile is not a company's exact figure."""
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        return "unknown"
+    if metric == "burn":
+        return _classify_burn_range(number)
+    if metric == "runway":
+        return _classify_runway_range(number)
+    if metric == "gross_margin":
+        stepped = int(round(number / 5.0) * 5)
+        return f"{stepped}%"
+    return _classify_revenue_range(number)
+
+
+def _band_percentiles(metric: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "p25": _band_published_value(metric, raw.get("p25")),
+        "median": _band_published_value(metric, raw.get("median")),
+        "p75": _band_published_value(metric, raw.get("p75")),
+        "sample_size": raw.get("sample_size", 0),
+        "companies": raw.get("companies", 0),
+    }
+
+
+def _metric_companies(metadata: Any) -> Optional[int]:
+    if metadata is None:
+        return None
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get("metric_companies")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _compute_percentiles(values: List[float]) -> Dict[str, Any]:
@@ -352,47 +430,50 @@ def _store_patterns(db: Session, patterns: List[Dict[str, Any]]) -> None:
         db.rollback()
 
 
-def _store_benchmarks(db: Session, benchmarks: Dict[str, Any]) -> None:
+def _store_benchmark_stage(db: Session, stage: str, raw_metrics: Dict[str, Dict[str, Any]]) -> None:
+    """Persist numeric percentiles plus a per-metric company count.
+
+    metadata_json.metric_companies is the only count trusted on read.
+    contributing_companies is kept for older readers and is the same
+    per-metric count, not the stage-wide company total.
+    """
     try:
-        for stage, data in benchmarks.items():
-            for metric_name, percentiles in data.items():
-                if metric_name == "sample_size":
-                    continue
-                if not isinstance(percentiles, dict):
-                    continue
-                if (percentiles.get("companies") or 0) < MIN_DISTINCT_PEERS:
-                    continue
-                if (percentiles.get("sample_size") or 0) < MIN_DISTINCT_PEERS:
-                    continue
-                db.execute(
-                    text("""
-                        INSERT INTO cross_company_patterns
-                            (pattern_type, industry, stage, decision_type,
-                             sample_size, median_impact, p25_impact, p75_impact,
-                             contributing_companies, computed_at)
-                        VALUES
-                            ('benchmark', 'all', :stage, :metric_name,
-                             :sample_size, :median, :p25, :p75,
-                             :contributing_companies, NOW())
-                        ON CONFLICT (pattern_type, industry, stage, decision_type)
-                        DO UPDATE SET
-                            sample_size = :sample_size,
-                            median_impact = :median,
-                            p25_impact = :p25,
-                            p75_impact = :p75,
-                            contributing_companies = :contributing_companies,
-                            computed_at = NOW()
-                    """),
-                    {
-                        "stage": stage,
-                        "metric_name": metric_name,
-                        "sample_size": percentiles.get("sample_size", 0),
-                        "median": percentiles.get("median", 0),
-                        "p25": percentiles.get("p25", 0),
-                        "p75": percentiles.get("p75", 0),
-                        "contributing_companies": percentiles.get("companies", data.get("sample_size", 0)),
-                    },
-                )
+        for metric_name, raw in raw_metrics.items():
+            companies = raw.get("companies") or 0
+            sample_size = raw.get("sample_size") or 0
+            if companies < MIN_DISTINCT_PEERS or sample_size < MIN_DISTINCT_PEERS:
+                continue
+            db.execute(
+                text("""
+                    INSERT INTO cross_company_patterns
+                        (pattern_type, industry, stage, decision_type,
+                         sample_size, median_impact, p25_impact, p75_impact,
+                         contributing_companies, metadata_json, computed_at)
+                    VALUES
+                        ('benchmark', 'all', :stage, :metric_name,
+                         :sample_size, :median, :p25, :p75,
+                         :contributing_companies, :metadata, NOW())
+                    ON CONFLICT (pattern_type, industry, stage, decision_type)
+                    DO UPDATE SET
+                        sample_size = :sample_size,
+                        median_impact = :median,
+                        p25_impact = :p25,
+                        p75_impact = :p75,
+                        contributing_companies = :contributing_companies,
+                        metadata_json = :metadata,
+                        computed_at = NOW()
+                """),
+                {
+                    "stage": stage,
+                    "metric_name": metric_name,
+                    "sample_size": sample_size,
+                    "median": raw.get("median", 0),
+                    "p25": raw.get("p25", 0),
+                    "p75": raw.get("p75", 0),
+                    "contributing_companies": companies,
+                    "metadata": json.dumps({"metric_companies": companies}),
+                },
+            )
         db.commit()
     except Exception as e:
         logger.error(f"Error storing benchmarks: {e}")

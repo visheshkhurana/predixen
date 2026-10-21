@@ -12,8 +12,32 @@ MIN_DISTINCT_PEERS = 5
 INSUFFICIENT_PEERS = "insufficient_peers"
 
 
+def is_sample_company(company: Any) -> bool:
+    """True for labelled sample data, including a metadata_json flag.
+
+    A missing company is not a real peer.
+    """
+    if company is None:
+        return True
+    if bool(getattr(company, "is_sample", False)):
+        return True
+    meta = getattr(company, "metadata_json", None) or {}
+    if isinstance(meta, str):
+        try:
+            import json
+            meta = json.loads(meta)
+        except (TypeError, ValueError):
+            meta = {}
+    return isinstance(meta, dict) and bool(meta.get("is_sample"))
+
+
 def opted_in(company: Any) -> bool:
-    """True only when the company has an explicit sharing flag set."""
+    """True only for an explicit sharing flag on a non-sample company.
+
+    A missing flag is not opt-in. Sample companies never join a peer cohort.
+    """
+    if company is None or is_sample_company(company):
+        return False
     return bool(getattr(company, "data_sharing_enabled", False))
 
 

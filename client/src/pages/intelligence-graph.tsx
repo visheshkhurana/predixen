@@ -957,28 +957,7 @@ export default function IntelligenceGraphPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Card className="p-4" data-testid="stat-companies">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <Building2 className="h-3.5 w-3.5" />
-            <span className="text-xs">Companies</span>
-          </div>
-          <div className="text-2xl font-bold font-mono">{stats.total_companies || 0}</div>
-        </Card>
-        <Card className="p-4" data-testid="stat-decisions">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <GitBranch className="h-3.5 w-3.5" />
-            <span className="text-xs">Decisions</span>
-          </div>
-          <div className="text-2xl font-bold font-mono">{stats.total_decisions || 0}</div>
-        </Card>
-        <Card className="p-4" data-testid="stat-records">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <Activity className="h-3.5 w-3.5" />
-            <span className="text-xs">Data Points</span>
-          </div>
-          <div className="text-2xl font-bold font-mono">{stats.total_financial_records || 0}</div>
-        </Card>
+      <div className="grid grid-cols-2 gap-3">
         <Card className="p-4" data-testid="stat-events">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Zap className="h-3.5 w-3.5" />
