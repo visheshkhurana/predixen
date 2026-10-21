@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from server.core.db import get_db, SessionLocal
 from server.core.security import get_current_user
-from server.core.plans import PlanTier, PLAN_DETAILS, Feature, FEATURE_LABELS, TRIAL_DURATION_DAYS, TRIAL_PLAN, minimum_plan_for_feature
+from server.core.plans import PlanTier, PLAN_DETAILS, Feature, FEATURE_LABELS, TRIAL_DURATION_DAYS, TRIAL_PLAN, beta_grants_feature, minimum_plan_for_feature
 from server.core.subscription import get_user_subscription, start_trial
 from server.core import stripe_billing
 
@@ -552,7 +552,8 @@ def check_feature(
 ):
     sub = get_user_subscription(db, current_user.id)
     plan_features = PLAN_DETAILS.get(sub["plan"], PLAN_DETAILS[PlanTier.FREE])["features"]
-    has_access = feature in [f.value if hasattr(f, 'value') else f for f in plan_features]
+    feature_values = [f.value if hasattr(f, "value") else f for f in plan_features]
+    has_access = feature in feature_values or beta_grants_feature(feature)
 
     min_plan = minimum_plan_for_feature(feature)
     feature_label = FEATURE_LABELS.get(feature, feature)

@@ -496,6 +496,11 @@ app.add_middleware(
     rate_limit_simulation=settings.RATE_LIMIT_SIMULATION,
 )
 
+# Plan caps are off during public beta. This burst window is the spend guard
+# for AI, simulation, and Truth Scan. It is in-process and does not fail open.
+from server.core.spend_guard import SpendGuardMiddleware
+app.add_middleware(SpendGuardMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,

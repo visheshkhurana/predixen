@@ -13,7 +13,8 @@ from server.core.db import get_db, SessionLocal
 from server.core.security import get_current_user
 from server.core.plans import (
     PlanTier, Feature, PLAN_DETAILS, TRIAL_DURATION_DAYS, TRIAL_PLAN,
-    has_feature, get_plan_limit, minimum_plan_for_feature, FEATURE_LABELS,
+    beta_grants_feature, has_feature, get_plan_limit,
+    minimum_plan_for_feature, FEATURE_LABELS,
 )
 
 logger = logging.getLogger(__name__)
@@ -258,7 +259,9 @@ def check_feature_access(feature: str):
         sub = get_user_subscription(db, current_user.id)
         effective_plan = sub["effective_plan"]
 
-        if has_feature(effective_plan, feature):
+        # Public beta opens every feature except the three held on their
+        # paid plans. BETA_ALL_FREE is the revert switch in plans.py.
+        if beta_grants_feature(feature) or has_feature(effective_plan, feature):
             return True
 
         min_plan = minimum_plan_for_feature(feature)
@@ -320,7 +323,9 @@ class PaywallMiddleware(BaseHTTPMiddleware):
             effective_plan = sub.get("effective_plan", PlanTier.FREE)
             plan_features = PLAN_DETAILS.get(effective_plan, PLAN_DETAILS[PlanTier.FREE])["features"]
 
-            if required_feature in plan_features:
+            # Same switch as check_feature_access. The three excluded features
+            # still require the plan that lists them.
+            if beta_grants_feature(required_feature) or required_feature in plan_features:
                 return await call_next(request)
 
             min_plan = _required_plan_for_feature(required_feature)
