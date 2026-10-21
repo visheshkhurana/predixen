@@ -2,6 +2,11 @@
 from enum import Enum
 from typing import Dict, List, Optional
 
+# CEO decision (Vishesh, 21 Oct 2026): during public beta every feature is free
+# for every account — no caps, no card, no trial. Flip this one constant to
+# False to restore the gated free tier below. No env var.
+BETA_ALL_FREE = True
+
 
 class PlanTier(str, Enum):
     FREE = "free"
@@ -41,30 +46,52 @@ class Feature(str, Enum):
     INVESTOR_ROOM = "investor_room"
 
 
+def _copy_plan(plan: dict) -> dict:
+    """Shallow copy that does not share feature or highlight lists."""
+    copied = dict(plan)
+    copied["features"] = list(plan["features"])
+    copied["highlights"] = list(plan["highlights"])
+    return copied
+
+
+# Pre-beta free tier. Kept intact so BETA_ALL_FREE = False is a one-line revert.
+_GATED_FREE_PLAN: dict = {
+    "name": "Free",
+    "price_monthly": 0,
+    "price_annual": 0,
+    "tagline": "Explore the platform",
+    "max_companies": 1,
+    "max_simulations_per_month": 3,
+    "max_copilot_messages_per_month": 10,
+    "max_connectors": 0,
+    "features": [
+        Feature.DASHBOARD,
+        Feature.BASIC_METRICS,
+        Feature.CSV_UPLOAD,
+        Feature.MANUAL_DATA_ENTRY,
+    ],
+    "highlights": [
+        "1 company",
+        "3 simulations / month",
+        "10 copilot messages / month",
+        "CSV upload",
+        "Basic dashboard",
+    ],
+}
+
+
+def _beta_free_highlights() -> List[str]:
+    return [
+        "Every feature free during public beta",
+        "Unlimited simulations",
+        "Unlimited copilot",
+        "Unlimited companies",
+        "No card, no trial",
+    ]
+
+
 PLAN_DETAILS: Dict[str, dict] = {
-    PlanTier.FREE: {
-        "name": "Free",
-        "price_monthly": 0,
-        "price_annual": 0,
-        "tagline": "Explore the platform",
-        "max_companies": 1,
-        "max_simulations_per_month": 3,
-        "max_copilot_messages_per_month": 10,
-        "max_connectors": 0,
-        "features": [
-            Feature.DASHBOARD,
-            Feature.BASIC_METRICS,
-            Feature.CSV_UPLOAD,
-            Feature.MANUAL_DATA_ENTRY,
-        ],
-        "highlights": [
-            "1 company",
-            "3 simulations / month",
-            "10 copilot messages / month",
-            "CSV upload",
-            "Basic dashboard",
-        ],
-    },
+    PlanTier.FREE: _copy_plan(_GATED_FREE_PLAN),
     PlanTier.STARTER: {
         "name": "Starter",
         "price_monthly": 29,
@@ -194,6 +221,19 @@ PLAN_DETAILS: Dict[str, dict] = {
     },
 }
 
+# -1 is the existing unlimited sentinel (see Scale). Applied only to Free.
+if BETA_ALL_FREE:
+    PLAN_DETAILS[PlanTier.FREE] = {
+        **_copy_plan(_GATED_FREE_PLAN),
+        "tagline": "Every feature free during public beta",
+        "max_companies": -1,
+        "max_simulations_per_month": -1,
+        "max_copilot_messages_per_month": -1,
+        "max_connectors": -1,
+        "features": list(PLAN_DETAILS[PlanTier.SCALE]["features"]),
+        "highlights": _beta_free_highlights(),
+    }
+
 TRIAL_DURATION_DAYS = 30
 TRIAL_PLAN = PlanTier.SCALE
 
@@ -214,7 +254,7 @@ def get_plan_limit(plan: str, limit_key: str) -> int:
 
 
 def minimum_plan_for_feature(feature: str) -> Optional[str]:
-    for tier in [PlanTier.STARTER, PlanTier.GROWTH, PlanTier.SCALE]:
+    for tier in [PlanTier.FREE, PlanTier.STARTER, PlanTier.GROWTH, PlanTier.SCALE]:
         if feature in PLAN_DETAILS[tier]["features"]:
             return tier
     return None
