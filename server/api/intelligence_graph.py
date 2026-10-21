@@ -21,7 +21,6 @@ from server.services.intelligence_graph import (
     find_similar_companies,
     get_decision_patterns,
     get_strategy_insights,
-    get_growth_benchmarks,
     get_intelligence_summary,
     process_graph_event,
     sync_twin_to_graph,
@@ -103,7 +102,7 @@ def api_strategy_insights(
 ):
     get_user_company(db, company_id, current_user)
     try:
-        return get_strategy_insights(db, company_id)
+        return get_strategy_insights(db, company_id, include_peer_benchmarks=False)
     except Exception as e:
         logger.error(f"Strategy insights error: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate strategy insights")
@@ -117,7 +116,22 @@ def api_growth_benchmarks(
 ):
     get_user_company(db, company_id, current_user)
     try:
-        return get_growth_benchmarks(db, company_id)
+        # Peer percentiles are withheld. get_growth_benchmarks reads raw
+        # FinancialRecord.revenue across every company, so p25/median/p75 can
+        # be another tenant's exact revenue. Own profile only; no peer stats.
+        profile = get_company_profile(db, company_id)
+        return {
+            "your_profile": {
+                "stage": profile.get("stage"),
+                "industry": profile.get("industry"),
+                "mrr": profile.get("mrr", 0),
+                "growth_pct": profile.get("growth_pct", 0),
+                "runway_months": profile.get("runway_months", 0),
+            },
+            "stage_benchmarks": {},
+            "total_companies_analyzed": 0,
+            "total_data_points": 0,
+        }
     except Exception as e:
         logger.error(f"Growth benchmarks error: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate benchmarks")
@@ -160,7 +174,7 @@ def api_ai_strategy_insights(
 ):
     get_user_company(db, company_id, current_user)
     try:
-        return generate_ai_strategy_insights(db, company_id)
+        return generate_ai_strategy_insights(db, company_id, include_peer_benchmarks=False)
     except Exception as e:
         logger.error(f"AI strategy insights error: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate AI insights")

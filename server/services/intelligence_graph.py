@@ -323,7 +323,9 @@ def _default_decision_patterns() -> Dict[str, Any]:
     }
 
 
-def get_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
+def get_strategy_insights(
+    db: Session, company_id: int, include_peer_benchmarks: bool = False
+) -> Dict[str, Any]:
     profile = get_company_profile(db, company_id)
     if not profile:
         return {"strategies": [], "peer_insights": []}
@@ -355,7 +357,13 @@ def get_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
 
     strategies.sort(key=lambda s: s["adoption_count"], reverse=True)
 
-    peer_insights = _generate_peer_insights(db, profile)
+    # Off by default. _generate_peer_insights medians other companies' raw
+    # FinancialRecord revenue and runway. Pass True only for a future opt-in
+    # design that also enforces a minimum group size.
+    if include_peer_benchmarks:
+        peer_insights = _generate_peer_insights(db, profile)
+    else:
+        peer_insights = _default_peer_insights(profile)
 
     return {
         "strategies": strategies[:6],
@@ -504,6 +512,13 @@ def _default_peer_insights(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def get_growth_benchmarks(db: Session, company_id: int) -> Dict[str, Any]:
+    """Raw cross-company revenue percentiles.
+
+    Unsafe for tenant-facing responses: the newest 500 FinancialRecords across
+    every company, with no opt-in, no is_sample filter, and no minimum group
+    size. p25/median/p75 can be another company's exact revenue. The
+    intelligence benchmarks and summary endpoints must not call this.
+    """
     profile = get_company_profile(db, company_id)
 
     records_with_company = (
@@ -588,8 +603,10 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
 
     similar = find_similar_companies(db, company_id, limit=5)
     patterns = get_decision_patterns(db, company_id)
-    strategies = get_strategy_insights(db, company_id)
-    benchmarks = get_growth_benchmarks(db, company_id)
+    # Do not call get_growth_benchmarks or peer financial benchmarks. Both
+    # aggregate other companies' FinancialRecord.revenue with no opt-in and
+    # no minimum group size. Own profile and non-financial blocks stay.
+    strategies = get_strategy_insights(db, company_id, include_peer_benchmarks=False)
     cross_company = get_cross_company_patterns(db, company_id)
 
     total_companies = db.query(func.count(Company.id)).scalar() or 0
@@ -612,7 +629,7 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
         "similar_companies": similar,
         "decision_patterns": patterns,
         "strategy_insights": strategies,
-        "growth_benchmarks": benchmarks,
+        "growth_benchmarks": None,
         "cross_company_patterns": cross_company,
         "graph_stats": {
             "total_companies": total_companies,
@@ -828,41 +845,23 @@ def sync_twin_to_graph(db: Session, company_id: int) -> Dict[str, Any]:
     }
 
 
-def generate_ai_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
+def generate_ai_strategy_insights(
+    db: Session, company_id: int, include_peer_benchmarks: bool = False
+) -> Dict[str, Any]:
     profile = get_company_profile(db, company_id)
     if not profile:
         return {"insights": [], "error": "Company not found"}
 
     similar = find_similar_companies(db, company_id, limit=10)
     patterns = get_decision_patterns(db, company_id)
-    strategies = get_strategy_insights(db, company_id)
-    benchmarks = get_growth_benchmarks(db, company_id)
+    strategies = get_strategy_insights(
+        db, company_id, include_peer_benchmarks=include_peer_benchmarks
+    )
+    # Do not call get_growth_benchmarks. Its stage median is another company's
+    # raw revenue, and recommendations copies that sentence into its response.
+    # This handler does not call an LLM, so there is no prompt to scrub.
 
     insights = []
-
-    stage_data = benchmarks.get("stage_benchmarks", {}).get(profile.get("stage", ""), {})
-    if stage_data:
-        median_mrr = stage_data.get("median", 0)
-        your_mrr = profile.get("mrr", 0)
-        if median_mrr > 0:
-            percentile = "above median" if your_mrr > median_mrr else "below median"
-            ratio = your_mrr / median_mrr if median_mrr > 0 else 0
-            if ratio < 0.5:
-                insights.append({
-                    "type": "revenue_gap",
-                    "severity": "high",
-                    "title": "Revenue significantly below peers",
-                    "description": f"Your MRR (${your_mrr:,.0f}) is {(1-ratio)*100:.0f}% below the peer median (${median_mrr:,.0f}). Companies that closed this gap typically focused on pricing optimization and sales efficiency.",
-                    "recommended_strategies": ["pricing", "growth"],
-                })
-            elif ratio > 1.5:
-                insights.append({
-                    "type": "revenue_leader",
-                    "severity": "low",
-                    "title": "Revenue outperforming peers",
-                    "description": f"Your MRR (${your_mrr:,.0f}) is {(ratio-1)*100:.0f}% above the peer median. Consider this advantage when planning your next fundraise.",
-                    "recommended_strategies": ["fundraising"],
-                })
 
     peer_strategies = strategies.get("strategies", [])
     your_decisions = patterns.get("your_recent_decisions", [])
@@ -944,8 +943,8 @@ def get_simulation_graph_recommendations(
         return {"recommendations": []}
 
     similar = find_similar_companies(db, company_id, limit=10)
-    strategies = get_strategy_insights(db, company_id)
-    ai_insights = generate_ai_strategy_insights(db, company_id)
+    strategies = get_strategy_insights(db, company_id, include_peer_benchmarks=False)
+    ai_insights = generate_ai_strategy_insights(db, company_id, include_peer_benchmarks=False)
 
     if not simulation_result:
         latest_sim = (
