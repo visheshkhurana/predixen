@@ -323,7 +323,9 @@ def _default_decision_patterns() -> Dict[str, Any]:
     }
 
 
-def get_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
+def get_strategy_insights(
+    db: Session, company_id: int, include_peer_benchmarks: bool = True
+) -> Dict[str, Any]:
     profile = get_company_profile(db, company_id)
     if not profile:
         return {"strategies": [], "peer_insights": []}
@@ -355,7 +357,12 @@ def get_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
 
     strategies.sort(key=lambda s: s["adoption_count"], reverse=True)
 
-    peer_insights = _generate_peer_insights(db, profile)
+    # Peer revenue/runway figures are raw values from other companies' books.
+    # Callers that must not leak those (the intelligence summary) pass False.
+    if include_peer_benchmarks:
+        peer_insights = _generate_peer_insights(db, profile)
+    else:
+        peer_insights = _default_peer_insights(profile)
 
     return {
         "strategies": strategies[:6],
@@ -504,6 +511,13 @@ def _default_peer_insights(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def get_growth_benchmarks(db: Session, company_id: int) -> Dict[str, Any]:
+    """Raw cross-company revenue percentiles.
+
+    Unsafe for tenant-facing responses: the newest 500 FinancialRecords across
+    every company, with no opt-in, no is_sample filter, and no minimum group
+    size. p25/median/p75 can be another company's exact revenue. The
+    intelligence benchmarks and summary endpoints must not call this.
+    """
     profile = get_company_profile(db, company_id)
 
     records_with_company = (
@@ -588,8 +602,10 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
 
     similar = find_similar_companies(db, company_id, limit=5)
     patterns = get_decision_patterns(db, company_id)
-    strategies = get_strategy_insights(db, company_id)
-    benchmarks = get_growth_benchmarks(db, company_id)
+    # Do not call get_growth_benchmarks or peer financial benchmarks. Both
+    # aggregate other companies' FinancialRecord.revenue with no opt-in and
+    # no minimum group size. Own profile and non-financial blocks stay.
+    strategies = get_strategy_insights(db, company_id, include_peer_benchmarks=False)
     cross_company = get_cross_company_patterns(db, company_id)
 
     total_companies = db.query(func.count(Company.id)).scalar() or 0
@@ -612,7 +628,7 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
         "similar_companies": similar,
         "decision_patterns": patterns,
         "strategy_insights": strategies,
-        "growth_benchmarks": benchmarks,
+        "growth_benchmarks": None,
         "cross_company_patterns": cross_company,
         "graph_stats": {
             "total_companies": total_companies,
