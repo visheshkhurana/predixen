@@ -68,12 +68,15 @@ def api_similar_companies(
 ):
     get_user_company(db, company_id, current_user)
     try:
-        similar = find_similar_companies(db, company_id, min_similarity, limit)
+        peer_view = find_similar_companies(db, company_id, min_similarity, limit)
         profile = get_company_profile(db, company_id)
         return {
             "your_profile": profile,
-            "similar_companies": similar,
-            "count": len(similar),
+            "similar_companies": peer_view["similar_companies"],
+            "aggregates": peer_view["aggregates"],
+            "count": len(peer_view["similar_companies"]),
+            "peer_count": peer_view["peer_count"],
+            "reason": peer_view["reason"],
         }
     except Exception as e:
         logger.error(f"Similar companies error: {e}")

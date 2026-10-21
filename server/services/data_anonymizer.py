@@ -7,6 +7,8 @@ into the shared intelligence pool.
 """
 import logging
 from typing import Dict, Any, Optional, List
+
+from server.services.peer_privacy import opted_in
 from sqlalchemy.orm import Session
 
 from server.models.company import Company
@@ -73,7 +75,7 @@ def anonymize_company_metrics(db: Session, company_id: int) -> Optional[Dict[str
     if not company:
         return None
 
-    if not getattr(company, "data_sharing_enabled", False):
+    if not opted_in(company):
         return None
 
     latest_fin = (
@@ -125,7 +127,7 @@ def anonymize_decision_outcome(db: Session, decision_id: str) -> Optional[Dict[s
         return None
 
     company = db.query(Company).filter(Company.id == decision.company_id).first()
-    if not company or not getattr(company, "data_sharing_enabled", False):
+    if not company or not opted_in(company):
         return None
 
     title_lower = (decision.title or "").lower()
@@ -177,13 +179,14 @@ def anonymize_decision_outcome(db: Session, decision_id: str) -> Optional[Dict[s
     }
 
 
-def get_opted_in_company_ids(db: Session) -> List[int]:
-    companies = (
-        db.query(Company.id)
-        .filter(Company.data_sharing_enabled == True)
-        .all()
-    )
-    return [c.id for c in companies]
+def get_opted_in_company_ids(
+    db: Session, exclude_company_id: Optional[int] = None
+) -> List[int]:
+    """Opted-in, non-sample companies. The caller is not one of its own peers."""
+    query = db.query(Company).filter(Company.data_sharing_enabled == True)
+    if exclude_company_id is not None:
+        query = query.filter(Company.id != exclude_company_id)
+    return [company.id for company in query.all() if opted_in(company)]
 
 
 def anonymize_all_opted_in_metrics(db: Session) -> List[Dict[str, Any]]:

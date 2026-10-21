@@ -46,8 +46,10 @@ function SimilarCompanies({ companyId }: { companyId: number }) {
 
   if (isLoading) return <Skeleton className="h-64" />;
 
-  const similar = data?.similar_companies || [];
   const profile = data?.your_profile || {};
+  const aggregates = data?.aggregates;
+  const bands = aggregates?.mrr_bands || [];
+  const stages = aggregates?.stages || [];
 
   return (
     <Card data-testid="similar-companies">
@@ -57,48 +59,50 @@ function SimilarCompanies({ companyId }: { companyId: number }) {
           Similar Companies
         </CardTitle>
         <CardDescription>
-          Companies matching your profile: {profile.stage} stage, {profile.industry} industry, {profile.mrr_range} MRR
+          Your profile: {profile.stage} stage, {profile.industry} industry, {profile.mrr_range} MRR.
+          Peer figures are aggregates of opted-in companies only.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {similar.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground text-sm">
+        {!aggregates ? (
+          <div className="text-center py-6 text-muted-foreground text-sm" data-testid="similar-companies-empty">
             <Building2 className="h-8 w-8 mx-auto mb-2 opacity-40" />
-            <p>No similar companies found yet</p>
-            <p className="text-xs mt-1">As more companies join the platform, peer matching improves</p>
+            <p>
+              {data?.reason === "insufficient_peers"
+                ? "Not enough opted-in peers to show aggregates"
+                : "No similar companies found yet"}
+            </p>
+            <p className="text-xs mt-1">
+              Revenue bands and stage are hidden until at least 5 companies opt in to sharing
+            </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {similar.map((c: any, i: number) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border/30"
-                data-testid={`similar-company-${i}`}
-              >
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-bold text-primary">{Math.round(c.similarity_score * 100)}%</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{c.industry}</span>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                      {c.stage}
-                    </Badge>
+          <div className="space-y-4" data-testid="similar-company-aggregates">
+            <p className="text-sm text-muted-foreground">
+              {aggregates.peer_count} opted-in companies. Individual peer names, revenue, and bands are not shown.
+            </p>
+            {bands.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">MRR bands</div>
+                {bands.map((band: any) => (
+                  <div key={band.band} className="flex items-center justify-between text-sm" data-testid={`mrr-band-${band.band}`}>
+                    <span>{band.band}</span>
+                    <span className="text-muted-foreground">{band.companies} companies</span>
                   </div>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {c.shared_traits?.slice(0, 3).map((trait: string, j: number) => (
-                      <span key={j} className="text-[10px] text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded">
-                        {trait}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-xs text-muted-foreground">{c.mrr_range}</div>
-                  <div className="text-xs text-muted-foreground">{c.growth_tier}</div>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
+            {stages.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Stage</div>
+                {stages.map((band: any) => (
+                  <div key={band.band} className="flex items-center justify-between text-sm">
+                    <span>{band.band}</span>
+                    <span className="text-muted-foreground">{band.companies} companies</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </CardContent>
@@ -953,28 +957,7 @@ export default function IntelligenceGraphPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Card className="p-4" data-testid="stat-companies">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <Building2 className="h-3.5 w-3.5" />
-            <span className="text-xs">Companies</span>
-          </div>
-          <div className="text-2xl font-bold font-mono">{stats.total_companies || 0}</div>
-        </Card>
-        <Card className="p-4" data-testid="stat-decisions">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <GitBranch className="h-3.5 w-3.5" />
-            <span className="text-xs">Decisions</span>
-          </div>
-          <div className="text-2xl font-bold font-mono">{stats.total_decisions || 0}</div>
-        </Card>
-        <Card className="p-4" data-testid="stat-records">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <Activity className="h-3.5 w-3.5" />
-            <span className="text-xs">Data Points</span>
-          </div>
-          <div className="text-2xl font-bold font-mono">{stats.total_financial_records || 0}</div>
-        </Card>
+      <div className="grid grid-cols-2 gap-3">
         <Card className="p-4" data-testid="stat-events">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Zap className="h-3.5 w-3.5" />
