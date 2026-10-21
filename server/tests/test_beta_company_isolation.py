@@ -13,7 +13,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from server.api import ai_graphics, board_export, copilot, datasets, doc_generator, simulations
+from server.api import (
+    ai_graphics,
+    board_export,
+    companies,
+    competitors,
+    copilot,
+    datasets,
+    doc_generator,
+    simulations,
+)
 from server.api import truth_scan as truth_scan_api
 from server.core.db import get_db
 from server.core.security import AUTH_COOKIE_NAME, create_access_token, get_current_user
@@ -101,6 +110,15 @@ def opened_app(monkeypatch):
         "server.api.datasets.process_termina_pdf",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("termina pdf ran")),
     )
+
+    async def _web_search_ran(*args, **kwargs):
+        raise AssertionError("web search ran")
+
+    monkeypatch.setattr("server.api.companies.search_company_info", _web_search_ran)
+    monkeypatch.setattr(
+        "server.lib.llm.llm_router.LLMRouter.chat",
+        lambda self, *args, **kwargs: (_ for _ in ()).throw(AssertionError("digest llm ran")),
+    )
     monkeypatch.setattr(
         "server.core.spend_guard.user_may_charge_company",
         lambda user_id, company_id: False,
@@ -119,6 +137,8 @@ def opened_app(monkeypatch):
     app.include_router(doc_generator.router)
     app.include_router(board_export.router)
     app.include_router(datasets.router)
+    app.include_router(companies.router)
+    app.include_router(competitors.router)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: stranger
     client = TestClient(app)
@@ -152,6 +172,14 @@ def test_company_a_cannot_use_company_b_sim_truth_scan_or_copilot(opened_app):
     )
     assert pdf.status_code in (403, 404), pdf.text
     assert "feature_locked" not in pdf.text
+
+    web = client.post("/companies/2/web-search")
+    assert web.status_code in (403, 404), web.text
+    assert "feature_locked" not in web.text
+
+    digest = client.get("/companies/2/competitors/digest")
+    assert digest.status_code in (403, 404), digest.text
+    assert "feature_locked" not in digest.text
     assert db.added == []
     sink, other = sinks
     assert sink == [] and other == []

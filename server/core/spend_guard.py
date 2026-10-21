@@ -69,11 +69,15 @@ _COMPANY_LLM = re.compile(
     r"doc-generator/generate|"
     r"fundraising/one-pager|"
     r"strategic-diagnosis|"
+    r"web-search|"
     r"smart-alerts/(?:evaluate|weekly-briefing)|"
     r"competitors/\d+/scan|"
+    r"competitors/digest|"
     r"datasets/termina-(?:pdf|excel)"
     r")$"
 )
+# GETs that call a model. They share the write bucket with POST spend routes.
+_LLM_GET_SUFFIXES = ("/strategic-diagnosis", "/competitors/digest")
 _DECISION_GENERATE = re.compile(r"^/simulation/(\d+)/decisions/generate$")
 _COMPANY_SIM = re.compile(
     r"^/companies/\d+/(?:"
@@ -143,7 +147,11 @@ def _under(path: str, prefix: str) -> bool:
 
 
 def _is_llm_write(verb: str, path: str) -> bool:
-    """LLM routes opened with the beta grant. GET strategic-diagnosis can spend."""
+    """LLM routes opened with the beta grant.
+
+    GET strategic-diagnosis and GET competitors/digest call a model, so they
+    use the write bucket rather than the read bucket.
+    """
     matched = bool(
         _COMPANY_LLM.match(path)
         or _DECISION_GENERATE.match(path)
@@ -152,7 +160,7 @@ def _is_llm_write(verb: str, path: str) -> bool:
         return False
     if verb in _WRITE_METHODS:
         return True
-    return verb == "GET" and path.endswith("/strategic-diagnosis")
+    return verb == "GET" and any(path.endswith(suffix) for suffix in _LLM_GET_SUFFIXES)
 
 
 def classify_spend(method: str, path: str) -> Optional[str]:

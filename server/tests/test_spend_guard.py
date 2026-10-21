@@ -75,6 +75,7 @@ SIM_WRITES = [
     "/companies/5/smart-alerts/evaluate",
     "/companies/5/smart-alerts/weekly-briefing",
     "/companies/5/competitors/9/scan",
+    "/companies/5/web-search",
     "/imports/excel",
     "/imports/pdf",
     "/companies/5/datasets/termina-pdf",
@@ -149,6 +150,11 @@ def test_read_routes_are_read_limited(path):
 def test_strategic_diagnosis_get_is_a_spend_write():
     assert classify_spend("GET", "/companies/5/strategic-diagnosis") == "write"
     assert classify_spend("GET", "/api/companies/5/strategic-diagnosis") == "write"
+
+
+def test_competitor_digest_get_is_a_spend_write():
+    assert classify_spend("GET", "/companies/5/competitors/digest") == "write"
+    assert classify_spend("GET", "/api/companies/5/competitors/digest") == "write"
 
 
 @pytest.mark.parametrize("method,path", HELD_LOCKS)
@@ -433,6 +439,49 @@ def test_route_without_a_company_is_per_user_only(monkeypatch):
     blocked = client.post("/llm/smart-chat", json={"query": "hi"})
     assert blocked.status_code == 429
     assert blocked.json()["dimension"] == "user"
+
+
+def _authed_guard(monkeypatch):
+    monkeypatch.setattr(
+        "server.core.spend_guard.user_may_charge_company",
+        lambda user_id, company_id: True,
+    )
+    app = FastAPI()
+    app.add_middleware(SpendGuardMiddleware)
+
+    @app.post("/companies/{company_id}/web-search")
+    def web_search(company_id: int):
+        return {"company_id": company_id}
+
+    @app.get("/companies/{company_id}/competitors/digest")
+    def digest(company_id: int):
+        return {"company_id": company_id}
+
+    client = TestClient(app)
+    client.cookies.set(AUTH_COOKIE_NAME, _cookie(1))
+    return client
+
+
+def test_web_search_post_is_rate_limited(monkeypatch):
+    client = _authed_guard(monkeypatch)
+    for _ in range(SPEND_BURST_PER_MINUTE):
+        response = client.post("/companies/4/web-search")
+        assert response.status_code == 200, response.text
+    blocked = client.post("/companies/4/web-search")
+    assert blocked.status_code == 429
+    assert blocked.json()["dimension"] in {"user", "company"}
+
+
+def test_competitor_digest_get_is_rate_limited(monkeypatch):
+    client = _authed_guard(monkeypatch)
+    for _ in range(SPEND_BURST_PER_MINUTE):
+        response = client.get("/companies/4/competitors/digest")
+        assert response.status_code == 200, response.text
+    blocked = client.get("/companies/4/competitors/digest")
+    assert blocked.status_code == 429
+    assert blocked.json()["dimension"] in {"user", "company"}
+    # The digest GET spends, so it shares the write bucket with web-search.
+    assert client.post("/companies/4/web-search").status_code == 429
 
 
 def test_read_cap_is_independent_on_the_middleware(monkeypatch):
