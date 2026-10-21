@@ -3,6 +3,11 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, validator
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+import hashlib
+import json
+import re
+import threading
+import time
 import uuid as uuid_lib
 import logging
 
@@ -1216,6 +1221,90 @@ def delete_company_decision(
     return {"success": True, "message": "Decision deleted"}
 
 
+# Per signed-in user. Code constants on purpose: this route must not become
+# an open relay by setting an env var. One replica is the production shape
+# (railway.json numReplicas), so the counters live in this process.
+SHARE_SENDS_PER_HOUR = 10
+SHARE_SEND_WINDOW_SECONDS = 60 * 60
+SHARE_DISTINCT_RECIPIENTS_PER_DAY = 5
+SHARE_RECIPIENT_WINDOW_SECONDS = 24 * 60 * 60
+SHARE_SUBJECT_MAX_CHARS = 500
+SHARE_MESSAGE_MAX_CHARS = 2000
+SHARE_CONTENT_MAX_CHARS = 20000
+SHARE_EMAIL_MAX_CHARS = 254
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_SHARE_LOCK = threading.Lock()
+# user id -> [(monotonic timestamp, sha256 of the normalized recipient)]
+_SHARE_SENDS: Dict[int, list] = {}
+
+
+class ShareSendLimited(Exception):
+    """The per-user cap was hit, or the cap could not be evaluated.
+
+    Callers must not send. A failure to read the counters is the same as
+    being over the limit (fail closed).
+    """
+
+
+def _recipient_digest(recipient: str) -> str:
+    normalized = recipient.strip().lower()
+    if (
+        not normalized
+        or len(normalized) > SHARE_EMAIL_MAX_CHARS
+        or any(ch.isspace() or ord(ch) < 32 for ch in normalized)
+        or _EMAIL_RE.fullmatch(normalized) is None
+    ):
+        raise ShareSendLimited()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def claim_share_send(
+    user_id: int,
+    recipient: str,
+    *,
+    now: Optional[float] = None,
+    store: Optional[Dict[int, list]] = None,
+) -> None:
+    """Reserve one send for this user, or raise ShareSendLimited.
+
+    Ten sends per hour and five distinct recipients per day. A rejected
+    call is not recorded, so retries do not extend the window. The stored
+    recipient is a digest, never the address. Any error while reading or
+    updating the counters denies the send.
+    """
+    bucket = _SHARE_SENDS if store is None else store
+    try:
+        uid = int(user_id)
+        digest = _recipient_digest(recipient)
+        stamp = time.monotonic() if now is None else float(now)
+        with _SHARE_LOCK:
+            prior = bucket.get(uid, [])
+            day = [
+                item for item in prior
+                if stamp - float(item[0]) < SHARE_RECIPIENT_WINDOW_SECONDS
+            ]
+            hour = [
+                item for item in day
+                if stamp - float(item[0]) < SHARE_SEND_WINDOW_SECONDS
+            ]
+            distinct = {item[1] for item in day}
+            over_sends = len(hour) >= SHARE_SENDS_PER_HOUR
+            over_recipients = digest not in distinct and len(distinct) >= SHARE_DISTINCT_RECIPIENTS_PER_DAY
+            if over_sends or over_recipients:
+                if day:
+                    bucket[uid] = day
+                elif uid in bucket:
+                    del bucket[uid]
+                raise ShareSendLimited()
+            day.append((stamp, digest))
+            bucket[uid] = day
+    except ShareSendLimited:
+        raise
+    except Exception as exc:
+        logger.error("share action item limit check failed (%s)", type(exc).__name__)
+        raise ShareSendLimited() from None
+
+
 class ShareActionItemRequest(BaseModel):
     to_email: str
     subject: Optional[str] = None
@@ -1225,10 +1314,58 @@ class ShareActionItemRequest(BaseModel):
 
     @validator('to_email')
     def validate_email(cls, v):
-        import re
-        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', v.strip()):
+        if not isinstance(v, str):
             raise ValueError('Invalid email address')
-        return v.strip()
+        text = v.strip()
+        if (
+            len(text) > SHARE_EMAIL_MAX_CHARS
+            or any(ord(ch) < 32 or ch.isspace() for ch in text)
+            or _EMAIL_RE.fullmatch(text) is None
+        ):
+            raise ValueError('Invalid email address')
+        return text
+
+    @validator('subject')
+    def validate_subject(cls, v):
+        if v is None:
+            return v
+        if not isinstance(v, str) or len(v) > SHARE_SUBJECT_MAX_CHARS:
+            raise ValueError('Subject is too long')
+        text = v.strip()
+        if any(ord(ch) < 32 for ch in text):
+            raise ValueError('Subject is invalid')
+        return text
+
+    @validator('personal_note')
+    def validate_personal_note(cls, v):
+        if v is None:
+            return v
+        if not isinstance(v, str) or len(v) > SHARE_MESSAGE_MAX_CHARS:
+            raise ValueError('Message is too long')
+        if "\x00" in v:
+            raise ValueError('Message is invalid')
+        return v
+
+    @validator('content_type')
+    def validate_content_type(cls, v):
+        if not isinstance(v, str):
+            raise ValueError('Invalid content type')
+        text = v.strip()
+        if not text or len(text) > 64 or any(ord(ch) < 32 or ch.isspace() for ch in text):
+            raise ValueError('Invalid content type')
+        return text
+
+    @validator('content_data')
+    def validate_content_data(cls, v):
+        if not isinstance(v, dict):
+            raise ValueError('Content is invalid')
+        try:
+            encoded = json.dumps(v, separators=(",", ":"), default=str)
+        except (TypeError, ValueError):
+            raise ValueError('Content is invalid')
+        if len(encoded) > SHARE_CONTENT_MAX_CHARS:
+            raise ValueError('Message is too long')
+        return v
 
 
 def _escape_html(text: str) -> str:
@@ -1440,6 +1577,23 @@ def _build_share_email_html(company_name: str, content_type: str, content_data: 
 </html>"""
 
 
+def _outbound_share_subject(requested: Optional[str], company_name: str) -> str:
+    """Subject line with control characters removed and length capped.
+
+    The company name is not request text, so a long name is truncated instead
+    of rejecting a share the caller is allowed to make.
+    """
+    if requested:
+        raw = requested
+    else:
+        safe_name = "".join(ch for ch in str(company_name) if ord(ch) >= 32).strip()
+        raw = f"Action Item from {safe_name}" if safe_name else "Action Item"
+    cleaned = "".join(ch for ch in str(raw) if ord(ch) >= 32).strip()
+    if not cleaned:
+        cleaned = "Action Item"
+    return cleaned[:SHARE_SUBJECT_MAX_CHARS]
+
+
 @router.post("/companies/{company_id}/share-action-item")
 def share_action_item(
     company_id: int,
@@ -1449,7 +1603,12 @@ def share_action_item(
 ):
     company = get_user_company(db, company_id, current_user)
 
-    subject = request.subject or f"Action Item from {company.name}"
+    try:
+        claim_share_send(getattr(current_user, "id", None), request.to_email)
+    except ShareSendLimited:
+        raise HTTPException(status_code=429, detail="Too many share emails")
+
+    subject = _outbound_share_subject(request.subject, getattr(company, "name", "") or "")
 
     html_content = _build_share_email_html(
         company_name=company.name,
@@ -1473,13 +1632,13 @@ def share_action_item(
         )
         if result.get("success"):
             return {"success": True, "message": f"Email sent to {request.to_email}", "message_id": result.get("message_id")}
-        else:
-            raise HTTPException(status_code=500, detail=result.get("error", "Failed to send email"))
+        logger.error("share action item send failed")
+        raise HTTPException(status_code=500, detail="Failed to send email")
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to send share email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.error("share action item send failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Failed to send email") from None
 
 
 @router.get("/companies/{company_id}/decision-patterns")
