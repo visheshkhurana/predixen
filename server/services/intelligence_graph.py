@@ -945,7 +945,7 @@ def generate_ai_strategy_insights(
                 "type": "strategy_gap",
                 "severity": "medium",
                 "title": f"Peers are adopting '{ps['strategy'].replace('_', ' ')}' strategy",
-                "description": f"{ps['adoption_count']} companies have implemented {ps['strategy'].replace('_', ' ')} decisions with {ps['high_confidence_rate']}% high-confidence outcomes. You haven't explored this strategy yet.",
+                "description": f"{ps['company_count']} companies have implemented {ps['strategy'].replace('_', ' ')} decisions with {ps['high_confidence_rate']}% high-confidence outcomes. You haven't explored this strategy yet.",
                 "recommended_strategies": [ps["strategy"]],
                 "peer_evidence": {
                     "adoption_count": ps["adoption_count"],
@@ -1071,7 +1071,7 @@ def get_simulation_graph_recommendations(
                 "type": "peer_strategy",
                 "priority": "medium",
                 "title": f"Peer-validated strategy: {ps['strategy'].replace('_', ' ').title()}",
-                "description": ps.get("recommendation", f"{ps['adoption_count']} peer companies have successfully used this strategy."),
+                "description": ps.get("recommendation", f"{ps['company_count']} peer companies have successfully used this strategy."),
                 "adoption_count": ps["adoption_count"],
                 "confidence_rate": ps["high_confidence_rate"],
             })

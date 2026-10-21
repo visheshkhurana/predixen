@@ -1665,7 +1665,7 @@ def get_decision_patterns(
     })
 
     engine = DecisionPatternEngine(db)
-    patterns = engine.find_patterns(profile)
+    patterns = engine.find_patterns(profile, exclude_company_id=company_id)
 
     metadata = company.metadata_json or {}
     alerts = metadata.get("smart_alerts", [])
@@ -1674,7 +1674,9 @@ def get_decision_patterns(
         if not alert.get("acknowledged"):
             challenges.append(alert.get("type", ""))
 
-    recommendations = engine.get_recommendations(profile, challenges if challenges else None)
+    recommendations = engine.get_recommendations(
+        profile, challenges if challenges else None, exclude_company_id=company_id
+    )
 
     return {
         "company_profile": profile,

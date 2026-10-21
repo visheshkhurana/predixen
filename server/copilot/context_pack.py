@@ -257,15 +257,6 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
                     "median": median,
                     "p75": p75,
                 })
-            elif isinstance(median, (int, float)) and median > 0:
-                insights.append({
-                    "type": "benchmark",
-                    "metric": metric,
-                    "insight": f"Peer {metric.replace('_', ' ')} benchmark: P25=${p25:,.0f}, Median=${median:,.0f}, P75=${p75:,.0f}",
-                    "p25": p25,
-                    "median": median,
-                    "p75": p75,
-                })
 
         if not insights:
             return None

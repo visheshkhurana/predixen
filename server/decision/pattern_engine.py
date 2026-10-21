@@ -12,6 +12,8 @@ from collections import defaultdict
 
 from sqlalchemy.orm import Session
 
+from server.services.peer_privacy import MIN_DISTINCT_PEERS
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,12 +82,15 @@ class DecisionPatternEngine:
     def __init__(self, db: Session):
         self.db = db
 
-    def collect_decision_outcomes(self) -> List[Dict[str, Any]]:
+    def collect_decision_outcomes(
+        self, exclude_company_id: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Collect anonymized decision outcomes from opted-in companies only.
-        Only companies with data_sharing_enabled=True contribute data.
-        Returns list of {profile, decision_type, outcome, metrics_delta}.
-        Uses real outcome_rating data when available, falls back to status-based inference.
+        Collect anonymized decision outcomes from opted-in, non-sample companies.
+
+        The caller is not one of its own peers. company_id stays on each
+        outcome so a cohort can be counted as distinct companies. It is not
+        copied into published patterns.
         """
         try:
             from server.models.company import Company
@@ -93,7 +98,9 @@ class DecisionPatternEngine:
             from server.models.financial import FinancialRecord
 
             from server.services.data_anonymizer import get_opted_in_company_ids
-            opted_in_set = set(get_opted_in_company_ids(self.db))
+            opted_in_set = set(
+                get_opted_in_company_ids(self.db, exclude_company_id=exclude_company_id)
+            )
 
             if not opted_in_set:
                 return []
@@ -112,6 +119,8 @@ class DecisionPatternEngine:
 
             for decision in decisions:
                 cid = decision.company_id
+                if exclude_company_id is not None and cid == exclude_company_id:
+                    continue
                 if cid not in company_cache:
                     company = self.db.query(Company).filter(Company.id == cid).first()
                     if not company:
@@ -160,6 +169,7 @@ class DecisionPatternEngine:
                         recency_weight = 0.7
 
                 outcomes.append({
+                    "company_id": cid,
                     "profile": profile,
                     "decision_type": decision_type,
                     "impact_level": confidence,
@@ -198,14 +208,18 @@ class DecisionPatternEngine:
         self,
         company_profile: Dict[str, str],
         min_similarity: float = 0.5,
+        exclude_company_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Find decision patterns from similar companies.
-        Returns anonymized pattern insights.
+        Find decision patterns from similar opted-in companies.
+
+        A pattern is published only when at least MIN_DISTINCT_PEERS distinct
+        companies match overall and again for that decision type. Outcome
+        counts do not satisfy the gate. Below the threshold the list is empty.
         """
-        all_outcomes = self.collect_decision_outcomes()
+        all_outcomes = self.collect_decision_outcomes(exclude_company_id=exclude_company_id)
         if not all_outcomes:
-            return self._get_default_patterns(company_profile)
+            return []
 
         similar_outcomes = []
         for outcome in all_outcomes:
@@ -213,18 +227,24 @@ class DecisionPatternEngine:
             if similarity >= min_similarity:
                 similar_outcomes.append({**outcome, "similarity": similarity})
 
-        if len(similar_outcomes) < 5:
-            return self._get_default_patterns(company_profile)
+        similar_companies = {
+            outcome.get("company_id")
+            for outcome in similar_outcomes
+            if outcome.get("company_id") is not None
+        }
+        if len(similar_companies) < MIN_DISTINCT_PEERS:
+            return []
 
         type_stats = defaultdict(lambda: {
             "total": 0, "weighted_total": 0.0, "positive": 0, "weighted_positive": 0.0,
             "neutral": 0, "weighted_neutral": 0.0,
-            "high_impact": 0, "real_outcome_count": 0,
+            "high_impact": 0, "real_outcome_count": 0, "companies": set(),
         })
         for outcome in similar_outcomes:
             dt = outcome["decision_type"]
             w = outcome.get("recency_weight", 1.0)
             type_stats[dt]["total"] += 1
+            type_stats[dt]["companies"].add(outcome.get("company_id"))
             type_stats[dt]["weighted_total"] += w
             if outcome.get("outcome_positive"):
                 type_stats[dt]["positive"] += 1
@@ -239,13 +259,15 @@ class DecisionPatternEngine:
 
         patterns = []
         for dtype, stats in type_stats.items():
-            if stats["total"] < 2:
+            company_count = len({cid for cid in stats["companies"] if cid is not None})
+            if company_count < MIN_DISTINCT_PEERS:
                 continue
             decisive_weight = stats["weighted_total"] - stats["weighted_neutral"]
             success_rate = stats["weighted_positive"] / decisive_weight if decisive_weight > 0 else 0
             patterns.append({
                 "decision_type": dtype,
                 "sample_size": stats["total"],
+                "company_count": company_count,
                 "success_rate": round(success_rate * 100, 1),
                 "high_impact_count": stats["high_impact"],
                 "real_outcome_count": stats["real_outcome_count"],
@@ -259,12 +281,15 @@ class DecisionPatternEngine:
         self,
         company_profile: Dict[str, str],
         current_challenges: List[str] = None,
+        exclude_company_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get actionable recommendations based on decision patterns
         from similar companies, enriched with cross-company success rates.
         """
-        patterns = self.find_patterns(company_profile)
+        patterns = self.find_patterns(
+            company_profile, exclude_company_id=exclude_company_id
+        )
 
         cross_company_rates = self._get_cross_company_rates(company_profile)
 
@@ -276,7 +301,7 @@ class DecisionPatternEngine:
             rec = {
                 "decision_type": dtype,
                 "confidence": "high" if pattern["sample_size"] >= 10 else "medium" if pattern["sample_size"] >= 5 else "low",
-                "based_on": f"{pattern['sample_size']} similar companies",
+                "based_on": f"{pattern['company_count']} similar companies",
                 "success_rate": f"{pattern['success_rate']}%",
                 "recommendation": pattern["recommendation"],
             }

@@ -677,3 +677,71 @@ def test_other_company_intelligence_routes_are_denied(db):
         assert str(int(B_REVENUE)) not in response.text
     missing = client.get("/companies/999999/intelligence/similar")
     assert missing.status_code == 404
+
+
+DECISIONS_EACH = 6
+
+
+def _decision_patterns(db, user, company_id: int) -> dict:
+    from server.api import decisions as decisions_api
+
+    app = FastAPI()
+    app.include_router(decisions_api.router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    response = TestClient(app).get(f"/companies/{company_id}/decision-patterns")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _assert_no_published_decision_pattern(payload: dict) -> None:
+    blob = json.dumps(payload).lower()
+    assert payload["patterns"] == []
+    assert payload["recommendations"] == []
+    assert "success_rate" not in blob
+    assert "similar companies" not in blob
+
+
+def test_decision_patterns_need_five_distinct_companies(db):
+    """One peer, or four peers, cannot publish a success rate no matter how many decisions they have.
+
+    The caller is opted in and has the same pile of decisions, and still does not count.
+    Five other companies do publish, and the label counts those companies.
+    """
+    owner = _user(1)
+    company_a = _add_company(db, owner.id, "Company A", stage="seed", sharing=True)
+    _add_revenue(db, company_a.id, A_REVENUE)
+    for n in range(DECISIONS_EACH):
+        _add_decision(db, company_a.id, f"Hire caller {n}")
+
+    def add_peer(index: int):
+        peer = _add_company(
+            db, 100 + index, f"ZZ-DP-PEER-{index}", stage="seed", sharing=True,
+        )
+        _add_revenue(db, peer.id, MAJOR_REVENUE)
+        for n in range(DECISIONS_EACH):
+            _add_decision(db, peer.id, f"Hire peer {index} role {n}")
+        return peer
+
+    add_peer(0)
+    _assert_no_published_decision_pattern(_decision_patterns(db, owner, company_a.id))
+
+    for index in range(1, MIN_DISTINCT_PEERS - 1):
+        add_peer(index)
+    _assert_no_published_decision_pattern(_decision_patterns(db, owner, company_a.id))
+
+    add_peer(MIN_DISTINCT_PEERS - 1)
+    published = _decision_patterns(db, owner, company_a.id)
+    blob = json.dumps(published)
+    assert published["patterns"]
+    assert published["recommendations"]
+    for pattern in published["patterns"]:
+        assert pattern["company_count"] == MIN_DISTINCT_PEERS
+        assert pattern["sample_size"] == DECISIONS_EACH * MIN_DISTINCT_PEERS
+        assert "success_rate" in pattern
+        assert "company_id" not in pattern
+    for rec in published["recommendations"]:
+        assert rec["based_on"] == f"{MIN_DISTINCT_PEERS} similar companies"
+    assert f"{DECISIONS_EACH * MIN_DISTINCT_PEERS} similar companies" not in blob
+    assert "ZZ-DP-PEER" not in blob
+    assert str(int(MAJOR_REVENUE)) not in blob
