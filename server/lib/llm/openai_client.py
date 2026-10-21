@@ -5,6 +5,7 @@ All OpenAI API calls should go through this module.
 import hashlib
 import time
 import os
+from contextlib import contextmanager
 from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
 
@@ -316,6 +317,7 @@ class AuditedOpenAIClient:
         ``llm_client.chat.completions.create(...)`` redacts message text and
         writes an llm_audit_logs row, then returns the raw provider response
         so callers keep reading ``response.choices[0].message.content``.
+        Image content parts are not redacted; text parts inside them are.
         """
         return _AuditedChatNamespace(self)
 
@@ -335,10 +337,33 @@ class _AuditedCompletions:
         original_parts = []
         redacted_messages = []
         all_findings = []
+        multimodal = False
 
         for msg in messages:
-            content = msg.get("content", "") if isinstance(msg, dict) else ""
-            if isinstance(content, str):
+            if not isinstance(msg, dict):
+                redacted_messages.append(msg)
+                original_parts.append("")
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                multimodal = True
+                redacted_content = []
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "text":
+                        text = item.get("text") if isinstance(item.get("text"), str) else ""
+                        redaction = redact_text(text, self._audited.pii_mode)
+                        updated_item = dict(item)
+                        updated_item["text"] = redaction.redacted_text
+                        redacted_content.append(updated_item)
+                        original_parts.append(text)
+                        all_findings.extend(redaction.findings)
+                    else:
+                        # Image and other non-text parts go to the provider unchanged.
+                        redacted_content.append(item)
+                updated = dict(msg)
+                updated["content"] = redacted_content
+                redacted_messages.append(updated)
+            elif isinstance(content, str):
                 redaction = redact_text(content, self._audited.pii_mode)
                 updated = dict(msg)
                 updated["content"] = redaction.redacted_text
@@ -346,17 +371,33 @@ class _AuditedCompletions:
                 original_parts.append(content)
                 all_findings.extend(redaction.findings)
             else:
-                redacted_messages.append(dict(msg) if isinstance(msg, dict) else msg)
+                redacted_messages.append(dict(msg))
                 original_parts.append("")
 
         original_input = "\n".join(original_parts)
-        redacted_input = "\n".join(
-            m.get("content", "") if isinstance(m, dict) and isinstance(m.get("content"), str) else ""
-            for m in redacted_messages
-        )
+        redacted_parts = []
+        for message in redacted_messages:
+            if not isinstance(message, dict):
+                redacted_parts.append("")
+                continue
+            content = message.get("content", "")
+            if isinstance(content, str):
+                redacted_parts.append(content)
+            elif isinstance(content, list):
+                for item in content:
+                    if (
+                        isinstance(item, dict)
+                        and item.get("type") == "text"
+                        and isinstance(item.get("text"), str)
+                    ):
+                        redacted_parts.append(item["text"])
+            else:
+                redacted_parts.append("")
+        redacted_input = "\n".join(redacted_parts)
         combined = RedactionResult(redacted_text=redacted_input, findings=all_findings)
         call_kwargs = dict(kwargs)
         call_kwargs["messages"] = redacted_messages
+        endpoint = "chat.completions.vision" if multimodal else "chat.completions"
 
         start_time = time.time()
         try:
@@ -369,7 +410,7 @@ class _AuditedCompletions:
                 output_content = ""
             usage = getattr(response, "usage", None)
             self._audited._create_audit_log(
-                endpoint="chat.completions",
+                endpoint=endpoint,
                 model=model,
                 original_input=original_input,
                 redaction_result=combined,
@@ -382,7 +423,7 @@ class _AuditedCompletions:
         except Exception as e:
             latency_ms = int((time.time() - start_time) * 1000)
             self._audited._create_audit_log(
-                endpoint="chat.completions",
+                endpoint=endpoint,
                 model=model,
                 original_input=original_input,
                 redaction_result=combined,
@@ -405,3 +446,70 @@ def get_audited_client(
         user_id=user_id,
         pii_mode=pii_mode
     )
+
+
+def _close_db(db) -> None:
+    if db is None:
+        return
+    try:
+        db.close()
+    except Exception:
+        pass
+
+
+@contextmanager
+def open_audited_openai(
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    pii_mode: Literal["off", "standard", "strict"] = "standard",
+    provider_client=None,
+):
+    """Open ``get_audited_client`` and close its DB session on every exit.
+
+    The session closes in ``finally``, including when the provider call or
+    the missing-key check raises. Callers that already know which SDK client
+    to use (competitors keeps its own missing-key error and base URL) pass
+    ``provider_client``. Otherwise the client is built from
+    ``resolve_openai_credentials``, so a plain key does not inherit the
+    integration proxy URL.
+
+    ``get_audited_client`` caches a process-wide SDK client. The cache is
+    restored before this helper returns so the call does not pin it.
+    """
+    from openai import OpenAI
+    from server.core.db import SessionLocal
+    from server.core.openai_credentials import missing_key_error, resolve_openai_credentials
+
+    global _client
+    previous_client = _client
+    db = None
+    try:
+        db = SessionLocal()
+        _client = None
+        try:
+            try:
+                audited = get_audited_client(
+                    db_session=db,
+                    company_id=company_id,
+                    user_id=user_id,
+                    pii_mode=pii_mode,
+                )
+            except ValueError as exc:
+                if "OpenAI API key not configured" in str(exc):
+                    raise missing_key_error() from None
+                raise
+        finally:
+            _client = previous_client
+
+        if provider_client is not None:
+            audited.client = provider_client
+        else:
+            api_key, base_url = resolve_openai_credentials()
+            if not api_key:
+                raise missing_key_error()
+            audited.client = (
+                OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+            )
+        yield audited
+    finally:
+        _close_db(db)

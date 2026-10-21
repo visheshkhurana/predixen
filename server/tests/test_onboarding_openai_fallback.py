@@ -201,7 +201,7 @@ def test_missing_key_is_not_swallowed_by_a_pattern_only_pdf_result(
         pdf_extractor, "extract_metrics_with_patterns", lambda _text: {"revenue": 1.0}
     )
 
-    def no_key(_text):
+    def no_key(_text, company_id=None, user_id=None):
         raise missing_key_error()
 
     monkeypatch.setattr(pdf_extractor, "extract_metrics_with_openai", no_key)
@@ -227,7 +227,7 @@ def test_missing_key_is_not_swallowed_by_a_partial_excel_result(
     )
     monkeypatch.setattr(excel_extractor, "excel_to_text", lambda _path: "text")
 
-    def no_key(_text):
+    def no_key(_text, company_id=None, user_id=None):
         raise missing_key_error()
 
     monkeypatch.setattr(excel_extractor, "extract_metrics_with_openai", no_key)

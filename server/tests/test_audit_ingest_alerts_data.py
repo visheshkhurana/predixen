@@ -64,7 +64,9 @@ def _costs(r):
 # 1. Termina import: net burn is a result, not a cost line ------------------
 
 def _upload(monkeypatch, endpoint, processor_name, baseline, filename):
-    monkeypatch.setattr(datasets_api, processor_name, lambda path: {"baseline_data": baseline})
+    monkeypatch.setattr(
+        datasets_api, processor_name, lambda path, **kwargs: {"baseline_data": baseline}
+    )
     import server.services.sample_data as sd
     monkeypatch.setattr(sd, "on_real_financials_written", lambda *a, **k: None)
     db = _DB(company=SimpleNamespace(id=1))

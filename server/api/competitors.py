@@ -111,14 +111,18 @@ def _extract_json_array(text: str) -> List[Dict[str, Any]]:
         return []
 
 
-def _scan_competitor_web(competitor: Competitor) -> List[Dict[str, Any]]:
+def _scan_competitor_web(
+    competitor: Competitor, user_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
     """Use OpenAI's web-search model to gather recent signals about a competitor.
 
     gpt-4o-search-preview performs real web search. It does NOT accept a
     temperature param, so we don't send one.
     """
-    client = _get_openai_client()
-    if client is None:
+    from server.lib.llm.openai_client import open_audited_openai
+
+    raw_client = _get_openai_client()
+    if raw_client is None:
         raise RuntimeError("OpenAI is not configured (set OPENAI_API_KEY)")
 
     handles = []
@@ -149,19 +153,27 @@ def _scan_competitor_web(competitor: Competitor) -> List[Dict[str, Any]]:
 
     # Try the full search model, fall back to the mini one (broadly allowed in
     # restricted projects). Both do real web search; neither accepts temperature.
+    # The audited wrapper redacts the prompt and writes the audit row. The raw
+    # client above is what actually gets called, so a missing key still raises
+    # the same RuntimeError and still uses this endpoint's base URL.
     resp = None
     last_err = None
-    for search_model in ("gpt-4o-search-preview", "gpt-4o-mini-search-preview"):
-        try:
-            resp = client.chat.completions.create(
-                model=search_model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1500,
-            )
-            break
-        except Exception as e:
-            last_err = e
-            continue
+    with open_audited_openai(
+        company_id=getattr(competitor, "company_id", None),
+        user_id=user_id,
+        provider_client=raw_client,
+    ) as client:
+        for search_model in ("gpt-4o-search-preview", "gpt-4o-mini-search-preview"):
+            try:
+                resp = client.chat.completions.create(
+                    model=search_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=1500,
+                )
+                break
+            except Exception as e:
+                last_err = e
+                continue
     if resp is None:
         raise last_err or RuntimeError("No web-search model available")
     content = resp.choices[0].message.content if resp.choices else ""
@@ -273,13 +285,15 @@ def list_signals(company_id: int, competitor_id: int, db: Session = Depends(get_
     return {"signals": [_signal_dict(s) for s in signals]}
 
 
-def _scan_and_store(db: Session, comp: Competitor) -> Dict[str, int]:
+def _scan_and_store(
+    db: Session, comp: Competitor, user_id: Optional[int] = None
+) -> Dict[str, int]:
     """Scan one competitor for fresh signals and persist the new ones.
 
     Shared by the manual /scan endpoint and the weekly auto-scan loop.
     Raises on web-search failure so callers can decide how to surface it.
     """
-    found = _scan_competitor_web(comp)
+    found = _scan_competitor_web(comp, user_id=user_id)
 
     existing = db.query(CompetitorSignal).filter(CompetitorSignal.competitor_id == comp.id).all()
     seen = {_dedupe_key(s.source_type or "web", s.title or "", s.url or "") for s in existing}
@@ -317,7 +331,7 @@ def scan_competitor(company_id: int, competitor_id: int, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Competitor not found")
 
     try:
-        result = _scan_and_store(db, comp)
+        result = _scan_and_store(db, comp, user_id=current_user.id)
     except Exception as e:
         logger.error(f"Competitor scan failed for {comp.name}: {e}", exc_info=True)
         raise HTTPException(status_code=502, detail=f"Web scan unavailable: {e}")
