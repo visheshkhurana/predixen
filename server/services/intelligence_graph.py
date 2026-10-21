@@ -30,6 +30,12 @@ from server.models.company_state import CompanyState
 from server.models.simulation_run import SimulationRun
 from server.models.scenario import Scenario
 from server.models.twin_event import TwinEvent
+from server.services.peer_privacy import (
+    MIN_DISTINCT_PEERS,
+    band_counts,
+    empty_peer_view,
+    opted_in,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +164,9 @@ def get_company_profile(db: Session, company_id: int) -> Dict[str, Any]:
     }
 
 
-def _bulk_load_company_profiles(db: Session, exclude_id: int = None) -> Dict[int, Dict[str, Any]]:
+def _bulk_load_company_profiles(
+    db: Session, exclude_id: int = None, opted_in_only: bool = False
+) -> Dict[int, Dict[str, Any]]:
     from sqlalchemy import func as sqlfunc
 
     latest_fin_subq = (
@@ -181,9 +189,13 @@ def _bulk_load_company_profiles(db: Session, exclude_id: int = None) -> Dict[int
     )
     if exclude_id:
         query = query.filter(Company.id != exclude_id)
+    if opted_in_only:
+        query = query.filter(Company.data_sharing_enabled == True)
 
     profiles = {}
     for company, fin in query.all():
+        if opted_in_only and not opted_in(company):
+            continue
         mrr = float(fin.mrr or fin.revenue or 0) if fin else 0
         headcount = int(fin.headcount or 0) if fin and hasattr(fin, "headcount") else 0
         emp_range = "1-5"
@@ -205,6 +217,7 @@ def _bulk_load_company_profiles(db: Session, exclude_id: int = None) -> Dict[int
             "growth_tier": _classify_growth_tier(0),
             "headcount": headcount,
             "employee_range": emp_range,
+            "opted_in": opted_in(company),
         }
 
     return profiles
@@ -212,47 +225,59 @@ def _bulk_load_company_profiles(db: Session, exclude_id: int = None) -> Dict[int
 
 def find_similar_companies(
     db: Session, company_id: int, min_similarity: float = 0.25, limit: int = 10
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
+    """Opted-in peer cohort as aggregates, or an empty list.
+
+    Individual peer names, ids, revenue, and revenue bands are never returned.
+    A band is included only when at least MIN_DISTINCT_PEERS distinct opted-in
+    companies share it. ``limit`` is accepted for existing callers and does not
+    truncate the cohort: a cap would either publish a group under the threshold
+    or hide a publishable one.
+    """
+    _ = limit
     target_profile = get_company_profile(db, company_id)
     if not target_profile:
-        return []
+        return empty_peer_view()
 
-    peer_profiles = _bulk_load_company_profiles(db, exclude_id=company_id)
-    results = []
+    peer_profiles = _bulk_load_company_profiles(
+        db, exclude_id=company_id, opted_in_only=True
+    )
+    matched_ids = set()
+    mrr_ids: Dict[str, set] = defaultdict(set)
+    stage_ids: Dict[str, set] = defaultdict(set)
+    industry_ids: Dict[str, set] = defaultdict(set)
+    growth_ids: Dict[str, set] = defaultdict(set)
+    employee_ids: Dict[str, set] = defaultdict(set)
 
-    for i, (cid, profile) in enumerate(peer_profiles.items()):
+    for cid, profile in peer_profiles.items():
+        if not profile.get("opted_in"):
+            continue
         similarity = _compute_company_similarity(target_profile, profile)
-        if similarity >= min_similarity:
-            results.append({
-                "peer_rank": i + 1,
-                "similarity_score": similarity,
-                "industry": profile["industry"],
-                "stage": profile["stage"],
-                "mrr_range": profile["mrr_range"],
-                "growth_tier": profile["growth_tier"],
-                "employee_range": profile["employee_range"],
-                "shared_traits": _get_shared_traits(target_profile, profile),
-            })
+        if similarity < min_similarity:
+            continue
+        matched_ids.add(cid)
+        mrr_ids[profile["mrr_range"]].add(cid)
+        stage_ids[profile["stage"]].add(cid)
+        industry_ids[profile["industry"]].add(cid)
+        growth_ids[profile["growth_tier"]].add(cid)
+        employee_ids[profile["employee_range"]].add(cid)
 
-    results.sort(key=lambda x: x["similarity_score"], reverse=True)
-    for i, r in enumerate(results):
-        r["peer_rank"] = i + 1
-    return results[:limit]
+    if len(matched_ids) < MIN_DISTINCT_PEERS:
+        return empty_peer_view()
 
-
-def _get_shared_traits(a: Dict, b: Dict) -> List[str]:
-    traits = []
-    if a.get("industry") == b.get("industry") and a["industry"] != "unknown":
-        traits.append(f"Same industry: {a['industry']}")
-    if a.get("stage") == b.get("stage") and a["stage"] != "unknown":
-        traits.append(f"Same stage: {a['stage']}")
-    if a.get("mrr_range") == b.get("mrr_range"):
-        traits.append(f"Similar MRR: {a['mrr_range']}")
-    if a.get("growth_tier") == b.get("growth_tier"):
-        traits.append(f"Similar growth: {a['growth_tier']}")
-    if a.get("employee_range") == b.get("employee_range"):
-        traits.append(f"Similar team size: {a['employee_range']}")
-    return traits
+    return {
+        "similar_companies": [],
+        "aggregates": {
+            "peer_count": len(matched_ids),
+            "mrr_bands": band_counts(mrr_ids),
+            "stages": band_counts(stage_ids),
+            "industries": band_counts(industry_ids),
+            "growth_tiers": band_counts(growth_ids),
+            "employee_ranges": band_counts(employee_ids),
+        },
+        "peer_count": len(matched_ids),
+        "reason": None,
+    }
 
 
 def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
@@ -365,6 +390,8 @@ def get_strategy_insights(
     else:
         peer_insights = _default_peer_insights(profile)
 
+    peer_view = find_similar_companies(db, company_id)
+
     return {
         "strategies": strategies[:6],
         "peer_insights": peer_insights,
@@ -374,6 +401,9 @@ def get_strategy_insights(
             "mrr_range": profile["mrr_range"],
             "growth_tier": profile["growth_tier"],
         },
+        "similar_companies": peer_view["similar_companies"],
+        "similar_company_aggregates": peer_view["aggregates"],
+        "similar_companies_reason": peer_view["reason"],
     }
 
 
@@ -601,7 +631,7 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
     if not profile:
         return {"error": "Company not found"}
 
-    similar = find_similar_companies(db, company_id, limit=5)
+    peer_view = find_similar_companies(db, company_id, limit=5)
     patterns = get_decision_patterns(db, company_id)
     # Do not call get_growth_benchmarks or peer financial benchmarks. Both
     # aggregate other companies' FinancialRecord.revenue with no opt-in and
@@ -626,7 +656,9 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
 
     return {
         "company_profile": profile,
-        "similar_companies": similar,
+        "similar_companies": peer_view["similar_companies"],
+        "similar_company_aggregates": peer_view["aggregates"],
+        "similar_companies_reason": peer_view["reason"],
         "decision_patterns": patterns,
         "strategy_insights": strategies,
         "growth_benchmarks": None,
@@ -636,7 +668,7 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
             "total_decisions": total_decisions,
             "total_financial_records": total_records,
             "total_events": total_events,
-            "similar_companies_found": len(similar),
+            "similar_companies_found": peer_view["peer_count"],
             "contributing_companies": contributing_companies,
         },
     }
@@ -716,9 +748,11 @@ def process_graph_event(
                 "change": payload.get("change"),
             })
 
-        similar_count = len(find_similar_companies(db, company_id, limit=3))
+        peer_view = find_similar_companies(db, company_id, limit=3)
         result["similarity_recalculated"] = True
-        result["similar_companies_count"] = similar_count
+        result["similar_companies_count"] = peer_view["peer_count"]
+        if peer_view["reason"]:
+            result["similar_companies_reason"] = peer_view["reason"]
 
     except Exception as e:
         logger.error(f"Graph event processing error: {e}")
@@ -824,13 +858,13 @@ def sync_twin_to_graph(db: Session, company_id: int) -> Dict[str, Any]:
             "relationship": "USED_STRATEGY",
         })
 
-    similar = find_similar_companies(db, company_id, limit=5)
-    for peer in similar:
+    peer_view = find_similar_companies(db, company_id, limit=5)
+    if peer_view["aggregates"]:
         relationships.append({
             "from": {"type": "Company", "id": company_id},
-            "to": {"type": "Company", "peer_rank": peer["peer_rank"]},
+            "to": {"type": "PeerCohort", "peer_count": peer_view["peer_count"]},
             "relationship": "SIMILAR_TO",
-            "properties": {"similarity_score": peer["similarity_score"]},
+            "properties": {"peer_count": peer_view["peer_count"]},
         })
 
     return {
@@ -852,7 +886,7 @@ def generate_ai_strategy_insights(
     if not profile:
         return {"insights": [], "error": "Company not found"}
 
-    similar = find_similar_companies(db, company_id, limit=10)
+    peer_view = find_similar_companies(db, company_id, limit=10)
     patterns = get_decision_patterns(db, company_id)
     strategies = get_strategy_insights(
         db, company_id, include_peer_benchmarks=include_peer_benchmarks
@@ -882,21 +916,17 @@ def generate_ai_strategy_insights(
                 },
             })
 
-    if similar:
-        avg_similarity = sum(s["similarity_score"] for s in similar) / len(similar)
-        most_common_traits = defaultdict(int)
-        for s in similar:
-            for trait in s.get("shared_traits", []):
-                most_common_traits[trait] += 1
-        top_traits = sorted(most_common_traits.items(), key=lambda x: x[1], reverse=True)[:3]
+    if peer_view["aggregates"]:
         insights.append({
             "type": "peer_network",
             "severity": "info",
-            "title": f"Connected to {len(similar)} similar companies",
-            "description": f"Average similarity score: {avg_similarity*100:.0f}%. Strongest shared traits: {', '.join(t[0] for t in top_traits)}.",
-            "peer_count": len(similar),
-            "avg_similarity": round(avg_similarity, 3),
-            "top_shared_traits": [t[0] for t in top_traits],
+            "title": f"Aggregated cohort of {peer_view['peer_count']} similar companies",
+            "description": (
+                f"Aggregated from {peer_view['peer_count']} opted-in companies. "
+                "Individual companies are not listed."
+            ),
+            "peer_count": peer_view["peer_count"],
+            "aggregates": peer_view["aggregates"],
         })
 
     growth_tier = profile.get("growth_tier", "moderate")
@@ -930,7 +960,10 @@ def generate_ai_strategy_insights(
             "growth_tier": growth_tier,
             "runway_months": runway,
         },
-        "peer_count": len(similar),
+        "similar_companies": peer_view["similar_companies"],
+        "similar_company_aggregates": peer_view["aggregates"],
+        "similar_companies_reason": peer_view["reason"],
+        "peer_count": peer_view["peer_count"],
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -942,7 +975,7 @@ def get_simulation_graph_recommendations(
     if not profile:
         return {"recommendations": []}
 
-    similar = find_similar_companies(db, company_id, limit=10)
+    peer_view = find_similar_companies(db, company_id, limit=10)
     strategies = get_strategy_insights(db, company_id, include_peer_benchmarks=False)
     ai_insights = generate_ai_strategy_insights(db, company_id, include_peer_benchmarks=False)
 
@@ -973,7 +1006,11 @@ def get_simulation_graph_recommendations(
                 "title": "Low survival probability detected",
                 "description": f"Simulation shows {survival_prob*100:.0f}% survival probability. Peer companies that improved survival focused on cost reduction and revenue acceleration.",
                 "suggested_actions": ["Reduce burn by 20-30%", "Accelerate top revenue channel", "Consider bridge financing"],
-                "peer_evidence": f"{len(similar)} similar companies tracked",
+                "peer_evidence": (
+                    f"Aggregated from {peer_view['peer_count']} opted-in companies"
+                    if peer_view["aggregates"]
+                    else "Peer detail withheld"
+                ),
             })
         elif survival_prob is not None and survival_prob > 0.8:
             recommendations.append({
@@ -982,7 +1019,11 @@ def get_simulation_graph_recommendations(
                 "title": "Strong survival — consider growth investments",
                 "description": f"With {survival_prob*100:.0f}% survival probability, you have room to invest in growth. Peers at this confidence level typically accelerate hiring and market expansion.",
                 "suggested_actions": ["Invest in sales team", "Explore new channels", "Consider fundraising"],
-                "peer_evidence": f"Based on {len(similar)} peer companies",
+                "peer_evidence": (
+                    f"Aggregated from {peer_view['peer_count']} opted-in companies"
+                    if peer_view["aggregates"]
+                    else "Peer detail withheld"
+                ),
             })
 
     peer_strategies = strategies.get("strategies", [])
@@ -1014,7 +1055,10 @@ def get_simulation_graph_recommendations(
         "company_id": company_id,
         "recommendations": recommendations[:8],
         "simulation_available": simulation_result is not None,
-        "peer_count": len(similar),
+        "similar_companies": peer_view["similar_companies"],
+        "similar_company_aggregates": peer_view["aggregates"],
+        "similar_companies_reason": peer_view["reason"],
+        "peer_count": peer_view["peer_count"],
         "profile_summary": {
             "stage": profile.get("stage"),
             "mrr": profile.get("mrr"),
@@ -1130,26 +1174,20 @@ def get_network_graph_data(db: Session, company_id: int) -> Dict[str, Any]:
                 "relationship": "RESULTED_IN",
             })
 
-    similar = find_similar_companies(db, company_id, limit=5)
-    for peer in similar:
-        peer_id = f"peer_{peer['peer_rank']}"
+    peer_view = find_similar_companies(db, company_id, limit=5)
+    if peer_view["aggregates"]:
         nodes.append({
-            "id": peer_id,
-            "type": "Company",
-            "label": f"Peer #{peer['peer_rank']}",
-            "properties": {
-                "industry": peer["industry"],
-                "stage": peer["stage"],
-                "mrr_range": peer["mrr_range"],
-                "similarity_score": peer["similarity_score"],
-            },
+            "id": "peer_cohort",
+            "type": "PeerCohort",
+            "label": f"{peer_view['peer_count']} similar companies",
+            "properties": {"peer_count": peer_view["peer_count"]},
             "is_self": False,
         })
         edges.append({
             "from": f"company_{company_id}",
-            "to": peer_id,
+            "to": "peer_cohort",
             "relationship": "SIMILAR_TO",
-            "properties": {"score": peer["similarity_score"]},
+            "properties": {"peer_count": peer_view["peer_count"]},
         })
 
     latest_sim = (

@@ -22,6 +22,7 @@ from server.services.data_anonymizer import (
     anonymize_decision_outcome,
     get_opted_in_company_ids,
 )
+from server.services.peer_privacy import INSUFFICIENT_PEERS, MIN_DISTINCT_PEERS
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,12 @@ logger = logging.getLogger(__name__)
 def aggregate_decision_patterns(db: Session) -> Dict[str, Any]:
     opted_in_ids = get_opted_in_company_ids(db)
     if not opted_in_ids:
-        return {"patterns": [], "contributing_companies": 0, "total_decisions": 0}
+        return {
+            "patterns": [],
+            "contributing_companies": 0,
+            "total_decisions": 0,
+            "reason": INSUFFICIENT_PEERS,
+        }
 
     decisions = (
         db.query(CompanyDecision)
@@ -73,7 +79,8 @@ def aggregate_decision_patterns(db: Session) -> Dict[str, Any]:
     patterns = []
     for (industry, stage), type_stats in groups.items():
         for dtype, stats in type_stats.items():
-            if stats["total"] < 2:
+            company_count = len(stats["companies"])
+            if company_count < MIN_DISTINCT_PEERS:
                 continue
             success_rate = stats["positive"] / stats["total"] * 100 if stats["total"] > 0 else 0
             patterns.append({
@@ -82,7 +89,7 @@ def aggregate_decision_patterns(db: Session) -> Dict[str, Any]:
                 "decision_type": dtype,
                 "sample_size": stats["total"],
                 "success_rate": round(success_rate, 1),
-                "contributing_companies": len(stats["companies"]),
+                "contributing_companies": company_count,
             })
 
     _store_patterns(db, patterns)
@@ -92,13 +99,18 @@ def aggregate_decision_patterns(db: Session) -> Dict[str, Any]:
         "contributing_companies": len(opted_in_ids),
         "total_decisions": len(decisions),
         "computed_at": datetime.now(timezone.utc).isoformat(),
+        "reason": None if patterns else INSUFFICIENT_PEERS,
     }
 
 
 def aggregate_benchmark_updates(db: Session) -> Dict[str, Any]:
     opted_in_ids = get_opted_in_company_ids(db)
     if not opted_in_ids:
-        return {"benchmarks": {}, "contributing_companies": 0}
+        return {
+            "benchmarks": {},
+            "contributing_companies": 0,
+            "reason": INSUFFICIENT_PEERS,
+        }
 
     records = (
         db.query(FinancialRecord, Company.stage, Company.industry)
@@ -109,7 +121,13 @@ def aggregate_benchmark_updates(db: Session) -> Dict[str, Any]:
         .all()
     )
 
-    stage_metrics = defaultdict(lambda: {"revenues": [], "burns": [], "runways": [], "margins": [], "companies": set()})
+    stage_metrics = defaultdict(lambda: {
+        "revenues": [],
+        "burns": [],
+        "runways": [],
+        "margins": [],
+        "companies": set(),
+    })
 
     for rec, stage, industry in records:
         key = (stage or "unknown").lower()
@@ -119,24 +137,32 @@ def aggregate_benchmark_updates(db: Session) -> Dict[str, Any]:
         margin = float(rec.gross_margin or 0) if hasattr(rec, "gross_margin") and rec.gross_margin else 0
 
         if rev > 0:
-            stage_metrics[key]["revenues"].append(rev)
+            stage_metrics[key]["revenues"].append((rec.company_id, rev))
         if burn > 0:
-            stage_metrics[key]["burns"].append(burn)
+            stage_metrics[key]["burns"].append((rec.company_id, burn))
         if 0 < runway <= 120:
-            stage_metrics[key]["runways"].append(runway)
+            stage_metrics[key]["runways"].append((rec.company_id, runway))
         if margin > 0:
-            stage_metrics[key]["margins"].append(margin)
+            stage_metrics[key]["margins"].append((rec.company_id, margin))
         stage_metrics[key]["companies"].add(rec.company_id)
 
     benchmarks = {}
     for stage, data in stage_metrics.items():
-        benchmarks[stage] = {
-            "revenue": _compute_percentiles(data["revenues"]),
-            "burn": _compute_percentiles(data["burns"]),
-            "runway": _compute_percentiles(data["runways"]),
-            "gross_margin": _compute_percentiles(data["margins"]),
-            "sample_size": len(data["companies"]),
-        }
+        if len(data["companies"]) < MIN_DISTINCT_PEERS:
+            continue
+        stage_stats = {"sample_size": len(data["companies"])}
+        for metric_name, pairs in (
+            ("revenue", data["revenues"]),
+            ("burn", data["burns"]),
+            ("runway", data["runways"]),
+            ("gross_margin", data["margins"]),
+        ):
+            published = _publish_percentiles(pairs)
+            if published:
+                stage_stats[metric_name] = published
+        if len(stage_stats) == 1:
+            continue
+        benchmarks[stage] = stage_stats
 
     _store_benchmarks(db, benchmarks)
 
@@ -144,6 +170,7 @@ def aggregate_benchmark_updates(db: Session) -> Dict[str, Any]:
         "benchmarks": benchmarks,
         "contributing_companies": len(opted_in_ids),
         "computed_at": datetime.now(timezone.utc).isoformat(),
+        "reason": None if benchmarks else INSUFFICIENT_PEERS,
     }
 
 
@@ -170,22 +197,29 @@ def get_relevant_patterns(
             {"industry": norm_ind, "stage": norm_stg},
         )
         rows = result.fetchall()
-        return [
-            {
-                "pattern_type": r[0],
+        published = []
+        for r in rows:
+            pattern_type = r[0]
+            contributing = r[9] or 0
+            sample_size = r[4] or 0
+            if pattern_type in ("decision_outcome", "benchmark") and (
+                contributing < MIN_DISTINCT_PEERS or sample_size < MIN_DISTINCT_PEERS
+            ):
+                continue
+            published.append({
+                "pattern_type": pattern_type,
                 "industry": r[1],
                 "stage": r[2],
                 "decision_type": r[3],
-                "sample_size": r[4],
+                "sample_size": sample_size,
                 "success_rate": r[5],
                 "median_impact": r[6],
                 "p25_impact": r[7],
                 "p75_impact": r[8],
-                "contributing_companies": r[9],
-                "computed_at": r[10].isoformat() if r[10] else None,
-            }
-            for r in rows
-        ]
+                "contributing_companies": contributing,
+                "computed_at": r[10].isoformat() if hasattr(r[10], "isoformat") else (str(r[10]) if r[10] else None),
+            })
+        return published
     except Exception as e:
         logger.debug(f"Error fetching patterns: {e}")
         return []
@@ -261,6 +295,17 @@ def _classify_decision_type(title_lower: str) -> str:
     return "general"
 
 
+def _publish_percentiles(pairs: List[Any]) -> Optional[Dict[str, Any]]:
+    """Percentiles only when at least MIN_DISTINCT_PEERS companies contributed."""
+    companies = {company_id for company_id, _value in pairs}
+    values = [value for _company_id, value in pairs]
+    if len(companies) < MIN_DISTINCT_PEERS or len(values) < MIN_DISTINCT_PEERS:
+        return None
+    stats = _compute_percentiles(values)
+    stats["companies"] = len(companies)
+    return stats
+
+
 def _compute_percentiles(values: List[float]) -> Dict[str, Any]:
     if not values:
         return {"p25": 0, "median": 0, "p75": 0, "sample_size": 0}
@@ -315,6 +360,10 @@ def _store_benchmarks(db: Session, benchmarks: Dict[str, Any]) -> None:
                     continue
                 if not isinstance(percentiles, dict):
                     continue
+                if (percentiles.get("companies") or 0) < MIN_DISTINCT_PEERS:
+                    continue
+                if (percentiles.get("sample_size") or 0) < MIN_DISTINCT_PEERS:
+                    continue
                 db.execute(
                     text("""
                         INSERT INTO cross_company_patterns
@@ -341,7 +390,7 @@ def _store_benchmarks(db: Session, benchmarks: Dict[str, Any]) -> None:
                         "median": percentiles.get("median", 0),
                         "p25": percentiles.get("p25", 0),
                         "p75": percentiles.get("p75", 0),
-                        "contributing_companies": data.get("sample_size", 0),
+                        "contributing_companies": percentiles.get("companies", data.get("sample_size", 0)),
                     },
                 )
         db.commit()
