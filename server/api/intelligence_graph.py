@@ -102,7 +102,7 @@ def api_strategy_insights(
 ):
     get_user_company(db, company_id, current_user)
     try:
-        return get_strategy_insights(db, company_id)
+        return get_strategy_insights(db, company_id, include_peer_benchmarks=False)
     except Exception as e:
         logger.error(f"Strategy insights error: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate strategy insights")
@@ -174,7 +174,7 @@ def api_ai_strategy_insights(
 ):
     get_user_company(db, company_id, current_user)
     try:
-        return generate_ai_strategy_insights(db, company_id)
+        return generate_ai_strategy_insights(db, company_id, include_peer_benchmarks=False)
     except Exception as e:
         logger.error(f"AI strategy insights error: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate AI insights")
