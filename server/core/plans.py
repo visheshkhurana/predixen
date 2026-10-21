@@ -5,6 +5,9 @@ from typing import Dict, List, Optional
 # CEO decision (Vishesh, 21 Oct 2026): during public beta every feature is free
 # for every account — no caps, no card, no trial. Flip this one constant to
 # False to restore the gated free tier below. No env var.
+#
+# Three features stay on their existing paid-plan lists. The beta switch does
+# not grant them. The set itself is declared after Feature.
 BETA_ALL_FREE = True
 
 
@@ -44,6 +47,16 @@ class Feature(str, Enum):
     BENCHMARKS = "benchmarks"
     FUNDRAISING_READINESS = "fundraising_readiness"
     INVESTOR_ROOM = "investor_room"
+
+
+# Held back from the public-beta grant. Each stays on the paid plan that
+# already lists it: data connectors and email reports on Growth, cross-company
+# learning on Scale.
+BETA_EXCLUDED_FEATURES = frozenset({
+    Feature.DATA_CONNECTORS,
+    Feature.EMAIL_REPORTS,
+    Feature.CROSS_COMPANY_LEARNING,
+})
 
 
 def _copy_plan(plan: dict) -> dict:
@@ -221,6 +234,18 @@ PLAN_DETAILS: Dict[str, dict] = {
     },
 }
 
+def beta_grants_feature(feature) -> bool:
+    """True when public beta opens this feature for every plan.
+
+    data_connectors, email_reports, and cross_company_learning stay on the
+    plan that already lists them (Growth or Scale).
+    """
+    if not BETA_ALL_FREE:
+        return False
+    value = feature.value if isinstance(feature, Feature) else str(feature)
+    return value not in {item.value for item in BETA_EXCLUDED_FEATURES}
+
+
 # -1 is the existing unlimited sentinel (see Scale). Applied only to Free.
 if BETA_ALL_FREE:
     PLAN_DETAILS[PlanTier.FREE] = {
@@ -230,7 +255,11 @@ if BETA_ALL_FREE:
         "max_simulations_per_month": -1,
         "max_copilot_messages_per_month": -1,
         "max_connectors": -1,
-        "features": list(PLAN_DETAILS[PlanTier.SCALE]["features"]),
+        "features": [
+            feature
+            for feature in PLAN_DETAILS[PlanTier.SCALE]["features"]
+            if feature not in BETA_EXCLUDED_FEATURES
+        ],
         "highlights": _beta_free_highlights(),
     }
 

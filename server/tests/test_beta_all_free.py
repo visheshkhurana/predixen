@@ -23,9 +23,11 @@ from server.api import truth_scan as truth_scan_api
 from server.core.db import get_db
 from server.core.plans import (
     BETA_ALL_FREE,
+    BETA_EXCLUDED_FEATURES,
     Feature,
     PLAN_DETAILS,
     PlanTier,
+    beta_grants_feature,
     _GATED_FREE_PLAN,
     has_feature,
     minimum_plan_for_feature,
@@ -212,8 +214,10 @@ def test_paid_plan_definitions_unchanged_by_snapshot():
 def test_free_plan_grants_scale_features_without_caps_and_billing_highlights_say_beta():
     free = PLAN_DETAILS[PlanTier.FREE]
     scale = PLAN_DETAILS[PlanTier.SCALE]
+    held = {feature.value for feature in BETA_EXCLUDED_FEATURES}
+    assert held == {"data_connectors", "email_reports", "cross_company_learning"}
     assert [feature.value for feature in free["features"]] == [
-        feature.value for feature in scale["features"]
+        feature.value for feature in scale["features"] if feature.value not in held
     ]
     assert free["features"] is not scale["features"]
     assert free["max_companies"] == -1
@@ -227,8 +231,20 @@ def test_free_plan_grants_scale_features_without_caps_and_billing_highlights_say
     assert "every feature free during public beta" in joined
     assert "no card, no trial" in joined
     for feature in Feature:
+        if feature in BETA_EXCLUDED_FEATURES:
+            assert not has_feature(PlanTier.FREE, feature), feature
+            assert not beta_grants_feature(feature)
+            continue
         assert has_feature(PlanTier.FREE, feature), feature
+        assert beta_grants_feature(feature)
         assert minimum_plan_for_feature(feature) == PlanTier.FREE
+    assert minimum_plan_for_feature(Feature.DATA_CONNECTORS) == PlanTier.GROWTH
+    assert minimum_plan_for_feature(Feature.EMAIL_REPORTS) == PlanTier.GROWTH
+    assert minimum_plan_for_feature(Feature.CROSS_COMPANY_LEARNING) == PlanTier.SCALE
+    assert has_feature(PlanTier.GROWTH, Feature.DATA_CONNECTORS)
+    assert has_feature(PlanTier.GROWTH, Feature.EMAIL_REPORTS)
+    assert not has_feature(PlanTier.GROWTH, Feature.CROSS_COMPANY_LEARNING)
+    assert has_feature(PlanTier.SCALE, Feature.CROSS_COMPANY_LEARNING)
 
     # The in-app billing page renders these highlights from GET /billing/plans.
     payload = billing.get_plans()
@@ -239,7 +255,10 @@ def test_free_plan_grants_scale_features_without_caps_and_billing_highlights_say
     assert listed["free"]["max_simulations_per_month"] == -1
     assert listed["free"]["max_copilot_messages_per_month"] == -1
     assert listed["free"]["max_companies"] == -1
-    assert listed["free"]["features"] == [feature.value for feature in scale["features"]]
+    assert listed["free"]["features"] == [feature.value for feature in free["features"]]
+    assert "data_connectors" not in listed["free"]["features"]
+    assert "email_reports" not in listed["free"]["features"]
+    assert "cross_company_learning" not in listed["free"]["features"]
     assert listed["starter"]["highlights"] == _PAID_SNAPSHOTS["starter"]["highlights"]
     assert listed["growth"]["price_monthly"] == 49
     assert listed["scale"]["price_monthly"] == 99
@@ -320,6 +339,10 @@ def test_require_feature_returns_access_for_every_feature(subscription_db):
 
     for feature in Feature:
         response = client.post(f"/locked/{feature.value}")
+        if feature in BETA_EXCLUDED_FEATURES:
+            assert response.status_code == 403, response.text
+            assert response.json()["detail"]["error"] == "feature_locked"
+            continue
         assert response.status_code == 200, response.text
         assert "feature_locked" not in response.text
 
@@ -336,8 +359,11 @@ def test_billing_feature_access_is_open_for_a_fresh_free_user(subscription_db):
         response = client.get(f"/billing/feature-access/{feature.value}")
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["has_access"] is True
         assert body["current_plan"] == PlanTier.FREE
+        if feature in BETA_EXCLUDED_FEATURES:
+            assert body["has_access"] is False
+            continue
+        assert body["has_access"] is True
         assert "feature_locked" not in response.text
 
 
@@ -413,3 +439,50 @@ def test_fresh_free_user_gets_200_on_truth_scan_simulation_chat_and_quick_chat(
     assert all(row["effective_plan"] == PlanTier.FREE for row in looked_up)
     assert all(row["status"] == "none" for row in looked_up)
     assert not any("Paywall middleware error" in item for item in warnings)
+
+
+def test_free_user_paywall_still_locks_data_connectors(subscription_db):
+    """data_connectors stays on Growth. The beta switch does not open it."""
+    app = FastAPI()
+    app.add_middleware(PaywallMiddleware)
+
+    @app.post("/connectors/ping")
+    def _connectors():
+        return {"ok": True}
+
+    user = SimpleNamespace(id=1, is_master=False, email="free@example.com")
+    app.dependency_overrides[get_current_user] = lambda: user
+    client = TestClient(app)
+    client.cookies.set(AUTH_COOKIE_NAME, _auth_cookie(1)[AUTH_COOKIE_NAME])
+    response = client.post("/connectors/ping")
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["error"] == "feature_locked"
+    assert response.json()["detail"]["feature"] == Feature.DATA_CONNECTORS.value
+
+
+def test_growth_plan_still_opens_data_connectors(subscription_db, monkeypatch):
+    monkeypatch.setattr(
+        "server.core.subscription.get_user_subscription",
+        lambda db, user_id: {"effective_plan": PlanTier.GROWTH, "plan": PlanTier.GROWTH},
+    )
+    app = FastAPI()
+
+    def _allow(feature: str):
+        def endpoint(_ok=Depends(check_feature_access(feature))):
+            return {"ok": True}
+        return endpoint
+
+    app.add_api_route("/locked/data_connectors", _allow(Feature.DATA_CONNECTORS.value), methods=["POST"])
+    app.add_api_route(
+        "/locked/cross_company_learning",
+        _allow(Feature.CROSS_COMPANY_LEARNING.value),
+        methods=["POST"],
+    )
+    user = SimpleNamespace(id=1, is_master=False, email="growth@example.com")
+    app.dependency_overrides[get_db] = lambda: subscription_db()
+    app.dependency_overrides[get_current_user] = lambda: user
+    client = TestClient(app)
+    assert client.post("/locked/data_connectors").status_code == 200
+    locked = client.post("/locked/cross_company_learning")
+    assert locked.status_code == 403
+    assert locked.json()["detail"]["error"] == "feature_locked"

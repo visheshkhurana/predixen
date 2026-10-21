@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 SPEND_BURST_PER_MINUTE = 20
 READ_BURST_PER_MINUTE = 60
 SPEND_WINDOW_SECONDS = 60.0
+# The middleware reads a JSON body only to find a company id. Anything larger
+# is refused. File uploads are not buffered here.
+MAX_BUFFERED_BODY_BYTES = 1024 * 1024
 
 _HITS: dict[str, list[float]] = {}
 _LOCK = threading.Lock()
@@ -54,9 +57,24 @@ _AI_EXACT = {
     "/llm/web-search",
     "/ingest/financials",
     "/ingest/onboarding/extract-deck",
+    "/imports/excel",
+    "/imports/pdf",
 }
 
 _COMPANY_AI = re.compile(r"^/companies/\d+/(?:chat|quick-chat)$")
+_COMPANY_LLM = re.compile(
+    r"^/companies/\d+/(?:"
+    r"ai-graphics/generate|"
+    r"board-export/generate(?:-graphic)?|"
+    r"doc-generator/generate|"
+    r"fundraising/one-pager|"
+    r"strategic-diagnosis|"
+    r"smart-alerts/(?:evaluate|weekly-briefing)|"
+    r"competitors/\d+/scan|"
+    r"datasets/termina-(?:pdf|excel)"
+    r")$"
+)
+_DECISION_GENERATE = re.compile(r"^/simulation/(\d+)/decisions/generate$")
 _COMPANY_SIM = re.compile(
     r"^/companies/\d+/(?:"
     r"simulate|simulate-multi|simulate-enhanced|simulate-scenarios-enhanced|"
@@ -77,11 +95,20 @@ _ASSUMPTION_ID = re.compile(
 )
 _UPLOAD_ID = re.compile(r"^/truth-scan/uploads/([^/]+)")
 _DOMAIN_SIM = {"/simulation/scenarios", "/simulation/runs", "/simulation/history"}
-_BODY_COMPANY_PATHS = {
+# JSON bodies the middleware may read, capped at MAX_BUFFERED_BODY_BYTES.
+# Multipart uploads stay on the per-user bucket and are not buffered here.
+_JSON_BODY_PATHS = {
     "/truth-scan/from-import-session",
     "/truth-scan/from-dataset",
     "/truth-scan/from-manual-baseline",
+    "/simulations/run",
+    "/simulations/sensitivity",
+    "/simulations/versions",
+}
+_BODY_COMPANY_PATHS = _JSON_BODY_PATHS | {
     "/ingest/financials",
+    "/imports/excel",
+    "/imports/pdf",
 }
 _BODY_SCENARIO_PATHS = {
     "/simulations/run",
@@ -115,13 +142,28 @@ def _under(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix + "/")
 
 
+def _is_llm_write(verb: str, path: str) -> bool:
+    """LLM routes opened with the beta grant. GET strategic-diagnosis can spend."""
+    matched = bool(
+        _COMPANY_LLM.match(path)
+        or _DECISION_GENERATE.match(path)
+    )
+    if not matched:
+        return False
+    if verb in _WRITE_METHODS:
+        return True
+    return verb == "GET" and path.endswith("/strategic-diagnosis")
+
+
 def classify_spend(method: str, path: str) -> Optional[str]:
     """'write', 'read', or None when this request is not a guarded route."""
     verb = (method or "").upper()
     if verb in {"OPTIONS", "HEAD"}:
         return None
     norm = normalize_path(path)
-    if verb in _WRITE_METHODS and (norm in _AI_EXACT or _COMPANY_AI.match(norm)):
+    if _is_llm_write(verb, norm) or (
+        verb in _WRITE_METHODS and (norm in _AI_EXACT or _COMPANY_AI.match(norm))
+    ):
         return "write"
     if _is_simulation(norm) or _is_truth(norm):
         if verb in _WRITE_METHODS:
@@ -163,7 +205,7 @@ def needs_body(method: str, path: str) -> bool:
     if (method or "").upper() not in _WRITE_METHODS:
         return False
     norm = normalize_path(path)
-    return norm in _BODY_COMPANY_PATHS or norm in _BODY_SCENARIO_PATHS
+    return norm in _JSON_BODY_PATHS
 
 
 def limit_for(kind: str) -> int:
@@ -214,10 +256,13 @@ def company_id_from_body(path: str, body: bytes, content_type: str) -> Optional[
         if "application/json" in kind:
             return None
     text_body = body.decode("utf-8", errors="ignore")
-    multipart = re.search(r'name=["\']companyId["\'][^\r\n]*\r?\n\r?\n(\d+)', text_body)
+    multipart = re.search(
+        r'name=["\'](?:companyId|company_id)["\'][^\r\n]*\r?\n\r?\n(\d+)',
+        text_body,
+    )
     if multipart:
         return int(multipart.group(1))
-    form = re.search(r"(?:^|&)companyId=(\d+)(?:&|$)", text_body)
+    form = re.search(r"(?:^|&)(?:companyId|company_id)=(\d+)(?:&|$)", text_body)
     if form:
         return int(form.group(1))
     return None
@@ -226,6 +271,9 @@ def company_id_from_body(path: str, body: bytes, content_type: str) -> Optional[
 def lookup_target(method: str, path: str, body: Optional[bytes], content_type: str) -> Optional[tuple[str, str]]:
     """(table kind, resource id) when the company id is not on the request."""
     norm = normalize_path(path)
+    decision = _DECISION_GENERATE.match(norm)
+    if decision:
+        return ("simulation_runs", decision.group(1))
     scenario = _SCENARIO_ID.search(norm)
     if scenario:
         return ("scenarios", scenario.group(1))
@@ -251,10 +299,18 @@ def _engine():
 
 
 def lookup_company_id(kind: str, resource_id: str) -> Optional[int]:
-    spec = _LOOKUP_TABLES.get(kind)
-    if spec is None:
-        return None
-    table, id_column, id_type = spec
+    if kind == "simulation_runs":
+        statement = text(
+            "SELECT s.company_id FROM simulation_runs r "
+            "JOIN scenarios s ON s.id = r.scenario_id WHERE r.id = :id"
+        )
+        id_type = "int"
+    else:
+        spec = _LOOKUP_TABLES.get(kind)
+        if spec is None:
+            return None
+        table, id_column, id_type = spec
+        statement = text(f"SELECT company_id FROM {table} WHERE {id_column} = :id")
     try:
         value = int(resource_id) if id_type == "int" else str(resource_id)
     except (TypeError, ValueError):
@@ -262,10 +318,7 @@ def lookup_company_id(kind: str, resource_id: str) -> Optional[int]:
     try:
         engine = _engine()
         with engine.connect() as conn:
-            row = conn.execute(
-                text(f"SELECT company_id FROM {table} WHERE {id_column} = :id"),
-                {"id": value},
-            ).fetchone()
+            row = conn.execute(statement, {"id": value}).fetchone()
         if row is None or row[0] is None:
             return None
         return int(row[0])
@@ -357,6 +410,15 @@ def spend_burst_limited(
     bucket = _HITS if store is None else store
     stamp = time.monotonic() if now is None else float(now)
     with _LOCK:
+        # Drop idle keys. /survival-sim is keyed per IP, and those keys would
+        # otherwise stay in this process forever.
+        stale = [
+            key
+            for key, hits in bucket.items()
+            if not hits or stamp - hits[-1] >= window
+        ]
+        for key in stale:
+            del bucket[key]
         trimmed = {
             key: [seen for seen in bucket.get(key, []) if stamp - seen < window]
             for key in keys
@@ -400,7 +462,12 @@ def _dimension(blocked_key: Optional[str]) -> str:
 
 
 class SpendGuardMiddleware:
-    """ASGI middleware. Buffers a body only when the company id lives there."""
+    """ASGI middleware. Verifies the token before any body is read.
+
+    Unauthenticated callers are rejected without buffering. A verified caller
+    whose JSON body is over MAX_BUFFERED_BODY_BYTES gets 413. File uploads are
+    not read here.
+    """
 
     def __init__(self, app):
         self.app = app
@@ -416,13 +483,35 @@ class SpendGuardMiddleware:
             await self.app(scope, receive, send)
             return
 
+        request = Request(scope)
+        try:
+            user_id = user_id_from_request(request)
+        except Exception:
+            logger.exception("spend guard token verification failed")
+            user_id = None
+        anonymous = is_anonymous_spend(path)
+        if user_id is None and not anonymous:
+            await _unauthorized()(scope, receive, send)
+            return
+
         body = None
         receive_for_app = receive
         if needs_body(method, path):
-            body, receive_for_app = await _buffer_body(receive)
+            declared = _content_length(scope)
+            if declared is not None and declared > MAX_BUFFERED_BODY_BYTES:
+                await _payload_too_large()(scope, receive, send)
+                return
+            body, receive_for_app, too_large = await _buffer_body(
+                receive, MAX_BUFFERED_BODY_BYTES
+            )
+            if too_large:
+                await _payload_too_large()(scope, receive_for_app, send)
+                return
 
         try:
-            blocked, retry_after, limit, dimension = _decide(scope, method, path, kind, body)
+            blocked, retry_after, limit, dimension = _decide(
+                scope, method, path, kind, body, user_id
+            )
         except Exception:
             logger.exception("spend guard failed closed")
             response = _too_many(SPEND_BURST_PER_MINUTE, 60, "user")
@@ -436,13 +525,8 @@ class SpendGuardMiddleware:
         await self.app(scope, receive_for_app, send)
 
 
-def _decide(scope, method: str, path: str, kind: str, body: Optional[bytes]):
+def _decide(scope, method: str, path: str, kind: str, body: Optional[bytes], user_id: Optional[int]):
     request = Request(scope)
-    user_id = user_id_from_request(request)
-    anonymous = is_anonymous_spend(path)
-    if user_id is None and not anonymous:
-        return False, 0, limit_for(kind), "user"
-
     company_id = company_id_from_path(path)
     if company_id is None:
         company_id = company_id_from_query(scope.get("query_string", b"").decode("latin-1"))
@@ -467,6 +551,31 @@ def _decide(scope, method: str, path: str, kind: str, body: Optional[bytes]):
     return blocked, retry_after, limit, _dimension(blocked_key)
 
 
+def _content_length(scope) -> Optional[int]:
+    for name, value in scope.get("headers") or []:
+        if name.lower() == b"content-length":
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _unauthorized() -> JSONResponse:
+    return JSONResponse(
+        status_code=401,
+        content={"detail": "Not authenticated"},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _payload_too_large() -> JSONResponse:
+    return JSONResponse(
+        status_code=413,
+        content={"detail": "Request body exceeds 1 MB."},
+    )
+
+
 def _too_many(limit: int, retry_after: int, dimension: str) -> JSONResponse:
     retry = max(1, int(retry_after))
     return JSONResponse(
@@ -480,15 +589,22 @@ def _too_many(limit: int, retry_after: int, dimension: str) -> JSONResponse:
     )
 
 
-async def _buffer_body(receive):
+async def _buffer_body(receive, limit: int):
     chunks = []
     other = None
+    total = 0
+    too_large = False
     while True:
         message = await receive()
         if message["type"] != "http.request":
             other = message
             break
-        chunks.append(message.get("body", b"") or b"")
+        piece = message.get("body", b"") or b""
+        if total + len(piece) > limit:
+            too_large = True
+            break
+        total += len(piece)
+        chunks.append(piece)
         if not message.get("more_body", False):
             break
     body = b"".join(chunks)
@@ -506,4 +622,4 @@ async def _buffer_body(receive):
             return queued
         return await receive()
 
-    return body, replay
+    return body, replay, too_large

@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from server.api import copilot, simulations
+from server.api import ai_graphics, board_export, copilot, datasets, doc_generator, simulations
 from server.api import truth_scan as truth_scan_api
 from server.core.db import get_db
 from server.core.security import AUTH_COOKIE_NAME, create_access_token, get_current_user
@@ -98,6 +98,10 @@ def opened_app(monkeypatch):
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("truth scan ran")),
     )
     monkeypatch.setattr(
+        "server.api.datasets.process_termina_pdf",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("termina pdf ran")),
+    )
+    monkeypatch.setattr(
         "server.core.spend_guard.user_may_charge_company",
         lambda user_id, company_id: False,
     )
@@ -111,6 +115,10 @@ def opened_app(monkeypatch):
     app.include_router(copilot.router)
     app.include_router(truth_scan_api.router)
     app.include_router(simulations.router)
+    app.include_router(ai_graphics.router)
+    app.include_router(doc_generator.router)
+    app.include_router(board_export.router)
+    app.include_router(datasets.router)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: stranger
     client = TestClient(app)
@@ -126,6 +134,9 @@ def test_company_a_cannot_use_company_b_sim_truth_scan_or_copilot(opened_app):
         ("/companies/2/truth/run", None),
         ("/companies/2/chat", {"message": "What is my runway?"}),
         ("/companies/2/quick-chat", {"message": "What is my runway?"}),
+        ("/companies/2/ai-graphics/generate", {"prompt": "runway chart"}),
+        ("/companies/2/doc-generator/generate", {"doc_type": "investor-update"}),
+        ("/companies/2/board-export/generate", {"templateId": "board-pack"}),
     ]
     for path, payload in cases:
         if payload is None:
@@ -134,6 +145,13 @@ def test_company_a_cannot_use_company_b_sim_truth_scan_or_copilot(opened_app):
             response = client.post(path, json=payload)
         assert response.status_code in (403, 404), (path, response.status_code, response.text)
         assert "feature_locked" not in response.text
+
+    pdf = client.post(
+        "/companies/2/datasets/termina-pdf",
+        files={"file": ("deck.pdf", b"%PDF-1.4", "application/pdf")},
+    )
+    assert pdf.status_code in (403, 404), pdf.text
+    assert "feature_locked" not in pdf.text
     assert db.added == []
     sink, other = sinks
     assert sink == [] and other == []

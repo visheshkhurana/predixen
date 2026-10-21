@@ -7,6 +7,8 @@ integrations, and notifications are not part of this guard.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -15,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from server.core.security import AUTH_COOKIE_NAME, create_access_token
 from server.core.spend_guard import (
+    MAX_BUFFERED_BODY_BYTES,
     READ_BURST_PER_MINUTE,
     SPEND_BURST_PER_MINUTE,
     SpendGuardMiddleware,
@@ -62,6 +65,21 @@ SIM_WRITES = [
     "/explain-simulation",
     "/survival-sim/run",
     "/api/scenarios/9/simulate",
+    "/companies/5/ai-graphics/generate",
+    "/companies/5/board-export/generate",
+    "/companies/5/board-export/generate-graphic",
+    "/companies/5/doc-generator/generate",
+    "/companies/5/fundraising/one-pager",
+    "/companies/5/strategic-diagnosis",
+    "/simulation/4/decisions/generate",
+    "/companies/5/smart-alerts/evaluate",
+    "/companies/5/smart-alerts/weekly-briefing",
+    "/companies/5/competitors/9/scan",
+    "/imports/excel",
+    "/imports/pdf",
+    "/companies/5/datasets/termina-pdf",
+    "/companies/5/datasets/termina-excel",
+    "/api/companies/5/ai-graphics/generate",
 ]
 
 TRUTH_WRITES = [
@@ -99,6 +117,10 @@ HELD_LOCKS = [
     ("POST", "/auth/login"),
     ("GET", "/llm/models"),
     ("POST", "/companies/5/chat/feedback"),
+    ("POST", "/companies/5/smart-alerts/rules"),
+    ("GET", "/companies/5/ai-graphics/styles"),
+    ("POST", "/companies/5/competitors"),
+    ("POST", "/imports/1/verify"),
 ]
 
 
@@ -122,6 +144,11 @@ def test_write_routes_are_spend_limited(path):
 @pytest.mark.parametrize("path", SIM_READS + TRUTH_READS)
 def test_read_routes_are_read_limited(path):
     assert classify_spend("GET", path) == "read"
+
+
+def test_strategic_diagnosis_get_is_a_spend_write():
+    assert classify_spend("GET", "/companies/5/strategic-diagnosis") == "write"
+    assert classify_spend("GET", "/api/companies/5/strategic-diagnosis") == "write"
 
 
 @pytest.mark.parametrize("method,path", HELD_LOCKS)
@@ -360,11 +387,11 @@ def test_stranger_does_not_fill_the_company_bucket(monkeypatch):
     assert client.post("/companies/1/simulate").status_code == 200
 
 
-def test_anonymous_requests_do_not_share_one_bucket(monkeypatch):
+def test_anonymous_requests_are_rejected_and_do_not_share_one_bucket(monkeypatch):
     client = _guarded_app(monkeypatch, lambda user_id, company_id: False)
     for _ in range(SPEND_BURST_PER_MINUTE + 5):
         response = client.post("/companies/1/simulate")
-        assert response.status_code == 200, response.text
+        assert response.status_code == 401, response.text
 
 
 def test_public_survival_sim_is_limited_per_ip(monkeypatch):
@@ -490,6 +517,113 @@ def test_membership_sql_recognizes_owner_and_ignores_a_stranger(monkeypatch):
     assert user_may_charge_company(10, 1) is True
     assert user_may_charge_company(11, 2) is True
     assert user_may_charge_company(10, 2) is False
+
+
+def test_idle_ip_buckets_are_evicted():
+    store = {}
+    spend_burst_limited(["ip:203.0.113.5:write"], limit=20, now=0.0, store=store)
+    spend_burst_limited(["ip:203.0.113.6:write"], limit=20, now=10.0, store=store)
+    spend_burst_limited(["ip:203.0.113.7:write"], limit=20, now=69.0, store=store)
+    assert "ip:203.0.113.5:write" not in store
+    assert "ip:203.0.113.6:write" in store
+    assert store["ip:203.0.113.7:write"] == [69.0]
+
+
+def _http_scope(path: str, headers: list[tuple[bytes, bytes]]):
+    return {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "headers": headers,
+        "client": ("127.0.0.1", 50000),
+        "server": ("testserver", 80),
+    }
+
+
+def _send_once(scope, headers, body: bytes):
+    reads = {"n": 0}
+    forwarded = {"called": False}
+
+    async def app(inner_scope, receive, send):
+        forwarded["called"] = True
+        await receive()
+        response_started = False
+
+        async def send_ok(message):
+            nonlocal response_started
+            response_started = True
+
+        from fastapi.responses import JSONResponse
+        await JSONResponse({"ok": True})(inner_scope, receive, send)
+
+    guard = SpendGuardMiddleware(app)
+
+    async def receive():
+        reads["n"] += 1
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    sent = []
+
+    async def send(message):
+        sent.append(message)
+
+    asyncio.run(guard(scope, receive, send))
+    status = next(message["status"] for message in sent if message["type"] == "http.response.start")
+    return status, reads["n"], forwarded["called"]
+
+
+def test_large_body_without_a_token_is_rejected_before_it_is_read():
+    payload = b"x" * (MAX_BUFFERED_BODY_BYTES + 50)
+    scope = _http_scope(
+        "/truth-scan/from-dataset",
+        [
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(payload)).encode()),
+        ],
+    )
+    status, reads, forwarded = _send_once(scope, scope["headers"], payload)
+    assert status == 401
+    assert reads == 0
+    assert forwarded is False
+
+
+def test_over_cap_authed_body_is_413_and_is_not_buffered():
+    payload = b"y" * (MAX_BUFFERED_BODY_BYTES + 50)
+    token = _cookie(1)
+    scope = _http_scope(
+        "/truth-scan/from-dataset",
+        [
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(payload)).encode()),
+            (b"cookie", f"{AUTH_COOKIE_NAME}={token}".encode()),
+        ],
+    )
+    status, reads, forwarded = _send_once(scope, scope["headers"], payload)
+    assert status == 413
+    assert reads == 0
+    assert forwarded is False
+
+
+def test_streamed_body_over_the_cap_is_413_without_reaching_the_app():
+    """No Content-Length. The guard stops once the buffered total crosses 1 MB."""
+    chunk = b"z" * (MAX_BUFFERED_BODY_BYTES + 8)
+    token = _cookie(1)
+    scope = _http_scope(
+        "/truth-scan/from-dataset",
+        [
+            (b"content-type", b"application/json"),
+            (b"cookie", f"{AUTH_COOKIE_NAME}={token}".encode()),
+        ],
+    )
+    status, reads, forwarded = _send_once(scope, scope["headers"], chunk)
+    assert status == 413
+    assert reads == 1
+    assert forwarded is False
 
 
 def test_app_registers_the_spend_guard():
