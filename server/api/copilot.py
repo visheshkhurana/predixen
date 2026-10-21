@@ -155,9 +155,30 @@ def compare_decisions(
     }
 
 
+def coerce_pii_mode(value: Any) -> Literal["standard", "strict"]:
+    """Accept only redacting modes. "off", blank, and anything else become standard.
+
+    The client must not be able to disable redaction by sending pii_mode="off".
+    Unknown values are coerced rather than rejected so a bad payload cannot 500.
+    """
+    mode = value.strip().lower() if isinstance(value, str) else ""
+    if mode == "strict":
+        return "strict"
+    return "standard"
+
+
 class PrivacySettings(BaseModel):
-    """Privacy settings for PII redaction."""
-    pii_mode: str = "standard"
+    """Privacy settings for PII redaction.
+
+    pii_mode is client-supplied and therefore untrusted. Only "standard" and
+    "strict" are honored; every other value is stored as "standard".
+    """
+    pii_mode: Literal["standard", "strict"] = "standard"
+
+    @field_validator("pii_mode", mode="before")
+    @classmethod
+    def _coerce_pii_mode(cls, value: Any) -> str:
+        return coerce_pii_mode(value)
 
 
 class CopilotContextRequest(BaseModel):
@@ -1149,9 +1170,11 @@ async def _copilot_chat_inner(
             session_context=session_context
         )
 
-    pii_mode = "standard"
-    if request.privacy and request.privacy.pii_mode:
-        pii_mode = request.privacy.pii_mode
+    # Guard again at the read site. Model validation already coerces the field,
+    # but a constructed request (or a future caller) must not be able to pass
+    # "off" through to redact_text or the LLM router.
+    requested_mode = request.privacy.pii_mode if request.privacy is not None else None
+    pii_mode = coerce_pii_mode(requested_mode)
 
     redaction_result = redact_text(sanitized_message, mode=pii_mode)
     redacted_message = redaction_result.redacted_text
