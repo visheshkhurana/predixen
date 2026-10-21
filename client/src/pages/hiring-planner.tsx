@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useTruthScan } from "@/api/hooks";
 import { useFounderStore } from "@/store/founderStore";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -111,10 +112,7 @@ export default function HiringPlannerPage() {
   const [savedPlanId, setSavedPlanId] = useState<string | null>(null);
   const [simResults, setSimResults] = useState<any>(null);
 
-  const { data: truthScan, isLoading: truthScanLoading } = useQuery<any>({
-    queryKey: ["/api/companies", companyId, "truth", "latest"],
-    enabled: !!companyId,
-  });
+  const { data: truthScan, isLoading: truthScanLoading } = useTruthScan(companyId ?? null);
 
   const { data: plansData } = useQuery<any>({
     queryKey: ["/api/companies", companyId, "hiring-plans"],

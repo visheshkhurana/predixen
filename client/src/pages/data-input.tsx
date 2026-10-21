@@ -256,7 +256,15 @@ export default function DataInput() {
   const excelInputRef = useRef<HTMLInputElement>(null);
 
   const { data: backendBaseline, isLoading: isLoadingBaseline } = useQuery<FinancialBaselineResponse>({
-    queryKey: ['/api/companies', currentCompany?.id, 'financials/baseline'],
+    // Same key as useFinancialMetrics, which the app shell already fetches.
+    queryKey: ['financials-baseline', currentCompany?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/companies/${currentCompany?.id}/financials/baseline`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
     enabled: !!currentCompany?.id,
   });
 
