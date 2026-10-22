@@ -1,6 +1,12 @@
 import json
 import os
 from typing import Dict, Any, List
+from server.decision.cross_company_claims import (
+    RESEARCH,
+    insight_text,
+    peer_rationale_suffix,
+    rate_fields,
+)
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
 
 # run_monte_carlo emits 999 for cash-flow-positive paths; finite paths cap at 120.
@@ -260,14 +266,20 @@ def generate_recommendations(
         bucket = action.get("bucket", "")
         if bucket in cross_company_data:
             cc = cross_company_data[bucket]
+            kind = cc.get("cross_company_source") or "peer_cohort"
+            text = insight_text(cc)
+            if kind == RESEARCH:
+                rationale_extra = " " + text
+            else:
+                rationale_extra = peer_rationale_suffix(cc["success_rate"])
+            rec["cross_company_source"] = kind
             rec["cross_company_insight"] = {
                 "success_rate": cc["success_rate"],
                 "sample_size": cc["sample_size"],
-                "text": f"{cc['success_rate']:.0f}% of similar companies saw positive outcomes from this type of action (based on {cc['sample_size']} decisions).",
+                "cross_company_source": kind,
+                "text": text,
             }
-            rec["rationale"] = (
-                action["description"] + f" {cc['success_rate']:.0f}% of similar companies that took this action saw positive outcomes."
-            )
+            rec["rationale"] = action["description"] + rationale_extra
 
         recommendations.append(rec)
     
@@ -304,14 +316,9 @@ def _get_cross_company_success_rates(truth_metrics: Dict) -> Dict[str, Any]:
                         "retention": "efficiency",
                     }
                     bucket = bucket_mapping.get(dtype, dtype)
-                    result[bucket] = {
-                        "success_rate": p["success_rate"],
-                        "sample_size": p["sample_size"],
-                    }
-                    result[dtype] = {
-                        "success_rate": p["success_rate"],
-                        "sample_size": p["sample_size"],
-                    }
+                    fields = rate_fields(p)
+                    result[bucket] = fields
+                    result[dtype] = fields
             return result
         finally:
             db.close()
