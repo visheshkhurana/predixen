@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Union, Set
+from typing import Dict, Optional, Union, Set
 from jose import JWTError, jwt
 import bcrypt
 import uuid
@@ -48,6 +48,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 # Warnings already emitted, so a deploy window does not log one line per request.
 _revocation_warned: Set[str] = set()
 
+# How many times each exception class has been swallowed. The warning above is
+# suppressed after the first occurrence of a class, which means the count is the
+# only place a later, different failure is still visible. Read it through
+# ``revocation_suppressed_counts()``.
+_revocation_suppressed: Dict[str, int] = {}
+
+
+def revocation_suppressed_counts() -> Dict[str, int]:
+    """Exceptions swallowed by ``_guarded_revocation``, per class name.
+
+    Revocation degrades rather than failing the request, so a swallowed error is
+    intended. What must not be silent is a *different* error of the same class:
+    the first warning names the class, this counter says how many have happened.
+    """
+    return dict(_revocation_suppressed)
+
 
 def _guarded_revocation(db: Session, fn, default=None):
     """Run a statement against a revocation table, degrading to ``default`` when
@@ -71,11 +87,22 @@ def _guarded_revocation(db: Session, fn, default=None):
             return fn()
     except SQLAlchemyError as exc:
         name = exc.__class__.__name__
+        seen = _revocation_suppressed.get(name, 0) + 1
+        _revocation_suppressed[name] = seen
         if name not in _revocation_warned:
             _revocation_warned.add(name)
             logger.warning(
                 "Session revocation unavailable (%s); treating revocation as off for now: %s",
                 name, exc,
+            )
+        elif seen & (seen - 1) == 0:
+            # Every second, fourth, eighth ... suppression is logged, so a class
+            # that keeps failing is observable in the log and not only in the
+            # counter. Between those points the counter carries the count.
+            logger.warning(
+                "Session revocation still unavailable (%s) - %d occurrences so far, "
+                "latest: %s",
+                name, seen, exc,
             )
         return default
 
