@@ -414,25 +414,85 @@ async def handle_slash_command(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/events")
 async def handle_slack_events(request: Request):
-    """Handle Slack Events API (URL verification + events)."""
+    """Handle Slack Events API (URL verification + events).
+
+    THE SHAPE HERE IS CHOSEN SO AN UNKNOWN CANNOT BREAK THE INSTALL PATH.
+
+    Whether Slack SIGNS the `url_verification` handshake is not established and
+    cannot be settled from this repository. Slack's handshake page does not name
+    `X-Slack-Signature` or `X-Slack-Request-Timestamp` at all; its signing page
+    states the signature header in blanket terms without naming `url_verification`
+    or publishing a per-endpoint exception list. So this handler does not rest on
+    the answer:
+      - signature headers PRESENT -> verify them and 401 on a mismatch. Real events
+        are unchanged, and every event still requires a signature.
+      - signature headers ABSENT  -> answer the handshake and nothing else. A caller
+        may hand us a challenge and get it echoed back, which is the pre-existing
+        behaviour and is not a lever: the response is the string the caller supplied.
+        Any other unsigned request is refused.
+    The install handshake happens ONCE, so a 401 there cannot be recovered without
+    editing the Slack app; an echo can.
+    """
     body_bytes = await request.body()
     timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
     signature = request.headers.get("X-Slack-Signature", "")
 
-    body = await request.json()
+    # HAG-401. Two defects lived here and the shape below fixes both:
+    #   1. `body = await request.json()` was UNGUARDED, so a malformed body raised
+    #      out of the handler and Starlette answered its bare 500.
+    #   2. The `url_verification` branch returned BEFORE `_verify_slack_signature`
+    #      ran, making the order parse -> answer -> verify.
+    # The sibling handler above, `handle_slash_command`, already gets this right:
+    # it verifies at :330 and only then reads the form at :333. This route was the
+    # odd one out, not the rule.
+    #
+    # WHAT THE TESTS FOR THIS HANDLER CANNOT SEE, stated because an earlier version
+    # of this comment overstated it: the order tests run against a STAND-IN whose
+    # verifier is a boolean stub, so they measure the SHAPE of the two orders and
+    # never whether Slack signs the handshake. That signing is an assumption here,
+    # not a measurement - which is why the shape is written to survive either answer
+    # instead of depending on one.
+    if signature and timestamp:
+        if not _verify_slack_signature(body_bytes, timestamp, signature):
+            raise HTTPException(status_code=401, detail="Invalid Slack signature")
 
-    if body.get("type") == "url_verification":
+        try:
+            body = await request.json()
+        except ValueError:
+            # `ValueError` covers `json.JSONDecodeError` and `UnicodeDecodeError`, the
+            # two things Starlette's `Request.json()` raises on a bad body. This branch
+            # is only reachable by a caller whose signature already verified, so a 400
+            # here is not a lever an anonymous caller can pull.
+            raise HTTPException(status_code=400, detail="Malformed JSON body")
+
+        if not isinstance(body, dict):
+            # The shape guard for the derefs below. A signed body that is not an
+            # object - `[1,2,3]` - would otherwise raise AttributeError on `body.get`
+            # at the handler's top level, where nothing catches it.
+            raise HTTPException(status_code=400, detail="Body must be a JSON object")
+
+        if body.get("type") == "url_verification":
+            return JSONResponse({"challenge": body.get("challenge")})
+
+        event = body.get("event", {})
+        # `.get(key, default)` applies that default only when the key is ABSENT, never
+        # when it is present and null, so `{"event": null}` reaches here as None.
+        event_type = event.get("type") if isinstance(event, dict) else None
+
+        logger.info(f"Slack event: {event_type}")
+
+        return JSONResponse({"ok": True})
+
+    # No signature headers at all. Answer the handshake; refuse everything else.
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Malformed JSON body")
+
+    if isinstance(body, dict) and body.get("type") == "url_verification":
         return JSONResponse({"challenge": body.get("challenge")})
 
-    if not _verify_slack_signature(body_bytes, timestamp, signature):
-        raise HTTPException(status_code=401, detail="Invalid Slack signature")
-
-    event = body.get("event", {})
-    event_type = event.get("type")
-
-    logger.info(f"Slack event: {event_type}")
-
-    return JSONResponse({"ok": True})
+    raise HTTPException(status_code=401, detail="Invalid Slack signature")
 
 
 @router.get("/install")
