@@ -1,0 +1,95 @@
+# IndexNow (HAG-292) - tell Bing/Yandex/ChatGPT search about new URLs, and test the
+# sitemap parse that decides which URLs those are.
+#
+# TWO TRIGGERS, TWO JOBS, DELIBERATELY IN ONE FILE.
+#
+#   - `ping` runs on push to main only. It is the production-facing half.
+#   - `sitemap-parse-test` runs on pull_request only. It is the test half.
+#
+# The test lives here rather than in `pr-checks.yml` because that file is on
+# Vishesh's hold list and four unmerged PRs (#93, #95, #96, #97) all edit it, so the
+# step at `pr-checks.yml:143` is a conflict stack rather than a line. Moving this job
+# into it later is housekeeping; a new file costs nothing today.
+#
+# ============================================================================
+# A FAILED PING MUST NEVER FAIL A DEPLOY. READ THIS BEFORE CHANGING ANYTHING.
+# ============================================================================
+# The ping step carries `continue-on-error: true`. That is a REQUIREMENT, not a
+# convenience: notifying a search engine is best-effort, and a network blip, an
+# IndexNow outage or a rate-limit response must not be able to hold up or fail a
+# release. If a future change removes `continue-on-error`, or adds this step to a
+# deploy path that gates on it, the ping has become a required deploy step by
+# accident. Do not do that.
+#
+# Non-blocking was verified three ways at HAG-292: `main` is not a protected branch
+# (the protection API returns 404 "Branch not protected", so no check can gate a merge
+# or a deploy), Railway builds from `Dockerfile` and reads no workflow, and
+# `continue-on-error` means the step cannot fail the run whatever it does.
+#
+# THE 32-HEX KEY IS PUBLIC BY DESIGN. It is a verification token, not a credential:
+# IndexNow fetches it back from `keyLocation` to prove we control the host. It is
+# served openly at `client/public/<key>.txt`, must never be moved into a secret store
+# or an Actions secret, and there is nothing to leak. Treating it as a secret would
+# BREAK verification - the file has to be publicly readable for the ping to work.
+#
+# The script exits non-zero when it could not do its job, which is on purpose: with
+# `continue-on-error` the run stays green but the log line is red, so a broken ping is
+# visible instead of silently absent.
+
+name: indexnow
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  sitemap-parse-test:
+    # Test half. Runs on a PR, never on a push to main.
+    if: github.event_name == 'pull_request'
+    name: Sitemap parse test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: IndexNow URL extraction + key tests
+        run: npx tsx --test server/tests/indexnow-ping.test.ts
+
+  ping:
+    # Production half. Runs on a push to main, never on a PR.
+    if: github.event_name == 'push'
+    name: Ping IndexNow
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # NOT a required step. See the header: a failed ping must never fail a deploy.
+      - name: Submit the sitemap's URLs to IndexNow
+        continue-on-error: true
+        run: npx tsx scripts/indexnow-ping.ts

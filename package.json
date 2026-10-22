@@ -11,7 +11,8 @@
     "db:push": "drizzle-kit push",
     "launch:gate": "bash scripts/launch_gate.sh",
     "generate:sitemap": "tsx scripts/generate-sitemap.ts",
-    "test:sitemap": "tsx server/tests/sitemap-drift.test.ts"
+    "test:sitemap": "tsx server/tests/sitemap-drift.test.ts",
+    "test:indexnow": "tsx server/tests/indexnow-ping.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
