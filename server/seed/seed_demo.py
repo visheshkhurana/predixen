@@ -3,6 +3,12 @@ from datetime import datetime, timedelta
 import json
 import logging
 from server.core.company_metadata import save_metadata_value
+from server.seed.demo_companies import (
+    SEED_MARKER,
+    ensure_seed_marked,
+    is_seed_guess,
+    rows_to_purge,
+)
 from server.models.user import User
 from server.models.company import Company
 from server.models.financial import FinancialRecord
@@ -174,9 +180,13 @@ def seed_demo_data(db: Session):
             demo_user.role = "owner"
             db.commit()
         all_companies = db.query(Company).filter(Company.user_id == demo_user.id).order_by(Company.id).all()
-        if len(all_companies) > 1:
-            primary = all_companies[0]
-            for dup in all_companies[1:]:
+        # HAG-651: only rows the seed itself created may be deleted or renamed.
+        # The demo password is public, so "every company under the demo user after
+        # the first" was a visitor's company as often as the seed's, and the rename
+        # below rewrote whichever row .first() returned.
+        primary_id = ensure_seed_marked(db, all_companies)
+        if primary_id is not None:
+            for dup in rows_to_purge(all_companies, primary_id):
                 try:
                     logger.info(f"Removing duplicate demo company id={dup.id} name={dup.name}")
                     db.delete(dup)
@@ -188,9 +198,66 @@ def seed_demo_data(db: Session):
                 db.commit()
             except Exception:
                 db.rollback()
-        company = db.query(Company).filter(Company.user_id == demo_user.id).first()
+        company = (
+            db.query(Company).filter(Company.id == primary_id).first()
+            if primary_id is not None
+            else None
+        )
         if company:
             demo_company = company
+            # A row the bootstrap GUESSED was the seed's is not treated as the
+            # seed's, and every line below this point mutates whichever row this
+            # is: the industry normalise, the rename, the financial re-create, the
+            # _seed_* families and the connector metadata. Refusing only the
+            # rename (rev 3) left all the rest running. Measured on this file's
+            # own fixture, that is 19 of the 60 company-scoped tables and 214 rows
+            # -- among them 24 financial_records, 60 transaction_records, 20
+            # customer_records and 15 metric_definitions -- plus a five-connector
+            # connected=True blob in metadata_json, all on a visitor's company. So
+            # the refusal is an early RETURN, not a guard around three fields:
+            #
+            #   * everything after this line is skipped for a guessed row, so a
+            #     future writer added anywhere below is safe by default -- it
+            #     cannot reach a guessed row by being added. A guarded block fails
+            #     open: a write added outside the guard silently writes to a
+            #     visitor's company.
+            #   * it is one exit, beside the two `return demo_user` calls that
+            #     already sit in this branch, rather than re-indenting forty lines
+            #     and making the diff unable to show the rest did not change.
+            #
+            # Prevention, not detection: no alarm after a write undoes a visitor's
+            # company rewritten to the demo's.
+            #
+            # THE COST, accepted knowingly: if a genuine seed row loses its marker
+            # (a whole-blob writer elsewhere can drop the keys), the demo stops
+            # healing its name, industry, stage and data until someone re-marks the
+            # row, and it says so LOUDLY ON EVERY RUN while it refuses -- the
+            # warning below is not spent on the run that made the guess. A stranded
+            # demo row is a worse demo; a visitor's company rewritten as the
+            # demo's is lost work for someone who did not ask for it.
+            #
+            # The count is the row count on THIS run, which is the account as the
+            # operator sees it, not the count at guess time: the guess happened on
+            # an earlier run and the only key carried forward is seed_guessed. Both
+            # numbers are named so the log line answers "which row, and how big is
+            # this account".
+            if is_seed_guess(demo_company.metadata_json):
+                logger.warning(
+                    "Demo seed: REFUSING to seed company id=%s, the row an earlier "
+                    "bootstrap GUESSED was the seed's -- it was the lowest id under "
+                    "the demo account when nothing carried metadata_json[%r]. The "
+                    "demo account holds %d row(s) on this run. Nothing was written "
+                    "to it: the financial re-create, the _seed_* families and the "
+                    "connector metadata were all skipped, and its name, industry, "
+                    "stage and data are still the visitor's own. If this really is "
+                    "the seed's own row it has lost its marker, and the demo will "
+                    "not heal until the row is re-marked; this warning repeats on "
+                    "every run until then.",
+                    demo_company.id,
+                    SEED_MARKER,
+                    len(all_companies),
+                )
+                return demo_user
             # Normalize industry to a valid dropdown id ("saas"); older seeds used
             # "general_saas", which isn't an option so the Industry field showed blank.
             if demo_company.industry in (None, "", "general_saas"):
@@ -241,6 +308,7 @@ def seed_demo_data(db: Session):
             db.add(demo_company)
             db.commit()
             db.refresh(demo_company)
+            save_metadata_value(db, demo_company, SEED_MARKER, True)
             _ensure_company_state(db, demo_company)
     else:
         demo_user = User(
@@ -263,6 +331,7 @@ def seed_demo_data(db: Session):
         db.add(demo_company)
         db.commit()
         db.refresh(demo_company)
+        save_metadata_value(db, demo_company, SEED_MARKER, True)
         _ensure_company_state(db, demo_company)
     
     base_date = datetime.now() - timedelta(days=365)
