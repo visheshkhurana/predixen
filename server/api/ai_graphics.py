@@ -6,6 +6,7 @@ import logging
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.llm_rate_limit import llm_rate_limit
 from server.core.company_access import get_user_company
 from server.models.user import User
 
@@ -24,7 +25,7 @@ def generate_image(
     company_id: int,
     request: ImageGenerateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(llm_rate_limit),
 ):
     company = get_user_company(db, company_id, current_user)
 

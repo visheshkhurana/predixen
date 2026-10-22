@@ -15,6 +15,9 @@ process.env.SECRET_KEY = SECRET;
 interface CompletionArgs {
   stream?: boolean;
   messages?: unknown;
+  max_tokens?: number;
+  max_completion_tokens?: number;
+  temperature?: number;
 }
 
 function signJwt(payload: Record<string, unknown>, secret = SECRET): string {
@@ -151,6 +154,10 @@ test("authenticated quick-answer returns the model text", async () => {
     assert.deepEqual(await res.json(), { answer: "Cut burn by 10%." });
     assert.equal(calls.length, 1);
     assert.equal(calls[0].stream, undefined);
+    // gpt-5 rejects max_tokens and non-default temperature.
+    assert.equal(calls[0].max_tokens, undefined);
+    assert.equal(calls[0].temperature, undefined);
+    assert.ok((calls[0].max_completion_tokens ?? 0) > 0);
   } finally {
     server.close();
   }
@@ -173,6 +180,8 @@ test("authenticated chat streams when the session cookie is present", async () =
     assert.match(body, /"done":true/);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].stream, true);
+    assert.equal(calls[0].max_tokens, undefined);
+    assert.ok((calls[0].max_completion_tokens ?? 0) > 0);
   } finally {
     server.close();
   }

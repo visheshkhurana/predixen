@@ -243,6 +243,31 @@ def update_member_role(
     return {"status": "updated", "role": member.role}
 
 
+def _revoke_slack_link_for_member(db: Session, member: WorkspaceMember) -> None:
+    """Drop a Slack link this member created, so it stops answering after they lose access.
+
+    The link lives on the company, not on the membership, so deleting the
+    membership alone would leave the Slack workspace reading the company for
+    someone who no longer works there.
+    """
+    from server.api.slack_bot import LINK_CODE_META_KEY, SLACK_META_KEY
+    from server.core.company_metadata import delete_metadata_value
+
+    company = db.query(Company).filter(Company.id == member.company_id).first()
+    if company is None:
+        return
+
+    metadata = company.metadata_json or {}
+    link = metadata.get(SLACK_META_KEY) or {}
+    if link.get("linked_by_user_id") != member.user_id:
+        return
+
+    delete_metadata_value(db, company, SLACK_META_KEY, commit=False)
+    pending = metadata.get(LINK_CODE_META_KEY) or {}
+    if pending.get("created_by") == member.user_id:
+        delete_metadata_value(db, company, LINK_CODE_META_KEY, commit=False)
+
+
 @router.delete("/members/{member_id}")
 def remove_member(
     member_id: int,
@@ -253,12 +278,13 @@ def remove_member(
     member = db.query(WorkspaceMember).filter(WorkspaceMember.id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
-    
+
     require_workspace_access(member.company_id, current_user, db, min_role="admin")
-    
+
+    _revoke_slack_link_for_member(db, member)
     db.delete(member)
     db.commit()
-    
+
     return {"status": "removed"}
 
 

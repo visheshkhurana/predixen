@@ -34,6 +34,33 @@ def _get_client():
     return _client
 
 
+_REASONING_MODEL_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def is_reasoning_model(model: Optional[str]) -> bool:
+    """gpt-5* and o-series reject `max_tokens` and any non-default temperature."""
+    name = (model or "").lower().split("/")[-1]
+    return name.startswith(_REASONING_MODEL_PREFIXES)
+
+
+def build_sampling_params(
+    model: str,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Token-limit and temperature kwargs the given model will accept."""
+    params: Dict[str, Any] = {}
+    if is_reasoning_model(model):
+        if max_tokens:
+            params["max_completion_tokens"] = max_tokens
+    else:
+        if temperature is not None:
+            params["temperature"] = temperature
+        if max_tokens:
+            params["max_tokens"] = max_tokens
+    return params
+
+
 def compute_prompt_hash(text: str) -> str:
     """Compute SHA256 hash of the redacted prompt."""
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
@@ -144,15 +171,15 @@ class AuditedOpenAIClient:
         start_time = time.time()
         
         try:
+            kwargs.pop("max_completion_tokens", None)
+            if is_reasoning_model(model):
+                kwargs.pop("temperature", None)
             request_kwargs = {
                 "model": model,
                 "messages": redacted_messages,
-                "temperature": temperature,
+                **build_sampling_params(model, temperature, max_tokens),
                 **kwargs
             }
-            
-            if max_tokens:
-                request_kwargs["max_tokens"] = max_tokens
             
             if response_format:
                 request_kwargs["response_format"] = response_format
@@ -262,10 +289,12 @@ class AuditedOpenAIClient:
         start_time = time.time()
         
         try:
+            vision_temperature = kwargs.pop("temperature", None)
+            kwargs.pop("max_completion_tokens", None)
             response = self.client.chat.completions.create(
                 model=model,
                 messages=redacted_messages,
-                max_tokens=max_tokens,
+                **build_sampling_params(model, vision_temperature, max_tokens),
                 **kwargs
             )
             

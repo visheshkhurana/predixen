@@ -855,6 +855,8 @@ export const api = {
         sources: string[];
         last_updated: string;
         is_cached: boolean;
+        is_fallback?: boolean;
+        note?: string | null;
       }>('/benchmarks/search', {
         method: 'POST',
         body: JSON.stringify({ industry, stage }),

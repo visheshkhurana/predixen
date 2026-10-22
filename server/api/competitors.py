@@ -69,13 +69,34 @@ def _competitor_dict(c: Competitor, signal_count: int = 0, unread_count: int = 0
     }
 
 
+def _safe_http_url(value: Any) -> Optional[str]:
+    """Return the URL only if it is an absolute http(s) link; else None.
+
+    Signal URLs come from an LLM and are rendered as links, so anything else
+    (javascript:, data:, relative paths) is dropped.
+    """
+    if not isinstance(value, str):
+        return None
+    url = value.strip()
+    if not url or len(url) > 1000 or any(ch in url for ch in "\r\n\t "):
+        return None
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
+        return None
+    return url
+
+
 def _signal_dict(s: CompetitorSignal) -> Dict[str, Any]:
     return {
         "id": s.id,
         "competitor_id": s.competitor_id,
         "source_type": s.source_type,
         "title": s.title,
-        "url": s.url,
+        "url": _safe_http_url(s.url),
         "summary": s.summary,
         "sentiment": s.sentiment,
         "threat_level": s.threat_level,
@@ -189,7 +210,7 @@ def _scan_competitor_web(
         tl = str(it.get("threat_level", "medium")).lower()
         cleaned.append({
             "title": (it.get("title") or "")[:500],
-            "url": (it.get("url") or "")[:1000] or None,
+            "url": _safe_http_url(it.get("url")),
             "source_type": st if st in allowed_sources else "web",
             "summary": (it.get("summary") or "")[:1000] or None,
             "sentiment": str(it.get("sentiment", "neutral")).lower(),
@@ -368,6 +389,10 @@ def competitor_digest(company_id: int, db: Session = Depends(get_db), current_us
             + (f" — {s.summary}" if (s.title and s.summary) else "")
         )
     facts = "\n".join(lines[:40])
+
+    # Only count requests that actually reach the model.
+    from server.core.llm_rate_limit import check_llm_rate_limit
+    check_llm_rate_limit(current_user.id)
 
     try:
         from server.lib.llm.llm_router import LLMRouter, TaskType

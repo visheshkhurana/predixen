@@ -8,12 +8,16 @@ Commands:
   /fc-alerts      — Show active smart alerts
   /fc-ask <query> — Ask the AI copilot any question
   /fc-simulate    — Get simulation summary
+  /fc-link <code> — Link this workspace/channel to a FounderConsole company
+                    (code from POST /companies/{id}/integrations/slack/link-code)
 """
 import os
 import hmac
 import hashlib
+import secrets
 import time
 import logging
+from datetime import datetime
 from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, Request, HTTPException, Depends
@@ -22,7 +26,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from server.core.db import get_db
+from server.core.security import get_current_user
+from server.core.company_access import get_user_company, get_user_company_role
+from server.core.company_metadata import save_metadata_value, delete_metadata_value
 from server.models.company import Company
+from server.models.user import User
+from server.utils.survival import survival_pct
 from server.models.truth_scan import TruthScan
 from server.models.financial import FinancialRecord
 
@@ -60,23 +69,79 @@ def _verify_slack_signature(
     return hmac.compare_digest(computed, signature)
 
 
+SLACK_META_KEY = "slack_integration"
+LINK_CODE_META_KEY = "slack_link_code"
+LINK_CODE_TTL_SECONDS = 15 * 60
+_LINK_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _hash_link_code(code: str) -> str:
+    return hashlib.sha256(code.strip().upper().encode()).hexdigest()
+
+
+def _company_by_meta(db: Session, key: str, field: str, value: str) -> Optional[Company]:
+    """Find a company by a string inside metadata_json, in the database.
+
+    A JSON-path filter, not a Python scan, so it covers every company
+    (the old lookup only looked at the first 100 rows).
+    """
+    return (
+        db.query(Company)
+        .filter(Company.metadata_json[key][field].as_string() == value)
+        .order_by(Company.id.asc())
+        .first()
+    )
+
+
 def _get_company_from_slack(
     db: Session, team_id: str, channel_id: str
 ) -> Optional[Company]:
-    """Look up the company associated with this Slack workspace."""
-    if not team_id and not channel_id:
+    """Look up the company associated with this Slack workspace or channel."""
+    if channel_id:
+        company = _company_by_meta(db, SLACK_META_KEY, "channel_id", channel_id)
+        if company is not None:
+            return company
+    if team_id:
+        company = _company_by_meta(db, SLACK_META_KEY, "team_id", team_id)
+        if company is not None:
+            return company
+    return None
+
+
+def _link_with_code(
+    db: Session, code: str, team_id: str, channel_id: str, slack_user_id: str
+) -> Optional[Company]:
+    """Consume a one-time link code and store the Slack team/channel on its company."""
+    if not code or not team_id:
+        return None
+    company = _company_by_meta(db, LINK_CODE_META_KEY, "code_hash", _hash_link_code(code))
+    if company is None:
+        return None
+    pending = (company.metadata_json or {}).get(LINK_CODE_META_KEY) or {}
+    try:
+        expired = float(pending.get("expires_at", 0)) < time.time()
+    except (TypeError, ValueError):
+        expired = True
+    # Single use either way.
+    delete_metadata_value(db, company, LINK_CODE_META_KEY)
+    if expired:
         return None
 
-    companies = db.query(Company).limit(100).all()
-    for company in companies:
-        meta = company.metadata_json or {}
-        slack_config = meta.get("slack_integration", {})
-        if team_id and slack_config.get("team_id") == team_id:
-            return company
-        if channel_id and slack_config.get("channel_id") == channel_id:
-            return company
+    # A workspace answers for one company: drop any older link to this team.
+    for _ in range(50):
+        previous = _company_by_meta(db, SLACK_META_KEY, "team_id", team_id)
+        if previous is None or previous.id == company.id:
+            break
+        delete_metadata_value(db, previous, SLACK_META_KEY)
 
-    return None
+    save_metadata_value(db, company, SLACK_META_KEY, {
+        "team_id": team_id,
+        "channel_id": channel_id or None,
+        "linked_by_slack_user": slack_user_id or None,
+        "linked_by_user_id": pending.get("created_by"),
+        "linked_at": datetime.utcnow().isoformat(),
+    })
+    return company
 
 
 def _get_metrics_snapshot(db: Session, company: Company) -> Dict[str, Any]:
@@ -320,6 +385,24 @@ async def _handle_ask_command(
         }
 
 
+def _runway_p50(results: Dict[str, Any]) -> Optional[float]:
+    """The engine writes runway as {"p10","p50","p90"}; older rows flattened it."""
+    runway = results.get("runway")
+    candidates = [
+        runway.get("p50") if isinstance(runway, dict) else None,
+        results.get("runway_p50"),
+        results.get("median_runway"),
+    ]
+    for value in candidates:
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 @router.post("/commands")
 async def handle_slash_command(request: Request, db: Session = Depends(get_db)):
     """Handle Slack slash commands."""
@@ -337,19 +420,31 @@ async def handle_slash_command(request: Request, db: Session = Depends(get_db)):
     channel_id = form.get("channel_id", "")
     user_name = form.get("user_name", "")
 
-    logger.info(f"Slack command: {command} '{text}' from {user_name} in {team_id}")
+    logger.info(f"Slack command: {command} from {user_name} in {team_id}")
+
+    cmd = command.lower().replace("/", "")
+
+    if cmd in ("fc-link", "fc_link", "fclink"):
+        linked = _link_with_code(db, text, team_id, channel_id, form.get("user_id", ""))
+        if linked is None:
+            return JSONResponse({
+                "response_type": "ephemeral",
+                "text": "That link code is invalid or expired. Generate a new one in FounderConsole and run `/fc-link <code>`.",
+            })
+        return JSONResponse({
+            "response_type": "ephemeral",
+            "text": f"Linked this Slack workspace to *{linked.name or 'your company'}*. Try `/fc-runway`.",
+        })
 
     company = _get_company_from_slack(db, team_id, channel_id)
     if not company:
         return JSONResponse({
             "response_type": "ephemeral",
-            "text": "No company linked to this Slack workspace. Set up the integration in FounderConsole Settings.",
+            "text": "No company linked to this Slack workspace. Generate a link code in FounderConsole, then run `/fc-link <code>`.",
         })
 
     company_name = company.name or "Your Company"
     metrics = _get_metrics_snapshot(db, company)
-
-    cmd = command.lower().replace("/", "")
 
     if cmd in ("fc-runway", "fc_runway", "fcrunway"):
         return JSONResponse(_build_runway_response(metrics, company_name))
@@ -382,8 +477,10 @@ async def handle_slash_command(request: Request, db: Session = Depends(get_db)):
 
         if latest_run and latest_run.outputs_json:
             results = latest_run.outputs_json
-            p50 = results.get("runway_p50", results.get("median_runway", 0))
-            survival = results.get("survival_probability", results.get("survival_rate", 0))
+            p50 = _runway_p50(results)
+            survival = survival_pct(results.get("survival"), 18)
+            p50_text = f"{p50:.1f} months" if p50 is not None else "not available"
+            survival_text = f"{survival:.1f}%" if survival is not None else "not available"
             return JSONResponse({
                 "response_type": "ephemeral",
                 "blocks": [
@@ -394,8 +491,8 @@ async def handle_slash_command(request: Request, db: Session = Depends(get_db)):
                     {
                         "type": "section",
                         "fields": [
-                            {"type": "mrkdwn", "text": f"*Runway P50:* {p50:.1f} months"},
-                            {"type": "mrkdwn", "text": f"*Survival (18m):* {survival:.1f}%"},
+                            {"type": "mrkdwn", "text": f"*Runway P50:* {p50_text}"},
+                            {"type": "mrkdwn", "text": f"*Survival (18m):* {survival_text}"},
                         ],
                     },
                 ],
@@ -408,7 +505,7 @@ async def handle_slash_command(request: Request, db: Session = Depends(get_db)):
 
     return JSONResponse({
         "response_type": "ephemeral",
-        "text": f"Unknown command: {command}. Available: /fc-runway, /fc-metrics, /fc-alerts, /fc-ask, /fc-simulate",
+        "text": f"Unknown command: {command}. Available: /fc-runway, /fc-metrics, /fc-alerts, /fc-ask, /fc-simulate, /fc-link",
     })
 
 
@@ -449,6 +546,7 @@ async def slack_install_info():
             {"command": "/fc-alerts", "description": "Show active smart alerts"},
             {"command": "/fc-ask", "description": "Ask the AI copilot any question"},
             {"command": "/fc-simulate", "description": "Show latest simulation results"},
+            {"command": "/fc-link", "description": "Link this workspace to a FounderConsole company"},
         ],
         "setup_instructions": [
             "1. Create a Slack App at api.slack.com/apps",
@@ -456,5 +554,78 @@ async def slack_install_info():
             "3. Set the Request URL to your FounderConsole domain + /api/slack/commands",
             "4. Set SLACK_SIGNING_SECRET and SLACK_CLIENT_ID environment variables",
             "5. Install the app to your workspace",
+            "6. In FounderConsole, generate a Slack link code and run /fc-link <code> in Slack",
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# Linking, from the FounderConsole side (authenticated).
+# ---------------------------------------------------------------------------
+link_router = APIRouter(tags=["slack"])
+
+
+def _require_slack_manager(db: Session, company_id: int, user: User) -> Company:
+    """Slack linking decides who can read this company from an external workspace.
+
+    A link outlives the request that made it, so it needs more than ordinary
+    read access: only an owner or admin may issue, inspect or revoke it. A
+    viewer keeps the access they already had and gains no way to create one.
+    """
+    company = get_user_company(db, company_id, user)
+    if get_user_company_role(db, company_id, user) not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Requires owner or admin role to manage the Slack link",
+        )
+    return company
+
+
+@link_router.post("/companies/{company_id}/integrations/slack/link-code")
+def create_slack_link_code(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Issue a one-time code; running `/fc-link <code>` in Slack links the workspace."""
+    company = _require_slack_manager(db, company_id, current_user)
+    code = "".join(secrets.choice(_LINK_CODE_ALPHABET) for _ in range(10))
+    expires_at = time.time() + LINK_CODE_TTL_SECONDS
+    save_metadata_value(db, company, LINK_CODE_META_KEY, {
+        "code_hash": _hash_link_code(code),
+        "expires_at": expires_at,
+        "created_by": current_user.id,
+    })
+    return {
+        "code": code,
+        "expires_in_seconds": LINK_CODE_TTL_SECONDS,
+        "instructions": f"In the Slack channel to link, run: /fc-link {code}",
+    }
+
+
+@link_router.get("/companies/{company_id}/integrations/slack")
+def get_slack_link_status(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = _require_slack_manager(db, company_id, current_user)
+    link = (company.metadata_json or {}).get(SLACK_META_KEY) or {}
+    return {
+        "linked": bool(link.get("team_id")),
+        "team_id": link.get("team_id"),
+        "channel_id": link.get("channel_id"),
+        "linked_at": link.get("linked_at"),
+    }
+
+
+@link_router.delete("/companies/{company_id}/integrations/slack")
+def unlink_slack(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = _require_slack_manager(db, company_id, current_user)
+    delete_metadata_value(db, company, SLACK_META_KEY)
+    delete_metadata_value(db, company, LINK_CODE_META_KEY)
+    return {"linked": False}

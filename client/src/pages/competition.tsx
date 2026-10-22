@@ -60,6 +60,18 @@ const sentimentColor = (s?: string | null) => {
   return "text-muted-foreground border-border bg-muted/30";
 };
 
+
+// Only absolute http(s) links are rendered; signal URLs come from an LLM.
+function safeHttpUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function SignalsFeed({ companyId, competitorId }: { companyId: number; competitorId: number }) {
   const { toast } = useToast();
   const { data, isLoading } = useQuery({
@@ -110,8 +122,8 @@ function SignalsFeed({ companyId, competitorId }: { companyId: number; competito
                 <Plus className="h-3 w-3 mr-1" /> Track as Decision
               </Button>
             </div>
-            {s.url && (
-              <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground shrink-0">
+            {safeHttpUrl(s.url) && (
+              <a href={safeHttpUrl(s.url)!} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground shrink-0">
                 <ExternalLink className="h-4 w-4" />
               </a>
             )}
@@ -279,8 +291,8 @@ export default function CompetitionPage() {
                   </div>
                 </button>
                 <div className="flex items-center gap-1 shrink-0">
-                  {c.website && <a href={c.website} target="_blank" rel="noopener noreferrer" className="p-2 text-muted-foreground hover:text-foreground"><Globe className="h-4 w-4" /></a>}
-                  {c.linkedin_url && <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer" className="p-2 text-muted-foreground hover:text-foreground"><Linkedin className="h-4 w-4" /></a>}
+                  {safeHttpUrl(c.website) && <a href={safeHttpUrl(c.website)!} target="_blank" rel="noopener noreferrer" className="p-2 text-muted-foreground hover:text-foreground"><Globe className="h-4 w-4" /></a>}
+                  {safeHttpUrl(c.linkedin_url) && <a href={safeHttpUrl(c.linkedin_url)!} target="_blank" rel="noopener noreferrer" className="p-2 text-muted-foreground hover:text-foreground"><Linkedin className="h-4 w-4" /></a>}
                   <Button size="sm" variant="outline" onClick={() => scanMut.mutate(c.id)} disabled={scanMut.isPending} data-testid={`scan-${c.id}`}>
                     <RefreshCw className={`h-4 w-4 mr-1 ${scanMut.isPending && scanMut.variables === c.id ? "animate-spin" : ""}`} /> Scan
                   </Button>
