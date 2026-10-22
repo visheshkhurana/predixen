@@ -1,4 +1,5 @@
 import { flushPostHogQueue, type PostHogClient, type QueuedPostHogCall } from "./posthog-queue";
+import { internalTrafficProperties } from "./internal-traffic";
 
 // PostHog client tokens are public by design (they ship in the JS bundle).
 // The default below is the real project token — the VITE_POSTHOG_KEY that was
@@ -96,13 +97,39 @@ function enqueue(call: QueuedPostHogCall) {
   void ensureClient();
 }
 
+/**
+ * HAG-294. Attach the internal-traffic label to every call this module dispatches, so
+ * `From search or AI` can be read as two numbers instead of one unreadable one.
+ *
+ * It is merged here, at the single choke point every event passes through, rather than
+ * at the call sites: a tag that has to be remembered at each `trackEvent` is a tag that
+ * will be missing from exactly the events that matter. The label wins over a caller's
+ * own property of the same name, because it is derived from the environment rather
+ * than passed in.
+ *
+ * It labels; it never drops. A filter that removes a real founder is worse than the
+ * noise it removes.
+ */
+function tagInternalTraffic(call: QueuedPostHogCall): QueuedPostHogCall {
+  if (typeof window === "undefined") return call;
+  const tag = internalTrafficProperties();
+  if (call.kind === "capture") {
+    return { ...call, properties: { ...call.properties, ...tag } };
+  }
+  if (call.kind === "identify") {
+    return { ...call, traits: { ...call.traits, ...tag } };
+  }
+  return call;
+}
+
 function dispatch(call: QueuedPostHogCall) {
   if (!POSTHOG_KEY) return;
+  const tagged = tagInternalTraffic(call);
   if (client) {
-    flushPostHogQueue(client, [call]);
+    flushPostHogQueue(client, [tagged]);
     return;
   }
-  enqueue(call);
+  enqueue(tagged);
 }
 
 /**
