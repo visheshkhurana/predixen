@@ -2,6 +2,9 @@
 //
 // Inert until VITE_X_PIXEL_ID is set, so this ships safely before the pixel
 // exists in X Events Manager. No pixel id → no script injected, no requests.
+// The tag is loaded by client/src/lib/consentTracking.ts only after
+// cookie-consent === "accepted" and only on a marketing surface. Calls from
+// the core app no-op even if the tag was loaded earlier in the session.
 //
 // Env:
 //   VITE_X_PIXEL_ID      the "o..." id from X Events Manager (e.g. "oabc1")
@@ -10,6 +13,8 @@
 // X's event ids are minted per conversion event inside Events Manager and look
 // like `tw-<pixel>-<event>`. They cannot be derived from the pixel id, which is
 // why each funnel step needs its own env var rather than a naming convention.
+
+import { marketingEventsEnabled } from "./consentTracking";
 
 const PIXEL_ID = import.meta.env.VITE_X_PIXEL_ID as string | undefined;
 
@@ -43,7 +48,10 @@ declare global {
  * pixel simply reports nothing, which looks identical to "no one converted".
  */
 export function initXAds(): void {
-  if (loaded || !PIXEL_ID || typeof window === "undefined") return;
+  // Consent and surface are enforced here too, so a funnel call cannot inject
+  // uwt.js from a core-app route or before the visitor accepts.
+  if (!marketingEventsEnabled()) return;
+  if (loaded || !PIXEL_ID || typeof window === "undefined" || typeof document === "undefined") return;
   loaded = true;
 
   try {
@@ -51,15 +59,19 @@ export function initXAds(): void {
     // it can be read and audited.
     if (!window.twq) {
       const twq: any = function (...args: any[]) {
+        if (!marketingEventsEnabled()) return;
         twq.exe ? twq.exe.apply(twq, args) : twq.queue!.push(args);
       };
       twq.version = "1.1";
       twq.queue = [];
       window.twq = twq;
-
+    }
+    const src = "https://static.ads-twitter.com/uwt.js";
+    // consentTracking appends the tag. Don't insert a second copy.
+    if (!document.querySelector(`script[src="${src}"]`)) {
       const script = document.createElement("script");
       script.async = true;
-      script.src = "https://static.ads-twitter.com/uwt.js";
+      script.src = src;
       script.onerror = () => console.debug("[xads] tag unavailable");
       document.head.appendChild(script);
     }
@@ -75,6 +87,7 @@ export function initXAds(): void {
  * click handler.
  */
 export function trackXConversion(step: string, params: Record<string, unknown> = {}): void {
+  if (!marketingEventsEnabled()) return;
   if (!PIXEL_ID || typeof window === "undefined") return;
   const eventId = EVENT_IDS[step];
   if (!eventId) return;

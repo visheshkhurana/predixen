@@ -1,14 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-            <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NJKW0TGC4C" onerror="console.debug('Analytics unavailable')"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-NJKW0TGC4C');
-    </script>
+    <!-- GA4 and the Meta pixel load from client/src/lib/consentTracking.ts
+         only after cookie-consent is accepted. Do not hardcode either tag here. -->
     <!-- PostHog is initialized once, from client/src/lib/posthog.ts (initPostHog).
          An inline array.js snippet used to live here as well, which meant two
          PostHog instances on the same token: duplicated $pageview/$autocapture,
