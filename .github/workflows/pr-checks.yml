@@ -158,6 +158,9 @@ jobs:
       - name: signup CTAs open the register tab
         run: npx tsx server/tests/signup-cta-register-tab.test.ts
 
+      - name: client money/finance lib tests
+        run: npx tsx --test client/src/lib/__tests__/money.test.ts client/src/lib/__tests__/finance.test.ts
+
       - name: sitemap.xml is generated, not hand-edited
         run: |
           npm run generate:sitemap
