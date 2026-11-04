@@ -96,6 +96,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import csv_import as csv_import_api
     from server.api import currency as currency_api
     from server.api import leads as leads_api
+    from server.api import d2c as d2c_api
     from server.api import events as events_api
     from server.api import cap_table as cap_table_api
     from server.api import hiring_planner as hiring_planner_api
@@ -170,6 +171,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(csv_import_api.router)
     app.include_router(currency_api.router)
     app.include_router(leads_api.router)
+    app.include_router(d2c_api.router)
     app.include_router(events_api.router)
     app.include_router(cap_table_api.router)
     app.include_router(hiring_planner_api.router)
