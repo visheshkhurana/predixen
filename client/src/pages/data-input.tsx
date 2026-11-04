@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -824,23 +825,7 @@ export default function DataInput() {
 
   const formatCurrency = (value: number) => {
     if (value === null || value === undefined || isNaN(value)) return 'N/A';
-    
-    const absValue = Math.abs(value);
-    const sign = value < 0 ? '-' : '';
-    
-    if (absValue >= 1_000_000_000) {
-      const billions = absValue / 1_000_000_000;
-      return `${sign}$${billions.toFixed(1)}B`;
-    } else if (absValue >= 1_000_000) {
-      const millions = absValue / 1_000_000;
-      return `${sign}$${millions.toFixed(1)}M`;
-    } else if (absValue >= 1_000) {
-      const thousands = absValue / 1_000;
-      return `${sign}$${thousands.toFixed(1)}K`;
-    } else if (absValue > 0) {
-      return `${sign}$${absValue.toFixed(0)}`;
-    }
-    return '$0';
+    return formatCurrencyAbbrev(value);
   };
 
   const getConfidenceBadge = (fieldKey: string) => {

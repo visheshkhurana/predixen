@@ -10,7 +10,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { formatCurrencyFull } from '@/lib/utils';
+import { formatCurrencyFull, formatCurrencyAbbrev } from '@/lib/utils';
 import { 
   Trophy, TrendingUp, Shield, AlertTriangle, Coins, 
   Info, ArrowUpRight, ArrowDownRight, SlidersHorizontal, 
@@ -120,15 +120,7 @@ const SCENARIO_RECOMMENDATIONS: Record<string, string> = {
 };
 
 function formatCurrency(value: number): string {
-  const absValue = Math.abs(value);
-  if (absValue >= 1000000000) {
-    return `$${(value / 1000000000).toFixed(1)}B`;
-  } else if (absValue >= 1000000) {
-    return `$${(value / 1000000).toFixed(1)}M`;
-  } else if (absValue >= 1000) {
-    return `$${(value / 1000).toFixed(0)}K`;
-  }
-  return `$${value.toFixed(0)}`;
+  return formatCurrencyAbbrev(value);
 }
 
 function getRankBadge(rank: number) {

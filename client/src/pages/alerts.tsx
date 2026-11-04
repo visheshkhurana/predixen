@@ -44,7 +44,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import { cn, formatRunwayInline, isRunwaySustainable } from "@/lib/utils";
+import { cn, formatRunwayInline, isRunwaySustainable, formatCurrencyAbbrev } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -231,7 +231,7 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
     { key: "burn_multiple", label: "Burn Multiple", unit: "x", format: (v: number) => v.toFixed(2) },
     { key: "revenue_growth_mom", label: "Revenue Growth", unit: "%", format: (v: number) => (v * 100).toFixed(1) },
     { key: "gross_margin", label: "Gross Margin", unit: "%", format: (v: number) => (v * 100).toFixed(1) },
-    { key: "net_burn", label: "Net Burn", unit: "", format: (v: number) => `$${(v / 1000).toFixed(0)}K` },
+    { key: "net_burn", label: "Net Burn", unit: "", format: (v: number) => formatCurrencyAbbrev(v) },
     { key: "churn_rate", label: "Churn Rate", unit: "%", format: (v: number) => (v * 100).toFixed(2) },
   ];
 
@@ -608,7 +608,7 @@ function generateThresholdAlerts(metrics: ReturnType<typeof useFinancialMetrics>
       type: 'cash_critical',
       severity: 'critical',
       title: 'Cash Balance Critical',
-      message: `Cash reserves at $${(metrics.cashOnHand / 1000).toFixed(0)}K — dangerously low. Immediate fundraising required.`,
+      message: `Cash reserves at ${formatCurrencyAbbrev(metrics.cashOnHand)} — dangerously low. Immediate fundraising required.`,
       metric: 'cash_balance',
       currentValue: metrics.cashOnHand,
       previousValue: 0,
@@ -754,13 +754,7 @@ export default function AlertsPage() {
     if (metric.includes("margin") || metric.includes("rate")) {
       return `${(value * 100).toFixed(1)}%`;
     }
-    if (value >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-      return `$${(value / 1000).toFixed(1)}K`;
-    }
-    return `$${value.toFixed(0)}`;
+    return formatCurrencyAbbrev(value);
   };
 
   const getOverallStatusBadge = (status: string) => {

@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -93,9 +94,7 @@ interface PlannedHire {
 }
 
 function formatCurrency(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+  return formatCurrencyAbbrev(value);
 }
 
 export default function HiringPlannerPage() {

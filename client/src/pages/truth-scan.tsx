@@ -1,3 +1,4 @@
+import { currencySymbol } from '@/lib/money';
 import { useState, useMemo, useEffect } from 'react';
 import { FadeIn, StaggerContainer, StaggerItem } from '@/components/motion/animated-container';
 import { FloatingOrbsBackground } from '@/components/motion/floating-orbs-background';
@@ -150,7 +151,7 @@ function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
       id: 'high-burn-multiple',
       icon: 'critical',
       title: 'Inefficient Growth Spending',
-      description: `Burn multiple of ${burnMultiple.toFixed(1)}x indicates you're spending $${burnMultiple.toFixed(1)} per $1 of new revenue.`,
+      description: `Burn multiple of ${burnMultiple.toFixed(1)}x indicates you're spending ${currencySymbol()}${burnMultiple.toFixed(1)} per ${currencySymbol()}1 of new revenue.`,
       priority: 1,
     });
   }
@@ -222,7 +223,7 @@ function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
     recommendations.push({
       type: 'warning',
       title: 'Burn Multiple is Elevated',
-      description: `Your burn multiple of ${burnMultiple.toFixed(1)}x means you're spending $${burnMultiple.toFixed(1)} for every $1 of new ARR. Top-tier startups maintain this below 2x.`,
+      description: `Your burn multiple of ${burnMultiple.toFixed(1)}x means you're spending ${currencySymbol()}${burnMultiple.toFixed(1)} for every ${currencySymbol()}1 of new ARR. Top-tier startups maintain this below 2x.`,
       action: 'Review customer acquisition costs and focus on higher-efficiency growth channels. Consider increasing pricing or reducing sales team overhead.'
     });
   }
