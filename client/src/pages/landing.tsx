@@ -82,7 +82,7 @@ const landingFaqs = [
   },
   {
     q: "What data sources can I connect?",
-    a: "FounderConsole supports 34 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more. You can also upload CSV files or enter data manually.",
+    a: "FounderConsole supports 35 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more. You can also upload CSV files or enter data manually.",
   },
   {
     q: "What is a Monte Carlo simulation?",
@@ -142,7 +142,7 @@ const pricingTiers = [
 ];
 
 const stats = [
-  { value: 34, suffix: "+", label: "Data Connectors" },
+  { value: 35, suffix: "+", label: "Data Connectors" },
   { value: 24, suffix: "+", label: "Metrics Tracked" },
   { value: 3, suffix: " bands", label: "P10 / P50 / P90" },
   { value: 10, suffix: "K runs", label: "Per Simulation" },
@@ -752,7 +752,7 @@ export default function LandingPage() {
   useSEO({
     title: "FounderConsole — AI Decision Simulator for Founders",
     description:
-      "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 34 data connectors — replace spreadsheets with simulations.",
+      "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 35 data connectors — replace spreadsheets with simulations.",
     path: "/",
     jsonLd: [
       {
@@ -776,7 +776,7 @@ export default function LandingPage() {
         operatingSystem: "Web",
         url: "https://founderconsole.ai",
         description:
-          "AI-powered financial intelligence platform for startups with Monte Carlo simulations, fundraising CRM, and 34 data connectors.",
+          "AI-powered financial intelligence platform for startups with Monte Carlo simulations, fundraising CRM, and 35 data connectors.",
         offers: {
           "@type": "Offer",
           price: "0",
@@ -784,7 +784,7 @@ export default function LandingPage() {
           description: "Free during early access. No credit card is required, and no plan is charged yet.",
         },
         featureList:
-          "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 34 Data Connectors, Digital Twin, Strategic Briefings",
+          "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 35 Data Connectors, Digital Twin, Strategic Briefings",
         screenshot: "https://founderconsole.ai/og-image.png",
       },
       {
@@ -806,7 +806,7 @@ export default function LandingPage() {
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10" data-testid="section-logo-cloud">
           <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-            Connect your financial stack — 34 connectors
+            Connect your financial stack — 35 connectors
           </p>
           <Marquee>
             {integrations.map((name) => (

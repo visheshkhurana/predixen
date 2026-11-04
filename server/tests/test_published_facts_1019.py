@@ -80,6 +80,15 @@ STALE_COUNT_PHRASES = (
     "37 production connector",
     'value: 37, suffix: "+"',
     'value="37+"',
+    # 34 until Shiprocket became the 35th connector.
+    "34 data connector",
+    "34 Data Connector",
+    "34 connectors",
+    "34 read-only",
+    "34 integrations",
+    "34 real OAuth",
+    "34 production connector",
+    'value="34+"',
 )
 
 
@@ -94,16 +103,16 @@ def _registered_module_names() -> list[str]:
     raise AssertionError("_CONNECTOR_MODULES not found")
 
 
-def test_registry_has_34_connectors():
+def test_registry_has_35_connectors():
     names = _registered_module_names()
-    assert len(names) == 34, names
-    assert len(set(names)) == 34
+    assert len(names) == 35, names
+    assert len(set(names)) == 35
     connectors_pkg.load_all_connectors()
     registered = ConnectorRegistry.get_available_providers()
-    assert len(registered) == 34, sorted(registered)
+    assert len(registered) == 35, sorted(registered)
 
 
-def test_llms_txt_prices_the_free_beta_and_counts_34_connectors():
+def test_llms_txt_prices_the_free_beta_and_counts_35_connectors():
     text = LLMS.read_text()
     lowered = " ".join(text.lower().split())
     assert "every feature is free during the public beta" in lowered
@@ -114,7 +123,7 @@ def test_llms_txt_prices_the_free_beta_and_counts_34_connectors():
     assert "$29" not in text
     assert "$49" not in text
     assert "$99" not in text
-    assert "34 read-only data connectors" in text
+    assert "35 read-only data connectors" in text
     assert "37" not in text
 
 
