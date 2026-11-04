@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { useSEO } from "@/lib/seo";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Clock, Loader2, Twitter, Linkedin, Github } from "lucide-react";
+import { Mail, Clock, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,12 +43,27 @@ export default function ContactPage() {
     defaultValues: { name: "", email: "", subject: "", message: "" },
   });
 
-  const onSubmit = async (_data: ContactForm) => {
+  const onSubmit = async (data: ContactForm) => {
     setIsPending(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setIsPending(false);
-    toast({ title: "Message sent", description: "We'll get back to you within 24 hours." });
-    form.reset();
+    try {
+      const website = (document.getElementById("contact-website") as HTMLInputElement | null)?.value ?? "";
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, website }),
+      });
+      if (!res.ok) throw new Error(`contact ${res.status}`);
+      toast({ title: "Message sent", description: "We'll get back to you within 24 hours." });
+      form.reset();
+    } catch {
+      toast({
+        title: "Message not sent",
+        description: "Something went wrong. Please email hello@founderconsole.ai directly.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (
@@ -133,6 +148,15 @@ export default function ContactPage() {
                       </FormItem>
                     )}
                   />
+                  <input
+                    id="contact-website"
+                    name="website"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                    className="hidden"
+                  />
                   <Button type="submit" disabled={isPending} className="w-full" data-testid="button-contact-submit">
                     {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Send Message
@@ -147,7 +171,7 @@ export default function ContactPage() {
                 <Mail className="mt-0.5 h-5 w-5 text-primary shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-foreground">Email</p>
-                  <p className="text-sm text-muted-foreground">hello@founderconsole.ai</p>
+                  <a href="mailto:hello@founderconsole.ai" className="text-sm text-muted-foreground hover:text-foreground">hello@founderconsole.ai</a>
                 </div>
               </div>
               <div className="flex items-start gap-3 rounded-xl border bg-card/50 p-6" data-testid="card-response-time">
@@ -155,22 +179,6 @@ export default function ContactPage() {
                 <div>
                   <p className="text-sm font-semibold text-foreground">Response Time</p>
                   <p className="text-sm text-muted-foreground">Within 24 hours</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-xl border bg-card/50 p-6" data-testid="card-social">
-                <div>
-                  <p className="text-sm font-semibold text-foreground mb-3">Social</p>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter" data-testid="link-twitter" className="text-muted-foreground transition-colors hover:text-foreground">
-                      <Twitter className="h-5 w-5" />
-                    </a>
-                    <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" data-testid="link-linkedin" className="text-muted-foreground transition-colors hover:text-foreground">
-                      <Linkedin className="h-5 w-5" />
-                    </a>
-                    <a href="https://github.com" target="_blank" rel="noopener noreferrer" aria-label="GitHub" data-testid="link-github" className="text-muted-foreground transition-colors hover:text-foreground">
-                      <Github className="h-5 w-5" />
-                    </a>
-                  </div>
                 </div>
               </div>
             </div>
