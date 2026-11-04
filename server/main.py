@@ -172,6 +172,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(currency_api.router)
     app.include_router(leads_api.router)
     app.include_router(d2c_api.router)
+    app.include_router(d2c_api.company_router)
     app.include_router(events_api.router)
     app.include_router(cap_table_api.router)
     app.include_router(hiring_planner_api.router)
@@ -235,6 +236,13 @@ async def _run_deferred_startup():
             logger.info("Ensured competition-tracking tables exist")
         except Exception as e:
             logger.warning(f"Could not ensure competitor tables: {e}")
+
+        try:
+            from server.models.d2c_month import D2CMonth
+            D2CMonth.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured d2c_months table exists")
+        except Exception as e:
+            logger.warning(f"Could not ensure d2c_months table: {e}")
 
         try:
             from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff

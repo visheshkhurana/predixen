@@ -1,5 +1,6 @@
 from server.models.user import User, UserRole
 from server.models.company import Company
+from server.models.d2c_month import D2CMonth
 from server.models.dataset import Dataset
 from server.models.financial import (
     FinancialRecord,
