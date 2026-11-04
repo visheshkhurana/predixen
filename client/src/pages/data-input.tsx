@@ -686,7 +686,7 @@ export default function DataInput() {
           otherOpex: values.otherOpexExpenses ? Number(values.otherOpexExpenses) : null,
         },
         hasManualExpenseOverride: hasManualExpenseOverride,
-        currency: 'USD',
+        currency: currentCompany.currency || 'USD',
         asOfDate: new Date().toISOString().split('T')[0],
       };
 
