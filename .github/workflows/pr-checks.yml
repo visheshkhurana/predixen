@@ -85,6 +85,9 @@ jobs:
       - name: truth-scan suggested actions tests
         run: npx tsx server/tests/truth-scan-suggested-actions.test.ts
 
+      - name: what-if gross margin tests
+        run: npx tsx server/tests/whatif-gross-margin.test.ts
+
       - name: overview suggested action tests
         run: npx tsx server/tests/overview-suggested-action.test.ts
 
