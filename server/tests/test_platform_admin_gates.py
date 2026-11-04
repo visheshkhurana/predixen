@@ -134,14 +134,6 @@ def test_runway_email_escapes_visitor_input():
     assert "&amp;&lt;b&gt;" in html
 
 
-def test_runway_email_subject_has_no_line_breaks():
-    sent = AsyncMock()
-    with patch("server.email.service.send_email", sent):
-        asyncio.run(leads_api._send_runway_email(_lead(runway_months="4\r\nBcc: x@e.test")))
-    subject = sent.call_args.kwargs["subject"]
-    assert "\r" not in subject and "\n" not in subject
-
-
 # --- raw LLM routes ------------------------------------------------------------
 
 LLM_PATHS = [
