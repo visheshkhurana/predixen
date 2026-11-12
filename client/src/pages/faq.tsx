@@ -18,7 +18,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       {
         question: "What is FounderConsole?",
         answer:
-          "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 35 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions.",
+          "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 36 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions.",
       },
       {
         question: "How does FounderConsole help founders?",

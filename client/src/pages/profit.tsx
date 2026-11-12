@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useFounderStore } from "@/store/founderStore";
 import { formatCurrencyAbbrev } from "@/lib/utils";
-import { Loader2, IndianRupee, Truck, Megaphone, Package } from "lucide-react";
+import { Loader2, IndianRupee, Truck, Megaphone, Package, AlertTriangle } from "lucide-react";
 
 // Contribution margin per order for a D2C brand (server/core/d2c.py):
 // CM1 after product cost, CM2 after shipping/RTO/payments, CM3 after marketing.
@@ -31,19 +31,59 @@ interface UnitEconomics {
   cm2_per_order: number | null;
   cm3_per_order: number | null;
   mer: number | null;
+  break_even_mer: number | null;
   cac: number | null;
   missing: string[];
 }
 
 type Inputs = Record<string, number | null>;
 
+interface AdAccount {
+  source: string;
+  source_label: string;
+  account_id: string;
+  account_name: string | null;
+  currency: string | null;
+  spend: number;
+  spend_company: number | null;
+  fx_rate: number | null;
+  fx_rate_date: string | null;
+  purchases: number | null;
+  purchase_value: number | null;
+  platform_roas: number | null;
+  currency_mismatch: boolean;
+}
+
+interface AdSpend {
+  company_currency: string | null;
+  accounts: AdAccount[];
+  sources: Array<{ source: string; source_label: string; spend: number | null; platform_purchase_value: number | null; platform_roas: number | null }>;
+  total: number | null;
+  currency_mismatch: Array<{ source_label: string; account_id: string; currency: string | null; spend: number }>;
+  marketing_spend_source: string | null;
+  manual_override: boolean;
+}
+
 interface MonthView {
   period: string;
   inputs: Inputs;
   sources: Record<string, string>;
   unit_economics: UnitEconomics | null;
+  ad_spend?: AdSpend;
   missing?: string[];
   error: string | null;
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  manual: "typed",
+  shopify: "Shopify",
+  shiprocket: "Shiprocket",
+  meta_ads: "Meta Ads",
+  google_ads: "Google Ads",
+};
+
+function sourceLabel(source: string): string {
+  return source.split("+").map((s) => SOURCE_LABELS[s] ?? s).join(" + ");
 }
 
 type FieldKind = "money" | "count" | "percent";
@@ -104,8 +144,17 @@ function pct(v: number | null | undefined): string {
   return v == null ? "—" : `${(v * 100).toFixed(1)}%`;
 }
 
-function money(v: number | null | undefined): string {
-  return v == null ? "—" : formatCurrencyAbbrev(v);
+function money(v: number | null | undefined, currency = "USD"): string {
+  if (v == null) return "—";
+  try {
+    return formatCurrencyAbbrev(v, currency);
+  } catch {
+    return `${currency} ${Math.round(v).toLocaleString()}`; // unknown ISO code
+  }
+}
+
+function ratio(v: number | null | undefined): string {
+  return v == null ? "—" : `${v.toFixed(2)}x`;
 }
 
 function toForm(inputs: Inputs | undefined): Record<string, string> {
@@ -139,7 +188,7 @@ function fromForm(form: Record<string, string>, original: Record<string, string>
   return body;
 }
 
-function MarginStep({ label, perOrder, share, total }: { label: string; perOrder: number | null; share: number | null; total: number | null }) {
+function MarginStep({ label, perOrder, share, total, currency }: { label: string; perOrder: number | null; share: number | null; total: number | null; currency: string }) {
   const width = share == null ? 0 : Math.max(0, Math.min(100, share * 100));
   const negative = (perOrder ?? 0) < 0;
   return (
@@ -147,7 +196,7 @@ function MarginStep({ label, perOrder, share, total }: { label: string; perOrder
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-sm font-medium">{label}</span>
         <span className={`text-lg font-semibold tabular-nums ${negative ? "text-destructive" : ""}`}>
-          {perOrder == null ? "—" : `${money(perOrder)} / order`}
+          {perOrder == null ? "—" : `${money(perOrder, currency)} / order`}
         </span>
       </div>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -155,9 +204,111 @@ function MarginStep({ label, perOrder, share, total }: { label: string; perOrder
       </div>
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         <span>{pct(share)} of net revenue</span>
-        <span>{money(total)} total</span>
+        <span>{money(total, currency)} total</span>
       </div>
     </div>
+  );
+}
+
+function AdSpendCard({ ad, ue, currency }: { ad: AdSpend | undefined; ue: UnitEconomics | null; currency: string }) {
+  const meta = ad?.sources.find((s) => s.source === "meta_ads");
+  const mer = ue?.mer ?? null;
+  const breakEven = ue?.break_even_mer ?? null;
+  const belowBreakEven = mer != null && breakEven != null && mer < breakEven;
+  return (
+    <Card data-testid="card-ad-spend">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-muted-foreground" />Ad spend & efficiency</CardTitle>
+        <CardDescription>
+          MER divides your store's net revenue by all marketing spend. Meta ROAS is Meta's own attribution: it counts sales Meta thinks its ads caused, overlaps with other channels, and is not revenue.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-md border p-3" data-testid="tile-mer">
+            <div className="text-xs text-muted-foreground">MER (from store net revenue)</div>
+            <div className={`text-xl font-semibold tabular-nums ${belowBreakEven ? "text-destructive" : ""}`}>{ratio(mer)}</div>
+          </div>
+          <div className="rounded-md border p-3" data-testid="tile-meta-roas">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Meta ROAS <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal">platform-reported</Badge>
+            </div>
+            <div className="text-xl font-semibold tabular-nums">{ratio(meta?.platform_roas)}</div>
+          </div>
+          <div className="rounded-md border p-3" data-testid="tile-break-even-mer">
+            <div className="text-xs text-muted-foreground">Break-even MER</div>
+            <div className="text-xl font-semibold tabular-nums">{ratio(breakEven)}</div>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {breakEven == null
+            ? "Break-even MER needs CM2 (product, shipping and payment costs)."
+            : belowBreakEven
+              ? "MER is below break-even: marketing is costing more than the margin it brings in (CM3 is negative)."
+              : `Below ${ratio(breakEven)} MER, marketing costs more than the margin it brings in.`}
+        </p>
+
+        {ad && ad.accounts.length > 0 ? (
+          <div className="space-y-2">
+            <div className="text-sm font-semibold">Spend by source</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="table-ad-spend">
+                <thead className="text-xs text-muted-foreground">
+                  <tr className="border-b text-left">
+                    <th className="py-1.5 pr-3 font-normal">Account</th>
+                    <th className="py-1.5 pr-3 text-right font-normal">Spend</th>
+                    <th className="py-1.5 text-right font-normal">Platform ROAS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ad.accounts.map((a) => (
+                    <tr key={`${a.source}-${a.account_id}`} className="border-b last:border-0">
+                      <td className="py-1.5 pr-3">
+                        <div>{a.account_name || a.account_id}</div>
+                        <div className="text-xs text-muted-foreground">{a.source_label} · {a.account_id}</div>
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">
+                        <div>{money(a.spend, a.currency || currency)}</div>
+                        {a.currency && a.currency !== currency && (
+                          <div className="text-xs text-muted-foreground">
+                            {a.spend_company != null ? `≈ ${money(a.spend_company, currency)} at ${a.fx_rate?.toFixed(4)} (${a.fx_rate_date})` : "not converted"}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">{ratio(a.platform_roas)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td className="pt-2">Total ad spend</td>
+                    <td className="pt-2 pr-3 text-right tabular-nums">{money(ad.total, currency)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {ad.currency_mismatch.length > 0 && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/40 p-3 text-xs" data-testid="ad-currency-mismatch">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <span>
+                  {ad.currency_mismatch.map((m) => `${m.source_label} ${m.account_id} is billed in ${m.currency}`).join("; ")}, and your company currency is {currency}. No exchange rate is stored for this month, so ad spend is not added up (CM3 and MER stay empty rather than mixing currencies). Type the month's total marketing spend in {currency} below, or switch the ad account currency.
+                </span>
+              </div>
+            )}
+            {ad.manual_override && (
+              <p className="text-xs text-muted-foreground">
+                You typed this month's marketing spend, so CM3 and MER use your number, not the ad platforms' total. Clear the field to use the total.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Connect <Link href="/integrations" className="underline">Meta Ads</Link> to bring in monthly ad spend, or type marketing spend below.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -165,6 +316,7 @@ export default function ProfitPage() {
   const { currentCompany } = useFounderStore();
   const { toast } = useToast();
   const companyId = currentCompany?.id;
+  const currency = (currentCompany?.currency || "USD").toUpperCase();
   const [period, setPeriod] = useState(currentMonth());
 
   const { data, isLoading } = useQuery<{ months: MonthView[] }>({
@@ -195,6 +347,7 @@ export default function ProfitPage() {
 
   const ue = selected?.unit_economics ?? null;
   const missing = ue?.missing ?? selected?.missing ?? [];
+  const adCurrency = selected?.ad_spend?.company_currency || currency;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
@@ -225,22 +378,23 @@ export default function ProfitPage() {
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       ) : (
         <div className="grid gap-6 lg:grid-cols-5">
-          <Card className="lg:col-span-2">
+          <div className="space-y-6 lg:col-span-2">
+          <Card>
             <CardHeader>
               <CardTitle>Contribution margin</CardTitle>
               <CardDescription>
-                {ue ? `${ue.delivered_orders.toLocaleString("en-IN")} delivered orders · AOV ${money(ue.aov)}` : "Add orders and sales to start"}
+                {ue ? `${ue.delivered_orders.toLocaleString("en-IN")} delivered orders · AOV ${money(ue.aov, currency)}` : "Add orders and sales to start"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <MarginStep label="CM1" perOrder={ue?.cm1_per_order ?? null} share={ue?.cm1_pct ?? null} total={ue?.cm1 ?? null} />
-              <MarginStep label="CM2" perOrder={ue?.cm2_per_order ?? null} share={ue?.cm2_pct ?? null} total={ue?.cm2 ?? null} />
-              <MarginStep label="CM3" perOrder={ue?.cm3_per_order ?? null} share={ue?.cm3_pct ?? null} total={ue?.cm3 ?? null} />
+              <MarginStep label="CM1" perOrder={ue?.cm1_per_order ?? null} share={ue?.cm1_pct ?? null} total={ue?.cm1 ?? null} currency={currency} />
+              <MarginStep label="CM2" perOrder={ue?.cm2_per_order ?? null} share={ue?.cm2_pct ?? null} total={ue?.cm2 ?? null} currency={currency} />
+              <MarginStep label="CM3" perOrder={ue?.cm3_per_order ?? null} share={ue?.cm3_pct ?? null} total={ue?.cm3 ?? null} currency={currency} />
               <div className="grid grid-cols-2 gap-3 border-t pt-4 text-sm">
                 <div><div className="text-muted-foreground">RTO rate</div><div className="font-semibold tabular-nums">{pct(ue?.rto_rate)}</div></div>
-                <div><div className="text-muted-foreground">Lost to RTO</div><div className="font-semibold tabular-nums">{money(ue?.rto_cost)}</div></div>
-                <div><div className="text-muted-foreground">MER (blended ROAS)</div><div className="font-semibold tabular-nums">{ue?.mer == null ? "—" : `${ue.mer.toFixed(2)}x`}</div></div>
-                <div><div className="text-muted-foreground">CAC</div><div className="font-semibold tabular-nums">{money(ue?.cac)}</div></div>
+                <div><div className="text-muted-foreground">Lost to RTO</div><div className="font-semibold tabular-nums">{money(ue?.rto_cost, currency)}</div></div>
+                <div><div className="text-muted-foreground">MER (blended ROAS)</div><div className="font-semibold tabular-nums">{ratio(ue?.mer)}</div></div>
+                <div><div className="text-muted-foreground">CAC</div><div className="font-semibold tabular-nums">{money(ue?.cac, currency)}</div></div>
               </div>
               {missing.length > 0 && (
                 <ul className="space-y-1 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground" data-testid="profit-missing">
@@ -250,12 +404,14 @@ export default function ProfitPage() {
               {selected?.error && <p className="text-sm text-destructive">{selected.error}</p>}
             </CardContent>
           </Card>
+          <AdSpendCard ad={selected?.ad_spend} ue={ue} currency={adCurrency} />
+          </div>
 
           <Card className="lg:col-span-3">
             <CardHeader>
               <CardTitle>Inputs for {period}</CardTitle>
               <CardDescription>
-                Numbers from <Link href="/integrations" className="underline">Shopify</Link> fill in automatically. Anything you type here is kept, even after the next sync.
+                Numbers from <Link href="/integrations" className="underline">Shopify, Shiprocket and Meta Ads</Link> fill in automatically. Anything you type here is kept, even after the next sync.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -279,7 +435,7 @@ export default function ProfitPage() {
                             {f.label}
                             {f.kind === "percent" && <span className="text-muted-foreground">(%)</span>}
                             {selected?.sources[f.key] && (
-                              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">{selected.sources[f.key]}</Badge>
+                              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">{sourceLabel(selected.sources[f.key])}</Badge>
                             )}
                           </Label>
                           <Input

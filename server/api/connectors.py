@@ -289,6 +289,7 @@ async def get_connector_status(
             "last_sync": config.get("last_sync"),
             "records_synced": config.get("records_synced", 0),
             "error": config.get("last_error"),
+            "needs_reauth": bool(config.get("needs_reauth")),
         })
         seen_ids.add(provider_id)
     
@@ -300,6 +301,7 @@ async def get_connector_status(
                 "last_sync": config.get("last_sync"),
                 "records_synced": config.get("records_synced", 0),
                 "error": config.get("last_error"),
+                "needs_reauth": bool(config.get("needs_reauth")),
             })
     
     return {
@@ -349,7 +351,8 @@ async def connect_provider(
         auth_success = await connector.authenticate()
 
         if not auth_success:
-            raise HTTPException(status_code=401, detail="Authentication failed. Check your credentials.")
+            detail = getattr(connector, "auth_error", None) or "Authentication failed. Check your credentials."
+            raise HTTPException(status_code=401, detail=detail)
 
         # Encrypt sensitive credentials before storing in database
         encrypted_creds = encrypt_credentials(credentials.credentials)
@@ -421,6 +424,11 @@ async def disconnect_provider(
         )
         .delete(synchronize_session=False)
     )
+    # Ad platforms feed the D2C ad-spend table, not FinancialRecords.
+    ad_rows_removed = 0
+    from server.services import d2c_months
+    if provider_id in d2c_months.AD_SOURCE_LABELS:
+        ad_rows_removed = d2c_months.remove_ad_source(db, company_id, provider_id)
     db.commit()
 
     if provider_id in (company.metadata_json or {}).get("connectors", {}):
@@ -429,7 +437,7 @@ async def disconnect_provider(
     return {
         "success": True,
         "provider_id": provider_id,
-        "records_removed": removed,
+        "records_removed": removed + ad_rows_removed,
         "message": "Provider disconnected",
     }
 
@@ -499,6 +507,11 @@ async def sync_provider(
 
         # STEP 2: Validate synced data BEFORE any DB commits
         if not result.success and result.errors:
+            if result.metadata.get("needs_reauth"):
+                # Expired/revoked token: remember it so the card asks to reconnect.
+                connectors[provider_id]["needs_reauth"] = True
+                connectors[provider_id]["last_error"] = result.errors[0]
+                save_metadata_value(db, company, ("connectors", provider_id), connectors[provider_id])
             error_msg = f"Connector sync validation failed: {result.errors[0]}"
             logger.warning(f"Sync validation error for {provider_id}: {error_msg}")
             raise ValueError(error_msg)
@@ -523,6 +536,7 @@ async def sync_provider(
             connectors[provider_id]["last_sync"] = datetime.utcnow().isoformat()
             connectors[provider_id]["records_synced"] = result.records_synced
             connectors[provider_id]["last_error"] = None  # Clear previous errors on success
+            connectors[provider_id].pop("needs_reauth", None)
 
             logger.info(
                 f"Sync completed for provider {provider_id}, company {company_id}: "
@@ -563,6 +577,18 @@ async def sync_provider(
                     db, company_id, date.fromisoformat(str(d2c_month["period"])[:10]),
                     d2c_month.get("values") or {}, source=provider_id,
                 )
+
+            # Ad platforms (e.g. Meta Ads) hand over spend per month and account;
+            # marketing_spend becomes the sum across platforms unless typed by hand.
+            ad_spend = result.metadata.get("ad_spend")
+            if isinstance(ad_spend, dict):
+                from server.services import d2c_months
+                for month in ad_spend.get("months") or []:
+                    if isinstance(month, dict) and month.get("period"):
+                        d2c_months.replace_ad_spend(
+                            db, company_id, date.fromisoformat(str(month["period"])[:10]),
+                            provider_id, month.get("accounts") or [],
+                        )
 
             db.commit()
 

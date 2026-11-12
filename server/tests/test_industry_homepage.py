@@ -65,7 +65,7 @@ def test_copy_respects_published_facts():
     for phrase in ("$29", "$49", "$99", "30-day", "Start Free Trial", "37 "):
         assert phrase not in text, phrase
     for count in re.findall(r"(\d+) (?:read-only )?(?:data )?connectors", text):
-        assert count == "35"
+        assert count == "36"
     assert "free during the public beta" in text.lower()
 
 

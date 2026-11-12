@@ -109,7 +109,7 @@ One page per kind of business, each with the numbers that business runs on:
   projections with P10/P50/P90 confidence bands, scenario versioning and sensitivity analysis.
 - [Digital Twin](https://founderconsole.ai/how-it-works): a continuously updated model of the
   company with health scoring and risk indicators.
-- [Integrations](https://founderconsole.ai/features): 35 read-only data connectors including
+- [Integrations](https://founderconsole.ai/features): 36 read-only data connectors including
   Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify and Salesforce.
 - [Pricing](https://founderconsole.ai/pricing) - [Security](https://founderconsole.ai/security)
   - [FAQ](https://founderconsole.ai/faq) - [Demo](https://founderconsole.ai/demo)

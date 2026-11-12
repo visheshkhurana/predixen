@@ -13,7 +13,7 @@ from server.api import d2c as d2c_api
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.company import Company
-from server.models.d2c_month import D2CMonth
+from server.models.d2c_month import D2CAdSpend, D2CMonth
 from server.models.user import User
 from server.services import d2c_months
 
@@ -21,7 +21,7 @@ from server.services import d2c_months
 @pytest.fixture
 def Session():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    User.metadata.create_all(engine, tables=[User.__table__, Company.__table__, D2CMonth.__table__])
+    User.metadata.create_all(engine, tables=[User.__table__, Company.__table__, D2CMonth.__table__, D2CAdSpend.__table__])
     S = sessionmaker(bind=engine)
     db = S()
     owner = User(email="owner@brand.in", is_active=True)

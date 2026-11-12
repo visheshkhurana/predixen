@@ -18,7 +18,7 @@
  *   - Features named here exist in the product today: Truth Scan, Scenarios,
  *     the Monte Carlo simulator, the AI copilot, the KPI board with its built-in
  *     metrics, custom metrics, the hiring planner, alerts, the Fundraising OS
- *     (CRM, cap table, dilution), the Investor Room and the 35 read-only
+ *     (CRM, cap table, dilution), the Investor Room and the 36 read-only
  *     connectors. Connector names come from server/connectors/__init__.py.
  *   - A metric is tagged `built-in` only if it is in the product's metric
  *     definitions (client/src/lib/metricDefinitions.ts). Industry metrics the
@@ -182,7 +182,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
       },
       {
         q: "Which D2C tools does it connect to?",
-        a: "Shopify, WooCommerce, RazorpayX, Tally, Zoho Books and Google Sheets are among the 35 read-only data connectors, along with Keka and greytHR for payroll. You can also upload a CSV or type numbers in.",
+        a: "Shopify, WooCommerce, RazorpayX, Tally, Zoho Books and Google Sheets are among the 36 read-only data connectors, along with Keka and greytHR for payroll. You can also upload a CSV or type numbers in.",
       },
       {
         q: "Does it publish D2C margin benchmarks?",
@@ -258,7 +258,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
       },
       {
         q: "Can it read my Stripe subscriptions?",
-        a: "Yes. Stripe is one of 35 read-only data connectors, along with Chargebee, Recurly and ProfitWell for billing and QuickBooks, Xero and NetSuite for accounting.",
+        a: "Yes. Stripe is one of 36 read-only data connectors, along with Chargebee, Recurly and ProfitWell for billing and QuickBooks, Xero and NetSuite for accounting.",
       },
       {
         q: "How much runway should a SaaS startup have?",
@@ -302,7 +302,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
       },
       {
         pain: "Payments, product analytics and the books all live in different tools.",
-        feature: "35 read-only connectors",
+        feature: "36 read-only connectors",
         detail:
           "Stripe for payments, Mixpanel, Amplitude or Google Analytics for activity, QuickBooks or Xero for spend, and a REST API for anything else.",
       },
@@ -376,7 +376,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
       },
       {
         pain: "Books in one tool, invoices in another, payroll in a third.",
-        feature: "35 read-only connectors",
+        feature: "36 read-only connectors",
         detail:
           "QuickBooks, Xero, Zoho Books, FreshBooks or Wave for the books, HubSpot or Pipedrive for the pipeline, Gusto, Deel or Keka for payroll.",
       },
@@ -409,7 +409,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
       },
       {
         q: "Which accounting tools does it connect to?",
-        a: "QuickBooks, Xero, Zoho Books, FreshBooks, Wave and NetSuite, plus HubSpot and Pipedrive for pipeline and Gusto, Deel, Rippling and Keka for payroll. All 35 connectors are read-only. CSV upload and manual entry also work.",
+        a: "QuickBooks, Xero, Zoho Books, FreshBooks, Wave and NetSuite, plus HubSpot and Pipedrive for pipeline and Gusto, Deel, Rippling and Keka for payroll. All 36 connectors are read-only. CSV upload and manual entry also work.",
       },
       FREE_DURING_BETA_FAQ,
     ],
@@ -480,7 +480,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
       },
       {
         q: "Which banking and payments data can it read?",
-        a: "Stripe, Plaid, Mercury, Brex and RazorpayX are among the 35 read-only connectors, plus NetSuite and QuickBooks for accounting and a REST API for internal systems.",
+        a: "Stripe, Plaid, Mercury, Brex and RazorpayX are among the 36 read-only connectors, plus NetSuite and QuickBooks for accounting and a REST API for internal systems.",
       },
       {
         q: "How is a Monte Carlo stress test different from a downside case?",
@@ -558,7 +558,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
       },
       {
         q: "Do I need to connect anything to start?",
-        a: "No. You can type in your numbers or upload a CSV. Connecting a bank or accounting tool through one of the 35 read-only connectors keeps them up to date.",
+        a: "No. You can type in your numbers or upload a CSV. Connecting a bank or accounting tool through one of the 36 read-only connectors keeps them up to date.",
       },
       FREE_DURING_BETA_FAQ,
     ],

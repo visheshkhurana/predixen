@@ -193,7 +193,7 @@ function ConnectorsAndLinks({ page }: { page: IndustryPage }) {
             Connect what you already use
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Among the 35 read-only data connectors. CSV upload and manual entry work too.
+            Among the 36 read-only data connectors. CSV upload and manual entry work too.
           </p>
           <ul className="mt-4 flex flex-wrap gap-2" data-testid="industry-connectors">
             {page.connectors.map((c) => (

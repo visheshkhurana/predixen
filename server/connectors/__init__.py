@@ -18,6 +18,7 @@ _CONNECTOR_MODULES = [
     "ramp", "shopify", "mysql_connector", "freshbooks", "wave",
     "bench", "chargebee", "recurly", "rippling", "deel",
     "netsuite", "profitwell", "amplitude", "woocommerce", "shiprocket",
+    "meta_ads",
 ]
 
 _connectors_loaded = False

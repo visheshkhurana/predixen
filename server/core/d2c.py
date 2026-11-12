@@ -8,6 +8,11 @@ MRR. The layers, all ex-GST and per period:
     CM2 = CM1 - fulfilment - payment_costs           (after getting it there)
     CM3 = CM2 - marketing                            (after acquiring the order)
 
+MER (marketing efficiency ratio) = net_revenue / marketing spend, from the
+store's revenue, never an ad platform's attributed revenue. Break-even MER =
+net_revenue / CM2: below it, marketing costs more than the margin it buys
+(CM3 < 0). It needs CM2, and is undefined when CM2 is not positive.
+
 where
 
     fulfilment    = forward shipping on every shipped order
@@ -74,6 +79,7 @@ class D2CUnitEconomics:
     cm2_per_order: Optional[float]
     cm3_per_order: Optional[float]
     mer: Optional[float]  # net revenue / marketing spend (blended ROAS)
+    break_even_mer: Optional[float]  # MER at which CM3 is zero: net revenue / CM2
     cac: Optional[float]
     missing: List[str] = field(default_factory=list)
 
@@ -185,6 +191,7 @@ def compute_unit_economics(inp: D2CPeriodInputs) -> D2CUnitEconomics:
         cm2_per_order=_per(cm2, delivered),
         cm3_per_order=_per(cm3, delivered),
         mer=mer,
+        break_even_mer=(net_revenue / cm2) if cm2 is not None and cm2 > 0 else None,
         cac=cac,
         missing=missing,
     )
