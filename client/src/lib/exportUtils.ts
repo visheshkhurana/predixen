@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev, formatCurrencyFull } from '@/lib/utils';
 export function printSimulationResults(): void {
   window.print();
 }
@@ -82,7 +83,7 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
         if (key.includes('margin') || key.includes('growth') || key.includes('rate')) {
           formattedValue = `${(value * 100).toFixed(1)}%`;
         } else if (key.includes('revenue') || key.includes('burn') || key.includes('cash')) {
-          formattedValue = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+          formattedValue = formatCurrencyFull(value);
         } else {
           formattedValue = value.toLocaleString();
         }
@@ -277,9 +278,8 @@ const PDF_COLORS = {
 };
 
 function fmtCurrency(v: number): string {
-  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
-  return `$${v.toFixed(0)}`;
+  // jsPDF's built-in fonts have no rupee glyph, so spell it out in the PDF.
+  return formatCurrencyAbbrev(v).replace('₹', 'Rs ');
 }
 
 export async function downloadSimulationPDF(data: SimulationPDFData) {

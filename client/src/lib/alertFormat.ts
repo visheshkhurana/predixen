@@ -18,13 +18,18 @@ export function safeFormat(format: (v: number) => string): (v: unknown) => strin
 }
 
 /** Value for a metric-health card, keyed by metric name. */
-export function formatAlertValue(value: unknown, metric: string): string {
+export function formatAlertValue(
+  value: unknown,
+  metric: string,
+  formatMoney?: (v: number) => string,
+): string {
   if (!isNum(value)) return "N/A";
   if (metric.includes("runway")) return `${value.toFixed(1)} mo`;
   if (metric.includes("multiple")) return `${value.toFixed(2)}x`;
   if (metric.includes("margin") || metric.includes("rate") || metric.includes("growth")) {
     return `${(value * 100).toFixed(1)}%`;
   }
+  if (formatMoney) return formatMoney(value);
   const sign = value < 0 ? "-" : "";
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;

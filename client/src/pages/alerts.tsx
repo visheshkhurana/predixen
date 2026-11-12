@@ -44,7 +44,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import { cn, formatRunwayInline, isRunwaySustainable } from "@/lib/utils";
+import { cn, formatRunwayInline, isRunwaySustainable, formatCurrencyAbbrev } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatAlertValue, formatMetricChange, isNum, safeFormat } from "@/lib/alertFormat";
@@ -232,7 +232,7 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
     { key: "burn_multiple", label: "Burn Multiple", unit: "x", format: safeFormat((v: number) => v.toFixed(2)) },
     { key: "revenue_growth_mom", label: "Revenue Growth", unit: "%", format: safeFormat((v: number) => (v * 100).toFixed(1)) },
     { key: "gross_margin", label: "Gross Margin", unit: "%", format: safeFormat((v: number) => (v * 100).toFixed(1)) },
-    { key: "net_burn", label: "Net Burn", unit: "", format: safeFormat((v: number) => `$${(v / 1000).toFixed(0)}K`) },
+    { key: "net_burn", label: "Net Burn", unit: "", format: safeFormat((v: number) => formatCurrencyAbbrev(v)) },
     { key: "churn_rate", label: "Churn Rate", unit: "%", format: safeFormat((v: number) => (v * 100).toFixed(2)) },
   ];
 
@@ -608,7 +608,7 @@ function generateThresholdAlerts(metrics: ReturnType<typeof useFinancialMetrics>
       type: 'cash_critical',
       severity: 'critical',
       title: 'Cash Balance Critical',
-      message: `Cash reserves at $${(metrics.cashOnHand / 1000).toFixed(0)}K — dangerously low. Immediate fundraising required.`,
+      message: `Cash reserves at ${formatCurrencyAbbrev(metrics.cashOnHand)} — dangerously low. Immediate fundraising required.`,
       metric: 'cash_balance',
       currentValue: metrics.cashOnHand,
       previousValue: 0,
@@ -751,7 +751,7 @@ export default function AlertsPage() {
   const formatValue = (value: unknown, metric: string) =>
     metric === "runway_months" && isNum(value) && isRunwaySustainable(value)
       ? "Sustainable"
-      : formatAlertValue(value, metric);
+      : formatAlertValue(value, metric, (v) => formatCurrencyAbbrev(v));
 
   const getOverallStatusBadge = (status: string) => {
     switch (status) {

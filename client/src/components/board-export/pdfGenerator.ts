@@ -1,3 +1,5 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
+
 export interface MetricItem {
   label: string;
   value: string;
@@ -101,9 +103,7 @@ export function downloadAsHTML(slides: SlideData[], companyName: string) {
 }
 
 function fmtCurrency(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n.toFixed(0)}`;
+  return formatCurrencyAbbrev(n);
 }
 
 function buildSvgLineChart(

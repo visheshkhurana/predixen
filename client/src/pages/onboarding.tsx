@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
@@ -37,10 +38,9 @@ const STAGE_DEFAULTS: Record<string, { monthly_revenue: number; gross_margin_pct
   growth: { monthly_revenue: 1000000, gross_margin_pct: 75, opex: 200000, payroll: 400000, other_costs: 50000, cash_balance: 10000000, headcount: 120 },
 };
 
-function formatCurrency(value: number): string {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${value.toLocaleString()}`;
+// Onboarding runs before the company exists, so use the currency picked on this form.
+function formatCurrency(value: number, currency: string): string {
+  return formatCurrencyAbbrev(value, currency);
 }
 
 type BaselineNumbers = {
@@ -1131,7 +1131,7 @@ export default function OnboardingPage() {
                         <span className="text-sm font-medium text-muted-foreground">Net Burn Rate</span>
                       </div>
                       <p className="text-2xl font-bold" data-testid="text-burn-value">
-                        {hasBaselineNumbers && totalExpenses > 0 ? formatCurrency(Math.abs(netBurn)) : 'N/A'}
+                        {hasBaselineNumbers && totalExpenses > 0 ? formatCurrency(Math.abs(netBurn), companyData.currency) : 'N/A'}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {!hasBaselineNumbers || totalExpenses === 0

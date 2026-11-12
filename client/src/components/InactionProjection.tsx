@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   AlertTriangle, Clock, TrendingDown, Flame
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyFull } from '@/lib/utils';
 
 interface InactionData {
   months_to_crisis: number;
@@ -84,7 +84,7 @@ export function InactionProjection({ data }: InactionProjectionProps) {
               {data.cash_at_crisis !== undefined && (
                 <span className="flex items-center gap-1">
                   <TrendingDown className="h-3 w-3 text-red-400" />
-                  Cash at crisis: ${data.cash_at_crisis.toLocaleString()}
+                  Cash at crisis: {formatCurrencyFull(data.cash_at_crisis)}
                 </span>
               )}
             </div>
