@@ -55,6 +55,9 @@ jobs:
       - name: Typecheck (must not exceed error budget)
         run: bash scripts/tsc-error-budget.sh
 
+      - name: INR lakh/crore formatting tests
+        run: npx tsx server/tests/inr-format.test.ts
+
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
 
