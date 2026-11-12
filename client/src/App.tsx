@@ -146,6 +146,7 @@ const DefaultAlivePage = lazy(() => import("@/pages/default-alive"));
 const BurnMultiplePage = lazy(() => import("@/pages/burn-multiple"));
 const DilutionPage = lazy(() => import("@/pages/dilution"));
 const LtvCacPage = lazy(() => import("@/pages/ltv-cac"));
+const D2cContributionMarginPage = lazy(() => import("@/pages/d2c-contribution-margin"));
 const ToolsIndexPage = lazy(() => import("@/pages/tools-index"));
 const VsRunwayCalculatorVsSpreadsheetPage = lazy(() => import("@/pages/vs-runway-calculator-vs-spreadsheet"));
 const AiCfoPage = lazy(() => import("@/pages/ai-cfo"));
@@ -341,6 +342,7 @@ function Router() {
         <Route path="/tools/dilution">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DilutionPage /></Suspense>}</Route>
 
         <Route path="/tools/ltv-cac">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><LtvCacPage /></Suspense>}</Route>
+        <Route path="/tools/d2c-contribution-margin">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><D2cContributionMarginPage /></Suspense>}</Route>
         <Route path="/vs/runway-calculator-vs-spreadsheet">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><VsRunwayCalculatorVsSpreadsheetPage /></Suspense>}</Route>
         <Route path="/default-alive">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DefaultAlivePage /></Suspense>}</Route>
         <Route path="/tools/burn-multiple">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BurnMultiplePage /></Suspense>}</Route>
