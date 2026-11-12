@@ -13,6 +13,24 @@ import { founderFaqs } from "../client/src/data/founder-faqs";
 // Same rule again: the "Cite FounderConsole" block a crawler is served and the one the
 // React footer renders come from one string, so they cannot drift.
 import { aiCitation } from "../client/src/data/ai-citation";
+// Legal entity, grievance officer, refund terms and the paid price: one copy each,
+// shared with the React pages. The price itself comes from shared/pricing.json,
+// which server/core/plans.py also reads, so what a reviewer reads here is what
+// checkout charges.
+import {
+  LEGAL_ENTITY_NAME,
+  PRODUCT_OF_LINE,
+  SUPPORT_EMAIL,
+  FIRST_PAYMENT_REFUND_WINDOW_DAYS,
+  REFUND_PROCESSING_TIME,
+  GOVERNING_LAW,
+  JURISDICTION_COURTS,
+  registeredAddress,
+  grievanceOfficer,
+} from "../client/src/data/legal";
+import { STARTER_PRICES, ANNUAL_LABEL } from "../client/src/data/public-pricing";
+import { razorpayBillingEnabled } from "./billing-gate";
+import { pricingFaq, type PricingFaqKey } from "../client/src/data/pricing-faq";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -69,8 +87,19 @@ const citationBlock = `<h2>${escapeHtml(aiCitation.heading)}</h2>
   .map((l) => `<li><a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a></li>`)
   .join("")}</ul>`;
 
+/**
+ * The landing FAQ for the current billing state. With payments off it is the
+ * text above, byte for byte; with Razorpay live, "Is FounderConsole free?" gets
+ * the paid-state answer from pricing-faq.ts (Free plan + real Starter price).
+ */
+function landingFaqsFor(paid: boolean): { q: string; a: string }[] {
+  if (!paid) return landingFaqs;
+  const isFree = pricingFaq(true)["is-free"];
+  return landingFaqs.map((f) => (f.q === isFree.q ? isFree : f));
+}
+
 function buildLandingBodyContent(): string {
-  const faqHtml = landingFaqs.map((f) =>
+  const faqHtml = landingFaqsFor(razorpayBillingEnabled()).map((f) =>
     `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p></section>`
   ).join("");
 
@@ -317,14 +346,65 @@ function esc(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function buildPricingBodyContent(): string {
+/**
+ * The legal-entity block every legal page ends with. The address line is
+ * emitted only once the owner has replaced the TODO placeholder in
+ * client/src/data/legal.ts, so no fake address is ever served.
+ */
+function legalEntityHtml(): string {
+  const address = registeredAddress();
+  return `<p>${escapeHtml(PRODUCT_OF_LINE)}${
+    address ? ` Registered office: ${escapeHtml(address)}.` : ""
+  } Email: <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>`;
+}
+
+/** Grievance Officer (Indian IT Rules, 2021). Name only once filled in. */
+function grievanceOfficerHtml(): string {
+  const officer = grievanceOfficer();
+  return `<h2>Grievance Officer</h2>
+<p>In accordance with the Information Technology Act, 2000 and the rules made under it, complaints about content or the processing of your information can be sent to our Grievance Officer${
+    officer.name ? `, ${escapeHtml(officer.name)}` : ""
+  }, at <a href="mailto:${escapeHtml(officer.email)}">${escapeHtml(officer.email)}</a>. We acknowledge complaints within 24 hours and resolve them within 15 days of receipt.</p>`;
+}
+
+function pricingPaidSectionHtml(): string {
+  const inr = STARTER_PRICES.INR;
+  const usd = STARTER_PRICES.USD;
+  const aed = STARTER_PRICES.AED;
+  return `<h2>Plans</h2>
+<ul>
+<li><strong>Free</strong> — ₹0, forever. 1 company, 3 simulations a month, 10 copilot messages a month, CSV upload and the basic dashboard.</li>
+<li><strong>Starter</strong> — ${inr.monthlyLabel}/month, or ${inr.annualLabel}/year (${escapeHtml(ANNUAL_LABEL)}). International customers: ${usd.monthlyLabel}/month (${usd.annualLabel}/year) or ${aed.monthlyLabel}/month (${aed.annualLabel}/year). 50 simulations a month, 100 copilot messages a month, 2 data connectors, Truth Scan and stress tests, industry benchmarks and PDF export.</li>
+</ul>
+<p>Subscriptions are billed in advance, monthly or annually, through Razorpay, and renew automatically until cancelled. You can cancel anytime from Billing; see the <a href="/refund-policy">Refund &amp; Cancellation Policy</a>.</p>`;
+}
+
+function buildPricingBodyContent(paid = false): string {
+  if (paid) {
+    return `<article>
+<h1>Pricing</h1>
+<p>Start free, and upgrade to Starter when you want live connectors and more simulations. No credit card is required for the Free plan.</p>
+${pricingPaidSectionHtml()}
+<h2>What is included</h2>
+<p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, industry benchmarks and PDF export. See the full list on <a href="/features">features</a>.</p>
+<h2>Free tools that need no account at all</h2>
+<ul>
+<li><a href="/tools/runway-calculator">Startup runway calculator</a> — months of runway and a cash-out date from your numbers</li>
+<li><a href="/default-alive">Default alive or default dead</a> — Paul Graham's test as a calculator</li>
+<li><a href="/survival-simulator">Startup survival simulator</a> — 1,000 Monte Carlo runs for survival probability</li>
+<li><a href="/tools">All free tools</a> — the full index, including the burn multiple, dilution and LTV:CAC calculators</li>
+</ul>
+<p>When you're ready, <a href="/signup">get started free</a>. Questions about billing? <a href="/contact">Contact us</a>.</p>
+${legalEntityHtml()}
+</article>`;
+  }
   return `<article>
 <h1>Pricing</h1>
 <p>Every FounderConsole feature is free during the public beta. No credit card is required to start, and there is no trial clock running in the background.</p>
 <h2>What is included</h2>
 <p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, cap table and dilution modelling, the fundraising CRM, board deck generation, and all 35 data connectors. See the full list on <a href="/features">features</a>.</p>
 <h2>What happens after the beta</h2>
-<p>Paid tiers will be introduced once the beta ends. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
+<p>Paid plans will be introduced once the beta ends. When they start, Starter will be ${STARTER_PRICES.INR.monthlyLabel}/month, or ${STARTER_PRICES.INR.annualLabel}/year (${escapeHtml(ANNUAL_LABEL)}); international customers pay ${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} a month. The Free plan stays free. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
 <h2>Free tools that need no account at all</h2>
 <p>Try these before you sign up — results in under a minute, no email required to see the answer:</p>
 <ul>
@@ -599,14 +679,22 @@ function buildAboutBodyContent(): string {
 </article>`;
 }
 
-const faqSections = [
+// Pricing answers come from client/src/data/pricing-faq.ts (numbers from
+// shared/pricing.json) and are resolved per request against the billing gate,
+// the same rule /pricing uses. A slot marks where each one goes.
+type FaqEntry = { q: string; a: string; pricingKey?: PricingFaqKey };
+function PRICING_FAQ_SLOT(key: PricingFaqKey): FaqEntry {
+  return { q: "", a: "", pricingKey: key };
+}
+
+const faqSectionsTemplate: { title: string; items: FaqEntry[] }[] = [
   {
     title: "Getting Started",
     items: [
       { q: "What is FounderConsole?", a: "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 35 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions." },
       { q: "How does FounderConsole help founders?", a: "FounderConsole helps founders by transforming financial uncertainty into measurable probability. Instead of relying on gut feelings, you get Monte Carlo simulations that show the range of possible outcomes, an AI copilot that answers financial questions using your real data, automated data validation (Truth Scan) that catches errors before they reach your board, and strategic briefings that explain your risks and opportunities in plain English." },
       { q: "What metrics does FounderConsole track?", a: "FounderConsole tracks over 24 financial health metrics including MRR, ARR, runway, burn rate, CAC, LTV, LTV:CAC ratio, churn rate, gross margin, NRR, ARPU, active customers, and headcount. Each metric includes a confidence score showing how reliable the data is." },
-      { q: "Is FounderConsole free?", a: "Yes — FounderConsole is completely free while we're in early access. Every feature is unlocked and no credit card is required. Planned pricing after early access is shown on the pricing page; we'll give plenty of notice before anything changes." },
+      PRICING_FAQ_SLOT("is-free"),
       { q: "What is a startup digital twin?", a: "A startup digital twin is a continuously-updated virtual representation of your company inside FounderConsole. It integrates your real financial data, simulation results, strategic decisions, and alerts into a single live model with health scoring and risk indicators." },
       { q: "How do I get started?", a: "Sign up for free (no credit card required), connect one or more data sources like QuickBooks, Stripe, or Mercury, and you'll have a baseline forecast with confidence intervals within 5 minutes." },
       { q: "Is there a demo I can try?", a: "Yes — you can sign in with demo credentials or watch our product walkthrough on the Demo page. The demo includes sample company data so you can explore simulations, the AI copilot, and reporting features without connecting your own data." },
@@ -631,14 +719,22 @@ const faqSections = [
   {
     title: "Pricing & Plans",
     items: [
-      { q: "Do I need to pay anything right now?", a: "No. Everything is free while we're in early access — every feature is unlocked, with no credit card required. We'll announce paid plans well in advance before anything changes." },
-      { q: "What will the paid plans cost later?", a: "Our planned pricing is Starter $29/month, Growth $49/month, and Scale $99/month. None of this is active yet — it's what we intend to charge once we exit early access." },
+      PRICING_FAQ_SLOT("pay-now"),
+      PRICING_FAQ_SLOT("cost"),
       { q: "Do you offer enterprise pricing?", a: "Yes — if you need custom integrations, dedicated support, or team-level access controls, contact us to discuss enterprise options." },
     ],
   },
 ];
 
-function buildFaqBodyContent(): string {
+function faqSectionsFor(paid: boolean): { title: string; items: { q: string; a: string }[] }[] {
+  const pricing = pricingFaq(paid);
+  return faqSectionsTemplate.map((section) => ({
+    title: section.title,
+    items: section.items.map((item) => (item.pricingKey ? pricing[item.pricingKey] : item)),
+  }));
+}
+
+function buildFaqBodyContent(faqSections = faqSectionsFor(razorpayBillingEnabled())): string {
   const sectionsHtml = faqSections.map((section) => {
     const items = section.items.map((item) =>
       `<section><h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p></section>`
@@ -656,7 +752,7 @@ ${sectionsHtml}
 </article>`;
 }
 
-function buildFaqJsonLd(): object {
+function buildFaqJsonLd(faqSections = faqSectionsFor(razorpayBillingEnabled())): object {
   const mainEntity = faqSections.flatMap((s) =>
     s.items.map((item) => ({
       "@type": "Question",
@@ -690,6 +786,10 @@ function buildContactBodyContent(): string {
 <li><strong>Response time</strong> — Within 24 hours</li>
 </ul>
 <p>Prefer email? Write <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> directly and use the same subjects above in your subject line.</p>
+<h2>Company</h2>
+${legalEntityHtml()}
+<p>Billing questions, cancellations and refunds: see the <a href="/refund-policy">Refund &amp; Cancellation Policy</a>.</p>
+${grievanceOfficerHtml()}
 <h2>Prefer to explore first?</h2>
 <p>Try free tools with no account: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/default-alive">default alive test</a>, or the <a href="/survival-simulator">startup survival simulator</a>. See what is included on <a href="/features">features</a> and <a href="/pricing">pricing</a>, or walk through the <a href="/demo">interactive demo</a>. When you are ready for live data and ongoing forecasts, <a href="/signup">get started free</a>.</p>
 </article>`;
@@ -699,7 +799,7 @@ function buildPrivacyBodyContent(): string {
   return `<article>
 <h1>Privacy Policy</h1>
 <p>Last updated: March 2026</p>
-<p>FounderConsole ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our platform.</p>
+<p>FounderConsole ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our platform. ${escapeHtml(PRODUCT_OF_LINE)} ${escapeHtml(LEGAL_ENTITY_NAME)} is responsible for your information under this policy.</p>
 <h2>Information We Collect</h2>
 <ul>
 <li><strong>Account Information:</strong> Your email address, name, and password when you register.</li>
@@ -727,6 +827,43 @@ function buildPrivacyBodyContent(): string {
 </ul>
 <h2>Your Rights</h2>
 <p>You may access, correct, delete, or export your data, and withdraw consent for integrations or analytics at any time. Contact <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a>. See also our <a href="/terms">Terms of Service</a>.</p>
+<h2>Payments</h2>
+<p>Subscription payments are processed by Razorpay. We do not store your full card or bank details on our servers; Razorpay handles them under its own privacy policy.</p>
+${grievanceOfficerHtml()}
+<h2>Company</h2>
+${legalEntityHtml()}
+</article>`;
+}
+
+function buildRefundPolicyBodyContent(): string {
+  const p = STARTER_PRICES;
+  const days = FIRST_PAYMENT_REFUND_WINDOW_DAYS;
+  return `<article>
+<h1>Refund &amp; Cancellation Policy</h1>
+<p>Last updated: November 2026</p>
+<p>This policy explains how cancellations and refunds work for paid FounderConsole subscriptions. ${escapeHtml(PRODUCT_OF_LINE)} In this policy, "we", "our" and "us" mean ${escapeHtml(LEGAL_ENTITY_NAME)}.</p>
+<h2>Subscription plans and billing</h2>
+<p>FounderConsole is a software-as-a-service subscription. Paid plans are billed in advance through Razorpay, monthly or annually, and renew automatically at the end of each billing period until cancelled.</p>
+<ul>
+<li><strong>Starter, monthly</strong> — ${p.INR.monthlyLabel} / ${p.USD.monthlyLabel} / ${p.AED.monthlyLabel} per month</li>
+<li><strong>Starter, annual</strong> — ${p.INR.annualLabel} / ${p.USD.annualLabel} / ${p.AED.annualLabel} per year (${escapeHtml(ANNUAL_LABEL)})</li>
+</ul>
+<p>Your charge currency follows the currency set for your company in FounderConsole: INR if it is INR, AED if it is AED, and USD otherwise. Current prices are always shown on <a href="/pricing">pricing</a>. The Free plan is never charged.</p>
+<h2>Cancellation</h2>
+<p>You can cancel anytime from Billing in your FounderConsole account. Cancellation takes effect at the end of the current billing period: you keep paid access until then, and no further charges are made after you cancel. You can also cancel by writing to <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a> from your account email.</p>
+<h2>Refunds</h2>
+<ul>
+<li><strong>No partial-period refunds.</strong> Fees already paid for the current billing period, monthly or annual, are not refunded when you cancel or downgrade, except as set out below.</li>
+<li><strong>First payment.</strong> If you are not satisfied, you can request a full refund within ${days} days of the first payment of a new subscription. This applies once per customer, to the first payment only, not to renewals.</li>
+<li><strong>Duplicate or erroneous charges.</strong> If you were charged twice, or charged in error, we refund the incorrect charge in full.</li>
+</ul>
+<h2>How refunds are processed</h2>
+<p>Approved refunds are issued through Razorpay to the original payment method. The amount reaches your account within ${escapeHtml(REFUND_PROCESSING_TIME)} of approval, depending on your bank or card issuer. We do not refund to a different card, account or wallet.</p>
+<h2>How to request a refund</h2>
+<p>Email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a> from the email address on your account, with the payment date and the Razorpay payment ID if you have it. We reply within 2 business days.</p>
+<h2>Contact</h2>
+${legalEntityHtml()}
+<p>See also our <a href="/terms">Terms of Service</a>, <a href="/privacy">Privacy Policy</a> and <a href="/contact">contact page</a>.</p>
 </article>`;
 }
 
@@ -734,11 +871,11 @@ function buildTermsBodyContent(): string {
   return `<article>
 <h1>Terms of Service</h1>
 <p>Last updated: July 2026</p>
-<p>These Terms of Service ("Terms") govern your use of FounderConsole ("the Service"), operated by FounderConsole ("we", "our", "us"). By accessing or using the Service, you agree to be bound by these Terms.</p>
+<p>These Terms of Service ("Terms") govern your use of FounderConsole ("the Service"), operated by ${escapeHtml(LEGAL_ENTITY_NAME)} ("we", "our", "us"). ${escapeHtml(PRODUCT_OF_LINE)} By accessing or using the Service, you agree to be bound by these Terms.</p>
 <h2>Service Description</h2>
 <p>FounderConsole is an AI-powered financial intelligence platform for startups. The Service provides financial dashboards and KPI tracking, Monte Carlo simulations and scenario modeling, an AI-powered copilot for financial analysis, data integrations with accounting, payroll, and payment platforms, and cap table management and fundraising tools.</p>
 <h2>Subscriptions &amp; Billing</h2>
-<p>The Service offers a Free plan and paid subscription plans. New accounts may start a one-time 30-day free trial with full feature access. Payments are processed securely by Stripe. Subscriptions renew automatically until cancelled. Founding accounts created before paid plans launched retain complimentary access at our discretion with at least 30 days' notice before changes.</p>
+<p>The Service offers a Free plan and paid subscription plans. New accounts may start a one-time 30-day free trial with full feature access. Payments are processed securely by Razorpay. Subscriptions renew automatically until cancelled. You can cancel anytime from Billing; cancellation takes effect at the end of the current billing period. Refunds are available within ${FIRST_PAYMENT_REFUND_WINDOW_DAYS} days of the first payment of a new subscription and for duplicate or erroneous charges, as set out in our <a href="/refund-policy">Refund &amp; Cancellation Policy</a>. Founding accounts created before paid plans launched retain complimentary access at our discretion with at least 30 days' notice before changes.</p>
 <h2>Service Disclaimer</h2>
 <p>The Service is under active development and may contain bugs or incomplete functionality. AI-generated insights, simulations, and recommendations are informational only and should not be the sole basis for financial, investment, or business decisions. FounderConsole does not provide financial, legal, or investment advice.</p>
 <h2>Account Terms &amp; Acceptable Use</h2>
@@ -748,7 +885,9 @@ function buildTermsBodyContent(): string {
 <h2>Data Rights &amp; Intellectual Property</h2>
 <p>You retain full ownership of data you upload. We claim a limited license to process it solely to provide the Service. We will not sell or rent your data except as described in our <a href="/privacy">Privacy Policy</a>. The Service's design, code, algorithms, and AI models are owned by FounderConsole.</p>
 <h2>Governing Law</h2>
-<p>These Terms are governed by the laws of the State of California, United States. Contact <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> with questions.</p>
+<p>These Terms are governed by ${GOVERNING_LAW}, and disputes are subject to the exclusive jurisdiction of ${JURISDICTION_COURTS}. Contact <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> with questions.</p>
+<h2>Company</h2>
+${legalEntityHtml()}
 </article>`;
 }
 
@@ -875,7 +1014,7 @@ function getPageMeta(path: string): PageMeta | null {
         {
           "@context": "https://schema.org",
           "@type": "FAQPage",
-          mainEntity: landingFaqs.map((f) => ({
+          mainEntity: landingFaqsFor(razorpayBillingEnabled()).map((f) => ({
             "@type": "Question",
             name: f.q,
             acceptedAnswer: { "@type": "Answer", text: f.a },
@@ -903,18 +1042,58 @@ function getPageMeta(path: string): PageMeta | null {
   }
 
   if (path === "/pricing") {
+    // The title is pinned by scripts/launch_gate.sh (HAG-471); only the body and
+    // description change with the billing gate.
+    const paid = razorpayBillingEnabled();
+    const description = paid
+      ? `FounderConsole pricing: Free forever, or Starter at ${STARTER_PRICES.INR.monthlyLabel}/month (${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} internationally), billed monthly or annually.`
+      : "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.";
+    const jsonLd: object[] = [{
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      name: "Pricing | FounderConsole",
+      url: SITE_URL + "/pricing",
+      description,
+      isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+    }];
+    if (paid) {
+      jsonLd.push({
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: "FounderConsole Starter",
+        brand: { "@type": "Brand", name: "FounderConsole" },
+        offers: (["INR", "USD", "AED"] as const).map((c) => ({
+          "@type": "Offer",
+          price: String(STARTER_PRICES[c].monthly),
+          priceCurrency: c,
+          url: SITE_URL + "/pricing",
+        })),
+      });
+    }
     return {
       title: "Pricing | FounderConsole",
-      description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.",
+      description,
       canonical: SITE_URL + "/pricing",
-      bodyContent: buildPricingBodyContent(),
+      bodyContent: buildPricingBodyContent(paid),
+      jsonLd,
+    };
+  }
+
+  if (path === "/refund-policy") {
+    const description = `How cancellations and refunds work for FounderConsole subscriptions billed through Razorpay. Cancel anytime; refunds within ${FIRST_PAYMENT_REFUND_WINDOW_DAYS} days of your first payment.`;
+    return {
+      title: "Refund & Cancellation Policy | FounderConsole",
+      description,
+      canonical: SITE_URL + "/refund-policy",
+      bodyContent: buildRefundPolicyBodyContent(),
       jsonLd: [{
         "@context": "https://schema.org",
         "@type": "WebPage",
-        name: "Pricing | FounderConsole",
-        url: SITE_URL + "/pricing",
-        description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.",
+        name: "Refund & Cancellation Policy | FounderConsole",
+        url: SITE_URL + "/refund-policy",
+        description,
         isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+        publisher: { "@type": "Organization", name: LEGAL_ENTITY_NAME },
       }],
     };
   }

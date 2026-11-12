@@ -5,6 +5,12 @@ import type { Request, Response, NextFunction } from "express";
 // users nor Google can recover from, and the bare path gets no SSR.
 export const LEGACY_REDIRECTS: Record<string, string> = {
   "/runway-calculator": "/tools/runway-calculator",
+  // Payment-gateway reviewers (Razorpay) and customers guess these names for
+  // the one policy page. A 301 keeps a single canonical URL.
+  "/cancellation-policy": "/refund-policy",
+  "/refunds": "/refund-policy",
+  "/refund": "/refund-policy",
+  "/cancellation-and-refund-policy": "/refund-policy",
 };
 
 export function legacyRedirects() {

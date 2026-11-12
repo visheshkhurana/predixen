@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -86,9 +87,7 @@ function formatValue(value: number, unit: string | null, format: string): string
   if (value === null || value === undefined || isNaN(value)) return "—";
   
   if (format === "currency" || unit === "USD") {
-    if (Math.abs(value) >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(1)}K`;
-    return `$${value.toFixed(0)}`;
+    return formatCurrencyAbbrev(value);
   }
   
   if (format === "percentage" || unit === "%") {

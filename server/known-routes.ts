@@ -117,6 +117,7 @@ export const APP_ROUTE_PATTERNS: readonly string[] = [
   "/profile",
   "/qa",
   "/referral",
+  "/refund-policy",
   "/register",
   "/reset-password",
   "/runway/:slug",

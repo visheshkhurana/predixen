@@ -97,6 +97,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import currency as currency_api
     from server.api import leads as leads_api
     from server.api import d2c as d2c_api
+    from server.api import contact as contact_api
     from server.api import events as events_api
     from server.api import cap_table as cap_table_api
     from server.api import hiring_planner as hiring_planner_api
@@ -173,6 +174,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(leads_api.router)
     app.include_router(d2c_api.router)
     app.include_router(d2c_api.company_router)
+    app.include_router(contact_api.router)
     app.include_router(events_api.router)
     app.include_router(cap_table_api.router)
     app.include_router(hiring_planner_api.router)
@@ -260,6 +262,14 @@ async def _run_deferred_startup():
             logger.info("Ensured stripe reconciliation table exists")
         except Exception as e:
             logger.warning(f"Could not ensure stripe reconciliation table: {e}")
+
+        try:
+            from server.models.razorpay_billing import RazorpaySubscription, RazorpayWebhookEvent
+            RazorpaySubscription.__table__.create(bind=engine, checkfirst=True)
+            RazorpayWebhookEvent.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured razorpay billing tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure razorpay billing tables: {e}")
 
         # #176 columns. create_all does not alter an existing leads table, and
         # production leaves RUN_MIGRATIONS off, so this is not behind that flag.
@@ -492,6 +502,7 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/auth/refresh",
     "/companies/*/seed-sample",
     "/billing/webhook",  # Stripe webhook — authenticated by signature, not session
+    "/billing/razorpay/webhook",  # Razorpay webhook — X-Razorpay-Signature HMAC
     # RFC 8058 one-click POST has no session and no CSRF header.
     "/email/unsubscribe",
     "/api/email/unsubscribe",

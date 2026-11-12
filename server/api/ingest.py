@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from server.core.uploads import read_upload_capped
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Dict, Any, Optional, List
@@ -83,6 +84,15 @@ class ExtractionResponse(BaseModel):
     fileName: str
     uploadId: Optional[int] = None
     calculatedMetrics: Dict[str, Any]
+
+def _detected_currency(value: Any) -> Optional[str]:
+    """A supported ISO code the extractor found, or None."""
+    from server.services.currency import SUPPORTED_CURRENCIES
+    if not isinstance(value, str):
+        return None
+    code = value.strip().upper()
+    return code if code in SUPPORTED_CURRENCIES else None
+
 
 def normalize_currency_value(value: Any) -> Optional[float]:
     """Normalize a currency or percentage value to float, handling various formats.
@@ -337,9 +347,8 @@ async def ingest_financials(
     if fileType == 'excel' and file_ext not in ['.xls', '.xlsx']:
         raise HTTPException(status_code=400, detail="File must be an Excel file (.xls or .xlsx)")
     
+    content = await read_upload_capped(file)
     try:
-        content = await file.read()
-        
         suffix = '.pdf' if fileType == 'pdf' else file_ext
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
             tmp_file.write(content)
@@ -352,7 +361,7 @@ async def ingest_financials(
                 )
                 raw_metrics = result.get('raw_metrics', result)
                 extracted_company_name = result.get('company_name')
-                extracted_currency = result.get('currency', 'USD')
+                extracted_currency = result.get('currency')
                 extraction_summary = result.get('summary')
             else:
                 result = process_termina_excel(
@@ -360,7 +369,7 @@ async def ingest_financials(
                 )
                 raw_metrics = result.get('raw_metrics', result.get('baseline_data', {}))
                 extracted_company_name = raw_metrics.get('company_name')
-                extracted_currency = raw_metrics.get('currency', 'USD')
+                extracted_currency = raw_metrics.get('currency')
                 extraction_summary = None
             
             extracted = extract_with_confidence(raw_metrics, fileType)
@@ -376,8 +385,12 @@ async def ingest_financials(
             if extracted_company_name and extracted_company_name.strip():
                 company.name = extracted_company_name.strip()
                 logger.info(f"Updated company name to: {extracted_company_name}")
-            if extracted_currency:
-                company.currency = extracted_currency
+            # Only a currency the document actually states may change the
+            # company's. Defaulting a missing one to "USD" here reset every
+            # INR company to dollars on its first upload.
+            detected_currency = _detected_currency(extracted_currency)
+            if detected_currency:
+                company.currency = detected_currency
             db.commit()
             
             dataset = Dataset(
