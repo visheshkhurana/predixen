@@ -14,11 +14,28 @@ from server.models.financial import FinancialRecord
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+def is_platform_admin(user) -> bool:
+    """True for the master session, or a verified account whose email matches ADMIN_MASTER_EMAIL.
+
+    A plain email match is not enough: an unverified account could have been
+    registered for that address by someone who does not own the inbox.
+    """
+    if user is None:
+        return False
+    if is_master_user(user):
+        return True
+    admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
+    if not admin_email:
+        return False
+    user_email = (getattr(user, "email", "") or "").lower().strip()
+    return user_email == admin_email and getattr(user, "is_email_verified", False) is True
+
+
 def require_platform_admin(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Ensures only the platform owner (whose email matches ADMIN_MASTER_EMAIL or is MasterUser)
-    can access admin endpoints. This is NOT a company-level role check.
-    All MasterUser access is logged for audit purposes.
+    Ensures only the platform owner (MasterUser, or the verified account whose
+    email matches ADMIN_MASTER_EMAIL) can access admin endpoints. This is NOT a
+    company-level role check. All MasterUser access is logged for audit purposes.
     """
     # MasterUser has automatic admin access
     if is_master_user(current_user):
@@ -32,17 +49,13 @@ def require_platform_admin(current_user: User = Depends(get_current_user), db: S
         )
         return current_user
 
-    admin_email = settings.ADMIN_MASTER_EMAIL
-    if not admin_email:
+    if not settings.ADMIN_MASTER_EMAIL:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin access is not configured"
         )
 
-    user_email = getattr(current_user, 'email', '').lower().strip()
-    admin_email_normalized = admin_email.lower().strip()
-
-    if user_email != admin_email_normalized:
+    if not is_platform_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. Only the platform owner can access admin features."

@@ -1,6 +1,8 @@
+import html as html_lib
 import os
 import uuid
 import logging
+from urllib.parse import urlencode, urlsplit
 from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Request, Query, HTTPException, Header, Depends
@@ -226,7 +228,12 @@ async def email_feedback_page(
             db.close()
 
     base_url = "/email-tracking/feedback"
-    params = f"email_id={email_id or ''}&email={email or ''}&campaign={campaign or ''}"
+    # Query values are reflected into the page, so encode them for the URL and
+    # then escape the result for the HTML attribute.
+    params = html_lib.escape(
+        urlencode({"email_id": email_id or "", "email": email or "", "campaign": campaign or ""}),
+        quote=True,
+    )
 
     if submitted:
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -317,20 +324,14 @@ def _verify_admin_jwt(token_str: str) -> bool:
         # Master admin token (issued only to the configured master admin)
         if user_id == "master" and payload.get("is_master"):
             return True
-        admin_email = (os.getenv("ADMIN_MASTER_EMAIL") or "").lower().strip()
         db = next(get_db())
         try:
             from server.models.user import User
+            from server.api.admin import is_platform_admin
             user = db.query(User).filter(User.id == int(user_id)).first()
-            if not user:
-                return False
-            if user.role == "owner":
-                return True
-            if admin_email and user.email.lower().strip() == admin_email:
-                return True
+            return bool(user) and is_platform_admin(user)
         finally:
             db.close()
-        return False
     except Exception:
         return False
 
@@ -437,6 +438,29 @@ async def email_analytics(
         db.close()
 
 
+_REDIRECT_HOSTS = {"founderconsole.ai", "www.founderconsole.ai"}
+_DEFAULT_REDIRECT = "https://founderconsole.ai"
+
+
+def safe_redirect_target(dest: Optional[str]) -> str:
+    """Our own site only: a same-site path or an https URL on a first-party host."""
+    if not dest or not isinstance(dest, str):
+        return _DEFAULT_REDIRECT
+    value = dest.strip()
+    if any(ch in value for ch in ("\\", "\r", "\n", "\t")):
+        return _DEFAULT_REDIRECT
+    if value.startswith("/") and not value.startswith("//"):
+        return value
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return _DEFAULT_REDIRECT
+    host = (parts.hostname or "").lower()
+    if parts.scheme == "https" and host in _REDIRECT_HOSTS and not parts.username and not parts.password:
+        return value
+    return _DEFAULT_REDIRECT
+
+
 @router.get("/welcome")
 async def welcome_redirect(
     request: Request,
@@ -444,6 +468,7 @@ async def welcome_redirect(
     uid: Optional[str] = None,
     dest: str = Query(default="https://founderconsole.ai")
 ):
+    dest = safe_redirect_target(dest)
     db = next(get_db())
     try:
         from server.models.email_event import EmailLinkClick

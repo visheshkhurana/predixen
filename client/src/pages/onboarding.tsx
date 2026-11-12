@@ -90,6 +90,26 @@ function baselineTextToNumbers(text: BaselineText): BaselineNumbers {
   };
 }
 
+// India is the primary market: a browser on India time starts in rupees.
+function defaultCurrencyForBrowser(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta') return 'INR';
+  } catch {
+    // fall through
+  }
+  return 'USD';
+}
+
+const ONBOARDING_CURRENCIES: Array<{ code: string; label: string }> = [
+  { code: 'INR', label: '₹ Indian Rupee (INR)' },
+  { code: 'USD', label: '$ US Dollar (USD)' },
+  { code: 'AED', label: 'AED UAE Dirham' },
+  { code: 'SGD', label: 'S$ Singapore Dollar (SGD)' },
+  { code: 'GBP', label: '£ British Pound (GBP)' },
+  { code: 'EUR', label: '€ Euro (EUR)' },
+];
+
 export default function OnboardingPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -116,7 +136,7 @@ export default function OnboardingPage() {
     website: '',
     industry: '',
     stage: '',
-    currency: 'USD',
+    currency: defaultCurrencyForBrowser(),
     amount_scale: 'UNITS' as AmountScale,
   });
   // Optional financials hold TEXT, same as the runway calculator. Parsing
@@ -769,6 +789,26 @@ export default function OnboardingPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Reporting currency</Label>
+                  <Select
+                    value={companyData.currency}
+                    onValueChange={(v) => setCompanyData({ ...companyData, currency: v })}
+                  >
+                    <SelectTrigger data-testid="select-currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ONBOARDING_CURRENCIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Amounts are shown in this currency{companyData.currency === 'INR' ? ', in lakhs and crores' : ''}.
+                  </p>
                 </div>
 
                 <Button

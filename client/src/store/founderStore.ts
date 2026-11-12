@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { setDisplayCurrency } from '@/lib/money';
 
 interface User {
   id: number;
@@ -269,3 +270,8 @@ export const useFounderStore = create<FounderState>()(
     }
   )
 );
+
+// Formatters that are not handed a currency use the selected company's
+// (lib/money.ts). Covers the persisted company on reload and every switch.
+setDisplayCurrency(useFounderStore.getState().currentCompany?.currency);
+useFounderStore.subscribe((state) => setDisplayCurrency(state.currentCompany?.currency));

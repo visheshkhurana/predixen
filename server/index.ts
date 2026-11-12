@@ -7,7 +7,7 @@ import { spawn, execSync, spawnSync, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupWebSocketServer } from "./websocket";
 import { registerTwilioRoutes } from "./twilio/routes";
-import { requireAuth } from "./middleware/requireAuth";
+import { requireAuth, requirePlatformAdmin } from "./middleware/requireAuth";
 import { existsSync } from "fs";
 import path from "path";
 import compression from "compression";
@@ -17,6 +17,8 @@ import { aiAgentLog } from "./middleware/aiAgentLog";
 import { requestId } from "./middleware/requestId";
 import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
 import { razorpayBillingEnabled } from "./billing-gate";
+// The Notion integration is the platform workspace, not a tenant's.
+import { requirePlatformAdmin as requireNotionAdmin } from "./middleware/requireAuth";
 
 const app = express();
 app.disable("x-powered-by");
@@ -545,12 +547,12 @@ const FASTAPI_URL = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPor
 const messagingRouter = express.Router();
 messagingRouter.use(express.json());
 registerTwilioRoutes(messagingRouter);
-// Auth-gate all messaging routes: unauthenticated SMS/WhatsApp send is toll-fraud/PII risk.
-app.use("/api/messaging", requireAuth, messagingRouter);
+// Messaging sends SMS/WhatsApp from the platform account: platform owner only.
+app.use("/api/messaging", requirePlatformAdmin, messagingRouter);
 
 // Register Notion routes before the API proxy (handled by Express, not FastAPI)
 import { getNotionClient, listPages, listDatabases } from "./notion/client";
-app.get("/api/notion/pages", requireAuth, async (req, res) => {
+app.get("/api/notion/pages", requireNotionAdmin, async (req, res) => {
   try {
     const pages = await listPages();
     const simplified = pages.map((p: any) => ({
@@ -568,7 +570,7 @@ app.get("/api/notion/pages", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res) => {
+app.post("/api/notion/push-report", requireNotionAdmin, express.json(), async (req, res) => {
   try {
     const notion = await getNotionClient();
     const { pageId } = req.body;
@@ -717,7 +719,7 @@ app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res
   }
 });
 
-app.get("/api/notion/databases", requireAuth, async (req, res) => {
+app.get("/api/notion/databases", requireNotionAdmin, async (req, res) => {
   try {
     const dbs = await listDatabases();
     const simplified = dbs.map((d: any) => ({
