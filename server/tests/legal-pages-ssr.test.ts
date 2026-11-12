@@ -207,3 +207,14 @@ test("/faq pricing answers: real Starter price, beta wording when billing is off
   const offBeta = textOf(withBillingEnv(null, () => injectSEO(SHELL, "/pricing")));
   assert.ok(offBeta.includes("₹3,000") && !offBeta.includes("$29"), "beta /pricing shows the real Starter price");
 });
+
+test("landing prerender: beta FAQ unchanged when billing is off, real Starter price when live", () => {
+  const off = textOf(withBillingEnv(null, () => injectSEO(SHELL, "/")));
+  const on = textOf(withBillingEnv(LIVE, () => injectSEO(SHELL, "/")));
+  for (const text of [off, on]) {
+    for (const old of ["$29", "$49", "$99"]) assert.ok(!text.includes(old), old);
+  }
+  assert.match(off, /All features are free during the public beta/);
+  assert.ok(on.includes("₹3,000"));
+  assert.doesNotMatch(on, /All features are free during the public beta/);
+});

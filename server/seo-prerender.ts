@@ -85,8 +85,19 @@ const citationBlock = `<h2>${escapeHtml(aiCitation.heading)}</h2>
   .map((l) => `<li><a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a></li>`)
   .join("")}</ul>`;
 
+/**
+ * The landing FAQ for the current billing state. With payments off it is the
+ * text above, byte for byte; with Razorpay live, "Is FounderConsole free?" gets
+ * the paid-state answer from pricing-faq.ts (Free plan + real Starter price).
+ */
+function landingFaqsFor(paid: boolean): { q: string; a: string }[] {
+  if (!paid) return landingFaqs;
+  const isFree = pricingFaq(true)["is-free"];
+  return landingFaqs.map((f) => (f.q === isFree.q ? isFree : f));
+}
+
 function buildLandingBodyContent(): string {
-  const faqHtml = landingFaqs.map((f) =>
+  const faqHtml = landingFaqsFor(razorpayBillingEnabled()).map((f) =>
     `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p></section>`
   ).join("");
 
@@ -1001,7 +1012,7 @@ function getPageMeta(path: string): PageMeta | null {
         {
           "@context": "https://schema.org",
           "@type": "FAQPage",
-          mainEntity: landingFaqs.map((f) => ({
+          mainEntity: landingFaqsFor(razorpayBillingEnabled()).map((f) => ({
             "@type": "Question",
             name: f.q,
             acceptedAnswer: { "@type": "Answer", text: f.a },
