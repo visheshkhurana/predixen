@@ -1134,7 +1134,7 @@ Analyze the provided document and extract the following information. Return ONLY
   "company_info": {
     "name": "string - the company name",
     "website": "string - the company website URL if found, or null",
-    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, other",
+    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, agency, startup, other",
     "stage": "string - one of: pre_seed, seed, series_a, series_b based on funding mentioned"
   },
   "financials": {
@@ -1176,7 +1176,7 @@ Extract company information and financial metrics from these images. Return ONLY
   "company_info": {
     "name": "string - the company name visible in the deck",
     "website": "string - company website if shown, or null",
-    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, other",
+    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, agency, startup, other",
     "stage": "string - one of: pre_seed, seed, series_a, series_b"
   },
   "financials": {
@@ -1564,6 +1564,12 @@ async def extract_onboarding_deck(
             "e-commerce": "ecommerce",
             "retail": "ecommerce",
             "marketplace": "marketplace",
+            "agency": "agency",
+            "services": "agency",
+            "professional services": "agency",
+            "consulting": "agency",
+            "startup": "startup",
+            "pre-revenue": "startup",
             "other": "other",
         }
         industry = industry_mapping.get(industry_raw, "")
