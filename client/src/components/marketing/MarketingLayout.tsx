@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,9 @@ import {
 import { FCLogo } from "@/components/FCLogo";
 import { MarketingBackground } from "@/components/marketing/MarketingBackground";
 import { metaPageView } from "@/lib/metaPixel";
+import { onConsentChange } from "@/lib/consent";
+import { initXAds } from "@/lib/xads";
+import { CookieConsent } from "@/components/CookieConsent";
 import { trackFunnel } from "@/lib/funnel";
 import { aiCitation } from "@/data/ai-citation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -280,38 +283,16 @@ function MobileStickyCTA() {
   );
 }
 
-function useMetaPixel() {
-  const pixelLoaded = useRef(false);
-  const [location] = useLocation();
-
-  useEffect(() => {
-    if (pixelLoaded.current) {
-      if ((window as any).fbq) {
-        (window as any).fbq('track', 'PageView');
-      }
-      return;
-    }
-    pixelLoaded.current = true;
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
-    (window as any).fbq = function () {
-      (window as any).fbq.callMethod
-        ? (window as any).fbq.callMethod.apply((window as any).fbq, arguments)
-        : (window as any).fbq.queue.push(arguments);
-    };
-    (window as any).fbq.push = (window as any).fbq;
-    (window as any).fbq.loaded = true;
-    (window as any).fbq.version = '2.0';
-    (window as any).fbq.queue = [];
-    document.head.appendChild(script);
-    (window as any).fbq('init', '872167299140812');
-    (window as any).fbq('track', 'PageView');
-  }, [location]);
-}
-
 export function MarketingLayout({ children }: { children: React.ReactNode }) {
-  useMetaPixel();
+  // A second, hard-coded pixel (872167299140812) used to load here on every
+  // marketing page, before consent and alongside lib/metaPixel's env-configured
+  // one, which Meta flagged as conflicting pixels. Header's metaPageView() is
+  // the only loader now; this fires the first PageView once tracking is accepted.
+  useEffect(() => onConsentChange((choice) => {
+    if (choice !== "accepted") return;
+    metaPageView();
+    initXAds();
+  }), []);
   const [location] = useLocation();
   const prefersReducedMotion = useReducedMotion();
 
@@ -337,6 +318,7 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
       )}
       <Footer />
       <MobileStickyCTA />
+      <CookieConsent />
     </div>
   );
 }
