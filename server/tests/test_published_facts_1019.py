@@ -89,6 +89,19 @@ STALE_COUNT_PHRASES = (
     "34 real OAuth",
     "34 production connector",
     'value="34+"',
+    "34 data integrations",
+    # 35 until Meta Ads became the 36th connector.
+    "35 data connector",
+    "35 Data Connector",
+    "35 connectors",
+    "35 read-only",
+    "35 integrations",
+    "35 data integrations",
+    "35 real OAuth",
+    "35 production connector",
+    'value: 35, suffix: "+"',
+    'value="35+"',
+    "35+ connect",
 )
 
 
@@ -103,16 +116,16 @@ def _registered_module_names() -> list[str]:
     raise AssertionError("_CONNECTOR_MODULES not found")
 
 
-def test_registry_has_35_connectors():
+def test_registry_has_36_connectors():
     names = _registered_module_names()
-    assert len(names) == 35, names
-    assert len(set(names)) == 35
+    assert len(names) == 36, names
+    assert len(set(names)) == 36
     connectors_pkg.load_all_connectors()
     registered = ConnectorRegistry.get_available_providers()
-    assert len(registered) == 35, sorted(registered)
+    assert len(registered) == 36, sorted(registered)
 
 
-def test_llms_txt_prices_the_free_beta_and_counts_35_connectors():
+def test_llms_txt_prices_the_free_beta_and_counts_36_connectors():
     text = LLMS.read_text()
     lowered = " ".join(text.lower().split())
     assert "every feature is free during the public beta" in lowered
@@ -123,7 +136,7 @@ def test_llms_txt_prices_the_free_beta_and_counts_35_connectors():
     assert "$29" not in text
     assert "$49" not in text
     assert "$99" not in text
-    assert "35 read-only data connectors" in text
+    assert "36 read-only data connectors" in text
     assert "37" not in text
 
 
