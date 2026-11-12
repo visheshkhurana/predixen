@@ -177,7 +177,7 @@ Create a dedicated “New Founder Test” flow in QA Front:
 
 Founder persona for testing (use this exact profile):
 Name: Maya Lim
-Email: maya.lim+founderconsole.qa2@gmail.com (or auto-generate unique + timestamp)
+Email: qa-user@example.com (or auto-generate unique + timestamp)
 Password: SeaStack@2026!
 Company: ReefOps AI (SEA B2B SaaS for logistics)
 Country: Singapore

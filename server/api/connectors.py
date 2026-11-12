@@ -29,6 +29,7 @@ from server.models.company import Company
 from server.models.financial import FinancialRecord
 
 from server.connectors import ConnectorRegistry, ConnectorConfig, load_all_connectors
+from server.core.url_safety import UnsafeTargetError
 from server.connectors.base import ProviderCategory
 
 load_all_connectors()
@@ -341,7 +342,10 @@ async def connect_provider(
         settings=credentials.settings or {},
     )
     
-    connector = connector_class(config)
+    try:
+        connector = connector_class(config)
+    except UnsafeTargetError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid connection target: {e}")
     
     try:
         auth_success = await connector.authenticate()
@@ -492,7 +496,10 @@ async def sync_provider(
         settings=stored_config.get("settings", {}),
     )
     
-    connector = connector_class(config)
+    try:
+        connector = connector_class(config)
+    except UnsafeTargetError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid connection target: {e}")
     
     try:
         # STEP 1: Fetch data from connector (no DB changes yet)

@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -38,9 +39,7 @@ const TWIN_ITERATIONS = 500;
 
 function formatCurrency(value: number | null | undefined): string {
   if (value == null) return "N/A";
-  if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+  return formatCurrencyAbbrev(value);
 }
 
 function formatNumber(value: number | null | undefined): string {

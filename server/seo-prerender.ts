@@ -13,6 +13,40 @@ import { founderFaqs } from "../client/src/data/founder-faqs";
 // Same rule again: the "Cite FounderConsole" block a crawler is served and the one the
 // React footer renders come from one string, so they cannot drift.
 import { aiCitation } from "../client/src/data/ai-citation";
+// Same rule: the D2C calculator's definitions, FAQ and worked example are read from the
+// modules the React page renders, so the crawler copy cannot drift from the visitor copy.
+import { D2C_MARGIN_DEFINITIONS, D2C_MARGIN_FAQS } from "../client/src/data/d2c-margin-content";
+import { computeD2cMargin, D2C_WORKED_EXAMPLE, formatInr } from "../client/src/lib/tools/d2cMargin";
+// Same rule: every /for/<slug> industry homepage, its meta, JSON-LD and visible body are
+// rendered from the config the React page renders, so adding an industry is one config
+// entry and the crawler copy cannot drift from the visitor copy.
+import {
+  INDUSTRY_PAGES,
+  METRIC_SOURCE_LABEL,
+  getIndustryPage,
+  industryJsonLd,
+  industryPath,
+  industrySignupHref,
+  type IndustryPage,
+} from "../client/src/data/industry-pages";
+// Legal entity, grievance officer, refund terms and the paid price: one copy each,
+// shared with the React pages. The price itself comes from shared/pricing.json,
+// which server/core/plans.py also reads, so what a reviewer reads here is what
+// checkout charges.
+import {
+  LEGAL_ENTITY_NAME,
+  PRODUCT_OF_LINE,
+  SUPPORT_EMAIL,
+  FIRST_PAYMENT_REFUND_WINDOW_DAYS,
+  REFUND_PROCESSING_TIME,
+  GOVERNING_LAW,
+  JURISDICTION_COURTS,
+  registeredAddress,
+  grievanceOfficer,
+} from "../client/src/data/legal";
+import { STARTER_PRICES, ANNUAL_LABEL } from "../client/src/data/public-pricing";
+import { razorpayBillingEnabled } from "./billing-gate";
+import { pricingFaq, type PricingFaqKey } from "../client/src/data/pricing-faq";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -69,8 +103,19 @@ const citationBlock = `<h2>${escapeHtml(aiCitation.heading)}</h2>
   .map((l) => `<li><a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a></li>`)
   .join("")}</ul>`;
 
+/**
+ * The landing FAQ for the current billing state. With payments off it is the
+ * text above, byte for byte; with Razorpay live, "Is FounderConsole free?" gets
+ * the paid-state answer from pricing-faq.ts (Free plan + real Starter price).
+ */
+function landingFaqsFor(paid: boolean): { q: string; a: string }[] {
+  if (!paid) return landingFaqs;
+  const isFree = pricingFaq(true)["is-free"];
+  return landingFaqs.map((f) => (f.q === isFree.q ? isFree : f));
+}
+
 function buildLandingBodyContent(): string {
-  const faqHtml = landingFaqs.map((f) =>
+  const faqHtml = landingFaqsFor(razorpayBillingEnabled()).map((f) =>
     `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p></section>`
   ).join("");
 
@@ -91,10 +136,14 @@ function buildLandingBodyContent(): string {
 <li><strong>AI Founder Copilot</strong> — Ask strategic questions in plain English. Get recommendations from parallel AI agents specialized in finance, strategy, and market analysis.</li>
 <li><strong>Decision Engine</strong> — Track every decision with full context. Learn from outcomes, compare scenarios, and build institutional memory.</li>
 </ul>
+<h2>Built for your kind of business</h2>
+<ul>${INDUSTRY_PAGES.map(
+  (p) => `<li><a href="${industryPath(p.slug)}">${escapeHtml(p.label)}</a> — ${escapeHtml(p.pickerHint)}</li>`,
+).join("")}</ul>
 <h2>Frequently Asked Questions</h2>
 ${faqHtml}
 <h2>Try a free tool first</h2>
-<p>No account required. Calculate <a href="/tools/runway-calculator">startup runway</a>, run Paul Graham's <a href="/default-alive">default alive test</a>, or estimate survival odds with the <a href="/survival-simulator">startup survival simulator</a>. <a href="/tools">Browse all the free tools</a>. See the full product on <a href="/features">features</a> and what's free during beta on <a href="/pricing">pricing</a>. When you're ready for live data and ongoing forecasts, <a href="/signup">get started free</a>.</p>
+<p>No account required. Calculate <a href="/tools/runway-calculator">startup runway</a>, work out <a href="/tools/d2c-contribution-margin">CM1, CM2 and CM3 for a D2C brand</a>, run Paul Graham's <a href="/default-alive">default alive test</a>, or estimate survival odds with the <a href="/survival-simulator">startup survival simulator</a>. <a href="/tools">Browse all the free tools</a>. See the full product on <a href="/features">features</a> and what's free during beta on <a href="/pricing">pricing</a>. When you're ready for live data and ongoing forecasts, <a href="/signup">get started free</a>.</p>
 </article>`;
 }
 
@@ -183,10 +232,11 @@ function buildToolsIndexBodyContent(): string {
   // and its own page says so. It is linked from the closing paragraph instead.
   return `<article>
 <h1>Free Startup Finance Tools</h1>
-<p>Four free calculators for the numbers that decide how long a company has left, and two more free tools that answer the same kind of question. No account, no card, no demo call.</p>
-<h2>The four calculators</h2>
+<p>Five free calculators for the numbers that decide how long a company has left — including contribution margin for D2C brands — and two more free tools that answer the same kind of question. No account, no card, no demo call.</p>
+<h2>The five calculators</h2>
 <ul>
 <li><a href="/tools/runway-calculator">Startup runway calculator</a> — enter cash on hand, monthly revenue, monthly expenses and growth rate to get your months of runway and the month the cash runs out.</li>
+<li><a href="/tools/d2c-contribution-margin">D2C contribution margin calculator</a> — CM1, CM2 and CM3 per order in ₹ for D2C brands, from AOV, RTO rate, COD share, COGS, shipping and ad spend, with MER and break-even MER.</li>
 <li><a href="/tools/burn-multiple">Burn multiple calculator</a> — how many dollars of burn bought each dollar of net new ARR, from new and total ARR at the start and end of a period.</li>
 <li><a href="/tools/dilution">Dilution calculator</a> — the percentage of the company a round costs you, from pre-money valuation, amount raised and the existing option pool.</li>
 <li><a href="/tools/ltv-cac">LTV:CAC calculator</a> — lifetime value against acquisition cost, graded separately from payback, because a healthy ratio with a slow payback is how a growing company runs out of cash.</li>
@@ -278,6 +328,35 @@ function buildLtvCacBodyContent(): string {
 </article>`;
 }
 
+function buildD2cMarginBodyContent(): string {
+  const r = computeD2cMargin(D2C_WORKED_EXAMPLE);
+  const rto30 = computeD2cMargin({ ...D2C_WORKED_EXAMPLE, rtoPct: 30 });
+  const e = D2C_WORKED_EXAMPLE;
+  const n = (v: number) => Math.round(v).toLocaleString("en-IN");
+  return `<article>
+<h1>D2C Contribution Margin Calculator (CM1, CM2, CM3)</h1>
+<p>See what each order really earns after COGS, shipping, RTO, COD and ad spend, in ₹. CM1 = net revenue − COGS. CM2 = CM1 − fulfilment and payment costs. CM3 = CM2 − marketing. The calculator runs in your browser and stores nothing.</p>
+<h2>CM1, CM2 and CM3, defined</h2>
+<dl>${D2C_MARGIN_DEFINITIONS.map((d) => `<dt><strong>${esc(d.term)}</strong></dt><dd>${esc(d.definition)}</dd>`).join("")}</dl>
+<h2>Worked example (illustrative, not a benchmark)</h2>
+<p>A brand with ₹${n(e.aov)} AOV ex-GST, ${n(e.orders)} orders shipped a month, ${e.rtoPct}% RTO, ${e.returnPct}% customer returns, ${e.codPct}% COD, ₹${n(e.cogsPerOrder)} COGS per order, ₹${n(e.forwardShipping)} forward and ₹${n(e.reverseShipping)} reverse shipping, ₹${n(e.packagingPerOrder)} packaging, a ${e.gatewayPct}% gateway fee, a ₹${n(e.codFee)} COD fee and ${esc(formatInr(e.marketing))} of monthly marketing:</p>
+<ul>
+<li>Delivers ${n(r.deliveredOrders)} orders and keeps ${n(r.keptOrders)}; net revenue is ${esc(formatInr(r.netRevenue))}.</li>
+<li>CM1 is ${esc(formatInr(r.cm1))} (${(r.cm1Pct ?? 0).toFixed(1)}% of net revenue).</li>
+<li>CM2 is ${esc(formatInr(r.cm2))} (${(r.cm2Pct ?? 0).toFixed(1)}%).</li>
+<li>CM3 is ${esc(formatInr(r.cm3))} (${(r.cm3Pct ?? 0).toFixed(1)}%), about ₹${n(r.cm3PerOrder ?? 0)} per delivered order.</li>
+<li>MER is ${(r.mer ?? 0).toFixed(2)}x against a break-even MER of ${(r.breakEvenMer ?? 0).toFixed(2)}x.</li>
+<li>At ${30}% RTO with everything else unchanged, CM3 falls to ${esc(formatInr(rto30.cm3))}.</li>
+</ul>
+<h2>Assumptions</h2>
+<p>AOV is ex-GST and after discounts. RTO'd and returned goods are restocked and carry no COGS. Every shipped order pays forward shipping and packaging. RTO is spread evenly across COD and prepaid orders; in practice most RTO comes from COD, so a high-COD brand's real numbers are likely worse.</p>
+<h2>Questions D2C founders ask</h2>
+${D2C_MARGIN_FAQS.map((f) => `<h3>${esc(f.question)}</h3>\n<p>${esc(f.answer)}</p>`).join("\n")}
+<h2>Related</h2>
+<p>Read <a href="/blog/cm1-cm2-cm3-contribution-margin-d2c">CM1, CM2, CM3 for D2C brands</a>, <a href="/blog/rto-cod-d2c-margins">how RTO and COD eat D2C margins</a> and <a href="/blog/mer-vs-roas-d2c">MER vs ROAS</a>. Once you know CM3, check how long your cash lasts with the <a href="/tools/runway-calculator">free runway calculator</a>, or browse <a href="/tools">all free tools</a>. FounderConsole is free during the public beta: <a href="/signup">start free</a>.</p>
+</article>`;
+}
+
 function buildVsRunwaySpreadsheetBodyContent(): string {
   // Comparison copy only — no competitor is named and no competitor claim is made,
   // the same rule /alternatives states on the page itself. Everything asserted about
@@ -317,14 +396,65 @@ function esc(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function buildPricingBodyContent(): string {
+/**
+ * The legal-entity block every legal page ends with. The address line is
+ * emitted only once the owner has replaced the TODO placeholder in
+ * client/src/data/legal.ts, so no fake address is ever served.
+ */
+function legalEntityHtml(): string {
+  const address = registeredAddress();
+  return `<p>${escapeHtml(PRODUCT_OF_LINE)}${
+    address ? ` Registered office: ${escapeHtml(address)}.` : ""
+  } Email: <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>`;
+}
+
+/** Grievance Officer (Indian IT Rules, 2021). Name only once filled in. */
+function grievanceOfficerHtml(): string {
+  const officer = grievanceOfficer();
+  return `<h2>Grievance Officer</h2>
+<p>In accordance with the Information Technology Act, 2000 and the rules made under it, complaints about content or the processing of your information can be sent to our Grievance Officer${
+    officer.name ? `, ${escapeHtml(officer.name)}` : ""
+  }, at <a href="mailto:${escapeHtml(officer.email)}">${escapeHtml(officer.email)}</a>. We acknowledge complaints within 24 hours and resolve them within 15 days of receipt.</p>`;
+}
+
+function pricingPaidSectionHtml(): string {
+  const inr = STARTER_PRICES.INR;
+  const usd = STARTER_PRICES.USD;
+  const aed = STARTER_PRICES.AED;
+  return `<h2>Plans</h2>
+<ul>
+<li><strong>Free</strong> — ₹0, forever. 1 company, 3 simulations a month, 10 copilot messages a month, CSV upload and the basic dashboard.</li>
+<li><strong>Starter</strong> — ${inr.monthlyLabel}/month, or ${inr.annualLabel}/year (${escapeHtml(ANNUAL_LABEL)}). International customers: ${usd.monthlyLabel}/month (${usd.annualLabel}/year) or ${aed.monthlyLabel}/month (${aed.annualLabel}/year). 50 simulations a month, 100 copilot messages a month, 2 data connectors, Truth Scan and stress tests, industry benchmarks and PDF export.</li>
+</ul>
+<p>Subscriptions are billed in advance, monthly or annually, through Razorpay, and renew automatically until cancelled. You can cancel anytime from Billing; see the <a href="/refund-policy">Refund &amp; Cancellation Policy</a>.</p>`;
+}
+
+function buildPricingBodyContent(paid = false): string {
+  if (paid) {
+    return `<article>
+<h1>Pricing</h1>
+<p>Start free, and upgrade to Starter when you want live connectors and more simulations. No credit card is required for the Free plan.</p>
+${pricingPaidSectionHtml()}
+<h2>What is included</h2>
+<p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, industry benchmarks and PDF export. See the full list on <a href="/features">features</a>.</p>
+<h2>Free tools that need no account at all</h2>
+<ul>
+<li><a href="/tools/runway-calculator">Startup runway calculator</a> — months of runway and a cash-out date from your numbers</li>
+<li><a href="/default-alive">Default alive or default dead</a> — Paul Graham's test as a calculator</li>
+<li><a href="/survival-simulator">Startup survival simulator</a> — 1,000 Monte Carlo runs for survival probability</li>
+<li><a href="/tools">All free tools</a> — the full index, including the burn multiple, dilution and LTV:CAC calculators</li>
+</ul>
+<p>When you're ready, <a href="/signup">get started free</a>. Questions about billing? <a href="/contact">Contact us</a>.</p>
+${legalEntityHtml()}
+</article>`;
+  }
   return `<article>
 <h1>Pricing</h1>
 <p>Every FounderConsole feature is free during the public beta. No credit card is required to start, and there is no trial clock running in the background.</p>
 <h2>What is included</h2>
 <p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, cap table and dilution modelling, the fundraising CRM, board deck generation, and all 36 data connectors. See the full list on <a href="/features">features</a>.</p>
 <h2>What happens after the beta</h2>
-<p>Paid tiers will be introduced once the beta ends. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
+<p>Paid plans will be introduced once the beta ends. When they start, Starter will be ${STARTER_PRICES.INR.monthlyLabel}/month, or ${STARTER_PRICES.INR.annualLabel}/year (${escapeHtml(ANNUAL_LABEL)}); international customers pay ${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} a month. The Free plan stays free. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
 <h2>Free tools that need no account at all</h2>
 <p>Try these before you sign up — results in under a minute, no email required to see the answer:</p>
 <ul>
@@ -599,14 +729,22 @@ function buildAboutBodyContent(): string {
 </article>`;
 }
 
-const faqSections = [
+// Pricing answers come from client/src/data/pricing-faq.ts (numbers from
+// shared/pricing.json) and are resolved per request against the billing gate,
+// the same rule /pricing uses. A slot marks where each one goes.
+type FaqEntry = { q: string; a: string; pricingKey?: PricingFaqKey };
+function PRICING_FAQ_SLOT(key: PricingFaqKey): FaqEntry {
+  return { q: "", a: "", pricingKey: key };
+}
+
+const faqSectionsTemplate: { title: string; items: FaqEntry[] }[] = [
   {
     title: "Getting Started",
     items: [
       { q: "What is FounderConsole?", a: "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 36 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions." },
       { q: "How does FounderConsole help founders?", a: "FounderConsole helps founders by transforming financial uncertainty into measurable probability. Instead of relying on gut feelings, you get Monte Carlo simulations that show the range of possible outcomes, an AI copilot that answers financial questions using your real data, automated data validation (Truth Scan) that catches errors before they reach your board, and strategic briefings that explain your risks and opportunities in plain English." },
       { q: "What metrics does FounderConsole track?", a: "FounderConsole tracks over 24 financial health metrics including MRR, ARR, runway, burn rate, CAC, LTV, LTV:CAC ratio, churn rate, gross margin, NRR, ARPU, active customers, and headcount. Each metric includes a confidence score showing how reliable the data is." },
-      { q: "Is FounderConsole free?", a: "Yes — FounderConsole is completely free while we're in early access. Every feature is unlocked and no credit card is required. Planned pricing after early access is shown on the pricing page; we'll give plenty of notice before anything changes." },
+      PRICING_FAQ_SLOT("is-free"),
       { q: "What is a startup digital twin?", a: "A startup digital twin is a continuously-updated virtual representation of your company inside FounderConsole. It integrates your real financial data, simulation results, strategic decisions, and alerts into a single live model with health scoring and risk indicators." },
       { q: "How do I get started?", a: "Sign up for free (no credit card required), connect one or more data sources like QuickBooks, Stripe, or Mercury, and you'll have a baseline forecast with confidence intervals within 5 minutes." },
       { q: "Is there a demo I can try?", a: "Yes — you can sign in with demo credentials or watch our product walkthrough on the Demo page. The demo includes sample company data so you can explore simulations, the AI copilot, and reporting features without connecting your own data." },
@@ -631,14 +769,22 @@ const faqSections = [
   {
     title: "Pricing & Plans",
     items: [
-      { q: "Do I need to pay anything right now?", a: "No. Everything is free while we're in early access — every feature is unlocked, with no credit card required. We'll announce paid plans well in advance before anything changes." },
-      { q: "What will the paid plans cost later?", a: "Our planned pricing is Starter $29/month, Growth $49/month, and Scale $99/month. None of this is active yet — it's what we intend to charge once we exit early access." },
+      PRICING_FAQ_SLOT("pay-now"),
+      PRICING_FAQ_SLOT("cost"),
       { q: "Do you offer enterprise pricing?", a: "Yes — if you need custom integrations, dedicated support, or team-level access controls, contact us to discuss enterprise options." },
     ],
   },
 ];
 
-function buildFaqBodyContent(): string {
+function faqSectionsFor(paid: boolean): { title: string; items: { q: string; a: string }[] }[] {
+  const pricing = pricingFaq(paid);
+  return faqSectionsTemplate.map((section) => ({
+    title: section.title,
+    items: section.items.map((item) => (item.pricingKey ? pricing[item.pricingKey] : item)),
+  }));
+}
+
+function buildFaqBodyContent(faqSections = faqSectionsFor(razorpayBillingEnabled())): string {
   const sectionsHtml = faqSections.map((section) => {
     const items = section.items.map((item) =>
       `<section><h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p></section>`
@@ -656,7 +802,7 @@ ${sectionsHtml}
 </article>`;
 }
 
-function buildFaqJsonLd(): object {
+function buildFaqJsonLd(faqSections = faqSectionsFor(razorpayBillingEnabled())): object {
   const mainEntity = faqSections.flatMap((s) =>
     s.items.map((item) => ({
       "@type": "Question",
@@ -690,6 +836,10 @@ function buildContactBodyContent(): string {
 <li><strong>Response time</strong> — Within 24 hours</li>
 </ul>
 <p>Prefer email? Write <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> directly and use the same subjects above in your subject line.</p>
+<h2>Company</h2>
+${legalEntityHtml()}
+<p>Billing questions, cancellations and refunds: see the <a href="/refund-policy">Refund &amp; Cancellation Policy</a>.</p>
+${grievanceOfficerHtml()}
 <h2>Prefer to explore first?</h2>
 <p>Try free tools with no account: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/default-alive">default alive test</a>, or the <a href="/survival-simulator">startup survival simulator</a>. See what is included on <a href="/features">features</a> and <a href="/pricing">pricing</a>, or walk through the <a href="/demo">interactive demo</a>. When you are ready for live data and ongoing forecasts, <a href="/signup">get started free</a>.</p>
 </article>`;
@@ -699,7 +849,7 @@ function buildPrivacyBodyContent(): string {
   return `<article>
 <h1>Privacy Policy</h1>
 <p>Last updated: March 2026</p>
-<p>FounderConsole ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our platform.</p>
+<p>FounderConsole ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our platform. ${escapeHtml(PRODUCT_OF_LINE)} ${escapeHtml(LEGAL_ENTITY_NAME)} is responsible for your information under this policy.</p>
 <h2>Information We Collect</h2>
 <ul>
 <li><strong>Account Information:</strong> Your email address, name, and password when you register.</li>
@@ -727,6 +877,43 @@ function buildPrivacyBodyContent(): string {
 </ul>
 <h2>Your Rights</h2>
 <p>You may access, correct, delete, or export your data, and withdraw consent for integrations or analytics at any time. Contact <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a>. See also our <a href="/terms">Terms of Service</a>.</p>
+<h2>Payments</h2>
+<p>Subscription payments are processed by Razorpay. We do not store your full card or bank details on our servers; Razorpay handles them under its own privacy policy.</p>
+${grievanceOfficerHtml()}
+<h2>Company</h2>
+${legalEntityHtml()}
+</article>`;
+}
+
+function buildRefundPolicyBodyContent(): string {
+  const p = STARTER_PRICES;
+  const days = FIRST_PAYMENT_REFUND_WINDOW_DAYS;
+  return `<article>
+<h1>Refund &amp; Cancellation Policy</h1>
+<p>Last updated: November 2026</p>
+<p>This policy explains how cancellations and refunds work for paid FounderConsole subscriptions. ${escapeHtml(PRODUCT_OF_LINE)} In this policy, "we", "our" and "us" mean ${escapeHtml(LEGAL_ENTITY_NAME)}.</p>
+<h2>Subscription plans and billing</h2>
+<p>FounderConsole is a software-as-a-service subscription. Paid plans are billed in advance through Razorpay, monthly or annually, and renew automatically at the end of each billing period until cancelled.</p>
+<ul>
+<li><strong>Starter, monthly</strong> — ${p.INR.monthlyLabel} / ${p.USD.monthlyLabel} / ${p.AED.monthlyLabel} per month</li>
+<li><strong>Starter, annual</strong> — ${p.INR.annualLabel} / ${p.USD.annualLabel} / ${p.AED.annualLabel} per year (${escapeHtml(ANNUAL_LABEL)})</li>
+</ul>
+<p>Your charge currency follows the currency set for your company in FounderConsole: INR if it is INR, AED if it is AED, and USD otherwise. Current prices are always shown on <a href="/pricing">pricing</a>. The Free plan is never charged.</p>
+<h2>Cancellation</h2>
+<p>You can cancel anytime from Billing in your FounderConsole account. Cancellation takes effect at the end of the current billing period: you keep paid access until then, and no further charges are made after you cancel. You can also cancel by writing to <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a> from your account email.</p>
+<h2>Refunds</h2>
+<ul>
+<li><strong>No partial-period refunds.</strong> Fees already paid for the current billing period, monthly or annual, are not refunded when you cancel or downgrade, except as set out below.</li>
+<li><strong>First payment.</strong> If you are not satisfied, you can request a full refund within ${days} days of the first payment of a new subscription. This applies once per customer, to the first payment only, not to renewals.</li>
+<li><strong>Duplicate or erroneous charges.</strong> If you were charged twice, or charged in error, we refund the incorrect charge in full.</li>
+</ul>
+<h2>How refunds are processed</h2>
+<p>Approved refunds are issued through Razorpay to the original payment method. The amount reaches your account within ${escapeHtml(REFUND_PROCESSING_TIME)} of approval, depending on your bank or card issuer. We do not refund to a different card, account or wallet.</p>
+<h2>How to request a refund</h2>
+<p>Email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a> from the email address on your account, with the payment date and the Razorpay payment ID if you have it. We reply within 2 business days.</p>
+<h2>Contact</h2>
+${legalEntityHtml()}
+<p>See also our <a href="/terms">Terms of Service</a>, <a href="/privacy">Privacy Policy</a> and <a href="/contact">contact page</a>.</p>
 </article>`;
 }
 
@@ -734,11 +921,11 @@ function buildTermsBodyContent(): string {
   return `<article>
 <h1>Terms of Service</h1>
 <p>Last updated: July 2026</p>
-<p>These Terms of Service ("Terms") govern your use of FounderConsole ("the Service"), operated by FounderConsole ("we", "our", "us"). By accessing or using the Service, you agree to be bound by these Terms.</p>
+<p>These Terms of Service ("Terms") govern your use of FounderConsole ("the Service"), operated by ${escapeHtml(LEGAL_ENTITY_NAME)} ("we", "our", "us"). ${escapeHtml(PRODUCT_OF_LINE)} By accessing or using the Service, you agree to be bound by these Terms.</p>
 <h2>Service Description</h2>
 <p>FounderConsole is an AI-powered financial intelligence platform for startups. The Service provides financial dashboards and KPI tracking, Monte Carlo simulations and scenario modeling, an AI-powered copilot for financial analysis, data integrations with accounting, payroll, and payment platforms, and cap table management and fundraising tools.</p>
 <h2>Subscriptions &amp; Billing</h2>
-<p>The Service offers a Free plan and paid subscription plans. New accounts may start a one-time 30-day free trial with full feature access. Payments are processed securely by Stripe. Subscriptions renew automatically until cancelled. Founding accounts created before paid plans launched retain complimentary access at our discretion with at least 30 days' notice before changes.</p>
+<p>The Service offers a Free plan and paid subscription plans. New accounts may start a one-time 30-day free trial with full feature access. Payments are processed securely by Razorpay. Subscriptions renew automatically until cancelled. You can cancel anytime from Billing; cancellation takes effect at the end of the current billing period. Refunds are available within ${FIRST_PAYMENT_REFUND_WINDOW_DAYS} days of the first payment of a new subscription and for duplicate or erroneous charges, as set out in our <a href="/refund-policy">Refund &amp; Cancellation Policy</a>. Founding accounts created before paid plans launched retain complimentary access at our discretion with at least 30 days' notice before changes.</p>
 <h2>Service Disclaimer</h2>
 <p>The Service is under active development and may contain bugs or incomplete functionality. AI-generated insights, simulations, and recommendations are informational only and should not be the sole basis for financial, investment, or business decisions. FounderConsole does not provide financial, legal, or investment advice.</p>
 <h2>Account Terms &amp; Acceptable Use</h2>
@@ -748,7 +935,9 @@ function buildTermsBodyContent(): string {
 <h2>Data Rights &amp; Intellectual Property</h2>
 <p>You retain full ownership of data you upload. We claim a limited license to process it solely to provide the Service. We will not sell or rent your data except as described in our <a href="/privacy">Privacy Policy</a>. The Service's design, code, algorithms, and AI models are owned by FounderConsole.</p>
 <h2>Governing Law</h2>
-<p>These Terms are governed by the laws of the State of California, United States. Contact <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> with questions.</p>
+<p>These Terms are governed by ${GOVERNING_LAW}, and disputes are subject to the exclusive jurisdiction of ${JURISDICTION_COURTS}. Contact <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> with questions.</p>
+<h2>Company</h2>
+${legalEntityHtml()}
 </article>`;
 }
 
@@ -816,6 +1005,48 @@ function buildIndustryBodyContent(slug: string): string | null {
 </article>`;
 }
 
+/**
+ * Visible SSR body for one `/for/<slug>` industry homepage. Everything comes from
+ * client/src/data/industry-pages.ts. Deliberately contains no picker markup: the
+ * industry chooser is client-only and never shown to crawlers.
+ */
+function buildIndustryLandingBodyContent(page: IndustryPage): string {
+  const pains = page.pains
+    .map(
+      (p) =>
+        `<li><strong>${esc(p.pain)}</strong> ${esc(p.feature)}: ${esc(p.detail)}${
+          p.href ? ` <a href="${esc(p.href)}">Try it free</a>.` : ""
+        }</li>`,
+    )
+    .join("");
+  const metrics = page.metrics
+    .map((m) => `<li><strong>${esc(m.label)}</strong> (${esc(METRIC_SOURCE_LABEL[m.source])}) — ${esc(m.hint)}</li>`)
+    .join("");
+  const links = page.links.map((l) => `<li><a href="${esc(l.href)}">${esc(l.label)}</a></li>`).join("");
+  const faqs = page.faqs.map((f) => `<section><h3>${esc(f.q)}</h3><p>${esc(f.a)}</p></section>`).join("");
+  const others = INDUSTRY_PAGES.filter((p) => p.slug !== page.slug)
+    .map((p) => `<li><a href="${industryPath(p.slug)}">${esc(p.label)}</a></li>`)
+    .join("");
+  return `<article>
+<p>${esc(page.eyebrow)}</p>
+<h1>${esc(page.headline)}</h1>
+<p>${esc(page.subhead)}</p>
+<p><a href="${esc(industrySignupHref(page.slug))}">Start free</a> — every feature is free during the public beta, no credit card required.</p>
+<h2>The numbers that matter for ${esc(page.label.toLowerCase())}</h2>
+<ul>${metrics}</ul>
+<h2>What gets in the way, and what helps</h2>
+<ul>${pains}</ul>
+<h2>Connect what you already use</h2>
+<p>${esc(page.connectors.join(", "))} — among the 36 read-only data connectors. CSV upload and manual entry work too.</p>
+<h2>Free tools and guides</h2>
+<ul>${links}</ul>
+<h2>Frequently asked questions</h2>
+${faqs}
+<h2>Other business types</h2>
+<ul>${others}<li><a href="/">Everything FounderConsole does</a></li></ul>
+</article>`;
+}
+
 function stripTrailingSlash(path: string): string {
   if (path.length > 1 && path.endsWith("/")) {
     return path.replace(/\/+$/, "");
@@ -830,7 +1061,29 @@ export function pageHttpStatus(path: string): number {
 
 /** Status and body the SPA catch-all should send for one pathname. */
 export function renderHtmlPage(shell: string, path: string): { status: number; html: string } {
-  return { status: pageHttpStatus(path), html: injectSEO(shell, path) };
+  const meta = getPageMeta(path);
+  if (!meta) {
+    return { status: 200, html: injectAppShellNoindex(shell) };
+  }
+  return { status: meta.statusCode ?? 200, html: renderMeta(shell, meta) };
+}
+
+/**
+ * A route the client knows but the prerenderer does not: the logged-in app
+ * (/overview, /settings, ...) and auth flows (/login, /reset-password, ...).
+ *
+ * The raw shell is the HOMEPAGE: homepage title, homepage canonical, homepage
+ * JSON-LD and `index, follow`. Served as-is, every app URL a crawler found was
+ * an indexable duplicate of "/". These pages have nothing to rank for, so they
+ * are `noindex, follow`, carry no canonical (a canonical beside noindex sends
+ * mixed signals) and no structured data. The body and the app mount are
+ * untouched, so the SPA boots exactly as before.
+ */
+function injectAppShellNoindex(html: string): string {
+  return html
+    .replace(/<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/, '<meta name="robots" content="noindex, follow" />')
+    .replace(/\s*<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/, "")
+    .replace(/\s*<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/g, "");
 }
 
 function notFoundMeta(canonical: string, description: string): PageMeta {
@@ -849,7 +1102,7 @@ function getPageMeta(path: string): PageMeta | null {
   if (path === "/" || path === "") {
     return {
       title: "FounderConsole — AI Decision Simulator for Founders",
-      description: "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 36 data connectors — replace spreadsheets with simulations.",
+      description: "FounderConsole is the AI-powered decision simulator for startup founders and D2C brands. Runway, burn and contribution margin with Monte Carlo simulations, an AI copilot, fundraising CRM and 36 data connectors. Free during public beta.",
       canonical: SITE_URL + "/",
       bodyContent: buildLandingBodyContent(),
       jsonLd: [
@@ -859,23 +1112,34 @@ function getPageMeta(path: string): PageMeta | null {
           name: "FounderConsole",
           url: SITE_URL,
           logo: OG_IMAGE,
-          description: "AI-powered financial intelligence platform for startups.",
+          description: "AI-powered financial intelligence platform for startup founders and D2C brands.",
           sameAs: ["https://twitter.com/founderconsole", "https://linkedin.com/company/founderconsole"],
+          contactPoint: { "@type": "ContactPoint", url: `${SITE_URL}/contact`, contactType: "customer support" },
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "FounderConsole",
+          url: SITE_URL + "/",
+          inLanguage: "en",
+          publisher: { "@type": "Organization", name: "FounderConsole", url: SITE_URL },
         },
         {
           "@context": "https://schema.org",
           "@type": "SoftwareApplication",
           name: "FounderConsole",
           applicationCategory: "BusinessApplication",
+          applicationSubCategory: "Financial planning and analysis",
           operatingSystem: "Web",
           url: SITE_URL,
-          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-          featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 36 Data Connectors, Digital Twin",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free during public beta — no credit card required" },
+          audience: { "@type": "BusinessAudience", audienceType: "Startup founders, CFOs and D2C brand operators" },
+          featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 36 Data Connectors, Digital Twin, Free D2C contribution margin (CM1/CM2/CM3) calculator",
         },
         {
           "@context": "https://schema.org",
           "@type": "FAQPage",
-          mainEntity: landingFaqs.map((f) => ({
+          mainEntity: landingFaqsFor(razorpayBillingEnabled()).map((f) => ({
             "@type": "Question",
             name: f.q,
             acceptedAnswer: { "@type": "Answer", text: f.a },
@@ -903,18 +1167,58 @@ function getPageMeta(path: string): PageMeta | null {
   }
 
   if (path === "/pricing") {
+    // The title is pinned by scripts/launch_gate.sh (HAG-471); only the body and
+    // description change with the billing gate.
+    const paid = razorpayBillingEnabled();
+    const description = paid
+      ? `FounderConsole pricing: Free forever, or Starter at ${STARTER_PRICES.INR.monthlyLabel}/month (${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} internationally), billed monthly or annually.`
+      : "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.";
+    const jsonLd: object[] = [{
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      name: "Pricing | FounderConsole",
+      url: SITE_URL + "/pricing",
+      description,
+      isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+    }];
+    if (paid) {
+      jsonLd.push({
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: "FounderConsole Starter",
+        brand: { "@type": "Brand", name: "FounderConsole" },
+        offers: (["INR", "USD", "AED"] as const).map((c) => ({
+          "@type": "Offer",
+          price: String(STARTER_PRICES[c].monthly),
+          priceCurrency: c,
+          url: SITE_URL + "/pricing",
+        })),
+      });
+    }
     return {
       title: "Pricing | FounderConsole",
-      description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.",
+      description,
       canonical: SITE_URL + "/pricing",
-      bodyContent: buildPricingBodyContent(),
+      bodyContent: buildPricingBodyContent(paid),
+      jsonLd,
+    };
+  }
+
+  if (path === "/refund-policy") {
+    const description = `How cancellations and refunds work for FounderConsole subscriptions billed through Razorpay. Cancel anytime; refunds within ${FIRST_PAYMENT_REFUND_WINDOW_DAYS} days of your first payment.`;
+    return {
+      title: "Refund & Cancellation Policy | FounderConsole",
+      description,
+      canonical: SITE_URL + "/refund-policy",
+      bodyContent: buildRefundPolicyBodyContent(),
       jsonLd: [{
         "@context": "https://schema.org",
         "@type": "WebPage",
-        name: "Pricing | FounderConsole",
-        url: SITE_URL + "/pricing",
-        description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.",
+        name: "Refund & Cancellation Policy | FounderConsole",
+        url: SITE_URL + "/refund-policy",
+        description,
         isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+        publisher: { "@type": "Organization", name: LEGAL_ENTITY_NAME },
       }],
     };
   }
@@ -1145,6 +1449,24 @@ function getPageMeta(path: string): PageMeta | null {
     };
   }
 
+  // Industry homepages. One per INDUSTRY_PAGES entry; an unknown slug is a real 404.
+  if (path.startsWith("/for/")) {
+    const page = getIndustryPage(path.slice("/for/".length));
+    if (!page || path.slice("/for/".length).includes("/")) {
+      return notFoundMeta(
+        SITE_URL + "/",
+        `This page does not exist. FounderConsole has pages for: ${INDUSTRY_PAGES.map((p) => p.label).join(", ")}.`,
+      );
+    }
+    return {
+      title: page.title,
+      description: page.description,
+      canonical: `${SITE_URL}${industryPath(page.slug)}`,
+      bodyContent: buildIndustryLandingBodyContent(page),
+      jsonLd: industryJsonLd(page),
+    };
+  }
+
   // The eight industry pages had no entry here at all, which meant no title, no
   // description, no canonical and no server-rendered text — eight programmatic
   // pages competing for search traffic while presenting a crawler with an empty
@@ -1298,6 +1620,41 @@ function getPageMeta(path: string): PageMeta | null {
           { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
           { "@type": "ListItem", position: 2, name: "Runway calculator", item: `${SITE_URL}/tools/runway-calculator` },
           { "@type": "ListItem", position: 3, name: "LTV:CAC calculator", item: `${SITE_URL}/tools/ltv-cac` },
+        ],
+      }],
+    };
+  }
+
+  if (path === "/tools/d2c-contribution-margin") {
+    return {
+      ...TOOL_PAGE_META["/tools/d2c-contribution-margin"],
+      canonical: SITE_URL + "/tools/d2c-contribution-margin",
+      bodyContent: buildD2cMarginBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: "D2C Contribution Margin Calculator",
+        url: SITE_URL + "/tools/d2c-contribution-margin",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
+        description: "Free CM1, CM2 and CM3 contribution margin calculator for Indian D2C brands, with RTO, COD, MER and break-even MER.",
+        creator: { "@type": "Organization", name: "FounderConsole", url: SITE_URL },
+      }, {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: D2C_MARGIN_FAQS.map((f) => ({
+          "@type": "Question",
+          name: f.question,
+          acceptedAnswer: { "@type": "Answer", text: f.answer },
+        })),
+      }, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Free tools", item: `${SITE_URL}/tools` },
+          { "@type": "ListItem", position: 3, name: "D2C contribution margin calculator", item: `${SITE_URL}/tools/d2c-contribution-margin` },
         ],
       }],
     };
@@ -1494,14 +1851,25 @@ function getPageMeta(path: string): PageMeta | null {
         bodyContent: buildBlogPostBodyContent(slug) || undefined,
         jsonLd: [{
           "@context": "https://schema.org",
-          "@type": "Article",
+          "@type": "BlogPosting",
           headline: post.title,
           description: post.excerpt,
           datePublished: isoDate,
-          author: { "@type": "Person", name: post.author },
-          publisher: { "@type": "Organization", name: "FounderConsole", logo: { "@type": "ImageObject", url: OG_IMAGE } },
+          dateModified: isoDate,
+          articleSection: post.category,
+          inLanguage: "en",
+          author: { "@type": "Person", name: post.author, jobTitle: post.authorRole },
+          publisher: { "@type": "Organization", name: "FounderConsole", url: SITE_URL, logo: { "@type": "ImageObject", url: OG_IMAGE } },
           image: OG_IMAGE,
           mainEntityOfPage: `${SITE_URL}/blog/${slug}`,
+        }, {
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+            { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE_URL}/blog` },
+            { "@type": "ListItem", position: 3, name: post.title, item: `${SITE_URL}/blog/${slug}` },
+          ],
         }],
       };
     }
@@ -1534,6 +1902,7 @@ function getPageMeta(path: string): PageMeta | null {
         url: SITE_URL + "/tools",
         hasPart: [
           `${SITE_URL}/tools/runway-calculator`,
+          `${SITE_URL}/tools/d2c-contribution-margin`,
           `${SITE_URL}/tools/burn-multiple`,
           `${SITE_URL}/tools/dilution`,
           `${SITE_URL}/tools/ltv-cac`,

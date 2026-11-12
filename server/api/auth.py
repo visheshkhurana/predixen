@@ -366,7 +366,11 @@ def admin_login(req: LoginRequest, request: Request, response: Response, db: Ses
         )
     
     admin_email_check = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
-    is_platform_admin = bool(admin_email_check and user.email.lower().strip() == admin_email_check)
+    is_platform_admin = bool(
+        admin_email_check
+        and user.email.lower().strip() == admin_email_check
+        and user.is_email_verified
+    )
     
     if not is_platform_admin:
         log_login_attempt(db, req.email, user.id, success=False,

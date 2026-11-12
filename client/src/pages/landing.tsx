@@ -1,4 +1,6 @@
 import { Link } from "wouter";
+import { usePlans } from "@/hooks/use-subscription";
+import { STARTER_PRICES, ANNUAL_LABEL } from "@/data/public-pricing";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +36,8 @@ import { CopilotDemo } from "@/components/marketing/redesign/CopilotDemo";
 import { TwinDashboardDemo } from "@/components/marketing/redesign/TwinDashboardDemo";
 import { Marquee } from "@/components/marketing/redesign/Marquee";
 import { trackFunnel } from "@/lib/funnel";
+import { HomeIndustryGate, INDUSTRY_ICONS } from "@/components/marketing/IndustryPicker";
+import { INDUSTRY_PAGES, industryPath } from "@/data/industry-pages";
 
 const integrations = [
   "Stripe", "QuickBooks", "Gusto", "Mercury", "Brex", "Plaid", "Xero", "Shopify",
@@ -102,10 +106,15 @@ const landingFaqs = [
   },
 ];
 
+// Starter is the one paid plan; its numbers come from shared/pricing.json (the
+// file plans.py charges from). Whether it is on sale is the same billing gate
+// as /pricing and /faq: payments_enabled + provider "razorpay" from
+// /api/billing/plans. With payments off it is shown as the price once paid
+// plans start, and every feature stays free during the public beta.
 const pricingTiers = [
   {
     name: "Free",
-    price: "$0",
+    price: "₹0",
     period: "",
     description: "Explore the platform at your own pace.",
     features: ["1 company", "3 simulations / month", "10 copilot messages / month", "CSV upload & manual entry", "Basic dashboard"],
@@ -114,29 +123,12 @@ const pricingTiers = [
   },
   {
     name: "Starter",
-    price: "$29",
+    price: STARTER_PRICES.INR.monthlyLabel,
     period: "/month",
     description: "For early-stage founders finding their footing.",
+    priceNote: `or ${STARTER_PRICES.INR.annualLabel}/year (${ANNUAL_LABEL}). International: ${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} a month.`,
     features: ["50 simulations / month", "100 copilot messages / month", "2 data connectors", "Truth Scan & Stress Tests", "Industry benchmarks"],
-    highlighted: false,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Growth",
-    price: "$49",
-    period: "/month",
-    description: "For scaling startups that decide weekly.",
-    features: ["Up to 3 companies", "Unlimited simulations & copilot", "10 data connectors", "Fundraising OS & cap table", "Board deck export"],
     highlighted: true,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Scale",
-    price: "$99",
-    period: "/month",
-    description: "Full power for serious founders.",
-    features: ["Unlimited companies & connectors", "Flight Simulator (AI agents)", "Digital Twin & Investor Room", "Hiring Planner", "Cross-company intelligence"],
-    highlighted: false,
     cta: "Get Started Free",
   },
 ];
@@ -629,6 +621,8 @@ function StatsBand() {
 
 function PricingPreview() {
   const reduced = useReducedMotion();
+  const { data: plansData } = usePlans();
+  const paidEnabled = !!plansData?.payments_enabled && plansData?.provider === "razorpay";
   return (
     <section className="border-t bg-card/30">
       <div className="mx-auto max-w-6xl px-4 py-20 md:py-24">
@@ -637,10 +631,12 @@ function PricingPreview() {
             Simple, transparent pricing
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Every feature is free during early access — no credit card required. The prices below are planned for later.
+            {paidEnabled
+              ? "Start free — no credit card required. Upgrade to Starter when you need more; cancel anytime."
+              : "Every feature is free during the public beta — no credit card required. The Starter price below is planned for later, once paid plans start."}
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 max-w-3xl mx-auto">
           {pricingTiers.map((tier, i) => (
             <motion.div
               key={tier.name}
@@ -664,6 +660,9 @@ function PricingPreview() {
                 <span className="text-4xl font-bold text-foreground">{tier.price}</span>
                 <span className="text-muted-foreground">{tier.period}</span>
               </div>
+              {tier.priceNote && (
+                <p className="text-xs text-muted-foreground mt-1" data-testid="text-landing-price-note">{tier.priceNote}</p>
+              )}
               <p className="text-sm text-muted-foreground mt-1">{tier.description}</p>
               <ul className="space-y-2.5 mt-5 mb-6">
                 {tier.features.map((f) => (
@@ -746,13 +745,62 @@ function FAQSection() {
   );
 }
 
+/* --------------------------- built for your business --------------------------- */
+
+/**
+ * One link per industry homepage. The same list is in the prerendered homepage
+ * body (server/seo-prerender.ts), both read from client/src/data/industry-pages.ts,
+ * so `/` stays the complete general page and still points at every variant.
+ */
+function IndustryLinks() {
+  return (
+    <section className="border-t" aria-labelledby="industry-links-heading">
+      <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
+        <div className="mb-10 text-center">
+          <h2 id="industry-links-heading" className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+            Built for your kind of business
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+            Pick yours to see the metrics, tools and guides that matter for it.
+          </p>
+        </div>
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="landing-industry-links">
+          {INDUSTRY_PAGES.map((page) => {
+            const Icon = INDUSTRY_ICONS[page.icon];
+            return (
+              <li key={page.slug}>
+                <Link
+                  href={industryPath(page.slug)}
+                  className="group flex h-full items-start gap-3 rounded-xl border bg-card/60 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+                  data-testid={`link-industry-${page.slug}`}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" aria-hidden />
+                  </span>
+                  <span>
+                    <span className="flex items-center gap-1 font-semibold text-foreground">
+                      {page.label}
+                      <ArrowRight className="h-3.5 w-3.5 text-primary opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+                    </span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">{page.pickerHint}</span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 /* --------------------------------- page ---------------------------------- */
 
 export default function LandingPage() {
   useSEO({
     title: "FounderConsole — AI Decision Simulator for Founders",
     description:
-      "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 36 data connectors — replace spreadsheets with simulations.",
+      "FounderConsole is the AI-powered decision simulator for startup founders and D2C brands. Runway, burn and contribution margin with Monte Carlo simulations, an AI copilot, fundraising CRM and 36 data connectors. Free during public beta.",
     path: "/",
     jsonLd: [
       {
@@ -801,7 +849,13 @@ export default function LandingPage() {
 
   return (
     <MarketingLayout>
-      <Hero />
+      {/* The gate renders nothing for crawlers and no-JS visitors: `/` stays the
+          full general page. First-time human visitors get the industry picker;
+          returning ones get a small pill. */}
+      <div className="relative">
+        <HomeIndustryGate />
+        <Hero />
+      </div>
 
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10" data-testid="section-logo-cloud">
@@ -823,6 +877,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <IndustryLinks />
       <HowItWorks />
       <FeatureDemos />
       <Comparison />

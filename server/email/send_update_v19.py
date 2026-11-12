@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from datetime import datetime
 from server.email.service import _send_email_sync
+from server.email.recipients import load_recipients
 
 CAMPAIGN = "founderconsole_decisions_ux_feb2026_v19"
 
@@ -18,11 +19,8 @@ IMG_STRESS_TESTS = f"{BASE_URL}/email-assets/sim-stress-tests.png"
 IMG_COUNTER_MOVES = f"{BASE_URL}/email-assets/sim-counter-moves.png"
 IMG_METRICS = f"{BASE_URL}/email-assets/sim-metrics.png"
 
-RECIPIENTS = [
-    {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
-    {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
-]
+# Loaded from RECIPIENTS / RECIPIENTS_FILE (never committed); see recipients.py
+RECIPIENTS = load_recipients()
 
 
 def build_plain_text(rcpt: dict) -> str:

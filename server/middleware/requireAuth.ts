@@ -22,7 +22,7 @@ function b64urlDecode(s: string): Buffer {
   return Buffer.from(s, "base64");
 }
 
-function verifyJwtHS256(token: string, secret: string): Record<string, any> | null {
+export function verifyJwtHS256(token: string, secret: string): Record<string, any> | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [h, p, sig] = parts;
@@ -98,7 +98,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 }
 
 /**
- * Platform owner only (master JWT or ADMIN_MASTER_EMAIL match).
+ * Platform owner only (master JWT, or verified account matching ADMIN_MASTER_EMAIL).
  * Used for /admin/ai-governance founder-panel routes.
  */
 export async function requirePlatformAdmin(
@@ -133,7 +133,8 @@ export async function requirePlatformAdmin(
     const { users } = await import("../../shared/schema");
     const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     const email = (rows[0]?.email || "").toLowerCase().trim();
-    if (!email || email !== adminEmail) {
+    // An unverified account registered for the admin address is not the owner.
+    if (!email || email !== adminEmail || rows[0]?.is_email_verified !== true) {
       res.status(403).json({ error: "Access denied. Only the platform owner can access admin features." });
       return;
     }

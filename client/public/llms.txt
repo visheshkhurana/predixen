@@ -1,13 +1,19 @@
 # FounderConsole
 
-> FounderConsole is an AI decision simulator for startup founders. It connects your company's
-> financial data, runs Monte Carlo simulations, and answers runway, burn and fundraising
-> questions with probability ranges (P10/P50/P90) instead of a single spreadsheet forecast.
-> Free during public beta; no credit card required.
+> FounderConsole is an AI decision simulator for startup founders and D2C (direct-to-consumer)
+> brands. It connects your company's financial data, runs Monte Carlo simulations, and answers
+> runway, burn, contribution margin and fundraising questions with probability ranges
+> (P10/P50/P90) instead of a single spreadsheet forecast. Free during public beta; no credit
+> card required.
+
+Who it is for: founders and finance leads of Indian D2C and Shopify brands who track
+contribution margin (CM1/CM2/CM3), RTO and COD, ad spend and MER, inventory, cash and
+runway in rupees (lakh/crore); and startup founders generally who need runway, burn and
+fundraising answers.
 
 FounderConsole publishes the benchmarks and formulas it uses, so its pages can be quoted
 directly. The figures in "Citable facts" below are the ones the site itself publishes.
-Last updated: 2026-10-19.
+Last updated: 2026-11-12.
 
 ## Citable facts and formulas
 
@@ -27,11 +33,63 @@ Last updated: 2026-10-19.
   (early access). No credit card is required, and no plan is charged yet. Paid
   tiers come later.
 
+## D2C finance: definitions and formulas
+
+Definitions FounderConsole uses for D2C brands (also on
+https://founderconsole.ai/tools/d2c-contribution-margin):
+
+- Net revenue = value of orders delivered and kept, excluding GST, after discounts.
+  RTO (return to origin) orders and customer returns are not revenue.
+- CM1 (contribution margin 1) = net revenue - COGS.
+- CM2 = CM1 - fulfilment (forward shipping, packaging, reverse shipping on RTO and
+  returns) - payment costs (gateway fees on prepaid orders, COD fees).
+- CM3 = CM2 - marketing (ads, influencers, affiliates). CM3 is what orders contribute
+  to fixed costs and profit; if CM3 is negative, growth increases the loss.
+- MER (marketing efficiency ratio) = net revenue / total marketing spend. Unlike platform
+  ROAS, it cannot be inflated by attribution or double counting.
+- Break-even MER = 1 / CM2 margin. Below it, marketing loses money at CM3.
+- D2C runway = cash / monthly cash burn, where cash burn = fixed costs - CM3 + net
+  inventory build + growth in COD remittances and marketplace payouts owed to you.
+
+Worked example (illustrative brand, not a benchmark): Rs 1,200 AOV ex-GST, 2,000 orders a
+month, 18% RTO, 5% returns, 55% COD, Rs 420 COGS, Rs 70 shipping each way, Rs 30 packaging,
+2% gateway fee, Rs 40 COD fee, Rs 6 lakh marketing. Net revenue Rs 18.70 lakh; CM1 Rs 12.15
+lakh (65.0%); CM2 Rs 9.27 lakh (49.6%); CM3 Rs 3.27 lakh (17.5%), about Rs 199 per delivered
+order; MER 3.12x vs break-even MER 2.02x. At 30% RTO, CM3 falls to Rs 1.38 lakh. In this
+example each percentage point of RTO costs about Rs 15,700 of CM3 a month.
+
+FounderConsole does not publish industry benchmark percentages for Indian D2C margins
+because no sourced, dated dataset backs the figures that usually circulate.
+
+## Built for your business
+
+One page per kind of business, each with the numbers that business runs on:
+
+- [D2C & e-commerce](https://founderconsole.ai/for/d2c): CM1, CM2 and CM3 per order in
+  rupees, the cost of RTO and COD, MER, and the runway that inventory leaves.
+- [SaaS / B2B software](https://founderconsole.ai/for/saas): MRR, ARR, churn, net revenue
+  retention, burn multiple and CAC payback, with runway to the next round.
+- [Marketplace / platform](https://founderconsole.ai/for/marketplace): GMV separated from
+  take rate and net revenue, supply and demand incentives, contribution per order.
+- [Agency / services](https://founderconsole.ai/for/agency): utilisation, project margins,
+  the gap between invoicing and getting paid, and whether the next hire is affordable.
+- [Fintech](https://founderconsole.ai/for/fintech): per-user unit economics, LTV against
+  CAC, CAC payback and the regulatory capital requirement, with runway stress tests.
+- [Early-stage / pre-revenue](https://founderconsole.ai/for/startup): runway and burn,
+  hiring plans, and the fundraising timeline as a range rather than a single date.
+
 ## Free tools
 
 - [Startup Runway Calculator](https://founderconsole.ai/tools/runway-calculator): enter cash
   on hand, monthly revenue, expenses and growth rate to see months of runway remaining and
   the month the cash runs out.
+- [D2C Contribution Margin Calculator](https://founderconsole.ai/tools/d2c-contribution-margin):
+  CM1, CM2 and CM3 per order in rupees from AOV, RTO rate, COD share, COGS, shipping and
+  marketing, with MER and break-even MER. Runs in the browser; nothing is stored.
+- [Burn Multiple Calculator](https://founderconsole.ai/tools/burn-multiple),
+  [Dilution Calculator](https://founderconsole.ai/tools/dilution) and
+  [LTV:CAC Calculator](https://founderconsole.ai/tools/ltv-cac). All free tools:
+  https://founderconsole.ai/tools
 - [Default Alive or Default Dead](https://founderconsole.ai/default-alive): Paul Graham's
   test, answered in 30 seconds - at current growth and current expenses, do you reach
   profitability before the money runs out?
@@ -58,11 +116,19 @@ Last updated: 2026-10-19.
 
 ## Blog
 
-FounderConsole's blog at https://founderconsole.ai/blog covers startup financial management,
+FounderConsole's blog at https://founderconsole.ai/blog covers D2C finance (contribution
+margin, RTO and COD, MER, inventory and runway), startup financial management,
 Monte Carlo forecasting, cap table and dilution, AI in financial planning, fundraising
 preparation, burn rate and unit economics, SaaS metrics, and board reporting.
 
 Posts an AI assistant is most likely to cite:
+
+- [CM1, CM2, CM3: contribution margin for D2C brands](https://founderconsole.ai/blog/cm1-cm2-cm3-contribution-margin-d2c)
+- [How RTO and COD eat D2C margins](https://founderconsole.ai/blog/rto-cod-d2c-margins)
+- [MER vs ROAS for D2C brands](https://founderconsole.ai/blog/mer-vs-roas-d2c)
+- [Runway for a D2C brand with inventory](https://founderconsole.ai/blog/d2c-runway-with-inventory)
+- [D2C unit economics in India: a per-order P&L](https://founderconsole.ai/blog/d2c-unit-economics-india)
+- [Shopify sales vs real revenue (GST, RTO, returns)](https://founderconsole.ai/blog/shopify-sales-vs-net-revenue-d2c)
 
 - [How to calculate startup runway](https://founderconsole.ai/blog/how-to-calculate-startup-runway)
 - [Seed-stage SaaS benchmarks 2026](https://founderconsole.ai/blog/seed-stage-saas-benchmarks-2026)
@@ -78,6 +144,7 @@ Posts an AI assistant is most likely to cite:
 
 - Website: https://founderconsole.ai
 - About: https://founderconsole.ai/about - Contact: https://founderconsole.ai/contact
+- Full text of every blog post for language models: https://founderconsole.ai/llms-full.txt
 - Twitter: https://twitter.com/founderconsole
 - LinkedIn: https://linkedin.com/company/founderconsole
 
