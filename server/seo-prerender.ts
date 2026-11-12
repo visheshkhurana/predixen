@@ -1037,7 +1037,7 @@ function buildIndustryLandingBodyContent(page: IndustryPage): string {
 <h2>What gets in the way, and what helps</h2>
 <ul>${pains}</ul>
 <h2>Connect what you already use</h2>
-<p>${esc(page.connectors.join(", "))} — among the 34 read-only data connectors. CSV upload and manual entry work too.</p>
+<p>${esc(page.connectors.join(", "))} — among the 35 read-only data connectors. CSV upload and manual entry work too.</p>
 <h2>Free tools and guides</h2>
 <ul>${links}</ul>
 <h2>Frequently asked questions</h2>
