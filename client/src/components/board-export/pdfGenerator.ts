@@ -438,7 +438,7 @@ function buildPrintableHTML(slides: SlideData[], companyName: string): string {
     }
 
     if (slide.content && !slide.narrativeHtml && slide.type !== 'chart' && slide.type !== 'simulation' && slide.type !== 'comparison') {
-      body += `<div style="margin-top:8px;line-height:1.8;color:${COLORS.medium};font-size:14px;white-space:pre-wrap;">${slide.content}</div>`;
+      body += `<div style="margin-top:8px;line-height:1.8;color:${COLORS.medium};font-size:14px;white-space:pre-wrap;">${escHtml(slide.content)}</div>`;
     }
 
     if (slide.imageBase64) {
