@@ -34,6 +34,8 @@ import { CopilotDemo } from "@/components/marketing/redesign/CopilotDemo";
 import { TwinDashboardDemo } from "@/components/marketing/redesign/TwinDashboardDemo";
 import { Marquee } from "@/components/marketing/redesign/Marquee";
 import { trackFunnel } from "@/lib/funnel";
+import { HomeIndustryGate, INDUSTRY_ICONS } from "@/components/marketing/IndustryPicker";
+import { INDUSTRY_PAGES, industryPath } from "@/data/industry-pages";
 
 const integrations = [
   "Stripe", "QuickBooks", "Gusto", "Mercury", "Brex", "Plaid", "Xero", "Shopify",
@@ -746,6 +748,55 @@ function FAQSection() {
   );
 }
 
+/* --------------------------- built for your business --------------------------- */
+
+/**
+ * One link per industry homepage. The same list is in the prerendered homepage
+ * body (server/seo-prerender.ts), both read from client/src/data/industry-pages.ts,
+ * so `/` stays the complete general page and still points at every variant.
+ */
+function IndustryLinks() {
+  return (
+    <section className="border-t" aria-labelledby="industry-links-heading">
+      <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
+        <div className="mb-10 text-center">
+          <h2 id="industry-links-heading" className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+            Built for your kind of business
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+            Pick yours to see the metrics, tools and guides that matter for it.
+          </p>
+        </div>
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="landing-industry-links">
+          {INDUSTRY_PAGES.map((page) => {
+            const Icon = INDUSTRY_ICONS[page.icon];
+            return (
+              <li key={page.slug}>
+                <Link
+                  href={industryPath(page.slug)}
+                  className="group flex h-full items-start gap-3 rounded-xl border bg-card/60 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+                  data-testid={`link-industry-${page.slug}`}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" aria-hidden />
+                  </span>
+                  <span>
+                    <span className="flex items-center gap-1 font-semibold text-foreground">
+                      {page.label}
+                      <ArrowRight className="h-3.5 w-3.5 text-primary opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+                    </span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">{page.pickerHint}</span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 /* --------------------------------- page ---------------------------------- */
 
 export default function LandingPage() {
@@ -801,7 +852,13 @@ export default function LandingPage() {
 
   return (
     <MarketingLayout>
-      <Hero />
+      {/* The gate renders nothing for crawlers and no-JS visitors: `/` stays the
+          full general page. First-time human visitors get the industry picker;
+          returning ones get a small pill. */}
+      <div className="relative">
+        <HomeIndustryGate />
+        <Hero />
+      </div>
 
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10" data-testid="section-logo-cloud">
@@ -823,6 +880,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <IndustryLinks />
       <HowItWorks />
       <FeatureDemos />
       <Comparison />

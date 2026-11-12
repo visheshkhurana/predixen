@@ -19,6 +19,7 @@ import { trackEvent } from '@/lib/posthog';
 import { SAMPLE_COMPANY, SAMPLE_FINANCIALS } from '@/lib/sampleCompany';
 import { SampleFirstRunCard } from '@/components/sample-data/SampleFirstRunCard';
 import { toNumber } from '@/lib/clearableNumber';
+import { onboardingIndustryPrefill, readStoredIndustry } from '@/lib/industryPicker';
 
 const STEPS = [
   { id: 1, title: 'Welcome', description: 'Tell us about your startup' },
@@ -111,14 +112,17 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [companyData, setCompanyData] = useState({
+  const [companyData, setCompanyData] = useState(() => ({
     name: '',
     website: '',
-    industry: '',
+    // Prefill only: the industry chosen on the homepage picker or carried by an
+    // industry page's signup link (`?industry=`). The founder can change it, and
+    // an existing company's industry (effect below) still wins.
+    industry: typeof window === 'undefined' ? '' : onboardingIndustryPrefill(window.location.search, readStoredIndustry()),
     stage: '',
     currency: 'USD',
     amount_scale: 'UNITS' as AmountScale,
-  });
+  }));
   // Optional financials hold TEXT, same as the runway calculator. Parsing
   // Number(e.target.value) on every keystroke made Number("") snap a cleared
   // field back to 0 (session 01a08122 @ t=50s on #payroll / #opex / #gross-margin).
