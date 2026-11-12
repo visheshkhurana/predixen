@@ -81,6 +81,7 @@ EXEMPT_PATHS = [
     "/auth/refresh",
     "/companies/*/seed-sample",
     "/billing/webhook",  # Stripe webhook — authenticated by signature, not session
+    "/billing/razorpay/webhook",  # Razorpay webhook — authenticated by HMAC signature, not session
     # RFC 8058 one-click POST has no session and no CSRF header.
     "/email/unsubscribe",
     "/api/email/unsubscribe",

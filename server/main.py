@@ -263,6 +263,14 @@ async def _run_deferred_startup():
         except Exception as e:
             logger.warning(f"Could not ensure stripe reconciliation table: {e}")
 
+        try:
+            from server.models.razorpay_billing import RazorpaySubscription, RazorpayWebhookEvent
+            RazorpaySubscription.__table__.create(bind=engine, checkfirst=True)
+            RazorpayWebhookEvent.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured razorpay billing tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure razorpay billing tables: {e}")
+
         # #176 columns. create_all does not alter an existing leads table, and
         # production leaves RUN_MIGRATIONS off, so this is not behind that flag.
         try:
@@ -494,6 +502,7 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/auth/refresh",
     "/companies/*/seed-sample",
     "/billing/webhook",  # Stripe webhook — authenticated by signature, not session
+    "/billing/razorpay/webhook",  # Razorpay webhook — X-Razorpay-Signature HMAC
     # RFC 8058 one-click POST has no session and no CSRF header.
     "/email/unsubscribe",
     "/api/email/unsubscribe",

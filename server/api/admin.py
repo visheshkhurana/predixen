@@ -123,6 +123,11 @@ class DashboardMetrics(BaseModel):
     total_companies: int
     total_subscriptions: int
     mrr: float
+    # Per-currency native totals, USD conversions and the FX used (see
+    # server/core/admin_mrr.py). None when mrr came from the financial-records
+    # fallback below.
+    mrr_breakdown: Optional[dict] = None
+    mrr_source: str = "subscriptions"
     active_simulations: int
     truth_scans_today: int
 
@@ -156,11 +161,12 @@ def get_dashboard_metrics(
     total_companies = db.query(Company).count()
     total_subscriptions = db.query(Subscription).filter(Subscription.status == "active").count()
     
-    mrr_result = db.query(func.sum(Subscription.monthly_price)).filter(
-        Subscription.status == "active"
-    ).scalar()
-    mrr = float(mrr_result) if mrr_result else 0.0
-    
+    from server.core.admin_mrr import compute_platform_mrr
+    platform_mrr = compute_platform_mrr(db)
+    mrr = platform_mrr["mrr_usd"]
+    mrr_breakdown = platform_mrr["breakdown"]
+    mrr_source = "subscriptions"
+
     if mrr == 0:
         from sqlalchemy import desc
         latest_records = (
@@ -177,6 +183,8 @@ def get_dashboard_metrics(
         )
         if latest_mrr and latest_mrr > 0:
             mrr = float(latest_mrr)
+            mrr_source = "financial_records"
+            mrr_breakdown = None
     
     active_simulations = db.query(Scenario).filter(
         Scenario.created_at >= datetime.utcnow() - timedelta(days=7)
@@ -193,6 +201,8 @@ def get_dashboard_metrics(
         total_companies=total_companies,
         total_subscriptions=total_subscriptions,
         mrr=mrr,
+        mrr_breakdown=mrr_breakdown,
+        mrr_source=mrr_source,
         active_simulations=active_simulations,
         truth_scans_today=truth_scans_today
     )
