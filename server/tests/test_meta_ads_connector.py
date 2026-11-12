@@ -378,3 +378,57 @@ def test_months_without_store_data_still_list_their_spend(db):
     assert months[0]["period"] == "2026-10-01"
     assert months[0]["ad_spend"]["total"] == 1000
     assert months[0]["unit_economics"] is None
+
+
+# --- the sync route ----------------------------------------------------------
+
+def _route_client(db, monkeypatch, result):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.api import connectors as connectors_api
+    from server.core.db import get_db
+    from server.core.security import get_current_user
+
+    company = db.query(Company).one()
+    company.metadata_json = {"connectors": {"meta_ads": {
+        "connected": True, "credentials": {"access_token": "EAAtoken", "ad_account_ids": "act_1"}}}}
+    db.commit()
+
+    async def fake_sync(self):
+        return result
+
+    monkeypatch.setattr(meta_ads.MetaAdsConnector, "sync_all", fake_sync)
+    app = FastAPI()
+    app.include_router(connectors_api.router, prefix="/api")
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: db.query(User).one()
+    return TestClient(app)
+
+
+def test_route_stores_spend_and_sets_marketing_spend(db, monkeypatch):
+    from server.connectors.base import SyncResult
+
+    result = SyncResult(success=True, provider_id="meta_ads", sync_type="full", records_synced=1, metadata={
+        "ad_spend": {"source": "meta_ads", "months": [
+            {"period": "2026-10-01", "accounts": [_acct("act_1", 42000, value=126000)]}]}})
+    client = _route_client(db, monkeypatch, result)
+    res = client.post("/api/connectors/companies/1/sync/meta_ads")
+    assert res.status_code == 200, res.text
+    db.expire_all()
+    assert _month(db).marketing_spend == 42000
+    assert db.query(D2CAdSpend).one().purchase_value == 126000
+
+
+def test_route_marks_needs_reauth_on_expired_token(db, monkeypatch):
+    from server.connectors.base import SyncResult
+
+    result = SyncResult(success=False, provider_id="meta_ads", sync_type="full",
+                        errors=["Meta access token is expired or no longer valid (x). Reconnect Meta Ads."],
+                        metadata={"needs_reauth": True})
+    client = _route_client(db, monkeypatch, result)
+    res = client.post("/api/connectors/companies/1/sync/meta_ads")
+    assert res.status_code == 400
+    status = client.get("/api/connectors/companies/1/status").json()
+    meta = next(c for c in status["connectors"] if c["provider_id"] == "meta_ads")
+    assert meta["needs_reauth"] is True and "Reconnect" in meta["error"]
