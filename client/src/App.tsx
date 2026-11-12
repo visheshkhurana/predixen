@@ -140,6 +140,7 @@ const SecurityPage = lazy(() => import("@/pages/security"));
 const ContactPage = lazy(() => import("@/pages/contact"));
 const BlogPage = lazy(() => import("@/pages/blog"));
 const RunwayByIndustryPage = lazy(() => import("@/pages/runway-by-industry"));
+const IndustryLandingPage = lazy(() => import("@/pages/industry-landing"));
 const EmbedSurvivalPage = lazy(() => import("@/pages/embed-survival"));
 const FAQPage = lazy(() => import("@/pages/faq"));
 const DemoPage = lazy(() => import("@/pages/demo"));
@@ -348,6 +349,8 @@ function Router() {
         <Route path="/vs/runway-calculator-vs-spreadsheet">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><VsRunwayCalculatorVsSpreadsheetPage /></Suspense>}</Route>
         <Route path="/default-alive">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DefaultAlivePage /></Suspense>}</Route>
         <Route path="/tools/burn-multiple">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BurnMultiplePage /></Suspense>}</Route>
+        {/* Industry homepages, one per entry in client/src/data/industry-pages.ts. */}
+        <Route path="/for/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><IndustryLandingPage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
         <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
         {/* HAG-449: the entry point the hero's "View Demo" uses. It logs into the
@@ -903,7 +906,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   ];
   const marketingPrefixes = [
     '/blog/', '/tools/', '/admin', '/scenarios/shared/',
-    '/survival/', '/runway/', '/embed/', '/vs/',
+    '/survival/', '/runway/', '/embed/', '/vs/', '/for/',
   ];
   // Use wouter's location (not window.location) so client-side navigations
   // re-evaluate the shell instead of keeping whatever was true on hard load.

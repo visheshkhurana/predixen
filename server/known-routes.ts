@@ -89,6 +89,7 @@ export const APP_ROUTE_PATTERNS: readonly string[] = [
   "/embed/survival",
   "/faq",
   "/features",
+  "/for/:slug",
   "/fundraising",
   "/goals",
   "/health-check",

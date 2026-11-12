@@ -150,12 +150,12 @@ test("unknown URLs answer 404, not a 200 duplicate of the homepage", () => {
 test("unknown blog slugs and runway verticals answer 404", () => {
   // Both families already emitted `noindex, follow` and a "Page not found"
   // title -- from a 200. The meta was right and the status was the bug.
-  for (const url of ["/blog/no-such-post-xyz", "/runway/no-such-industry"]) {
+  for (const url of ["/blog/no-such-post-xyz", "/runway/no-such-industry", "/for/no-such-industry", "/for/saas/extra", "/for"]) {
     assert.equal(decideShellResponse(SHELL, url).status, 404, `${url} must be a 404`);
   }
   // And the real ones keep working: a 404 that swallowed a live page would be
   // a worse bug than the one being fixed.
-  for (const url of ["/blog", "/runway/saas", ...NOW_REAL_TOOLS]) {
+  for (const url of ["/blog", "/runway/saas", "/for/saas", "/for/d2c", ...NOW_REAL_TOOLS]) {
     assert.equal(decideShellResponse(SHELL, url).status, 200, `${url} must stay a 200`);
   }
 });

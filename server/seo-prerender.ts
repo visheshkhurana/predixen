@@ -17,6 +17,18 @@ import { aiCitation } from "../client/src/data/ai-citation";
 // modules the React page renders, so the crawler copy cannot drift from the visitor copy.
 import { D2C_MARGIN_DEFINITIONS, D2C_MARGIN_FAQS } from "../client/src/data/d2c-margin-content";
 import { computeD2cMargin, D2C_WORKED_EXAMPLE, formatInr } from "../client/src/lib/tools/d2cMargin";
+// Same rule: every /for/<slug> industry homepage, its meta, JSON-LD and visible body are
+// rendered from the config the React page renders, so adding an industry is one config
+// entry and the crawler copy cannot drift from the visitor copy.
+import {
+  INDUSTRY_PAGES,
+  METRIC_SOURCE_LABEL,
+  getIndustryPage,
+  industryJsonLd,
+  industryPath,
+  industrySignupHref,
+  type IndustryPage,
+} from "../client/src/data/industry-pages";
 // Legal entity, grievance officer, refund terms and the paid price: one copy each,
 // shared with the React pages. The price itself comes from shared/pricing.json,
 // which server/core/plans.py also reads, so what a reviewer reads here is what
@@ -124,6 +136,10 @@ function buildLandingBodyContent(): string {
 <li><strong>AI Founder Copilot</strong> — Ask strategic questions in plain English. Get recommendations from parallel AI agents specialized in finance, strategy, and market analysis.</li>
 <li><strong>Decision Engine</strong> — Track every decision with full context. Learn from outcomes, compare scenarios, and build institutional memory.</li>
 </ul>
+<h2>Built for your kind of business</h2>
+<ul>${INDUSTRY_PAGES.map(
+  (p) => `<li><a href="${industryPath(p.slug)}">${escapeHtml(p.label)}</a> — ${escapeHtml(p.pickerHint)}</li>`,
+).join("")}</ul>
 <h2>Frequently Asked Questions</h2>
 ${faqHtml}
 <h2>Try a free tool first</h2>
@@ -989,6 +1005,48 @@ function buildIndustryBodyContent(slug: string): string | null {
 </article>`;
 }
 
+/**
+ * Visible SSR body for one `/for/<slug>` industry homepage. Everything comes from
+ * client/src/data/industry-pages.ts. Deliberately contains no picker markup: the
+ * industry chooser is client-only and never shown to crawlers.
+ */
+function buildIndustryLandingBodyContent(page: IndustryPage): string {
+  const pains = page.pains
+    .map(
+      (p) =>
+        `<li><strong>${esc(p.pain)}</strong> ${esc(p.feature)}: ${esc(p.detail)}${
+          p.href ? ` <a href="${esc(p.href)}">Try it free</a>.` : ""
+        }</li>`,
+    )
+    .join("");
+  const metrics = page.metrics
+    .map((m) => `<li><strong>${esc(m.label)}</strong> (${esc(METRIC_SOURCE_LABEL[m.source])}) — ${esc(m.hint)}</li>`)
+    .join("");
+  const links = page.links.map((l) => `<li><a href="${esc(l.href)}">${esc(l.label)}</a></li>`).join("");
+  const faqs = page.faqs.map((f) => `<section><h3>${esc(f.q)}</h3><p>${esc(f.a)}</p></section>`).join("");
+  const others = INDUSTRY_PAGES.filter((p) => p.slug !== page.slug)
+    .map((p) => `<li><a href="${industryPath(p.slug)}">${esc(p.label)}</a></li>`)
+    .join("");
+  return `<article>
+<p>${esc(page.eyebrow)}</p>
+<h1>${esc(page.headline)}</h1>
+<p>${esc(page.subhead)}</p>
+<p><a href="${esc(industrySignupHref(page.slug))}">Start free</a> — every feature is free during the public beta, no credit card required.</p>
+<h2>The numbers that matter for ${esc(page.label.toLowerCase())}</h2>
+<ul>${metrics}</ul>
+<h2>What gets in the way, and what helps</h2>
+<ul>${pains}</ul>
+<h2>Connect what you already use</h2>
+<p>${esc(page.connectors.join(", "))} — among the 34 read-only data connectors. CSV upload and manual entry work too.</p>
+<h2>Free tools and guides</h2>
+<ul>${links}</ul>
+<h2>Frequently asked questions</h2>
+${faqs}
+<h2>Other business types</h2>
+<ul>${others}<li><a href="/">Everything FounderConsole does</a></li></ul>
+</article>`;
+}
+
 function stripTrailingSlash(path: string): string {
   if (path.length > 1 && path.endsWith("/")) {
     return path.replace(/\/+$/, "");
@@ -1388,6 +1446,24 @@ function getPageMeta(path: string): PageMeta | null {
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
         description: "An AI CFO for founders without a finance team. Ask about runway, burn rate and hiring, and get answers from your real numbers with Monte Carlo confidence bands.",
       }],
+    };
+  }
+
+  // Industry homepages. One per INDUSTRY_PAGES entry; an unknown slug is a real 404.
+  if (path.startsWith("/for/")) {
+    const page = getIndustryPage(path.slice("/for/".length));
+    if (!page || path.slice("/for/".length).includes("/")) {
+      return notFoundMeta(
+        SITE_URL + "/",
+        `This page does not exist. FounderConsole has pages for: ${INDUSTRY_PAGES.map((p) => p.label).join(", ")}.`,
+      );
+    }
+    return {
+      title: page.title,
+      description: page.description,
+      canonical: `${SITE_URL}${industryPath(page.slug)}`,
+      bodyContent: buildIndustryLandingBodyContent(page),
+      jsonLd: industryJsonLd(page),
     };
   }
 

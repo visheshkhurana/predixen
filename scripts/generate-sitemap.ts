@@ -45,6 +45,9 @@ import { fileURLToPath } from "url";
 // extensionless specifier, but plain `node` (which strips types itself) does not.
 // scripts/ is outside tsconfig's `include` and is never bundled, so this costs nothing.
 import { blogPosts } from "../client/src/data/blog-posts.ts";
+// Industry homepages are generated from their config, like the blog: add an entry to
+// INDUSTRY_PAGES and its /for/<slug> sitemap entry appears on the next generate.
+import { INDUSTRY_PAGES } from "../client/src/data/industry-pages.ts";
 
 export const ORIGIN = "https://founderconsole.ai";
 export const BLOG_PREFIX = "/blog/";
@@ -118,6 +121,12 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/runway/hardware", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
   { path: "/runway/biotech", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
   { path: "/runway/devtools", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  ...INDUSTRY_PAGES.map((page) => ({
+    path: `/for/${page.slug}`,
+    lastmod: "2026-11-12",
+    changefreq: "monthly",
+    priority: "0.9",
+  })),
 ];
 
 const HEADER =
