@@ -244,3 +244,105 @@ FEATURE_LABELS: Dict[str, str] = {
     Feature.FUNDRAISING_READINESS: "Fundraising Readiness Score",
     Feature.INVESTOR_ROOM: "Investor Room",
 }
+
+
+# ---------------------------------------------------------------------------
+# Regional pricing (Razorpay billing).
+#
+# Used only when BILLING_PROVIDER=razorpay. The Stripe path keeps using the
+# USD price_monthly / price_annual values above, unchanged.
+#
+# One table, keyed by (tier, currency, interval). Each entry carries the
+# amount and the name of the env var that holds the matching Razorpay plan id
+# (plan ids are created in the Razorpay dashboard and differ between test
+# and live mode, so they are never hardcoded).
+#
+# Owner pricing decision (2026-11-12, final):
+#   INR  ₹3,000 / month   (India)
+#   USD  $39 / month      (US and every other country)
+#   AED  AED 149 / month  (UAE)
+# Annual billing is "2 months free": annual = monthly × ANNUAL_MULTIPLIER.
+# Annual amounts are derived, never written down separately, so changing a
+# monthly price below updates the annual price automatically.
+#
+# Only STARTER is sold through Razorpay for now. GROWTH and SCALE keep their
+# USD Stripe config above and are hidden from the plan list when the
+# provider is Razorpay (no regional price = not offered).
+# ---------------------------------------------------------------------------
+
+SUPPORTED_CURRENCIES = ("INR", "USD", "AED")
+DEFAULT_CURRENCY = "INR"  # primary market: Indian D2C brands
+INTERVALS = ("monthly", "annual")
+ANNUAL_MULTIPLIER = 10  # "2 months free"
+ANNUAL_LABEL = "2 months free"
+
+CURRENCY_SYMBOLS: Dict[str, str] = {"INR": "₹", "USD": "$", "AED": "AED "}
+
+# Country (ISO-3166 alpha-2) -> billing currency. Anything else -> USD.
+COUNTRY_CURRENCY: Dict[str, str] = {"IN": "INR", "US": "USD", "AE": "AED"}
+FALLBACK_CURRENCY = "USD"
+
+# Monthly price per (tier, currency), in major units (rupees, dollars, dirhams).
+REGIONAL_MONTHLY_PRICES: Dict[tuple, int] = {
+    (PlanTier.STARTER.value, "INR"): 3000,
+    (PlanTier.STARTER.value, "USD"): 39,
+    (PlanTier.STARTER.value, "AED"): 149,
+}
+
+
+def annual_from_monthly(monthly: int) -> int:
+    return monthly * ANNUAL_MULTIPLIER
+
+
+def razorpay_plan_env_var(tier: str, currency: str, interval: str) -> str:
+    """e.g. RAZORPAY_PLAN_STARTER_MONTHLY_INR"""
+    return f"RAZORPAY_PLAN_{str(tier).upper()}_{interval.upper()}_{currency.upper()}"
+
+
+def _build_price_table() -> Dict[tuple, dict]:
+    table: Dict[tuple, dict] = {}
+    for (tier, currency), monthly in REGIONAL_MONTHLY_PRICES.items():
+        for interval in INTERVALS:
+            amount = monthly if interval == "monthly" else annual_from_monthly(monthly)
+            table[(tier, currency, interval)] = {
+                "amount": amount,
+                # Razorpay amounts are in the smallest unit (paise / cents / fils).
+                "amount_minor": amount * 100,
+                "currency": currency,
+                "plan_env": razorpay_plan_env_var(tier, currency, interval),
+            }
+    return table
+
+
+# (tier, currency, interval) -> {amount, amount_minor, currency, plan_env}
+PRICE_TABLE: Dict[tuple, dict] = _build_price_table()
+
+
+def normalize_currency(value) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    v = value.strip().upper()
+    return v if v in SUPPORTED_CURRENCIES else None
+
+
+def currency_for_country(country) -> Optional[str]:
+    """Map an ISO country code to a billing currency. Unknown/blank -> None."""
+    if not isinstance(country, str):
+        return None
+    c = country.strip().upper()
+    if len(c) != 2 or not c.isalpha() or c in ("XX", "T1"):  # Cloudflare unknown / Tor
+        return None
+    return COUNTRY_CURRENCY.get(c, FALLBACK_CURRENCY)
+
+
+def get_regional_price(tier: str, currency: str, interval: str) -> Optional[dict]:
+    tier = tier.value if isinstance(tier, PlanTier) else tier
+    return PRICE_TABLE.get((tier, currency, interval))
+
+
+def regional_tiers(currency: str) -> List[str]:
+    """Paid tiers that have a regional price in this currency."""
+    return [
+        t.value for t in (PlanTier.STARTER, PlanTier.GROWTH, PlanTier.SCALE)
+        if (t.value, currency, "monthly") in PRICE_TABLE
+    ]
