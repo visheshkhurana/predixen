@@ -30,13 +30,13 @@ export const PRODUCT_NAME = "FounderConsole";
 export const PRODUCT_OF_LINE = `${PRODUCT_NAME} is a product of ${LEGAL_ENTITY_NAME}.`;
 
 /** OWNER: registered office address. Left as TODO = not rendered. */
-export const LEGAL_ENTITY_ADDRESS = "TODO: registered office address";
+export const LEGAL_ENTITY_ADDRESS = "ANM 84, First Floor, Akashneem Marg, DLF Phase-2, DLF Qutab Enclave, Gurugram, Haryana 122002, India";
 
 /** OWNER: Grievance Officer name. Left as TODO = not rendered. */
-export const GRIEVANCE_OFFICER_NAME = "TODO: grievance officer name";
+export const GRIEVANCE_OFFICER_NAME = "Vishesh Khurana";
 
 /** OWNER: Grievance Officer email. Left as TODO = SUPPORT_EMAIL is shown instead. */
-export const GRIEVANCE_OFFICER_EMAIL = "TODO: grievance officer email";
+export const GRIEVANCE_OFFICER_EMAIL = "hello@founderconsole.ai";
 
 /** The support address already published on /contact, /privacy and /terms. */
 export const SUPPORT_EMAIL = "hello@founderconsole.ai";
@@ -52,6 +52,10 @@ export const SUPPORT_EMAIL = "hello@founderconsole.ai";
 export const FIRST_PAYMENT_REFUND_WINDOW_DAYS = 7;
 
 /** Razorpay's refund timeline to the original payment method, once approved. */
+/** Governing law and courts for the Terms. */
+export const GOVERNING_LAW = "the laws of India";
+export const JURISDICTION_COURTS = "the courts at Gurugram, Haryana";
+
 export const REFUND_PROCESSING_TIME = "5–7 business days";
 
 export const LEGAL_PLACEHOLDER_PREFIX = "TODO";

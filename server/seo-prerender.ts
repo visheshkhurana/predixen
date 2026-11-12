@@ -23,6 +23,8 @@ import {
   SUPPORT_EMAIL,
   FIRST_PAYMENT_REFUND_WINDOW_DAYS,
   REFUND_PROCESSING_TIME,
+  GOVERNING_LAW,
+  JURISDICTION_COURTS,
   registeredAddress,
   grievanceOfficer,
 } from "../client/src/data/legal";
@@ -883,7 +885,7 @@ function buildTermsBodyContent(): string {
 <h2>Data Rights &amp; Intellectual Property</h2>
 <p>You retain full ownership of data you upload. We claim a limited license to process it solely to provide the Service. We will not sell or rent your data except as described in our <a href="/privacy">Privacy Policy</a>. The Service's design, code, algorithms, and AI models are owned by FounderConsole.</p>
 <h2>Governing Law</h2>
-<p>These Terms are governed by the laws of the State of California, United States. Contact <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> with questions.</p>
+<p>These Terms are governed by ${GOVERNING_LAW}, and disputes are subject to the exclusive jurisdiction of ${JURISDICTION_COURTS}. Contact <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> with questions.</p>
 <h2>Company</h2>
 ${legalEntityHtml()}
 </article>`;

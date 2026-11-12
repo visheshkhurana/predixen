@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from 'wouter';
 import { useSEO } from '@/lib/seo';
 import { LegalEntityNotice } from '@/components/marketing/LegalEntity';
-import { LEGAL_ENTITY_NAME, PRODUCT_OF_LINE, FIRST_PAYMENT_REFUND_WINDOW_DAYS } from '@/data/legal';
+import { LEGAL_ENTITY_NAME, PRODUCT_OF_LINE, FIRST_PAYMENT_REFUND_WINDOW_DAYS, GOVERNING_LAW, JURISDICTION_COURTS } from '@/data/legal';
 
 function Section({ icon: Icon, title, children, testId }: {
   icon: any; title: string; children: React.ReactNode; testId: string;
@@ -151,7 +151,7 @@ export default function TermsOfServicePage() {
         </Section>
 
         <Section icon={Gavel} title="Governing Law" testId="section-governing-law">
-          <p>These Terms are governed by and construed in accordance with the laws of the State of California, United States, without regard to conflict of law principles. Any disputes arising from these Terms shall be resolved in the state or federal courts located in San Francisco County, California.</p>
+          <p>These Terms are governed by and construed in accordance with {GOVERNING_LAW}, without regard to conflict of law principles. Any disputes arising from these Terms shall be subject to the exclusive jurisdiction of {JURISDICTION_COURTS}.</p>
         </Section>
 
         <Section icon={Mail} title="Contact" testId="section-terms-contact">
