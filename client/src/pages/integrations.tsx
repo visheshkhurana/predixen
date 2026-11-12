@@ -30,7 +30,8 @@ import {
   TrendingUp,
   Settings,
   Briefcase,
-  Bell
+  Bell,
+  Truck,
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot, SiStripe } from "react-icons/si";
 import { apiRequest } from "@/lib/queryClient";
@@ -87,6 +88,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   zoho: <Users className="h-6 w-6" />,
   zoho_books: <FileText className="h-6 w-6" />,
   tally: <Database className="h-6 w-6" />,
+  shiprocket: <Truck className="h-6 w-6" />,
   razorpayx_payroll: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
   keka: <Users className="h-6 w-6" />,
@@ -341,6 +343,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   paddle: { setupTime: "~10 min", category: "revenue" },
   shopify: { setupTime: "~10 min", category: "revenue" },
   woocommerce: { setupTime: "~10 min", category: "revenue" },
+  shiprocket: { setupTime: "~5 min", category: "revenue" },
   brex: { setupTime: "~5 min", category: "revenue" },
   netsuite: { setupTime: "~15 min", category: "accounting" },
   wave: { setupTime: "~10 min", category: "accounting" },
@@ -510,6 +513,12 @@ const paymentsProviders: IntegrationProvider[] = [
     name: "WooCommerce",
     description: "WordPress e-commerce for D2C brands and online stores",
     features: ["Order Revenue", "COD/Prepaid Split", "Customer Data", "Return Rate Analysis"],
+  },
+  {
+    id: "shiprocket",
+    name: "Shiprocket",
+    description: "Shipping for Indian D2C: what shipped, what came back (RTO), and what freight cost",
+    features: ["RTO Rate", "Freight per Order", "COD Share", "Customer Returns"],
   },
 ];
 
@@ -693,7 +702,7 @@ export default function IntegrationsPage() {
     queryKey: ["/api/connectors/companies", companyId, "status"],
   });
 
-  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp"; provider: string }) => {
@@ -792,7 +801,7 @@ export default function IntegrationsPage() {
     return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
   };
   
-  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -1461,6 +1470,10 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "client_secret", label: "Client Secret", placeholder: "Enter Ramp Client Secret" },
     { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
   ],
+  shiprocket: [
+    { field: "email", label: "API User Email", placeholder: "Shiprocket > Settings > API > Create API user" },
+    { field: "password", label: "API User Password", placeholder: "Password of that API user" },
+  ],
   shopify: [
     { field: "shop_domain", label: "Shop Domain", placeholder: "yourstore (without .myshopify.com)" },
     { field: "access_token", label: "Admin API Token", placeholder: "shpat_..." },
@@ -1537,7 +1550,7 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
+  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
   const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {
@@ -1778,7 +1791,7 @@ function ConnectDialog({
                     </div>
                   ))}
                   <p className="text-xs text-muted-foreground">
-                    For demo purposes, enter any values to simulate a connection.
+                    Credentials are stored encrypted and used only to read your data.
                   </p>
                 </div>
               ) : (

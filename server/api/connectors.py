@@ -554,6 +554,16 @@ async def sync_provider(
                         d2c_months.shopify_values(d2c_summary), source="shopify",
                     )
 
+            # Connectors with no ledger figures (e.g. Shiprocket) hand over a
+            # D2C month directly instead of a FinancialRecord.
+            d2c_month = result.metadata.get("d2c_month")
+            if isinstance(d2c_month, dict) and d2c_month.get("period"):
+                from server.services import d2c_months
+                d2c_months.upsert_month(
+                    db, company_id, date.fromisoformat(str(d2c_month["period"])[:10]),
+                    d2c_month.get("values") or {}, source=provider_id,
+                )
+
             db.commit()
 
             try:

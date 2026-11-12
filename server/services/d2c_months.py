@@ -14,6 +14,15 @@ from server.models.d2c_month import D2CMonth
 INPUT_FIELDS = tuple(f.name for f in fields(D2CPeriodInputs))
 MANUAL = "manual"
 
+# Fields where one connector knows better than another. Shopify counts orders
+# placed; the shipping partner counts what actually shipped and what came
+# back, so its numbers are kept even if a Shopify sync runs later.
+PREFERRED_SOURCE = {
+    "orders_shipped": "shiprocket",
+    "rto_orders": "shiprocket",
+    "cod_share": "shiprocket",
+}
+
 
 def month_start(value: date) -> date:
     return value.replace(day=1)
@@ -47,7 +56,11 @@ def upsert_month(
         if name not in INPUT_FIELDS:
             continue
         if source != MANUAL:
-            if value is None or sources.get(name) == MANUAL:
+            current = sources.get(name)
+            if value is None or current == MANUAL:
+                continue
+            preferred = PREFERRED_SOURCE.get(name)
+            if preferred and current == preferred and source != preferred:
                 continue
         setattr(row, name, value)
         if value is None:
