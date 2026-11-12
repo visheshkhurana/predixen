@@ -792,9 +792,11 @@ def _apply_razorpay_state(db: Session, rz: dict, local_status: Optional[str], en
         return True
 
     monthly = get_regional_price(plan, currency, "monthly")
-    # subscriptions.monthly_price feeds the admin MRR sum, which is in USD.
-    # Only USD subscriptions are written there; INR/AED amounts live in
-    # razorpay_subscriptions (amount + currency) until there is an FX rule.
+    # subscriptions.monthly_price is USD. Only USD subscriptions get a price
+    # here; INR/AED amounts live in razorpay_subscriptions (amount + currency).
+    # Admin MRR (server/core/admin_mrr.py) counts every active Razorpay
+    # subscription from razorpay_subscriptions, FX-converted, and skips this
+    # row, so nothing is counted twice.
     monthly_price = float(monthly["amount"]) if (monthly and currency == "USD") else 0.0
 
     params = {
