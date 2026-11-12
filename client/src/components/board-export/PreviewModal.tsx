@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
@@ -120,9 +121,7 @@ function formatShortDate(dateStr?: string): string {
 }
 
 function fmtCurrency(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n.toFixed(0)}`;
+  return formatCurrencyAbbrev(n);
 }
 
 function getSlideIcon(type: string, title: string) {
@@ -747,9 +746,7 @@ function formatVal(value: any, type: 'currency' | 'percent' | 'ratio' | 'months'
   if (isNaN(num)) return 'N/A';
   switch (type) {
     case 'currency':
-      if (Math.abs(num) >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
-      if (Math.abs(num) >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
-      return `$${num.toFixed(0)}`;
+      return formatCurrencyAbbrev(num);
     case 'percent':
       return `${num.toFixed(1)}%`;
     case 'ratio':

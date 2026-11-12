@@ -107,6 +107,7 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/tools/ltv-cac", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
   { path: "/vs/runway-calculator-vs-spreadsheet", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
   { path: "/contact", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.5" },
+  { path: "/refund-policy", lastmod: "2026-11-12", changefreq: "yearly", priority: "0.3" },
   { path: "/demo", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.6" },
   { path: "/survival-simulator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.6" },
   { path: "/runway/saas", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },

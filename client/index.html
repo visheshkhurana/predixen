@@ -6,6 +6,17 @@
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+      // Consent Mode: no analytics/ad storage until the visitor accepts
+      // (client/src/lib/consent.ts updates this when they choose).
+      var fcConsent = null;
+      try { fcConsent = localStorage.getItem('cookie-consent'); } catch (e) {}
+      var fcGranted = fcConsent === 'accepted' ? 'granted' : 'denied';
+      gtag('consent', 'default', {
+        analytics_storage: fcGranted,
+        ad_storage: fcGranted,
+        ad_user_data: fcGranted,
+        ad_personalization: fcGranted
+      });
       gtag('js', new Date());
       gtag('config', 'G-NJKW0TGC4C');
     </script>

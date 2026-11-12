@@ -43,3 +43,6 @@ server/models/__pycache__/
 roleplay-data/
 .claude/
 .gstack/
+
+# Ops-only newsletter recipient lists (see server/email/recipients.py)
+server/email/recipients.local.txt
