@@ -22,7 +22,7 @@ const SHELL = readFileSync("dist/public/index.html", "utf8");  // run from the r
 const WAS_BLANK = ["/pricing", "/demo", "/ai-cfo",
   "/runway/saas", "/runway/ecommerce", "/runway/fintech", "/runway/marketplace",
   "/runway/ai", "/runway/hardware", "/runway/biotech", "/runway/devtools",
-  "/features", "/product", "/about", "/compare", "/customers", "/use-cases", "/how-it-works", "/alternatives", "/signup", "/security", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
+  "/features", "/product", "/about", "/compare", "/customers", "/use-cases", "/how-it-works", "/alternatives", "/signup", "/security", "/faq", "/contact", "/privacy", "/terms", "/refund-policy", "/survival-simulator"];
 const ALREADY_WORKED = ["/", "/tools/runway-calculator", "/default-alive", "/blog"];
 const INDUSTRY_HOMEPAGES = INDUSTRY_PAGES.map((p) => `/for/${p.slug}`);
 

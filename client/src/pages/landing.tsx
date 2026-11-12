@@ -1,4 +1,6 @@
 import { Link } from "wouter";
+import { usePlans } from "@/hooks/use-subscription";
+import { STARTER_PRICES, ANNUAL_LABEL } from "@/data/public-pricing";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -104,10 +106,15 @@ const landingFaqs = [
   },
 ];
 
+// Starter is the one paid plan; its numbers come from shared/pricing.json (the
+// file plans.py charges from). Whether it is on sale is the same billing gate
+// as /pricing and /faq: payments_enabled + provider "razorpay" from
+// /api/billing/plans. With payments off it is shown as the price once paid
+// plans start, and every feature stays free during the public beta.
 const pricingTiers = [
   {
     name: "Free",
-    price: "$0",
+    price: "₹0",
     period: "",
     description: "Explore the platform at your own pace.",
     features: ["1 company", "3 simulations / month", "10 copilot messages / month", "CSV upload & manual entry", "Basic dashboard"],
@@ -116,29 +123,12 @@ const pricingTiers = [
   },
   {
     name: "Starter",
-    price: "$29",
+    price: STARTER_PRICES.INR.monthlyLabel,
     period: "/month",
     description: "For early-stage founders finding their footing.",
+    priceNote: `or ${STARTER_PRICES.INR.annualLabel}/year (${ANNUAL_LABEL}). International: ${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} a month.`,
     features: ["50 simulations / month", "100 copilot messages / month", "2 data connectors", "Truth Scan & Stress Tests", "Industry benchmarks"],
-    highlighted: false,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Growth",
-    price: "$49",
-    period: "/month",
-    description: "For scaling startups that decide weekly.",
-    features: ["Up to 3 companies", "Unlimited simulations & copilot", "10 data connectors", "Fundraising OS & cap table", "Board deck export"],
     highlighted: true,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Scale",
-    price: "$99",
-    period: "/month",
-    description: "Full power for serious founders.",
-    features: ["Unlimited companies & connectors", "Flight Simulator (AI agents)", "Digital Twin & Investor Room", "Hiring Planner", "Cross-company intelligence"],
-    highlighted: false,
     cta: "Get Started Free",
   },
 ];
@@ -631,6 +621,8 @@ function StatsBand() {
 
 function PricingPreview() {
   const reduced = useReducedMotion();
+  const { data: plansData } = usePlans();
+  const paidEnabled = !!plansData?.payments_enabled && plansData?.provider === "razorpay";
   return (
     <section className="border-t bg-card/30">
       <div className="mx-auto max-w-6xl px-4 py-20 md:py-24">
@@ -639,10 +631,12 @@ function PricingPreview() {
             Simple, transparent pricing
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Every feature is free during early access — no credit card required. The prices below are planned for later.
+            {paidEnabled
+              ? "Start free — no credit card required. Upgrade to Starter when you need more; cancel anytime."
+              : "Every feature is free during the public beta — no credit card required. The Starter price below is planned for later, once paid plans start."}
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 max-w-3xl mx-auto">
           {pricingTiers.map((tier, i) => (
             <motion.div
               key={tier.name}
@@ -666,6 +660,9 @@ function PricingPreview() {
                 <span className="text-4xl font-bold text-foreground">{tier.price}</span>
                 <span className="text-muted-foreground">{tier.period}</span>
               </div>
+              {tier.priceNote && (
+                <p className="text-xs text-muted-foreground mt-1" data-testid="text-landing-price-note">{tier.priceNote}</p>
+              )}
               <p className="text-sm text-muted-foreground mt-1">{tier.description}</p>
               <ul className="space-y-2.5 mt-5 mb-6">
                 {tier.features.map((f) => (

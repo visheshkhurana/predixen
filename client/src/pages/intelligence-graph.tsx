@@ -1,3 +1,4 @@
+import { formatCurrencyFull } from '@/lib/utils';
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useFounderStore } from "@/store/founderStore";
@@ -330,7 +331,7 @@ function GrowthBenchmarks({ companyId }: { companyId: number }) {
       <CardContent>
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MetricBox label="Your MRR" value={`$${(profile.mrr || 0).toLocaleString()}`} />
+            <MetricBox label="Your MRR" value={formatCurrencyFull(profile.mrr || 0)} />
             <MetricBox label="Growth" value={`${profile.growth_pct || 0}%`} />
             <MetricBox label="Runway" value={`${Math.round(profile.runway_months || 0)}mo`} />
             <MetricBox label="Stage" value={profile.stage || "—"} />

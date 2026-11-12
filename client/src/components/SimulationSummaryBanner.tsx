@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, AlertTriangle, CheckCircle, Clock, DollarSign } from 'lucide-react';
@@ -54,10 +55,7 @@ export function SimulationSummaryBanner({
 
   const formatCurrency = (value: number | undefined) => {
     if (value === undefined || value === null) return 'N/A';
-    if (Math.abs(value) >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    return `$${(value / 1000).toFixed(0)}K`;
+    return formatCurrencyAbbrev(value);
   };
 
   const calculateNetProfit = () => {

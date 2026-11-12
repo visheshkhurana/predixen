@@ -65,6 +65,7 @@ const VerifyEmailPage = lazy(() => import("@/pages/verify-email"));
 const UnsubscribePage = lazy(() => import("@/pages/unsubscribe"));
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy"));
 const TermsOfServicePage = lazy(() => import("@/pages/terms"));
+const RefundPolicyPage = lazy(() => import("@/pages/refund-policy"));
 const OnboardingPage = lazy(() => import("@/pages/onboarding"));
 const OverviewPage = lazy(() => import("@/pages/overview"));
 const TruthScanPage = lazy(() => import("@/pages/truth-scan"));
@@ -113,6 +114,7 @@ const MessagingPage = lazy(() => import("@/pages/messaging"));
 const JournalPage = lazy(() => import("@/pages/journal"));
 const GoalsPage = lazy(() => import("@/pages/goals"));
 const HiringPlannerPage = lazy(() => import("@/pages/hiring-planner"));
+const ProfitPage = lazy(() => import("@/pages/profit"));
 const SharedScenarioPage = lazy(() => import("@/pages/shared-scenario"));
 const QAFrontPage = lazy(() => import("@/pages/qa"));
 const PricingPage = lazy(() => import("@/pages/pricing"));
@@ -364,6 +366,7 @@ function Router() {
         <Route path="/unsubscribe" component={UnsubscribePage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/terms" component={TermsOfServicePage} />
+        <Route path="/refund-policy" component={RefundPolicyPage} />
       {/* /login means login. /register and /join still land on the register
           form so old links do not drop people on the login form. /signup is a
           public get-started page that renders the same form from a prerendered
@@ -478,6 +481,9 @@ function Router() {
           No connector-detail page exists — Integrations is the live dest. */}
       <Route path="/data-source/:id">
         {() => <Redirect to="/integrations" />}
+      </Route>
+      <Route path="/profit">
+        {() => <AuthenticatedRoute component={ProfitPage} />}
       </Route>
       <Route path="/alerts">
         {() => <AuthenticatedRoute component={AlertsPage} />}
@@ -893,7 +899,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const marketingPaths = [
     '/', '/features', '/product', '/pricing', '/about', '/compare', '/customers', '/use-cases', '/how-it-works', '/alternatives', '/blog', '/faq',
     '/contact', '/demo', '/demo/enter', '/auth', '/onboarding', '/onboard', '/owner-console',
-    '/survival-simulator', '/default-alive', '/privacy', '/terms', '/security',
+    '/survival-simulator', '/default-alive', '/privacy', '/terms', '/refund-policy', '/security',
     '/reset-password', '/verify-email', '/auth/callback',
     '/login', '/signup', '/register', '/join',
     '/ai-cfo', '/embed/survival', '/tools',
