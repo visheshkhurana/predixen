@@ -967,7 +967,8 @@ def _process_razorpay_event(db: Session, etype: str, event: dict) -> Optional[st
         if not rz:
             rz = _adopt_unknown_subscription(db, sub_entity)
         if not rz:
-            logger.error(f"Razorpay webhook {etype}: unknown subscription {sub_id}")
+            # Expected on a shared Razorpay account: events for other products' plans.
+            logger.info(f"Razorpay webhook {etype}: ignoring subscription {sub_id} (not ours)")
             return sub_id
         if sub_entity.get("status"):
             local_status = RAZORPAY_STATUS_MAP.get(sub_entity["status"])
@@ -978,14 +979,10 @@ def _process_razorpay_event(db: Session, etype: str, event: dict) -> Optional[st
 
     if etype == "payment.failed":
         sub_id = pay_entity.get("subscription_id") or sub_entity.get("id")
-        rz = _rz_by_subscription_id(db, sub_id)
-        if not rz and pay_entity.get("customer_id"):
-            row = db.execute(
-                text(f"""SELECT {RZ_SUB_COLUMNS} FROM razorpay_subscriptions
-                         WHERE razorpay_customer_id = :cid ORDER BY id DESC LIMIT 1"""),
-                {"cid": pay_entity.get("customer_id")},
-            ).fetchone()
-            rz = _rz_row_to_dict(row)
+        # Match on the subscription id only. The Razorpay account is shared with
+        # other products, so a customer id can belong to someone's payment for a
+        # different product; renewal failures also arrive as subscription.halted.
+        rz = _rz_by_subscription_id(db, sub_id) if sub_id else None
         # Only a failed renewal of a live subscription downgrades. A declined
         # first attempt in Checkout must not end an in-app trial.
         if rz and rz["status"] == "active":

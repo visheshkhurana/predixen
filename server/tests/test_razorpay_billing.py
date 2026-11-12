@@ -376,6 +376,26 @@ def test_payment_failed_does_not_end_a_trial(env):
     assert _local_sub(env)[:2] == ("scale", "trialing")
 
 
+def test_payment_failed_for_other_product_same_customer_is_ignored(env):
+    # Shared Razorpay account: a failed payment by the same customer for another
+    # product (no subscription id of ours) must not touch this subscription.
+    _enable(env.mp)
+    _seed_rz(env, status="active")
+    env.q("INSERT INTO subscriptions (user_id, plan, status, created_at) VALUES (1, 'starter', 'active', '2026-11-01')")
+    event = {"event": "payment.failed", "created_at": 900, "payload": {"payment": {"entity": {
+        "id": "pay_other", "customer_id": "cust_1", "status": "failed"}}}}
+    assert _post_webhook(env, event).status_code == 200
+    assert _local_sub(env)[1] == "active"
+
+
+def test_subscription_event_for_other_products_plan_is_ignored(env):
+    _enable(env.mp)
+    event = {"event": "subscription.charged", "created_at": 900, "payload": {"subscription": {"entity": {
+        "id": "sub_cleya", "status": "active", "plan_id": "plan_not_ours", "customer_id": "cust_9",
+        "notes": {}}}}}
+    assert _post_webhook(env, event).status_code == 200
+
+
 def test_tier_comes_from_plan_id_not_notes(env):
     _enable(env.mp)
     _seed_rz(env)
