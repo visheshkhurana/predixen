@@ -16,6 +16,8 @@ import { legacyRedirects } from "./middleware/legacyRedirects";
 import { aiAgentLog } from "./middleware/aiAgentLog";
 import { requestId } from "./middleware/requestId";
 import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
+// The Notion integration is the platform workspace, not a tenant's.
+import { requirePlatformAdmin as requireNotionAdmin } from "./middleware/requireAuth";
 
 const app = express();
 app.disable("x-powered-by");
@@ -543,7 +545,7 @@ app.use("/api/messaging", requireAuth, messagingRouter);
 
 // Register Notion routes before the API proxy (handled by Express, not FastAPI)
 import { getNotionClient, listPages, listDatabases } from "./notion/client";
-app.get("/api/notion/pages", requireAuth, async (req, res) => {
+app.get("/api/notion/pages", requireNotionAdmin, async (req, res) => {
   try {
     const pages = await listPages();
     const simplified = pages.map((p: any) => ({
@@ -561,7 +563,7 @@ app.get("/api/notion/pages", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res) => {
+app.post("/api/notion/push-report", requireNotionAdmin, express.json(), async (req, res) => {
   try {
     const notion = await getNotionClient();
     const { pageId } = req.body;
@@ -710,7 +712,7 @@ app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res
   }
 });
 
-app.get("/api/notion/databases", requireAuth, async (req, res) => {
+app.get("/api/notion/databases", requireNotionAdmin, async (req, res) => {
   try {
     const dbs = await listDatabases();
     const simplified = dbs.map((d: any) => ({

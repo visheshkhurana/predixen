@@ -22,7 +22,7 @@ function b64urlDecode(s: string): Buffer {
   return Buffer.from(s, "base64");
 }
 
-function verifyJwtHS256(token: string, secret: string): Record<string, any> | null {
+export function verifyJwtHS256(token: string, secret: string): Record<string, any> | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [h, p, sig] = parts;
