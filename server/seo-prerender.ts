@@ -13,6 +13,10 @@ import { founderFaqs } from "../client/src/data/founder-faqs";
 // Same rule again: the "Cite FounderConsole" block a crawler is served and the one the
 // React footer renders come from one string, so they cannot drift.
 import { aiCitation } from "../client/src/data/ai-citation";
+// Same rule: the D2C calculator's definitions, FAQ and worked example are read from the
+// modules the React page renders, so the crawler copy cannot drift from the visitor copy.
+import { D2C_MARGIN_DEFINITIONS, D2C_MARGIN_FAQS } from "../client/src/data/d2c-margin-content";
+import { computeD2cMargin, D2C_WORKED_EXAMPLE, formatInr } from "../client/src/lib/tools/d2cMargin";
 // Legal entity, grievance officer, refund terms and the paid price: one copy each,
 // shared with the React pages. The price itself comes from shared/pricing.json,
 // which server/core/plans.py also reads, so what a reviewer reads here is what
@@ -123,7 +127,7 @@ function buildLandingBodyContent(): string {
 <h2>Frequently Asked Questions</h2>
 ${faqHtml}
 <h2>Try a free tool first</h2>
-<p>No account required. Calculate <a href="/tools/runway-calculator">startup runway</a>, run Paul Graham's <a href="/default-alive">default alive test</a>, or estimate survival odds with the <a href="/survival-simulator">startup survival simulator</a>. <a href="/tools">Browse all the free tools</a>. See the full product on <a href="/features">features</a> and what's free during beta on <a href="/pricing">pricing</a>. When you're ready for live data and ongoing forecasts, <a href="/signup">get started free</a>.</p>
+<p>No account required. Calculate <a href="/tools/runway-calculator">startup runway</a>, work out <a href="/tools/d2c-contribution-margin">CM1, CM2 and CM3 for a D2C brand</a>, run Paul Graham's <a href="/default-alive">default alive test</a>, or estimate survival odds with the <a href="/survival-simulator">startup survival simulator</a>. <a href="/tools">Browse all the free tools</a>. See the full product on <a href="/features">features</a> and what's free during beta on <a href="/pricing">pricing</a>. When you're ready for live data and ongoing forecasts, <a href="/signup">get started free</a>.</p>
 </article>`;
 }
 
@@ -212,10 +216,11 @@ function buildToolsIndexBodyContent(): string {
   // and its own page says so. It is linked from the closing paragraph instead.
   return `<article>
 <h1>Free Startup Finance Tools</h1>
-<p>Four free calculators for the numbers that decide how long a company has left, and two more free tools that answer the same kind of question. No account, no card, no demo call.</p>
-<h2>The four calculators</h2>
+<p>Five free calculators for the numbers that decide how long a company has left — including contribution margin for D2C brands — and two more free tools that answer the same kind of question. No account, no card, no demo call.</p>
+<h2>The five calculators</h2>
 <ul>
 <li><a href="/tools/runway-calculator">Startup runway calculator</a> — enter cash on hand, monthly revenue, monthly expenses and growth rate to get your months of runway and the month the cash runs out.</li>
+<li><a href="/tools/d2c-contribution-margin">D2C contribution margin calculator</a> — CM1, CM2 and CM3 per order in ₹ for D2C brands, from AOV, RTO rate, COD share, COGS, shipping and ad spend, with MER and break-even MER.</li>
 <li><a href="/tools/burn-multiple">Burn multiple calculator</a> — how many dollars of burn bought each dollar of net new ARR, from new and total ARR at the start and end of a period.</li>
 <li><a href="/tools/dilution">Dilution calculator</a> — the percentage of the company a round costs you, from pre-money valuation, amount raised and the existing option pool.</li>
 <li><a href="/tools/ltv-cac">LTV:CAC calculator</a> — lifetime value against acquisition cost, graded separately from payback, because a healthy ratio with a slow payback is how a growing company runs out of cash.</li>
@@ -304,6 +309,35 @@ function buildLtvCacBodyContent(): string {
 <p>Win no new customers and there is nothing to divide the spend by, so the calculator reports no new customers rather than a CAC of zero. Spend nothing and there is no measurable acquisition cost to report. A zero gross margin is legitimate and gets a real answer: an LTV of zero and a statement that no marketing spend can ever pay back, rather than a division by zero.</p>
 <h2>Related free tools</h2>
 <p>Also try the <a href="/tools/dilution">dilution calculator</a>, the <a href="/tools/runway-calculator">startup runway calculator</a> and the <a href="/default-alive">default alive or default dead</a> test — all free, no account required. When you're ready to see whether growth is paying for itself against real numbers, <a href="/signup">sign up for FounderConsole</a>.</p>
+</article>`;
+}
+
+function buildD2cMarginBodyContent(): string {
+  const r = computeD2cMargin(D2C_WORKED_EXAMPLE);
+  const rto30 = computeD2cMargin({ ...D2C_WORKED_EXAMPLE, rtoPct: 30 });
+  const e = D2C_WORKED_EXAMPLE;
+  const n = (v: number) => Math.round(v).toLocaleString("en-IN");
+  return `<article>
+<h1>D2C Contribution Margin Calculator (CM1, CM2, CM3)</h1>
+<p>See what each order really earns after COGS, shipping, RTO, COD and ad spend, in ₹. CM1 = net revenue − COGS. CM2 = CM1 − fulfilment and payment costs. CM3 = CM2 − marketing. The calculator runs in your browser and stores nothing.</p>
+<h2>CM1, CM2 and CM3, defined</h2>
+<dl>${D2C_MARGIN_DEFINITIONS.map((d) => `<dt><strong>${esc(d.term)}</strong></dt><dd>${esc(d.definition)}</dd>`).join("")}</dl>
+<h2>Worked example (illustrative, not a benchmark)</h2>
+<p>A brand with ₹${n(e.aov)} AOV ex-GST, ${n(e.orders)} orders shipped a month, ${e.rtoPct}% RTO, ${e.returnPct}% customer returns, ${e.codPct}% COD, ₹${n(e.cogsPerOrder)} COGS per order, ₹${n(e.forwardShipping)} forward and ₹${n(e.reverseShipping)} reverse shipping, ₹${n(e.packagingPerOrder)} packaging, a ${e.gatewayPct}% gateway fee, a ₹${n(e.codFee)} COD fee and ${esc(formatInr(e.marketing))} of monthly marketing:</p>
+<ul>
+<li>Delivers ${n(r.deliveredOrders)} orders and keeps ${n(r.keptOrders)}; net revenue is ${esc(formatInr(r.netRevenue))}.</li>
+<li>CM1 is ${esc(formatInr(r.cm1))} (${(r.cm1Pct ?? 0).toFixed(1)}% of net revenue).</li>
+<li>CM2 is ${esc(formatInr(r.cm2))} (${(r.cm2Pct ?? 0).toFixed(1)}%).</li>
+<li>CM3 is ${esc(formatInr(r.cm3))} (${(r.cm3Pct ?? 0).toFixed(1)}%), about ₹${n(r.cm3PerOrder ?? 0)} per delivered order.</li>
+<li>MER is ${(r.mer ?? 0).toFixed(2)}x against a break-even MER of ${(r.breakEvenMer ?? 0).toFixed(2)}x.</li>
+<li>At ${30}% RTO with everything else unchanged, CM3 falls to ${esc(formatInr(rto30.cm3))}.</li>
+</ul>
+<h2>Assumptions</h2>
+<p>AOV is ex-GST and after discounts. RTO'd and returned goods are restocked and carry no COGS. Every shipped order pays forward shipping and packaging. RTO is spread evenly across COD and prepaid orders; in practice most RTO comes from COD, so a high-COD brand's real numbers are likely worse.</p>
+<h2>Questions D2C founders ask</h2>
+${D2C_MARGIN_FAQS.map((f) => `<h3>${esc(f.question)}</h3>\n<p>${esc(f.answer)}</p>`).join("\n")}
+<h2>Related</h2>
+<p>Read <a href="/blog/cm1-cm2-cm3-contribution-margin-d2c">CM1, CM2, CM3 for D2C brands</a>, <a href="/blog/rto-cod-d2c-margins">how RTO and COD eat D2C margins</a> and <a href="/blog/mer-vs-roas-d2c">MER vs ROAS</a>. Once you know CM3, check how long your cash lasts with the <a href="/tools/runway-calculator">free runway calculator</a>, or browse <a href="/tools">all free tools</a>. FounderConsole is free during the public beta: <a href="/signup">start free</a>.</p>
 </article>`;
 }
 
@@ -969,7 +1003,29 @@ export function pageHttpStatus(path: string): number {
 
 /** Status and body the SPA catch-all should send for one pathname. */
 export function renderHtmlPage(shell: string, path: string): { status: number; html: string } {
-  return { status: pageHttpStatus(path), html: injectSEO(shell, path) };
+  const meta = getPageMeta(path);
+  if (!meta) {
+    return { status: 200, html: injectAppShellNoindex(shell) };
+  }
+  return { status: meta.statusCode ?? 200, html: renderMeta(shell, meta) };
+}
+
+/**
+ * A route the client knows but the prerenderer does not: the logged-in app
+ * (/overview, /settings, ...) and auth flows (/login, /reset-password, ...).
+ *
+ * The raw shell is the HOMEPAGE: homepage title, homepage canonical, homepage
+ * JSON-LD and `index, follow`. Served as-is, every app URL a crawler found was
+ * an indexable duplicate of "/". These pages have nothing to rank for, so they
+ * are `noindex, follow`, carry no canonical (a canonical beside noindex sends
+ * mixed signals) and no structured data. The body and the app mount are
+ * untouched, so the SPA boots exactly as before.
+ */
+function injectAppShellNoindex(html: string): string {
+  return html
+    .replace(/<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/, '<meta name="robots" content="noindex, follow" />')
+    .replace(/\s*<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/, "")
+    .replace(/\s*<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/g, "");
 }
 
 function notFoundMeta(canonical: string, description: string): PageMeta {
@@ -988,7 +1044,7 @@ function getPageMeta(path: string): PageMeta | null {
   if (path === "/" || path === "") {
     return {
       title: "FounderConsole — AI Decision Simulator for Founders",
-      description: "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 35 data connectors — replace spreadsheets with simulations.",
+      description: "FounderConsole is the AI-powered decision simulator for startup founders and D2C brands. Runway, burn and contribution margin with Monte Carlo simulations, an AI copilot, fundraising CRM and 35 data connectors. Free during public beta.",
       canonical: SITE_URL + "/",
       bodyContent: buildLandingBodyContent(),
       jsonLd: [
@@ -998,18 +1054,29 @@ function getPageMeta(path: string): PageMeta | null {
           name: "FounderConsole",
           url: SITE_URL,
           logo: OG_IMAGE,
-          description: "AI-powered financial intelligence platform for startups.",
+          description: "AI-powered financial intelligence platform for startup founders and D2C brands.",
           sameAs: ["https://twitter.com/founderconsole", "https://linkedin.com/company/founderconsole"],
+          contactPoint: { "@type": "ContactPoint", url: `${SITE_URL}/contact`, contactType: "customer support" },
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "FounderConsole",
+          url: SITE_URL + "/",
+          inLanguage: "en",
+          publisher: { "@type": "Organization", name: "FounderConsole", url: SITE_URL },
         },
         {
           "@context": "https://schema.org",
           "@type": "SoftwareApplication",
           name: "FounderConsole",
           applicationCategory: "BusinessApplication",
+          applicationSubCategory: "Financial planning and analysis",
           operatingSystem: "Web",
           url: SITE_URL,
-          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-          featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 35 Data Connectors, Digital Twin",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free during public beta — no credit card required" },
+          audience: { "@type": "BusinessAudience", audienceType: "Startup founders, CFOs and D2C brand operators" },
+          featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 35 Data Connectors, Digital Twin, Free D2C contribution margin (CM1/CM2/CM3) calculator",
         },
         {
           "@context": "https://schema.org",
@@ -1481,6 +1548,41 @@ function getPageMeta(path: string): PageMeta | null {
       }],
     };
   }
+
+  if (path === "/tools/d2c-contribution-margin") {
+    return {
+      ...TOOL_PAGE_META["/tools/d2c-contribution-margin"],
+      canonical: SITE_URL + "/tools/d2c-contribution-margin",
+      bodyContent: buildD2cMarginBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: "D2C Contribution Margin Calculator",
+        url: SITE_URL + "/tools/d2c-contribution-margin",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
+        description: "Free CM1, CM2 and CM3 contribution margin calculator for Indian D2C brands, with RTO, COD, MER and break-even MER.",
+        creator: { "@type": "Organization", name: "FounderConsole", url: SITE_URL },
+      }, {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: D2C_MARGIN_FAQS.map((f) => ({
+          "@type": "Question",
+          name: f.question,
+          acceptedAnswer: { "@type": "Answer", text: f.answer },
+        })),
+      }, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Free tools", item: `${SITE_URL}/tools` },
+          { "@type": "ListItem", position: 3, name: "D2C contribution margin calculator", item: `${SITE_URL}/tools/d2c-contribution-margin` },
+        ],
+      }],
+    };
+  }
   if (path === "/vs/runway-calculator-vs-spreadsheet") {
     return {
       title: "Runway Calculator vs Spreadsheet - Which Should You Use? | FounderConsole",
@@ -1673,14 +1775,25 @@ function getPageMeta(path: string): PageMeta | null {
         bodyContent: buildBlogPostBodyContent(slug) || undefined,
         jsonLd: [{
           "@context": "https://schema.org",
-          "@type": "Article",
+          "@type": "BlogPosting",
           headline: post.title,
           description: post.excerpt,
           datePublished: isoDate,
-          author: { "@type": "Person", name: post.author },
-          publisher: { "@type": "Organization", name: "FounderConsole", logo: { "@type": "ImageObject", url: OG_IMAGE } },
+          dateModified: isoDate,
+          articleSection: post.category,
+          inLanguage: "en",
+          author: { "@type": "Person", name: post.author, jobTitle: post.authorRole },
+          publisher: { "@type": "Organization", name: "FounderConsole", url: SITE_URL, logo: { "@type": "ImageObject", url: OG_IMAGE } },
           image: OG_IMAGE,
           mainEntityOfPage: `${SITE_URL}/blog/${slug}`,
+        }, {
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+            { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE_URL}/blog` },
+            { "@type": "ListItem", position: 3, name: post.title, item: `${SITE_URL}/blog/${slug}` },
+          ],
         }],
       };
     }
@@ -1713,6 +1826,7 @@ function getPageMeta(path: string): PageMeta | null {
         url: SITE_URL + "/tools",
         hasPart: [
           `${SITE_URL}/tools/runway-calculator`,
+          `${SITE_URL}/tools/d2c-contribution-margin`,
           `${SITE_URL}/tools/burn-multiple`,
           `${SITE_URL}/tools/dilution`,
           `${SITE_URL}/tools/ltv-cac`,

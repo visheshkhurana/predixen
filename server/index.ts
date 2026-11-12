@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { registerJarvisRoutes } from "./jarvis-routes";
 import { serveStatic } from "./static";
+import { registerLlmsFull } from "./llms-full";
 import { createServer } from "http";
 import { spawn, execSync, spawnSync, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
@@ -925,6 +926,9 @@ app.use((req, res, next) => {
     res.status(status).json({ message });
     console.error(`[error] ${status} ${message}`, err.stack || err);
   });
+
+  // Before the SPA catch-all in both modes, so it is never answered with the app shell.
+  registerLlmsFull(app);
 
   const isProd = process.env["NODE_ENV"] === "production" || process.env["ENVIRONMENT"] === "production";
   if (isProd) {
