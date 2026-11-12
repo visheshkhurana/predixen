@@ -28,6 +28,7 @@ import {
 } from "../client/src/data/legal";
 import { STARTER_PRICES, ANNUAL_LABEL } from "../client/src/data/public-pricing";
 import { razorpayBillingEnabled } from "./billing-gate";
+import { pricingFaq, type PricingFaqKey } from "../client/src/data/pricing-faq";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -390,7 +391,7 @@ ${legalEntityHtml()}
 <h2>What is included</h2>
 <p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, cap table and dilution modelling, the fundraising CRM, board deck generation, and all 34 data connectors. See the full list on <a href="/features">features</a>.</p>
 <h2>What happens after the beta</h2>
-<p>Paid tiers will be introduced once the beta ends. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
+<p>Paid plans will be introduced once the beta ends. When they start, Starter will be ${STARTER_PRICES.INR.monthlyLabel}/month, or ${STARTER_PRICES.INR.annualLabel}/year (${escapeHtml(ANNUAL_LABEL)}); international customers pay ${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} a month. The Free plan stays free. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
 <h2>Free tools that need no account at all</h2>
 <p>Try these before you sign up — results in under a minute, no email required to see the answer:</p>
 <ul>
@@ -665,14 +666,22 @@ function buildAboutBodyContent(): string {
 </article>`;
 }
 
-const faqSections = [
+// Pricing answers come from client/src/data/pricing-faq.ts (numbers from
+// shared/pricing.json) and are resolved per request against the billing gate,
+// the same rule /pricing uses. A slot marks where each one goes.
+type FaqEntry = { q: string; a: string; pricingKey?: PricingFaqKey };
+function PRICING_FAQ_SLOT(key: PricingFaqKey): FaqEntry {
+  return { q: "", a: "", pricingKey: key };
+}
+
+const faqSectionsTemplate: { title: string; items: FaqEntry[] }[] = [
   {
     title: "Getting Started",
     items: [
       { q: "What is FounderConsole?", a: "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 34 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions." },
       { q: "How does FounderConsole help founders?", a: "FounderConsole helps founders by transforming financial uncertainty into measurable probability. Instead of relying on gut feelings, you get Monte Carlo simulations that show the range of possible outcomes, an AI copilot that answers financial questions using your real data, automated data validation (Truth Scan) that catches errors before they reach your board, and strategic briefings that explain your risks and opportunities in plain English." },
       { q: "What metrics does FounderConsole track?", a: "FounderConsole tracks over 24 financial health metrics including MRR, ARR, runway, burn rate, CAC, LTV, LTV:CAC ratio, churn rate, gross margin, NRR, ARPU, active customers, and headcount. Each metric includes a confidence score showing how reliable the data is." },
-      { q: "Is FounderConsole free?", a: "Yes — FounderConsole is completely free while we're in early access. Every feature is unlocked and no credit card is required. Planned pricing after early access is shown on the pricing page; we'll give plenty of notice before anything changes." },
+      PRICING_FAQ_SLOT("is-free"),
       { q: "What is a startup digital twin?", a: "A startup digital twin is a continuously-updated virtual representation of your company inside FounderConsole. It integrates your real financial data, simulation results, strategic decisions, and alerts into a single live model with health scoring and risk indicators." },
       { q: "How do I get started?", a: "Sign up for free (no credit card required), connect one or more data sources like QuickBooks, Stripe, or Mercury, and you'll have a baseline forecast with confidence intervals within 5 minutes." },
       { q: "Is there a demo I can try?", a: "Yes — you can sign in with demo credentials or watch our product walkthrough on the Demo page. The demo includes sample company data so you can explore simulations, the AI copilot, and reporting features without connecting your own data." },
@@ -697,14 +706,22 @@ const faqSections = [
   {
     title: "Pricing & Plans",
     items: [
-      { q: "Do I need to pay anything right now?", a: "No. Everything is free while we're in early access — every feature is unlocked, with no credit card required. We'll announce paid plans well in advance before anything changes." },
-      { q: "What will the paid plans cost later?", a: "Our planned pricing is Starter $29/month, Growth $49/month, and Scale $99/month. None of this is active yet — it's what we intend to charge once we exit early access." },
+      PRICING_FAQ_SLOT("pay-now"),
+      PRICING_FAQ_SLOT("cost"),
       { q: "Do you offer enterprise pricing?", a: "Yes — if you need custom integrations, dedicated support, or team-level access controls, contact us to discuss enterprise options." },
     ],
   },
 ];
 
-function buildFaqBodyContent(): string {
+function faqSectionsFor(paid: boolean): { title: string; items: { q: string; a: string }[] }[] {
+  const pricing = pricingFaq(paid);
+  return faqSectionsTemplate.map((section) => ({
+    title: section.title,
+    items: section.items.map((item) => (item.pricingKey ? pricing[item.pricingKey] : item)),
+  }));
+}
+
+function buildFaqBodyContent(faqSections = faqSectionsFor(razorpayBillingEnabled())): string {
   const sectionsHtml = faqSections.map((section) => {
     const items = section.items.map((item) =>
       `<section><h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p></section>`
@@ -722,7 +739,7 @@ ${sectionsHtml}
 </article>`;
 }
 
-function buildFaqJsonLd(): object {
+function buildFaqJsonLd(faqSections = faqSectionsFor(razorpayBillingEnabled())): object {
   const mainEntity = faqSections.flatMap((s) =>
     s.items.map((item) => ({
       "@type": "Question",

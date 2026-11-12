@@ -164,3 +164,29 @@ def test_pricing_gate_matches_razorpay_enabled():
     page = read(PRICING_PAGE)
     assert 'plansData?.payments_enabled && plansData?.provider === "razorpay"' in page
     assert "paidEnabled ? paidTiers : tiers" in page
+
+
+# 5. No retired planned prices; FAQ follows the same gate ----------------------
+
+FAQ_PAGE = ROOT / "client" / "src" / "pages" / "faq.tsx"
+PRICING_FAQ = ROOT / "client" / "src" / "data" / "pricing-faq.ts"
+
+
+def test_faq_and_pricing_drop_the_retired_planned_prices():
+    for path in (FAQ_PAGE, PRICING_PAGE, PRICING_FAQ, PRERENDER):
+        code = strip_comments(read(path))
+        for old in ("$29", "$49", "$99"):
+            assert old not in code, f"{path}: still shows retired planned price {old}"
+    faq_data = read(PRICING_FAQ)
+    assert "./public-pricing" in faq_data
+    assert "free during the public beta" in faq_data
+    faq = read(FAQ_PAGE)
+    assert "pricingFaq(paidEnabled)" in faq
+    assert 'plansData?.payments_enabled && plansData?.provider === "razorpay"' in faq
+    assert "faqSectionsFor(razorpayBillingEnabled())" in read(PRERENDER)
+
+
+def test_geo_gate_allows_the_uae_by_default():
+    src = read(ROOT / "server" / "middleware" / "geoRestrict.ts")
+    assert 'const DEFAULT_ALLOWED = ["US", "IN", "AE"];' in src
+    assert "GEO_ALLOWED_COUNTRIES" in src

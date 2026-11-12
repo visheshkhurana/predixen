@@ -145,7 +145,10 @@ test("/pricing: paid Starter plan only when Razorpay billing is live; title pinn
   for (const html of [off, partial, stripe]) {
     const text = textOf(html);
     assert.match(text, /free during the public beta/);
-    assert.ok(!text.includes("₹3,000"), "paid price leaked with billing off");
+    // Billing off: Starter appears only as the price once paid plans start,
+    // never as a plan on sale.
+    assert.ok(!text.includes("Starter — "), "paid plan listed with billing off");
+    assert.match(text, /When they start, Starter will be ₹3,000\/month/);
   }
   const text = textOf(on);
   assert.ok(text.includes(`Starter — ${STARTER_PRICES.INR.monthlyLabel}/month`));
@@ -187,3 +190,20 @@ test("no TODO placeholder ever renders", () => {
   }
 });
 
+
+test("/faq pricing answers: real Starter price, beta wording when billing is off", () => {
+  const off = textOf(withBillingEnv(null, () => injectSEO(SHELL, "/faq")));
+  const on = textOf(withBillingEnv(LIVE, () => injectSEO(SHELL, "/faq")));
+  for (const text of [off, on]) {
+    for (const old of ["$29", "$49", "$99"]) assert.ok(!text.includes(old), `old planned price ${old}`);
+    for (const price of ["₹3,000", "$39", "AED 149", "₹30,000", "2 months free"]) {
+      assert.ok(text.includes(price), `missing ${price}`);
+    }
+  }
+  assert.match(off, /free during the public beta/);
+  assert.match(off, /What will the paid plans cost later\?/);
+  assert.match(on, /What do the paid plans cost\?/);
+  assert.doesNotMatch(on, /free during the public beta/);
+  const offBeta = textOf(withBillingEnv(null, () => injectSEO(SHELL, "/pricing")));
+  assert.ok(offBeta.includes("₹3,000") && !offBeta.includes("$29"), "beta /pricing shows the real Starter price");
+});

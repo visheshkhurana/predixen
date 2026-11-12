@@ -69,66 +69,20 @@ const paidTiers: Tier[] = [
   },
 ];
 
+/**
+ * Payments off (public beta): the same two plans, with Starter shown as the
+ * price that will apply when paid plans start. Every feature is free today.
+ * The retired planned Growth and Scale tiers and the old Starter price are
+ * gone; Starter is the one real paid plan and its numbers come from
+ * shared/pricing.json.
+ */
 const tiers: Tier[] = [
+  { ...paidTiers[0], price: "$0" },
   {
-    name: "Free",
-    price: "$0",
-    period: "",
-    bullet: "Explore the platform at your own pace.",
-    features: [
-      "1 company",
-      "3 simulations / month",
-      "10 copilot messages / month",
-      "CSV upload & manual entry",
-      "Basic dashboard",
-    ],
-    highlighted: false,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Starter",
-    price: "$29",
-    period: "/month",
-    bullet: "For early-stage founders finding their footing.",
-    features: [
-      "50 simulations / month",
-      "100 copilot messages / month",
-      "2 data connectors",
-      "Truth Scan & Stress Tests",
-      "Industry benchmarks",
-      "PDF export",
-    ],
-    highlighted: false,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Growth",
-    price: "$49",
-    period: "/month",
-    bullet: "For scaling startups that decide weekly.",
-    features: [
-      "Up to 3 companies",
-      "Unlimited simulations & copilot",
-      "10 data connectors",
-      "Fundraising OS & cap table",
-      "Board deck export",
-      "Fundraising readiness score",
-    ],
-    highlighted: true,
-    cta: "Get Started Free",
-  },
-  {
-    name: "Scale",
-    price: "$99",
-    period: "/month",
-    bullet: "Full power for serious founders.",
-    features: [
-      "Unlimited companies & connectors",
-      "Flight Simulator (AI agents)",
-      "Document Generator & AI Graphics",
-      "Digital Twin & Investor Room",
-      "Hiring Planner",
-      "Cross-company intelligence",
+    ...paidTiers[1],
+    priceNotes: [
+      ...(paidTiers[1].priceNotes ?? []),
+      "Free during the public beta — this is the price once paid plans start.",
     ],
     highlighted: false,
     cta: "Get Started Free",
@@ -172,7 +126,7 @@ export default function PricingPage() {
 
   const betaSEO = {
     title: "Pricing | FounderConsole",
-    description: "FounderConsole is free while in early access — every feature unlocked, no credit card required. Planned pricing: Free, Starter $29, Growth $49, Scale $99 per month.",
+    description: `FounderConsole is free during the public beta — every feature unlocked, no credit card required. When paid plans start, Starter will be ${STARTER_PRICES.INR.monthlyLabel}/month (${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} internationally).`,
     path: "/pricing",
     jsonLd: {
       "@context": "https://schema.org",
@@ -186,31 +140,7 @@ export default function PricingPage() {
           name: "Free",
           price: "0",
           priceCurrency: "USD",
-          description: "Explore the platform: 1 company, basic dashboard, CSV upload.",
-        },
-        {
-          "@type": "Offer",
-          name: "Starter",
-          price: "29",
-          priceCurrency: "USD",
-          billingIncrement: "month",
-          description: "For early-stage founders: simulations, copilot, Truth Scan, benchmarks.",
-        },
-        {
-          "@type": "Offer",
-          name: "Growth",
-          price: "49",
-          priceCurrency: "USD",
-          billingIncrement: "month",
-          description: "For scaling startups: unlimited simulations, Fundraising OS, cap table.",
-        },
-        {
-          "@type": "Offer",
-          name: "Scale",
-          price: "99",
-          priceCurrency: "USD",
-          billingIncrement: "month",
-          description: "Full power: AI agent simulations, document generator, investor room.",
+          description: "Every feature is free during the public beta.",
         },
       ],
     },
@@ -267,7 +197,7 @@ export default function PricingPage() {
                 Everything's free while we're in early access
               </h1>
               <p className="mt-3 max-w-xl mx-auto text-lg text-muted-foreground" data-testid="text-pricing-subtitle">
-                Every feature is unlocked today — no credit card required. The plans below are our planned pricing for when we exit early access.
+                Every feature is unlocked today — no credit card required. Starter below shows the price that will apply once paid plans start.
               </p>
             </>
           )}
@@ -280,7 +210,7 @@ export default function PricingPage() {
         <div className="mx-auto max-w-6xl px-4 py-10">
           <StaggerChildren
             key={paidEnabled ? "paid" : "beta"}
-            className={paidEnabled ? "grid gap-6 md:grid-cols-2 max-w-3xl mx-auto" : "grid gap-6 md:grid-cols-2 lg:grid-cols-4"}
+            className="grid gap-6 md:grid-cols-2 max-w-3xl mx-auto"
             staggerDelay={0.1}
           >
             {shownTiers.map((tier) => (

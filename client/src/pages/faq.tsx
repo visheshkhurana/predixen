@@ -4,8 +4,14 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
 import { FadeIn, ScrollReveal } from '@/components/ui/motion-primitives';
+import { usePlans } from "@/hooks/use-subscription";
+import { pricingFaq, type PricingFaqKey } from "@/data/pricing-faq";
 
-const faqSections = [
+type FaqItem = { question: string; answer: string; pricingKey?: PricingFaqKey };
+
+// Pricing answers are filled at render time from client/src/data/pricing-faq.ts,
+// gated on whether billing is live (same rule as /pricing).
+const faqSections: { title: string; items: FaqItem[] }[] = [
   {
     title: "Getting Started",
     items: [
@@ -24,11 +30,7 @@ const faqSections = [
         answer:
           "FounderConsole tracks over 24 financial health metrics including MRR, ARR, runway, burn rate, CAC, LTV, LTV:CAC ratio, churn rate, gross margin, NRR, ARPU, active customers, and headcount. It automatically derives metrics from connected data sources, validates them with cross-reference checks, and flags anomalies using Z-score detection. Each metric includes a confidence score showing how reliable the data is.",
       },
-      {
-        question: "Is FounderConsole free?",
-        answer:
-          "Yes — FounderConsole is completely free while we're in early access. Every feature is unlocked and no credit card is required. The plans on our pricing page (Starter $29, Growth $49, Scale $99 per month) are our planned pricing for when we exit early access; we'll give plenty of notice before anything changes.",
-      },
+      { pricingKey: "is-free" as PricingFaqKey, question: "", answer: "" },
       {
         question: "What is a startup digital twin?",
         answer:
@@ -89,16 +91,8 @@ const faqSections = [
   {
     title: "Pricing & Plans",
     items: [
-      {
-        question: "Do I need to pay anything right now?",
-        answer:
-          "No. Everything is free while we're in early access — every feature is unlocked, with no credit card required. We'll announce paid plans well in advance before anything changes.",
-      },
-      {
-        question: "What will the paid plans cost later?",
-        answer:
-          "Our planned pricing is Starter $29/month (50 simulations, 100 copilot messages, 2 connectors, Truth Scan, benchmarks), Growth $49/month (up to 3 companies, unlimited simulations and copilot, 10 connectors, Fundraising OS, board deck export), and Scale $99/month (unlimited companies and connectors, AI-agent Flight Simulator, Digital Twin, Investor Room, and cross-company intelligence). None of this is active yet — it's what we intend to charge once we exit early access.",
-      },
+      { pricingKey: "pay-now" as PricingFaqKey, question: "", answer: "" },
+      { pricingKey: "cost" as PricingFaqKey, question: "", answer: "" },
       {
         question: "Do you offer enterprise pricing?",
         answer:
@@ -108,9 +102,20 @@ const faqSections = [
   },
 ];
 
-const allFaqItems = faqSections.flatMap((s) => s.items);
-
 export default function FAQPage() {
+  const { data: plansData } = usePlans();
+  const paidEnabled = !!plansData?.payments_enabled && plansData?.provider === "razorpay";
+  const pricing = pricingFaq(paidEnabled);
+  const sections = faqSections.map((section) => ({
+    ...section,
+    items: section.items.map((item) =>
+      item.pricingKey
+        ? { question: pricing[item.pricingKey].q, answer: pricing[item.pricingKey].a }
+        : item,
+    ),
+  }));
+  const allFaqItems = sections.flatMap((s) => s.items);
+
   useSEO({
     title: "FAQ | FounderConsole",
     description: "FounderConsole FAQ: product, data, pricing, accuracy, and explainability.",
@@ -146,7 +151,7 @@ export default function FAQPage() {
 
       <section className="border-t">
         <div className="mx-auto max-w-3xl px-4 py-10">
-          {faqSections.map((section) => (
+          {sections.map((section) => (
             <ScrollReveal key={section.title}>
             <div className="mb-10">
               <h2 className="mb-4 text-lg font-semibold text-foreground" data-testid={`text-faq-section-${section.title.toLowerCase().replace(/\s+/g, "-")}`}>

@@ -120,3 +120,15 @@ Keep it equal to the table above, or the page and the charge will disagree.
    "cancel at cycle end" in the Razorpay dashboard.
 6. Automated tests: `python -m pytest server/tests/test_razorpay_billing.py`
    (all Razorpay calls are mocked).
+
+## Public pages and the country gate
+
+- `/pricing` and `/faq` show the real Starter price (from `shared/pricing.json`)
+  as a paid plan only when billing is live (`BILLING_PROVIDER=razorpay` plus all
+  three `RAZORPAY_*` secrets). Otherwise they say every feature is free during
+  the public beta and show Starter as the price that applies once paid plans
+  start. `/refund-policy` always shows the prices.
+- The country gate (`server/middleware/geoRestrict.ts`) allows **US, IN and AE**
+  by default, since Starter is sold in AED. `GEO_ALLOWED_COUNTRIES` *replaces*
+  that default when set: if production sets it (e.g. `US,IN`), add `AE` there
+  too or UAE visitors keep getting a 403.
