@@ -370,7 +370,7 @@ for (const path of RUNWAY_PATHS) {
 // list it walks, and a list that silently shrank would pass every assertion in
 // it. 18 is the number the sitemap generator writes into client/public/
 // sitemap.xml, so this is the join between the two files.
-const EXPECTED_BLOG_POSTS = 18;
+const EXPECTED_BLOG_POSTS = 24;
 console.log(
   `${blogPosts.length === EXPECTED_BLOG_POSTS ? "PASS" : "FAIL"}  blog list has ${blogPosts.length} posts (expected ${EXPECTED_BLOG_POSTS}, the count the sitemap is built from)`,
 );

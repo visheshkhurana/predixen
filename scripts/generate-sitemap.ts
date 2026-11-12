@@ -101,6 +101,7 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   // page they hang off returned 404, so a crawler had the tools and no index.
   { path: "/tools", lastmod: "2026-10-19", changefreq: "monthly", priority: "0.9" },
   { path: "/tools/runway-calculator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.8" },
+  { path: "/tools/d2c-contribution-margin", lastmod: "2026-11-12", changefreq: "monthly", priority: "0.9" },
   { path: "/tools/burn-multiple", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
   { path: "/tools/dilution", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
   { path: "/tools/ltv-cac", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
