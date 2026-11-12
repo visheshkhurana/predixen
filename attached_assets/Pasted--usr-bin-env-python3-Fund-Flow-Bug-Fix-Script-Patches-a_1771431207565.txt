@@ -370,15 +370,15 @@ print("\n[10/10] server/services/notifications.py — env-driven recipients + XS
 patch("server/services/notifications.py",
     '''NOTIFICATION_RECIPIENTS = [
     "nikita@founderconsole.ai",
-    "vysheshk@gmail.com",
-    "nikita.luther@gmail.com",
-    "nikitafl2024@gmail.com"
+    "recipient3@example.com",
+    "recipient1@example.com",
+    "recipient2@example.com"
 ]''',
     '''NOTIFICATION_RECIPIENTS = [
     email.strip()
     for email in os.getenv(
         "NOTIFICATION_RECIPIENTS",
-        "nikita@founderconsole.ai,vysheshk@gmail.com,nikita.luther@gmail.com,nikitafl2024@gmail.com"
+        "nikita@founderconsole.ai,recipient3@example.com,recipient1@example.com,recipient2@example.com"
     ).split(",")
     if email.strip()
 ]'''
