@@ -28,9 +28,8 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 class SubscribeBody(BaseModel):
     interval: str = "monthly"  # "monthly" | "annual"
-    # Razorpay only, optional. Validated against SUPPORTED_CURRENCIES; it picks
-    # which server-side price applies, it never sets an amount.
-    currency: Optional[str] = None
+    # No currency or amount field on purpose: the Razorpay charge currency is
+    # decided by the server from the company's currency setting.
 
 
 # ---------------------------------------------------------------------------
@@ -66,16 +65,15 @@ def _optional_user_id(request: Request) -> Optional[int]:
         return None
 
 
-def _display_currency(request: Request, user_id: Optional[int], requested: Optional[str]) -> str:
+def _display_currency(user_id: Optional[int], requested: Optional[str]) -> str:
+    """Currency for the plan list. Signed-in users see what they will be
+    charged (company currency). Signed-out visitors may pass ?currency= to
+    preview a price; it never reaches checkout."""
     if user_id is None:
-        from server.core.plans import DEFAULT_CURRENCY, currency_for_country
-        cur = normalize_currency(requested)
-        if cur:
-            return cur
-        return currency_for_country(request.headers.get("cf-ipcountry")) or DEFAULT_CURRENCY
+        return normalize_currency(requested) or "USD"
     db = SessionLocal()
     try:
-        return resolve_currency(db, user_id, request.headers, requested)[0]
+        return resolve_currency(db, user_id)[0]
     finally:
         db.close()
 
@@ -86,7 +84,7 @@ def get_plans(request: Request, currency: Optional[str] = None):
     display_currency = "USD"
     offered = None
     if provider == "razorpay":
-        display_currency = _display_currency(request, _optional_user_id(request), currency)
+        display_currency = _display_currency(_optional_user_id(request), currency)
         offered = set(regional_tiers(display_currency))
 
     plans = []
@@ -151,7 +149,7 @@ def get_subscription(
             result["has_payment_method"] = True
             result["razorpay_subscription_id"] = rz["razorpay_subscription_id"]
         else:
-            result["currency"] = resolve_currency(db, current_user.id, None)[0]
+            result["currency"] = resolve_currency(db, current_user.id)[0]
     return result
 
 
@@ -838,11 +836,8 @@ def _razorpay_subscribe(plan_id: str, body: Optional[SubscribeBody], current_use
     interval = body.interval if body else "monthly"
     if interval not in ("monthly", "annual"):
         raise HTTPException(status_code=400, detail="interval must be 'monthly' or 'annual'")
-    requested = body.currency if body else None
-    if requested is not None and normalize_currency(requested) is None:
-        raise HTTPException(status_code=400, detail="Unsupported currency")
-
-    currency, _source = resolve_currency(db, current_user.id, None, requested)
+    # Server-decided from the company currency setting; never from the client.
+    currency, _source = resolve_currency(db, current_user.id)
     price = get_regional_price(plan_id, currency, interval)
     if not price:
         raise HTTPException(status_code=404, detail="This plan is not available in your region yet.")

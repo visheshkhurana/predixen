@@ -258,9 +258,11 @@ FEATURE_LABELS: Dict[str, str] = {
 # and live mode, so they are never hardcoded).
 #
 # Owner pricing decision (2026-11-12, final):
-#   INR  ₹3,000 / month   (India)
-#   USD  $39 / month      (US and every other country)
-#   AED  AED 149 / month  (UAE)
+#   INR  ₹3,000 / month
+#   USD  $39 / month
+#   AED  AED 149 / month
+# The charge currency comes from the company's currency setting
+# (server/core/billing_region.py): INR -> INR, AED -> AED, else USD.
 # Annual billing is "2 months free": annual = monthly × ANNUAL_MULTIPLIER.
 # Annual amounts are derived, never written down separately, so changing a
 # monthly price below updates the annual price automatically.
@@ -271,16 +273,11 @@ FEATURE_LABELS: Dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 SUPPORTED_CURRENCIES = ("INR", "USD", "AED")
-DEFAULT_CURRENCY = "INR"  # primary market: Indian D2C brands
 INTERVALS = ("monthly", "annual")
 ANNUAL_MULTIPLIER = 10  # "2 months free"
 ANNUAL_LABEL = "2 months free"
 
 CURRENCY_SYMBOLS: Dict[str, str] = {"INR": "₹", "USD": "$", "AED": "AED "}
-
-# Country (ISO-3166 alpha-2) -> billing currency. Anything else -> USD.
-COUNTRY_CURRENCY: Dict[str, str] = {"IN": "INR", "US": "USD", "AE": "AED"}
-FALLBACK_CURRENCY = "USD"
 
 # Monthly price per (tier, currency), in major units (rupees, dollars, dirhams).
 REGIONAL_MONTHLY_PRICES: Dict[tuple, int] = {
@@ -323,16 +320,6 @@ def normalize_currency(value) -> Optional[str]:
         return None
     v = value.strip().upper()
     return v if v in SUPPORTED_CURRENCIES else None
-
-
-def currency_for_country(country) -> Optional[str]:
-    """Map an ISO country code to a billing currency. Unknown/blank -> None."""
-    if not isinstance(country, str):
-        return None
-    c = country.strip().upper()
-    if len(c) != 2 or not c.isalpha() or c in ("XX", "T1"):  # Cloudflare unknown / Tor
-        return None
-    return COUNTRY_CURRENCY.get(c, FALLBACK_CURRENCY)
 
 
 def get_regional_price(tier: str, currency: str, interval: str) -> Optional[dict]:

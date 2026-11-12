@@ -434,6 +434,7 @@ def _mock_api(env, sub_status="active"):
 def test_subscribe_returns_checkout_params(env):
     _enable(env.mp)
     calls = _mock_api(env)
+    env.q("INSERT INTO companies (user_id, currency) VALUES (1, 'INR')")
     r = env.client.post("/billing/subscribe/starter", json={"interval": "annual"})
     assert r.status_code == 200, r.text
     data = r.json()
@@ -445,16 +446,14 @@ def test_subscribe_returns_checkout_params(env):
     assert tuple(row) == (1, "starter", "annual", "INR", 30000)
 
 
-def test_subscribe_ignores_client_amount_and_rejects_bad_currency(env):
+def test_subscribe_ignores_client_amount(env):
     _enable(env.mp)
     calls = _mock_api(env)
-    r = env.client.post("/billing/subscribe/starter", json={"interval": "monthly", "currency": "AED", "amount": 1})
+    env.q("INSERT INTO companies (user_id, currency) VALUES (1, 'AED')")
+    r = env.client.post("/billing/subscribe/starter", json={"interval": "monthly", "amount": 1, "currency": "EUR"})
     assert r.status_code == 200
     assert r.json()["amount"] == 149
     assert calls["create_sub"][-1][0] == "plan_aed_m"
-
-    r = env.client.post("/billing/subscribe/starter", json={"interval": "monthly", "currency": "EUR"})
-    assert r.status_code == 400
 
 
 def test_subscribe_unoffered_tier_404(env):
@@ -466,7 +465,7 @@ def test_subscribe_unoffered_tier_404(env):
 def test_subscribe_missing_plan_env_503(env):
     _enable(env.mp)
     _mock_api(env)
-    env.mp.delenv("RAZORPAY_PLAN_STARTER_MONTHLY_INR")
+    env.mp.delenv("RAZORPAY_PLAN_STARTER_MONTHLY_USD")
     assert env.client.post("/billing/subscribe/starter", json={}).status_code == 503
 
 
@@ -481,7 +480,7 @@ def test_plans_show_regional_prices_when_enabled(env):
     assert by_id["starter"]["price_monthly"] == 3000 and by_id["starter"]["price_annual"] == 30000
     usd = {p["id"]: p for p in env.client.get("/billing/plans", params={"currency": "usd"}).json()["plans"]}
     assert usd["starter"]["price_monthly"] == 39
-    assert env.client.get("/billing/plans", params={"currency": "EUR"}).json()["currency"] == "INR"
+    assert env.client.get("/billing/plans", params={"currency": "EUR"}).json()["currency"] == "USD"
 
 
 def test_verify_activates_from_fetched_state(env):
@@ -613,14 +612,6 @@ def test_unknown_price_is_none():
     assert plans.get_regional_price("starter", "INR", "weekly") is None
 
 
-@pytest.mark.parametrize("country,currency", [
-    ("IN", "INR"), ("in", "INR"), ("US", "USD"), ("AE", "AED"), ("GB", "USD"), ("SG", "USD"),
-    ("", None), (None, None), ("XX", None), ("T1", None), ("India", None),
-])
-def test_currency_for_country(country, currency):
-    assert plans.currency_for_country(country) == currency
-
-
 def test_tier_for_plan_id(env):
     _enable(env.mp)
     assert razorpay_billing.tier_for_plan_id("plan_aed_a") == {
@@ -629,42 +620,46 @@ def test_tier_for_plan_id(env):
     assert razorpay_billing.tier_for_plan_id(None) is None
 
 
-def _resolve(env, user_id=1, headers=None, requested=None):
+def _resolve(env, user_id=1):
     db = env.Session()
     try:
-        return resolve_currency(db, user_id, headers, requested)
+        return resolve_currency(db, user_id)
     finally:
         db.close()
 
 
-def test_resolution_default_is_inr(env):
-    assert _resolve(env) == ("INR", "default")
+def test_resolution_no_company_is_usd(env):
+    assert _resolve(env) == ("USD", "no_company")
 
 
-def test_resolution_requested_wins_if_valid(env):
-    env.q("INSERT INTO companies (user_id, currency) VALUES (1, 'INR')")
-    assert _resolve(env, requested="aed") == ("AED", "requested")
-    assert _resolve(env, requested="EUR") == ("INR", "company_currency")
-
-
-def test_resolution_company_currency(env):
-    env.q("INSERT INTO companies (user_id, currency, metadata_json) VALUES (1, 'AED', '{\"country\": \"IN\"}')")
-    assert _resolve(env, headers={"cf-ipcountry": "US"}) == ("AED", "company_currency")
-
-
-def test_resolution_company_country_when_currency_unsupported(env):
-    env.q("INSERT INTO companies (user_id, currency, metadata_json) VALUES (1, 'EUR', '{\"country\": \"AE\"}')")
-    assert _resolve(env, headers={"cf-ipcountry": "US"}) == ("AED", "company_country")
-
-
-def test_resolution_ip_header_then_default(env):
-    env.q("INSERT INTO companies (user_id, currency, metadata_json) VALUES (1, 'EUR', '{}')")
-    assert _resolve(env, headers={"cf-ipcountry": "US"}) == ("USD", "ip_country")
-    assert _resolve(env, headers={"cf-ipcountry": "DE"}) == ("USD", "ip_country")
-    assert _resolve(env, headers={"cf-ipcountry": "XX"}) == ("INR", "default")
-    assert _resolve(env, headers={}) == ("INR", "default")
+@pytest.mark.parametrize("stored,expected", [
+    ("INR", "INR"), ("inr", "INR"), ("AED", "AED"), ("USD", "USD"),
+    ("EUR", "USD"), ("GBP", "USD"), ("", "USD"), (None, "USD"),
+])
+def test_resolution_from_company_currency_only(env, stored, expected):
+    env.q("INSERT INTO companies (user_id, currency, metadata_json) VALUES (1, :c, '{\"country\": \"IN\"}')", c=stored)
+    assert _resolve(env)[0] == expected
 
 
 def test_resolution_uses_latest_company(env):
     env.q("INSERT INTO companies (id, user_id, currency) VALUES (1, 1, 'USD'), (2, 1, 'INR')")
     assert _resolve(env) == ("INR", "company_currency")
+
+
+def test_checkout_ignores_client_currency_and_geo_header(env):
+    _enable(env.mp)
+    calls = _mock_api(env)
+    env.q("INSERT INTO companies (user_id, currency) VALUES (1, 'USD')")
+    r = env.client.post("/billing/subscribe/starter", json={"interval": "monthly", "currency": "INR"},
+                        headers={"cf-ipcountry": "IN"})
+    assert r.status_code == 200
+    assert r.json()["currency"] == "USD" and r.json()["amount"] == 39
+    assert calls["create_sub"][-1][0] == "plan_usd_m"
+
+
+def test_plans_for_signed_in_user_follow_company_not_query(env):
+    _enable(env.mp)
+    env.q("INSERT INTO companies (user_id, currency) VALUES (1, 'AED')")
+    env.mp.setattr(billing, "_optional_user_id", lambda request: 1)
+    data = env.client.get("/billing/plans", params={"currency": "INR"}, headers={"cf-ipcountry": "IN"}).json()
+    assert data["currency"] == "AED"

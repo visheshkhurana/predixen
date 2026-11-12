@@ -9,9 +9,9 @@ and the billing page shows "Free during beta".
 
 | Region | Currency | Monthly | Annual (2 months free) |
 |---|---|---|---|
-| India | INR | ₹3,000 | ₹30,000 |
-| US and every other country | USD | $39 | $390 |
-| UAE | AED | AED 149 | AED 1,490 |
+| Company currency INR | INR | ₹3,000 | ₹30,000 |
+| Company currency AED | AED | AED 149 | AED 1,490 |
+| Anything else (incl. USD) | USD | $39 | $390 |
 
 - Only the Starter tier is sold through Razorpay. Growth and Scale stay in
   config (USD, Stripe) and are hidden from the plan list when Razorpay is the
@@ -19,21 +19,20 @@ and the billing page shows "Free during beta".
 - Annual = monthly × 10 ("2 months free"). The rule lives in
   `server/core/plans.py` (`ANNUAL_MULTIPLIER`). Annual amounts are derived, so
   editing a monthly price in `REGIONAL_MONTHLY_PRICES` updates the annual price.
-- The server picks the price and the Razorpay plan id. The client sends only
-  tier + interval, plus an optional currency that must be INR, USD or AED.
+- The server picks the currency, price and Razorpay plan id. The client sends
+  only tier + interval.
 
-### Which currency a user sees
+### Which currency a user is charged in
 
-1. The currency the client asked for, if it is INR/USD/AED.
-2. The user's latest company currency setting, if it is INR/USD/AED.
-3. A country in the company's `metadata_json` (`country` / `hq_country`):
-   IN → INR, US → USD, AE → AED, anything else → USD.
-4. The `cf-ipcountry` header, if a proxy sets one. founderconsole.ai is
-   DNS-only on Cloudflare today, so this is usually absent.
-5. INR.
+Only the user's latest company currency setting decides it: INR → INR,
+AED → AED, anything else (or no company) → USD. A currency sent by the client
+and geo headers such as `cf-ipcountry` are ignored for the charge, because
+either would let a buyer pick the cheaper currency. Signed-out visitors may
+pass `?currency=` to `/api/billing/plans` to preview a price; it never reaches
+checkout.
 
-Note: `companies.currency` defaults to `USD`, so step 2 puts any company that
-never changed its currency on USD pricing.
+Existing companies still on the default `USD` currency are quoted $39 until
+they change their currency in settings.
 
 ## Environment variables
 
