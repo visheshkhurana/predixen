@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { loadRecipientEmails } from './ops-recipients';
 
 async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -38,12 +39,7 @@ async function sendWeeklyDigest() {
 
   const resend = new Resend(apiKey);
 
-  const recipients = [
-    'nikita@founderconsole.ai',
-    'nikita.luther@gmail.com',
-    'nikitafl2024@gmail.com',
-    'vysheshk@gmail.com'
-  ];
+  const recipients = loadRecipientEmails();
 
   const senderEmail = 'FounderConsole Weekly <noreply@founderconsole.ai>';
   const subject = 'FounderConsole Weekly Digest — Feb 8-14, 2026: 5 Bug Fixes, 4 New Features, 3 UI Upgrades';
