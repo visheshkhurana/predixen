@@ -1,23 +1,8 @@
-import crypto from "crypto";
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import { registerChatRoutes } from "./replit_integrations/chat";
+import { requireInternalAuth } from "./middleware/internalAuth";
 import { broadcastMetricUpdate, broadcastSimulationUpdate, broadcastTruthScanUpdate, getConnectedClientsCount } from "./websocket";
-
-function requireInternalAuth(req: Request, res: Response, next: NextFunction) {
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV !== "production") return next();
-    return res.status(503).json({ error: "Internal routes not configured" });
-  }
-  const provided = req.headers["x-internal-secret"];
-  const given = Buffer.from(typeof provided === "string" ? provided : "", "utf8");
-  const expected = Buffer.from(secret, "utf8");
-  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-}
 
 export async function registerRoutes(
   httpServer: Server,
