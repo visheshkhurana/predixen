@@ -864,7 +864,29 @@ export function pageHttpStatus(path: string): number {
 
 /** Status and body the SPA catch-all should send for one pathname. */
 export function renderHtmlPage(shell: string, path: string): { status: number; html: string } {
-  return { status: pageHttpStatus(path), html: injectSEO(shell, path) };
+  const meta = getPageMeta(path);
+  if (!meta) {
+    return { status: 200, html: injectAppShellNoindex(shell) };
+  }
+  return { status: meta.statusCode ?? 200, html: renderMeta(shell, meta) };
+}
+
+/**
+ * A route the client knows but the prerenderer does not: the logged-in app
+ * (/overview, /settings, ...) and auth flows (/login, /reset-password, ...).
+ *
+ * The raw shell is the HOMEPAGE: homepage title, homepage canonical, homepage
+ * JSON-LD and `index, follow`. Served as-is, every app URL a crawler found was
+ * an indexable duplicate of "/". These pages have nothing to rank for, so they
+ * are `noindex, follow`, carry no canonical (a canonical beside noindex sends
+ * mixed signals) and no structured data. The body and the app mount are
+ * untouched, so the SPA boots exactly as before.
+ */
+function injectAppShellNoindex(html: string): string {
+  return html
+    .replace(/<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/, '<meta name="robots" content="noindex, follow" />')
+    .replace(/\s*<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/, "")
+    .replace(/\s*<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/g, "");
 }
 
 function notFoundMeta(canonical: string, description: string): PageMeta {
@@ -883,7 +905,7 @@ function getPageMeta(path: string): PageMeta | null {
   if (path === "/" || path === "") {
     return {
       title: "FounderConsole — AI Decision Simulator for Founders",
-      description: "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 34 data connectors — replace spreadsheets with simulations.",
+      description: "FounderConsole is the AI-powered decision simulator for startup founders and D2C brands. Runway, burn and contribution margin with Monte Carlo simulations, an AI copilot, fundraising CRM and 34 data connectors. Free during public beta.",
       canonical: SITE_URL + "/",
       bodyContent: buildLandingBodyContent(),
       jsonLd: [
@@ -893,18 +915,29 @@ function getPageMeta(path: string): PageMeta | null {
           name: "FounderConsole",
           url: SITE_URL,
           logo: OG_IMAGE,
-          description: "AI-powered financial intelligence platform for startups.",
+          description: "AI-powered financial intelligence platform for startup founders and D2C brands.",
           sameAs: ["https://twitter.com/founderconsole", "https://linkedin.com/company/founderconsole"],
+          contactPoint: { "@type": "ContactPoint", url: `${SITE_URL}/contact`, contactType: "customer support" },
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "FounderConsole",
+          url: SITE_URL + "/",
+          inLanguage: "en",
+          publisher: { "@type": "Organization", name: "FounderConsole", url: SITE_URL },
         },
         {
           "@context": "https://schema.org",
           "@type": "SoftwareApplication",
           name: "FounderConsole",
           applicationCategory: "BusinessApplication",
+          applicationSubCategory: "Financial planning and analysis",
           operatingSystem: "Web",
           url: SITE_URL,
-          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-          featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 34 Data Connectors, Digital Twin",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free during public beta — no credit card required" },
+          audience: { "@type": "BusinessAudience", audienceType: "Startup founders, CFOs and D2C brand operators" },
+          featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 34 Data Connectors, Digital Twin, Free D2C contribution margin (CM1/CM2/CM3) calculator",
         },
         {
           "@context": "https://schema.org",
@@ -1563,14 +1596,25 @@ function getPageMeta(path: string): PageMeta | null {
         bodyContent: buildBlogPostBodyContent(slug) || undefined,
         jsonLd: [{
           "@context": "https://schema.org",
-          "@type": "Article",
+          "@type": "BlogPosting",
           headline: post.title,
           description: post.excerpt,
           datePublished: isoDate,
-          author: { "@type": "Person", name: post.author },
-          publisher: { "@type": "Organization", name: "FounderConsole", logo: { "@type": "ImageObject", url: OG_IMAGE } },
+          dateModified: isoDate,
+          articleSection: post.category,
+          inLanguage: "en",
+          author: { "@type": "Person", name: post.author, jobTitle: post.authorRole },
+          publisher: { "@type": "Organization", name: "FounderConsole", url: SITE_URL, logo: { "@type": "ImageObject", url: OG_IMAGE } },
           image: OG_IMAGE,
           mainEntityOfPage: `${SITE_URL}/blog/${slug}`,
+        }, {
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+            { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE_URL}/blog` },
+            { "@type": "ListItem", position: 3, name: post.title, item: `${SITE_URL}/blog/${slug}` },
+          ],
         }],
       };
     }
