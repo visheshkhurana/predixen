@@ -297,7 +297,7 @@ def free_client(monkeypatch):
             )
 
     monkeypatch.setattr("server.api.simulation_v2.SimulationEngine", _Engine)
-    monkeypatch.setattr("server.api.simulation_v2.get_openai_client", lambda: object())
+    monkeypatch.setattr("server.api.simulation_v2._audited_simulation_client", lambda db, user: object())
 
     from server.api.copilot import CopilotChatResponse
 
