@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { registerChatRoutes } from "./replit_integrations/chat";
@@ -10,7 +11,9 @@ function requireInternalAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(503).json({ error: "Internal routes not configured" });
   }
   const provided = req.headers["x-internal-secret"];
-  if (provided !== secret) {
+  const given = Buffer.from(typeof provided === "string" ? provided : "", "utf8");
+  const expected = Buffer.from(secret, "utf8");
+  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
@@ -42,7 +45,9 @@ export async function registerRoutes(
     if (!scenarioId || !status) {
       return res.status(400).json({ error: "Missing scenarioId or status" });
     }
-    broadcastSimulationUpdate(scenarioId, status, progress, results);
+    broadcastSimulationUpdate(scenarioId, status, progress, results).catch((err) => {
+      console.error("[WebSocket] simulation broadcast failed:", err);
+    });
     res.json({ success: true, clients: getConnectedClientsCount() });
   });
 

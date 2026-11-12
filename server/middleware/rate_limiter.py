@@ -228,7 +228,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     - Public lead capture (POST /leads), tighter than the general API cap
     """
 
-    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password"}
+    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"}
     ADMIN_AUTH_PATHS = {"/auth/admin/login"}
     UPLOAD_PATHS = {"/csv-import", "/api/upload"}
     HEALTH_PATHS = {"/health", "/"}
