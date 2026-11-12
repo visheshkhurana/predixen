@@ -140,6 +140,7 @@ export const APP_ROUTE_PATTERNS: readonly string[] = [
   "/terms",
   "/tools",
   "/tools/burn-multiple",
+  "/tools/d2c-contribution-margin",
   "/tools/dilution",
   "/tools/ltv-cac",
   "/tools/runway-calculator",

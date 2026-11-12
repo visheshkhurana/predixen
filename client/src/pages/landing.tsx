@@ -749,7 +749,7 @@ export default function LandingPage() {
   useSEO({
     title: "FounderConsole — AI Decision Simulator for Founders",
     description:
-      "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 34 data connectors — replace spreadsheets with simulations.",
+      "FounderConsole is the AI-powered decision simulator for startup founders and D2C brands. Runway, burn and contribution margin with Monte Carlo simulations, an AI copilot, fundraising CRM and 34 data connectors. Free during public beta.",
     path: "/",
     jsonLd: [
       {
