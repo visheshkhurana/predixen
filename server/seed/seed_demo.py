@@ -176,8 +176,9 @@ def seed_demo_data(db: Session):
     existing = db.query(User).filter(User.email == "demo@founderconsole.ai").first()
     if existing:
         demo_user = existing
-        if demo_user.role != "owner":
-            demo_user.role = "owner"
+        # The demo account is shared; it must never hold an elevated role.
+        if demo_user.role != "viewer":
+            demo_user.role = "viewer"
             db.commit()
         all_companies = db.query(Company).filter(Company.user_id == demo_user.id).order_by(Company.id).all()
         # HAG-651: only rows the seed itself created may be deleted or renamed.
@@ -314,7 +315,7 @@ def seed_demo_data(db: Session):
         demo_user = User(
             email="demo@founderconsole.ai",
             password_hash=get_password_hash("demo123"),
-            role="owner"
+            role="viewer"
         )
         db.add(demo_user)
         db.commit()

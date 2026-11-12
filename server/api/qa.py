@@ -19,9 +19,8 @@ router = APIRouter(prefix="/qa", tags=["qa"])
 
 
 def require_qa_access(current_user: User = Depends(get_current_user)):
-    admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
-    user_email = getattr(current_user, 'email', '').lower().strip()
-    if not admin_email or user_email != admin_email:
+    from server.core.company_access import is_platform_admin
+    if not is_platform_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="QA endpoints require admin access"
