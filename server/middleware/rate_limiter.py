@@ -228,7 +228,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     - Public lead capture (POST /leads), tighter than the general API cap
     """
 
-    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password"}
+    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"}
     ADMIN_AUTH_PATHS = {"/auth/admin/login"}
     UPLOAD_PATHS = {"/csv-import", "/api/upload"}
     HEALTH_PATHS = {"/health", "/"}
@@ -236,7 +236,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     # Express strips the /api prefix before FastAPI sees the request. Both
     # forms are listed so a direct hit and a proxied hit share this cap.
     # The number is a class constant. Lead capture does not read an environment variable.
-    LEAD_PATHS = {"/leads", "/api/leads"}
+    LEAD_PATHS = {"/leads", "/api/leads", "/contact", "/api/contact"}
     LEAD_RATE_LIMIT = 8
 
     WINDOW_SECONDS = 60

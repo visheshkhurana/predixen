@@ -56,6 +56,9 @@ PLAN_DETAILS: Dict[str, dict] = {
             Feature.BASIC_METRICS,
             Feature.CSV_UPLOAD,
             Feature.MANUAL_DATA_ENTRY,
+            Feature.SIMULATIONS,
+            Feature.COPILOT,
+            Feature.TRUTH_SCAN,
         ],
         "highlights": [
             "1 company",

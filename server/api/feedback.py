@@ -31,7 +31,7 @@ async def submit_feedback(
         auth_header = request.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-            from jose import jwt
+            import jwt
             from server.core.config import settings
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             user_id = int(payload.get("sub", 0)) or None
