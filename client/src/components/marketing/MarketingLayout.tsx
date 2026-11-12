@@ -14,6 +14,7 @@ import { MarketingBackground } from "@/components/marketing/MarketingBackground"
 import { metaPageView } from "@/lib/metaPixel";
 import { trackFunnel } from "@/lib/funnel";
 import { aiCitation } from "@/data/ai-citation";
+import { PRODUCT_OF_LINE, registeredAddress } from "@/data/legal";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const navLinks = [
@@ -60,6 +61,7 @@ const footerCompany = [
 const footerLegal = [
   { label: "Privacy", href: "/privacy" },
   { label: "Terms", href: "/terms" },
+  { label: "Refund & Cancellation", href: "/refund-policy" },
   { label: "Security", href: "/security" },
 ];
 
@@ -257,9 +259,15 @@ export function Footer() {
             </p>
           </div>
           <div className="mt-4 flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between">
-            <p className="text-xs text-muted-foreground" data-testid="text-copyright">
-              &copy; {new Date().getFullYear()} FounderConsole. All rights reserved.
-            </p>
+            <div className="text-xs text-muted-foreground">
+              <p data-testid="text-copyright">
+                &copy; {new Date().getFullYear()} FounderConsole. All rights reserved.
+              </p>
+              <p data-testid="text-legal-entity">{PRODUCT_OF_LINE}</p>
+              {registeredAddress() && (
+                <p data-testid="text-legal-address">Registered office: {registeredAddress()}</p>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground italic" data-testid="text-tagline">
               Built for founders, by founders.
             </p>

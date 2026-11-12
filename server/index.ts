@@ -16,6 +16,7 @@ import { legacyRedirects } from "./middleware/legacyRedirects";
 import { aiAgentLog } from "./middleware/aiAgentLog";
 import { requestId } from "./middleware/requestId";
 import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
+import { razorpayBillingEnabled } from "./billing-gate";
 
 const app = express();
 app.disable("x-powered-by");
@@ -62,11 +63,7 @@ app.use(legacyRedirects());
 // Razorpay Checkout origins. Added to the CSP only when Razorpay is the active
 // billing provider (same rule as server/core/razorpay_billing.razorpay_enabled),
 // so with payments off the policy is byte-for-byte what it was.
-const RAZORPAY_CSP_ENABLED =
-  (process.env.BILLING_PROVIDER || "").trim().toLowerCase() === "razorpay" &&
-  !!(process.env.RAZORPAY_KEY_ID || "").trim() &&
-  !!(process.env.RAZORPAY_KEY_SECRET || "").trim() &&
-  !!(process.env.RAZORPAY_WEBHOOK_SECRET || "").trim();
+const RAZORPAY_CSP_ENABLED = razorpayBillingEnabled();
 const rzp = (sources: string) => (RAZORPAY_CSP_ENABLED ? ` ${sources}` : "");
 
 app.use((req, res, next) => {

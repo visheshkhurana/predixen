@@ -1,5 +1,7 @@
 """Plan definitions and feature gating for FounderConsole."""
+import json
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional
 
 
@@ -265,25 +267,33 @@ FEATURE_LABELS: Dict[str, str] = {
 # (server/core/billing_region.py): INR -> INR, AED -> AED, else USD.
 # Annual billing is "2 months free": annual = monthly × ANNUAL_MULTIPLIER.
 # Annual amounts are derived, never written down separately, so changing a
-# monthly price below updates the annual price automatically.
+# monthly price updates the annual price automatically.
+#
+# The numbers live in shared/pricing.json, not here. The public /pricing and
+# /refund-policy pages (server/seo-prerender.ts and the React pages) read the
+# same file, so the price a visitor reads and the price checkout charges
+# cannot drift apart. shared/ ships in the runtime image (Dockerfile).
 #
 # Only STARTER is sold through Razorpay for now. GROWTH and SCALE keep their
 # USD Stripe config above and are hidden from the plan list when the
 # provider is Razorpay (no regional price = not offered).
 # ---------------------------------------------------------------------------
 
+PRICING_FILE = Path(__file__).resolve().parents[2] / "shared" / "pricing.json"
+_PRICING = json.loads(PRICING_FILE.read_text(encoding="utf-8"))
+
 SUPPORTED_CURRENCIES = ("INR", "USD", "AED")
 INTERVALS = ("monthly", "annual")
-ANNUAL_MULTIPLIER = 10  # "2 months free"
-ANNUAL_LABEL = "2 months free"
+ANNUAL_MULTIPLIER = int(_PRICING["annual_multiplier"])  # "2 months free"
+ANNUAL_LABEL = str(_PRICING["annual_label"])
 
 CURRENCY_SYMBOLS: Dict[str, str] = {"INR": "₹", "USD": "$", "AED": "AED "}
 
 # Monthly price per (tier, currency), in major units (rupees, dollars, dirhams).
 REGIONAL_MONTHLY_PRICES: Dict[tuple, int] = {
-    (PlanTier.STARTER.value, "INR"): 3000,
-    (PlanTier.STARTER.value, "USD"): 39,
-    (PlanTier.STARTER.value, "AED"): 149,
+    (str(tier), str(currency)): int(amount)
+    for tier, by_currency in _PRICING["regional_monthly_prices"].items()
+    for currency, amount in by_currency.items()
 }
 
 

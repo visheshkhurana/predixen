@@ -7,7 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { useSEO } from "@/lib/seo";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Clock, Loader2, Twitter, Linkedin, Github } from "lucide-react";
+import { Mail, Clock, Loader2, Twitter, Linkedin, Github, Building2, Scale } from "lucide-react";
+import { Link } from "wouter";
+import { LegalEntityNotice, GrievanceOfficerText } from "@/components/marketing/LegalEntity";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -155,6 +157,24 @@ export default function ContactPage() {
                 <div>
                   <p className="text-sm font-semibold text-foreground">Response Time</p>
                   <p className="text-sm text-muted-foreground">Within 24 hours</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-xl border bg-card/50 p-6" data-testid="card-company">
+                <Building2 className="mt-0.5 h-5 w-5 text-primary shrink-0" />
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p className="text-sm font-semibold text-foreground">Company</p>
+                  <LegalEntityNotice className="space-y-1" showEmail={false} />
+                  <p>
+                    Billing, cancellations and refunds:{" "}
+                    <Link href="/refund-policy" className="text-indigo-400 hover:underline">Refund &amp; Cancellation Policy</Link>
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-xl border bg-card/50 p-6" data-testid="card-grievance">
+                <Scale className="mt-0.5 h-5 w-5 text-primary shrink-0" />
+                <div className="text-sm text-muted-foreground">
+                  <p className="text-sm font-semibold text-foreground mb-1">Grievance Officer</p>
+                  <GrievanceOfficerText />
                 </div>
               </div>
               <div className="flex items-start gap-3 rounded-xl border bg-card/50 p-6" data-testid="card-social">

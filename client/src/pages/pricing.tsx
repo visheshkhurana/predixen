@@ -9,8 +9,67 @@ import { useSEO } from "@/lib/seo";
 import { FadeIn, ScrollReveal, StaggerChildren, StaggerItem } from '@/components/ui/motion-primitives';
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { usePlans } from "@/hooks/use-subscription";
+import { STARTER_PRICES, ANNUAL_LABEL } from "@/data/public-pricing";
+import { LegalEntityNotice } from "@/components/marketing/LegalEntity";
 
-const tiers = [
+type Tier = {
+  name: string;
+  price: string;
+  period: string;
+  /** Extra price lines under the headline price (annual, other currencies). */
+  priceNotes?: string[];
+  bullet: string;
+  features: string[];
+  highlighted: boolean;
+  cta: string;
+};
+
+/**
+ * Shown only when Razorpay billing is live (GET /api/billing/plans reports
+ * payments_enabled with provider "razorpay" -- the same rule as
+ * server/core/razorpay_billing.razorpay_enabled). Prices come from
+ * shared/pricing.json, the file plans.py charges from.
+ */
+const paidTiers: Tier[] = [
+  {
+    name: "Free",
+    price: "₹0",
+    period: "",
+    bullet: "Explore the platform at your own pace.",
+    features: [
+      "1 company",
+      "3 simulations / month",
+      "10 copilot messages / month",
+      "CSV upload & manual entry",
+      "Basic dashboard",
+    ],
+    highlighted: false,
+    cta: "Get Started Free",
+  },
+  {
+    name: "Starter",
+    price: STARTER_PRICES.INR.monthlyLabel,
+    period: "/month",
+    priceNotes: [
+      `or ${STARTER_PRICES.INR.annualLabel}/year (${ANNUAL_LABEL})`,
+      `International: ${STARTER_PRICES.USD.monthlyLabel}/month (${STARTER_PRICES.USD.annualLabel}/year) or ${STARTER_PRICES.AED.monthlyLabel}/month (${STARTER_PRICES.AED.annualLabel}/year)`,
+    ],
+    bullet: "For early-stage founders finding their footing.",
+    features: [
+      "50 simulations / month",
+      "100 copilot messages / month",
+      "2 data connectors",
+      "Truth Scan & Stress Tests",
+      "Industry benchmarks",
+      "PDF export",
+    ],
+    highlighted: true,
+    cta: "Get Started",
+  },
+];
+
+const tiers: Tier[] = [
   {
     name: "Free",
     price: "$0",
@@ -81,6 +140,9 @@ gsap.registerPlugin(ScrollTrigger);
 export default function PricingPage() {
   const [, navigate] = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
+  const { data: plansData } = usePlans();
+  const paidEnabled = !!plansData?.payments_enabled && plansData?.provider === "razorpay";
+  const shownTiers = paidEnabled ? paidTiers : tiers;
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
@@ -108,7 +170,7 @@ export default function PricingPage() {
     return () => ctx.revert();
   }, []);
 
-  useSEO({
+  const betaSEO = {
     title: "Pricing | FounderConsole",
     description: "FounderConsole is free while in early access — every feature unlocked, no credit card required. Planned pricing: Free, Starter $29, Growth $49, Scale $99 per month.",
     path: "/pricing",
@@ -152,7 +214,31 @@ export default function PricingPage() {
         },
       ],
     },
-  });
+  };
+  const paidSEO = {
+    title: "Pricing | FounderConsole",
+    description: `FounderConsole pricing: Free forever, or Starter at ${STARTER_PRICES.INR.monthlyLabel}/month (${STARTER_PRICES.USD.monthlyLabel} or ${STARTER_PRICES.AED.monthlyLabel} internationally), billed monthly or annually.`,
+    path: "/pricing",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "FounderConsole",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      offers: [
+        { "@type": "Offer", name: "Free", price: "0", priceCurrency: "INR" },
+        ...(["INR", "USD", "AED"] as const).map((c) => ({
+          "@type": "Offer",
+          name: "Starter",
+          price: String(STARTER_PRICES[c].monthly),
+          priceCurrency: c,
+          billingIncrement: "month",
+        })),
+      ],
+    },
+  };
+
+  useSEO(paidEnabled ? paidSEO : betaSEO);
 
   return (
     <MarketingLayout>
@@ -160,15 +246,31 @@ export default function PricingPage() {
       <FadeIn delay={0.05} duration={0.5}>
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
-          <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-trial">
-            Free During Early Access — No Credit Card
-          </Badge>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-pricing-title">
-            Everything's free while we're in early access
-          </h1>
-          <p className="mt-3 max-w-xl mx-auto text-lg text-muted-foreground" data-testid="text-pricing-subtitle">
-            Every feature is unlocked today — no credit card required. The plans below are our planned pricing for when we exit early access.
-          </p>
+          {paidEnabled ? (
+            <>
+              <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-trial">
+                Free plan — No Credit Card
+              </Badge>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-pricing-title">
+                Simple pricing for founders
+              </h1>
+              <p className="mt-3 max-w-xl mx-auto text-lg text-muted-foreground" data-testid="text-pricing-subtitle">
+                Start free. Upgrade to Starter for live connectors and more simulations — billed monthly or annually, cancel anytime.
+              </p>
+            </>
+          ) : (
+            <>
+              <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-trial">
+                Free During Early Access — No Credit Card
+              </Badge>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-pricing-title">
+                Everything's free while we're in early access
+              </h1>
+              <p className="mt-3 max-w-xl mx-auto text-lg text-muted-foreground" data-testid="text-pricing-subtitle">
+                Every feature is unlocked today — no credit card required. The plans below are our planned pricing for when we exit early access.
+              </p>
+            </>
+          )}
         </div>
       </section>
       </FadeIn>
@@ -176,8 +278,12 @@ export default function PricingPage() {
       <ScrollReveal>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <StaggerChildren className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" staggerDelay={0.1}>
-            {tiers.map((tier) => (
+          <StaggerChildren
+            key={paidEnabled ? "paid" : "beta"}
+            className={paidEnabled ? "grid gap-6 md:grid-cols-2 max-w-3xl mx-auto" : "grid gap-6 md:grid-cols-2 lg:grid-cols-4"}
+            staggerDelay={0.1}
+          >
+            {shownTiers.map((tier) => (
               <StaggerItem key={tier.name}>
               <Card
                 className={`flex flex-col h-full ${tier.highlighted ? "border-primary" : ""}`}
@@ -200,6 +306,9 @@ export default function PricingPage() {
                     <span className="text-3xl font-bold text-foreground">{tier.price}</span>
                     {tier.period && <span className="text-sm text-muted-foreground ml-1">{tier.period}</span>}
                     {!tier.period && <span className="text-sm text-muted-foreground ml-1">forever</span>}
+                    {tier.priceNotes?.map((note) => (
+                      <p key={note} className="mt-1 text-xs text-muted-foreground" data-testid="text-price-note">{note}</p>
+                    ))}
                   </div>
 
                   <ul className="space-y-3">
@@ -274,9 +383,19 @@ export default function PricingPage() {
 
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10 text-center">
-          <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
-            All plans include SSL encryption, daily backups, and reliable cloud hosting. Everything is free while we're in early access — no credit card required. We'll give plenty of notice before paid plans begin.
-          </p>
+          {paidEnabled ? (
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p data-testid="text-pricing-footer">
+                All plans include SSL encryption, daily backups, and reliable cloud hosting. Paid plans are billed in advance through Razorpay and renew automatically; cancel anytime from Billing.
+                See our <Link href="/refund-policy" className="text-indigo-400 hover:underline">Refund &amp; Cancellation Policy</Link>.
+              </p>
+              <LegalEntityNotice className="text-xs" showEmail={false} />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
+              All plans include SSL encryption, daily backups, and reliable cloud hosting. Everything is free while we're in early access — no credit card required. We'll give plenty of notice before paid plans begin.
+            </p>
+          )}
         </div>
       </section>
       </div>
