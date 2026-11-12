@@ -355,7 +355,7 @@ index 80e0059..1f7b24c 100644
      email.strip()
      for email in os.getenv(
          "NOTIFICATION_RECIPIENTS",
--        "nikita@founderconsole.ai,vysheshk@gmail.com,nikita.luther@gmail.com,nikitafl2024@gmail.com"
+-        "nikita@founderconsole.ai,recipient3@example.com,recipient1@example.com,recipient2@example.com"
 +        ""
      ).split(",")
      if email.strip()

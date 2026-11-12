@@ -7,6 +7,8 @@ import logging
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
+from server.core.plans import Feature
+from server.core.subscription import check_feature_access
 from server.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,8 @@ def generate_image(
     request: ImageGenerateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    # Paid image generation: the plan check lives here, not only in the UI.
+    _feature=Depends(check_feature_access(Feature.AI_GRAPHICS)),
 ):
     company = get_user_company(db, company_id, current_user)
 
