@@ -238,9 +238,10 @@ async def _run_deferred_startup():
             logger.warning(f"Could not ensure competitor tables: {e}")
 
         try:
-            from server.models.d2c_month import D2CMonth
+            from server.models.d2c_month import D2CAdSpend, D2CMonth
             D2CMonth.__table__.create(bind=engine, checkfirst=True)
-            logger.info("Ensured d2c_months table exists")
+            D2CAdSpend.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured d2c_months and d2c_ad_spend tables exist")
         except Exception as e:
             logger.warning(f"Could not ensure d2c_months table: {e}")
 

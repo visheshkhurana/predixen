@@ -116,10 +116,12 @@ def update_company_month(
     if get_user_company_role(db, company_id, current_user) not in _WRITE_ROLES:
         raise HTTPException(status_code=403, detail="Editing requires editor access")
     month = _parse_period(period)
-    row = d2c_months.upsert_month(
-        db, company_id, month, update.model_dump(exclude_unset=True), source=d2c_months.MANUAL
-    )
-    view = d2c_months.month_view(row)
+    body = update.model_dump(exclude_unset=True)
+    row = d2c_months.upsert_month(db, company_id, month, body, source=d2c_months.MANUAL)
+    if "marketing_spend" in body and body["marketing_spend"] is None:
+        # Clearing a typed spend hands the field back to the ad platforms' sum.
+        d2c_months.recompute_marketing_spend(db, company_id, month)
+    view = d2c_months.month_view_for(db, company_id, row)
     if view["error"]:
         db.rollback()
         raise HTTPException(status_code=422, detail=view["error"])
