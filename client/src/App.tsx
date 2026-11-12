@@ -113,6 +113,7 @@ const MessagingPage = lazy(() => import("@/pages/messaging"));
 const JournalPage = lazy(() => import("@/pages/journal"));
 const GoalsPage = lazy(() => import("@/pages/goals"));
 const HiringPlannerPage = lazy(() => import("@/pages/hiring-planner"));
+const ProfitPage = lazy(() => import("@/pages/profit"));
 const SharedScenarioPage = lazy(() => import("@/pages/shared-scenario"));
 const QAFrontPage = lazy(() => import("@/pages/qa"));
 const PricingPage = lazy(() => import("@/pages/pricing"));
@@ -473,6 +474,9 @@ function Router() {
           No connector-detail page exists — Integrations is the live dest. */}
       <Route path="/data-source/:id">
         {() => <Redirect to="/integrations" />}
+      </Route>
+      <Route path="/profit">
+        {() => <AuthenticatedRoute component={ProfitPage} />}
       </Route>
       <Route path="/alerts">
         {() => <AuthenticatedRoute component={AlertsPage} />}

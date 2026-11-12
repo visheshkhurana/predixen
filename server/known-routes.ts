@@ -94,6 +94,7 @@ export const APP_ROUTE_PATTERNS: readonly string[] = [
   "/health-check",
   "/help",
   "/hiring-planner",
+  "/profit",
   "/how-it-works",
   "/ingest",
   "/integrations",

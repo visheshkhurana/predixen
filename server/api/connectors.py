@@ -544,6 +544,16 @@ async def sync_provider(
                 from server.services.sample_data import on_real_financials_written
                 on_real_financials_written(db, company_id, commit=False)
 
+                # D2C stores: the month's orders/sales/COD share feed the
+                # contribution-margin inputs, without touching manual entries.
+                d2c_summary = result.metadata["financials"].get("d2c")
+                if provider_id == "shopify" and isinstance(d2c_summary, dict):
+                    from server.services import d2c_months
+                    d2c_months.upsert_month(
+                        db, company_id, financial_record.period_start,
+                        d2c_months.shopify_values(d2c_summary), source="shopify",
+                    )
+
             db.commit()
 
             try:
