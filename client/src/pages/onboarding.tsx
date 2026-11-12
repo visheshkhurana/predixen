@@ -747,6 +747,8 @@ export default function OnboardingPage() {
                         <SelectItem value="logistics">Logistics / Supply Chain</SelectItem>
                         <SelectItem value="real_estate">Real Estate / PropTech</SelectItem>
                         <SelectItem value="food">Food / CPG</SelectItem>
+                        <SelectItem value="agency">Agency / services</SelectItem>
+                        <SelectItem value="startup">Early-stage / pre-revenue</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>

@@ -61,6 +61,23 @@ example each percentage point of RTO costs about Rs 15,700 of CM3 a month.
 FounderConsole does not publish industry benchmark percentages for Indian D2C margins
 because no sourced, dated dataset backs the figures that usually circulate.
 
+## Built for your business
+
+One page per kind of business, each with the numbers that business runs on:
+
+- [D2C & e-commerce](https://founderconsole.ai/for/d2c): CM1, CM2 and CM3 per order in
+  rupees, the cost of RTO and COD, MER, and the runway that inventory leaves.
+- [SaaS / B2B software](https://founderconsole.ai/for/saas): MRR, ARR, churn, net revenue
+  retention, burn multiple and CAC payback, with runway to the next round.
+- [Marketplace / platform](https://founderconsole.ai/for/marketplace): GMV separated from
+  take rate and net revenue, supply and demand incentives, contribution per order.
+- [Agency / services](https://founderconsole.ai/for/agency): utilisation, project margins,
+  the gap between invoicing and getting paid, and whether the next hire is affordable.
+- [Fintech](https://founderconsole.ai/for/fintech): per-user unit economics, LTV against
+  CAC, CAC payback and the regulatory capital requirement, with runway stress tests.
+- [Early-stage / pre-revenue](https://founderconsole.ai/for/startup): runway and burn,
+  hiring plans, and the fundraising timeline as a range rather than a single date.
+
 ## Free tools
 
 - [Startup Runway Calculator](https://founderconsole.ai/tools/runway-calculator): enter cash

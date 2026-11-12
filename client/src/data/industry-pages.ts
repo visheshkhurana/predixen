@@ -346,6 +346,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     label: "Agency / services",
     pickerHint: "Utilisation, project margins, cash-flow gaps",
     icon: "Briefcase",
+    onboardingIndustry: "agency",
     title: "Cash Flow, Margin and Hiring Planning for Agencies | FounderConsole",
     description:
       "Free AI CFO for agencies and services firms. Track utilisation and project margins, see the gap between invoicing and getting paid, and test whether you can afford the next hire. Connects QuickBooks, Xero, Zoho Books and FreshBooks. Free during public beta.",
@@ -493,6 +494,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     label: "Early-stage startup",
     pickerHint: "Pre-revenue? Runway, burn, hires, when to raise",
     icon: "Rocket",
+    onboardingIndustry: "startup",
     title: "Runway, Burn and Fundraising Planner for Early-Stage Startups | FounderConsole",
     description:
       "Free AI CFO for early-stage and pre-revenue startups. Know your runway and burn, plan hires, and see your fundraising timeline as a range, not a guess. Monte Carlo simulation and an AI copilot. Free during public beta.",

@@ -42,6 +42,8 @@ const SITEMAP = readFileSync("client/public/sitemap.xml", "utf8");
 const ONBOARDING = readFileSync("client/src/pages/onboarding.tsx", "utf8");
 const CONFIG_SOURCE = readFileSync("client/src/data/industry-pages.ts", "utf8");
 const CONNECTOR_INIT = readFileSync("server/connectors/__init__.py", "utf8");
+const LLMS_TXT = readFileSync("client/public/llms.txt", "utf8");
+const TAXONOMY = readFileSync("server/core/taxonomy.py", "utf8");
 
 function meta(html: string) {
   return {
@@ -289,6 +291,30 @@ test("onboarding prefill maps only to values the Industry select offers", () => 
   assert.equal(onboardingIndustryPrefill("", null), "");
   assert.equal(onboardingIndustryPrefill("", INDUSTRY_SKIPPED), "");
   assert.equal(onboardingIndustryPrefill("?industry=nope", null), "");
+});
+
+test("every industry page prefills onboarding, including agency and startup", () => {
+  for (const p of INDUSTRY_PAGES) assert.ok(p.onboardingIndustry, `${p.slug} has no onboarding value`);
+  assert.equal(onboardingIndustryPrefill("?industry=agency", null), "agency");
+  assert.equal(onboardingIndustryPrefill("", "startup"), "startup");
+});
+
+test("new onboarding values map to a seeded benchmark industry", () => {
+  // server/core/taxonomy.py: agency benchmarks as services, startup falls back to saas.
+  assert.match(TAXONOMY, /"agency":\s*"services"/);
+  assert.match(TAXONOMY, /"startup":\s*"saas"/);
+});
+
+/* --------------------------------- llms.txt --------------------------------- */
+
+test("llms.txt lists every /for/* page under 'Built for your business'", () => {
+  const start = LLMS_TXT.indexOf("## Built for your business");
+  assert.ok(start >= 0, "section missing");
+  const end = LLMS_TXT.indexOf("\n## ", start + 1);
+  const section = LLMS_TXT.slice(start, end < 0 ? undefined : end);
+  for (const p of INDUSTRY_PAGES) {
+    assert.ok(section.includes(`(https://founderconsole.ai/for/${p.slug})`), `llms.txt misses /for/${p.slug}`);
+  }
 });
 
 test("homepage meta is unchanged and consistent across shell, prerender and landing", () => {
