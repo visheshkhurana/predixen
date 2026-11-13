@@ -248,11 +248,11 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
             median = p.get("median_impact", 0)
             p25 = p.get("p25_impact", 0)
             p75 = p.get("p75_impact", 0)
-            if median > 0:
+            if isinstance(median, str) and median:
                 insights.append({
                     "type": "benchmark",
                     "metric": metric,
-                    "insight": f"Peer {metric.replace('_', ' ')} benchmark: P25=${p25:,.0f}, Median=${median:,.0f}, P75=${p75:,.0f}",
+                    "insight": f"Peer {metric.replace('_', ' ')} benchmark: P25={p25}, Median={median}, P75={p75}",
                     "p25": p25,
                     "median": median,
                     "p75": p75,

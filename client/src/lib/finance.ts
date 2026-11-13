@@ -169,11 +169,21 @@ export function formatRunway(runwayMonths: number | null): string {
 export function normalizeGrossMarginPct(value: number | null | undefined): number | null {
   if (value == null || isNaN(value)) return null;
   
-  // If value is between 0 and 1 (inclusive of boundaries), it's likely a decimal fraction
-  if (value >= 0 && value <= 1) {
+  // Magnitude <= 1 is a fraction, same rule as server/core/units.py. A
+  // negative fraction (-0.56) is -56%, not -0.56%.
+  if (Math.abs(value) <= 1) {
     return value * 100;
   }
   
   // If it's already in percentage form (e.g., 90 for 90%)
   return value;
+}
+
+/**
+ * Lower bound for a gross-margin slider. The old fixed floor of 30% pinned a
+ * loss-making company at 30%, so the explorer showed it as profitable. Allow
+ * at least 10 points below the baseline, down to the server's -200% floor.
+ */
+export function grossMarginSliderMin(baselinePct: number): number {
+  return Math.max(-200, Math.min(30, Math.floor(baselinePct / 10) * 10 - 10));
 }

@@ -155,9 +155,30 @@ def compare_decisions(
     }
 
 
+def coerce_pii_mode(value: Any) -> Literal["standard", "strict"]:
+    """Accept only redacting modes. "off", blank, and anything else become standard.
+
+    The client must not be able to disable redaction by sending pii_mode="off".
+    Unknown values are coerced rather than rejected so a bad payload cannot 500.
+    """
+    mode = value.strip().lower() if isinstance(value, str) else ""
+    if mode == "strict":
+        return "strict"
+    return "standard"
+
+
 class PrivacySettings(BaseModel):
-    """Privacy settings for PII redaction."""
-    pii_mode: str = "standard"
+    """Privacy settings for PII redaction.
+
+    pii_mode is client-supplied and therefore untrusted. Only "standard" and
+    "strict" are honored; every other value is stored as "standard".
+    """
+    pii_mode: Literal["standard", "strict"] = "standard"
+
+    @field_validator("pii_mode", mode="before")
+    @classmethod
+    def _coerce_pii_mode(cls, value: Any) -> str:
+        return coerce_pii_mode(value)
 
 
 class CopilotContextRequest(BaseModel):
@@ -606,6 +627,10 @@ async def copilot_quick_chat(
             )
 
         sanitized_message = PromptInjectionDefense.sanitize_user_input(request.message)
+        # Same gate as the main /chat path: redact founder PII before any model
+        # sees the text. The router writes the llm_audit_logs row.
+        pii_mode = "standard"
+        redacted_message = redact_text(sanitized_message, mode=pii_mode).redacted_text
 
         context = build_context_pack(company, db)
         data_summary = _build_data_summary(context)
@@ -617,7 +642,7 @@ async def copilot_quick_chat(
         today_str = dt.utcnow().strftime("%B %d, %Y")
 
         web_research = await search_for_copilot(
-            message=sanitized_message,
+            message=redacted_message,
             company_industry=company.industry or "",
             company_stage=company.stage or "",
             company_name=company.name or "",
@@ -636,10 +661,10 @@ async def copilot_quick_chat(
         messages = []
         if request.conversation_history:
             for msg in request.conversation_history[-10:]:
-                # Also sanitize conversation history
                 sanitized_content = PromptInjectionDefense.sanitize_user_input(msg.content)
-                messages.append({"role": msg.role, "content": sanitized_content})
-        messages.append({"role": "user", "content": PromptInjectionDefense.wrap_user_message(sanitized_message)})
+                redacted_content = redact_text(sanitized_content, mode=pii_mode).redacted_text
+                messages.append({"role": msg.role, "content": redacted_content})
+        messages.append({"role": "user", "content": PromptInjectionDefense.wrap_user_message(redacted_message)})
 
         system_prompt = QUICK_CHAT_SYSTEM_PROMPT + f"\n\nToday's date: {today_str}\n\n--- COMPANY DATA ---\n{data_summary}\n--- END DATA ---"
 
@@ -669,10 +694,13 @@ async def copilot_quick_chat(
         if data_gaps:
             system_prompt += f"\n\n--- DATA GAPS ---\nThe following data is not yet available: {'; '.join(data_gaps)}\nMention relevant gaps when they would improve the analysis quality.\n--- END GAPS ---"
 
+        system_prompt = redact_text(system_prompt, mode=pii_mode).redacted_text
+
         llm_router = get_llm_router(
             db_session=db,
             company_id=company_id,
-            user_id=current_user.id
+            user_id=current_user.id,
+            pii_mode=pii_mode,
         )
 
         import asyncio
@@ -1142,9 +1170,11 @@ async def _copilot_chat_inner(
             session_context=session_context
         )
 
-    pii_mode = "standard"
-    if request.privacy and request.privacy.pii_mode:
-        pii_mode = request.privacy.pii_mode
+    # Guard again at the read site. Model validation already coerces the field,
+    # but a constructed request (or a future caller) must not be able to pass
+    # "off" through to redact_text or the LLM router.
+    requested_mode = request.privacy.pii_mode if request.privacy is not None else None
+    pii_mode = coerce_pii_mode(requested_mode)
 
     redaction_result = redact_text(sanitized_message, mode=pii_mode)
     redacted_message = redaction_result.redacted_text
