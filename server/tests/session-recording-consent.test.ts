@@ -35,8 +35,9 @@ const recordingLib = readFileSync("client/src/lib/sessionRecording.ts", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
 const embed = readFileSync("client/src/pages/embed-survival.tsx", "utf8");
 const runway = readFileSync("client/src/pages/runway-calculator.tsx", "utf8");
+// calculator_used is fired from a shared hook the calculator pages call.
+const calculatorUsedHook = readFileSync("client/src/lib/calculator-used.ts", "utf8");
 const funnel = readFileSync("client/src/lib/funnel.ts", "utf8");
-const leadsOptIn = readFileSync("client/src/components/marketing/CalculatorEmailOptIn.tsx", "utf8");
 
 const CORE_ROUTES = [
   "/overview",
@@ -128,8 +129,10 @@ test("SPA route changes sync recording, and named events are not gated", () => {
   assert.doesNotMatch(trackPage, /cookie-consent|stopSessionRecording|autocapture/);
   assert.doesNotMatch(trackEvent, /cookie-consent|shouldRecordSession|autocapture/);
   assert.doesNotMatch(posthogLib, /founder_activated|lead_captured|calculator_used/);
-  assert.match(runway, /calculator_used/);
-  assert.match(leadsOptIn, /lead_captured/);
+  assert.match(runway, /useCalculatorUsedOnce\(/);
+  assert.match(calculatorUsedHook, /"calculator_used"/);
+  // lead_captured is sent server-side (server/api/leads.py), once per lead.
+  assert.match(readFileSync("server/api/leads.py", "utf8"), /lead_captured/);
   assert.match(funnel, /posthogTrack\(name/);
 });
 
