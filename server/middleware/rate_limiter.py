@@ -410,7 +410,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     metrics/computed, and baseline.
     """
 
-    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"}
+    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password", "/auth/demo"}
     ADMIN_AUTH_PATHS = {"/auth/admin/login"}
     UPLOAD_MARKERS = ("/csv-import", "/upload")
     HEALTH_PATHS = {"/health", "/"}

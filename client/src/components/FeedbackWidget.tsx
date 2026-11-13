@@ -65,7 +65,7 @@ export function FeedbackWidget() {
         <div className="fixed bottom-16 right-20 z-[1000] w-80 rounded-xl border bg-background shadow-2xl" data-testid="feedback-panel">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h3 className="text-sm font-semibold">Send Feedback</h3>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)} data-testid="button-feedback-close">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)} data-testid="button-feedback-close" aria-label="Close">
               <X className="h-4 w-4" />
             </Button>
           </div>
