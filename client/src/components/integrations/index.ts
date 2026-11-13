@@ -1,6 +1,4 @@
 export { IntegrationCard } from './IntegrationCard';
-export { OAuthConnectModal } from './OAuthConnectModal';
 export { ApiKeyConnectModal } from './ApiKeyConnectModal';
-export { GoogleSheetsConfigModal } from './GoogleSheetsConfigModal';
 export { StripeConnectModal } from './StripeConnectModal';
 export { SlackLinkCard } from './SlackLinkCard';

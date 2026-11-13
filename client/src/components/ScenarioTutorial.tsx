@@ -89,7 +89,7 @@ export function ScenarioTutorial({ currentStep, onClose, onNeverShowAgain }: Sce
               </CardDescription>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} data-testid="tutorial-close">
+          <Button variant="ghost" size="icon" onClick={onClose} data-testid="tutorial-close" aria-label="Close">
             <X className="h-4 w-4" />
           </Button>
         </div>

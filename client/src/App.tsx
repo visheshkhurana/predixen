@@ -24,6 +24,7 @@ import { useFounderStore } from "@/store/founderStore";
 import { isDemoEmail } from "@/lib/demo";
 import { captureFirstTouchAttribution } from "@/lib/attribution";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
+import { SessionRecordingSync } from "@/components/SessionRecordingSync";
 import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
 import {
@@ -315,6 +316,7 @@ function PublicOrAuthHome() {
 
 function Router() {
   return (
+    <SessionRecordingSync>
     <ErrorBoundary
       onError={(error) => {
         // Log to console with context
@@ -422,7 +424,7 @@ function Router() {
       <Route path="/data">
         {() => <AuthenticatedRoute component={DataInputPage} />}
       </Route>
-      {/* Unmounted pages/dashboard.tsx still links here; live ingest is /data. */}
+      {/* Legacy alias kept for old bookmarks; live ingest is /data. */}
       <Route path="/ingest">
         {() => <Redirect to="/data" />}
       </Route>
@@ -631,6 +633,7 @@ function Router() {
       </Switch>
       </Suspense>
     </ErrorBoundary>
+    </SessionRecordingSync>
   );
 }
 
@@ -784,10 +787,11 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
               placeholder="Ask about your financials..."
+              aria-label="Ask the copilot a question"
               className="flex-1"
               data-testid="input-copilot-drawer"
             />
-            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} data-testid="button-copilot-send">
+            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} aria-label="Send message" data-testid="button-copilot-send">
               <Send className="h-4 w-4" />
             </Button>
           </div>
@@ -1065,7 +1069,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               {getConfidenceBadge()}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" data-testid="button-user-avatar">
+                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" aria-label="Account menu" data-testid="button-user-avatar">
                     <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
                       {user?.email?.charAt(0)?.toUpperCase() || 'U'}
                     </div>

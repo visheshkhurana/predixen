@@ -13,6 +13,7 @@ import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
+import { readNextFromSearch } from "@/lib/loginNext";
 import { getBrowserDistinctId } from '@/lib/posthog';
 import { readFirstTouchAttribution } from '@/lib/attribution';
 import {
@@ -244,7 +245,8 @@ export default function AuthPage({
     }
     setCompanyLoadError(false);
     toast({ title: 'Welcome back!' });
-    setLocation(dest);
+    // Back to the page the session expired on (validated same-origin path).
+    setLocation(dest === '/' ? (readNextFromSearch(window.location.search) ?? '/') : dest);
   };
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {

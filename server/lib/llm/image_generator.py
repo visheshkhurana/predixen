@@ -99,15 +99,15 @@ class NanoBananaImageGenerator:
             def _truncate(text: str, max_len: int = 1000) -> str:
                 return text[:max_len] if len(text) > max_len else text
 
-            redacted_prompt = prompt
-            pii_count = 0
             try:
                 from server.lib.privacy.pii_redactor import redact_text
                 redaction_result = redact_text(prompt, mode="standard")
-                redacted_prompt = redaction_result.redacted_text
-                pii_count = len(redaction_result.findings)
             except Exception:
-                pass
+                # Fail closed. A redaction error must not fall back to the raw prompt.
+                logger.error("PII redaction failed; refusing to store the image prompt")
+                return None
+            redacted_prompt = redaction_result.redacted_text
+            pii_count = len(redaction_result.findings)
 
             # Hash and preview the redacted prompt only. The raw prompt is kept as a length.
             audit_log = LLMAuditLog(
@@ -161,9 +161,25 @@ class NanoBananaImageGenerator:
 
         size = ASPECT_RATIOS.get(aspect_ratio, "1024x1024")
 
+        try:
+            from server.lib.privacy.pii_redactor import redact_text
+            outbound_prompt = redact_text(full_prompt, mode="standard").redacted_text
+        except Exception:
+            # Fail closed: never send or return the raw prompt when redaction fails.
+            logger.error("PII redaction failed; refusing to send the image prompt")
+            return {
+                "image_base64": None,
+                "mime_type": None,
+                "prompt_used": None,
+                "style": style,
+                "model": model,
+                "latency_ms": int((time.time() - start_time) * 1000),
+                "error": "Image generation refused because prompt redaction failed.",
+            }
+
         request_body = {
             "model": model,
-            "prompt": full_prompt,
+            "prompt": outbound_prompt,
             "n": 1,
             "size": size,
             "output_format": "png",
@@ -194,7 +210,7 @@ class NanoBananaImageGenerator:
                 return {
                     "image_base64": None,
                     "mime_type": None,
-                    "prompt_used": full_prompt,
+                    "prompt_used": outbound_prompt,
                     "style": style,
                     "model": model,
                     "latency_ms": latency_ms,
@@ -205,7 +221,7 @@ class NanoBananaImageGenerator:
             return {
                 "image_base64": image_base64,
                 "mime_type": "image/png",
-                "prompt_used": full_prompt,
+                "prompt_used": outbound_prompt,
                 "style": style,
                 "model": model,
                 "latency_ms": latency_ms,
@@ -227,7 +243,7 @@ class NanoBananaImageGenerator:
             return {
                 "image_base64": None,
                 "mime_type": None,
-                "prompt_used": full_prompt,
+                "prompt_used": outbound_prompt,
                 "style": style,
                 "model": model,
                 "latency_ms": latency_ms,
@@ -247,7 +263,7 @@ class NanoBananaImageGenerator:
             return {
                 "image_base64": None,
                 "mime_type": None,
-                "prompt_used": full_prompt,
+                "prompt_used": outbound_prompt,
                 "style": style,
                 "model": model,
                 "latency_ms": latency_ms,
