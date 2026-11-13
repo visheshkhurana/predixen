@@ -91,6 +91,9 @@ jobs:
       - name: posthog calls do not send email
         run: npx tsx server/tests/posthog-no-email-properties.test.ts
 
+      - name: session recording consent tests
+        run: npx tsx --test server/tests/session-recording-consent.test.ts
+
       - name: gtag must not receive user_email
         run: npx tsx --test server/tests/no-gtag-user-email.test.ts
 

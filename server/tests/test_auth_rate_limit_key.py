@@ -138,6 +138,11 @@ def _drive(middleware, times: int, **kwargs):
 
 
 def _middleware(store):
+    # The in-process sliding window (#201) is module state; each shape starts empty.
+    from server.middleware import rate_limiter as _rl
+
+    with _rl._WINDOW_LOCK:
+        _rl._WINDOW_HITS.clear()
     middleware = RateLimiterMiddleware(MagicMock())
     return middleware, patch("server.middleware.rate_limiter._get_engine", return_value=store)
 
