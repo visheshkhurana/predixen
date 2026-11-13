@@ -9,6 +9,7 @@ real dependency against SQLite.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -144,7 +145,9 @@ def test_oauth_password_clear_rejects_the_old_access_token(env):
     db.close()
 
     db = Session()
-    linked = oauth_api._get_or_create_oauth_user(db, email, "google", "g-reclaim")
+    # example.com is an internal domain; this test is about session revocation.
+    with patch("server.services.posthog.urllib.request.urlopen"):
+        linked = oauth_api._get_or_create_oauth_user(db, email, "google", "g-reclaim")
     assert linked.password_hash is None
     db.close()
 
