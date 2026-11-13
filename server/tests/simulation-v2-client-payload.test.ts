@@ -62,7 +62,8 @@ test("non-null base metrics are sent and canned customers/churn are not", () => 
     controls,
   );
   assert.equal(payload.monthly_revenue, 43948.68);
-  assert.equal(payload.monthly_burn, 24109.37);
+  // monthly_burn is GROSS spend (engine does cash += mrr - burn): net + MRR.
+  assert.ok(Math.abs(payload.monthly_burn - (24109.37 + 43948.68)) < 1e-6);
   assert.equal(payload.cash_balance, 513745.58);
   assert.ok(Math.abs(payload.growth_rate - 0.108) < 1e-12);
   assert.equal(payload.team_size, 11);
@@ -80,6 +81,28 @@ test("zero burn and cash are sent; zero headcount is not a team size", () => {
   assert.equal(payload.cash_balance, 0);
   assert.equal(payload.growth_rate, 0);
   assert.equal("team_size" in payload, false);
+});
+
+test("gross spend reproduces the dashboard's net burn and runway", () => {
+  const mrr = 43949;
+  const net = 24109;
+  const cash = 514000;
+  const payload = buildSimulationV2Payload({ mrr, burnRate: net, cashOnHand: cash }, controls);
+  // One month of the engine's cash update: cash += mrr - burn.
+  const monthlyChange = payload.monthly_revenue - payload.monthly_burn;
+  assert.ok(Math.abs(monthlyChange + net) < 1e-9);
+  const runway = cash / (payload.monthly_burn - payload.monthly_revenue);
+  assert.ok(runway > 21 && runway < 21.5, `runway ${runway}`);
+});
+
+test("profitable company sends total expenses; burn without MRR is not sent", () => {
+  const profitable = buildSimulationV2Payload(
+    { mrr: 100000, burnRate: 0, totalMonthlyExpenses: 80000 },
+    controls,
+  );
+  assert.equal(profitable.monthly_burn, 80000);
+  const noMrr = buildSimulationV2Payload({ mrr: null, burnRate: 24109 }, controls);
+  assert.equal("monthly_burn" in noMrr, false);
 });
 
 test("missing or unknown provenance is not labelled entered", () => {

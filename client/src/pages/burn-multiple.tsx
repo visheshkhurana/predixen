@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { trackFunnel } from "@/lib/funnel";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import {
   ArrowRight,
   Calculator,
@@ -151,11 +154,10 @@ export default function BurnMultiplePage() {
 
   const { result } = results;
   const band = result.multiple === null ? null : bandFor(result.multiple);
+  const onCalculatorInput = useCalculatorUsedOnce("burn-multiple");
 
   useSEO({
-    title: "Burn Multiple Calculator — What Each Dollar of New ARR Costs You | FounderConsole",
-    description:
-      "Free burn multiple calculator. Enter new, expansion, churned and contraction ARR plus cash in and out to see your burn multiple, the ARR reconciliation check, and how it reads against the 2024 median of 2.3x.",
+    ...TOOL_PAGE_META["/tools/burn-multiple"],
     path: "/tools/burn-multiple",
     jsonLd: [
       {
@@ -207,7 +209,7 @@ export default function BurnMultiplePage() {
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12">
           <div className="grid gap-8 lg:grid-cols-5">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6" onInput={onCalculatorInput}>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -396,6 +398,15 @@ export default function BurnMultiplePage() {
                 </CardContent>
               </Card>
 
+              <CalculatorEmailOptIn
+                source="burn-multiple"
+                sourcePage="/tools/burn-multiple"
+                plan="burn-multiple"
+                resultByEmail={false}
+                visible={result.outcome !== "invalid"}
+                notes={`Burn multiple ${result.multiple === null ? "n/a" : `${result.multiple.toFixed(2)}x`}. Net new ARR ${formatCurrency(result.netNewArr)}, net burn ${formatCurrency(result.netBurn)}. ${result.reason ?? ""}`.trim()}
+              />
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
@@ -443,7 +454,7 @@ export default function BurnMultiplePage() {
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
               <Link
-                href="/auth?tab=register"
+                href="/signup"
                 onClick={() => trackFunnel("cta_click", { location: "burn-multiple" })}
               >
                 Connect Your Real Data

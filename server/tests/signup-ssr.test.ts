@@ -26,7 +26,7 @@ function jsonLdBlocks(html: string): object[] {
 }
 
 const REQUIRED_HREFS = [
-  "/auth?tab=register",
+  "/signup",
   "/product",
   "/features",
   "/pricing",

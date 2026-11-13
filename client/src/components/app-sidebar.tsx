@@ -53,6 +53,7 @@ import {
   Brain,
   Plug,
   Zap,
+  IndianRupee,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { cn } from "@/lib/utils";
 import { FCLogo } from "@/components/FCLogo";
 import { useQuery } from "@tanstack/react-query";
+import { useScenarios } from "@/api/hooks";
 
 interface SettingsNavItem {
   title: string;
@@ -337,10 +339,10 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { currentCompany } = useFounderStore();
 
-  const { data: scenarios } = useQuery<any[]>({
-    queryKey: ["/api/scenarios"],
-    enabled: !!currentCompany?.id,
-  });
+  // Same key as the simulate and decisions pages, so the badge does not fire a
+  // second scenarios request. The old key was GET /api/scenarios, which is not
+  // the company list.
+  const { data: scenarios } = useScenarios(currentCompany?.id ?? null);
 
   const { data: decisions } = useQuery<any[]>({
     queryKey: ["/api/companies", currentCompany?.id, "decisions"],
@@ -434,6 +436,18 @@ export function AppSidebar() {
                   <Link href="/overview">
                     <LayoutDashboard className="h-4 w-4" />
                     <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/profit"}
+                  data-testid="nav-profit"
+                >
+                  <Link href="/profit">
+                    <IndianRupee className="h-4 w-4" />
+                    <span>Profit per order</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

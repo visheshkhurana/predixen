@@ -1,3 +1,4 @@
+import { currencySymbol } from '@/lib/money';
 import { useState, useMemo, useEffect } from 'react';
 import { FadeIn, StaggerContainer, StaggerItem } from '@/components/motion/animated-container';
 import { FloatingOrbsBackground } from '@/components/motion/floating-orbs-background';
@@ -33,9 +34,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatTruthScanForExport } from '@/lib/exportUtils';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
-import { generateMockTrendData } from '@/components/Sparkline';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { api } from '@/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/posthog';
 
@@ -150,7 +151,7 @@ function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
       id: 'high-burn-multiple',
       icon: 'critical',
       title: 'Inefficient Growth Spending',
-      description: `Burn multiple of ${burnMultiple.toFixed(1)}x indicates you're spending $${burnMultiple.toFixed(1)} per $1 of new revenue.`,
+      description: `Burn multiple of ${burnMultiple.toFixed(1)}x indicates you're spending ${currencySymbol()}${burnMultiple.toFixed(1)} per ${currencySymbol()}1 of new revenue.`,
       priority: 1,
     });
   }
@@ -222,7 +223,7 @@ function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
     recommendations.push({
       type: 'warning',
       title: 'Burn Multiple is Elevated',
-      description: `Your burn multiple of ${burnMultiple.toFixed(1)}x means you're spending $${burnMultiple.toFixed(1)} for every $1 of new ARR. Top-tier startups maintain this below 2x.`,
+      description: `Your burn multiple of ${burnMultiple.toFixed(1)}x means you're spending ${currencySymbol()}${burnMultiple.toFixed(1)} for every ${currencySymbol()}1 of new ARR. Top-tier startups maintain this below 2x.`,
       action: 'Review customer acquisition costs and focus on higher-efficiency growth channels. Consider increasing pricing or reducing sales team overhead.'
     });
   }
@@ -691,31 +692,40 @@ export default function TruthScanPage() {
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
 
+  // Sparklines come from real per-period FinancialRecord history (dashboard KPIs
+  // endpoint). A metric with fewer than 2 real points gets no sparkline.
+  const { data: kpiHistory } = useQuery({
+    queryKey: ['/api/dashboard/companies', currentCompany?.id, 'kpis'],
+    queryFn: () => api.dashboard.kpis(currentCompany!.id),
+    enabled: !!currentCompany?.id,
+    retry: false,
+  });
   const trendData = useMemo(() => {
-    if (!truthScan?.metrics) return {} as Record<string, number[]>;
-    const m = truthScan.metrics;
-    // Extract numeric values from potential object structures
-    const getValue = (v: any): number => {
-      if (v === null || v === undefined) return 0;
-      if (typeof v === 'number') return v;
-      if (typeof v === 'object' && 'value' in v) return getValue(v.value);
-      return 0;
+    const series = (key: string): number[] | undefined => {
+      const history = kpiHistory?.[key]?.history;
+      if (!Array.isArray(history)) return undefined;
+      const values = history
+        .map((p: any) => (typeof p?.value === 'number' ? p.value : null))
+        .filter((v: number | null): v is number => v !== null);
+      return values.length > 1 ? values : undefined;
     };
+    // The growth card is month-over-month, so derive MoM growth from the real
+    // revenue points rather than reusing the YoY series.
+    const revenue = series('mrr');
+    const momGrowth = revenue
+      ?.slice(1)
+      .map((v, i) => (revenue[i] > 0 ? ((v - revenue[i]) / revenue[i]) * 100 : null))
+      .filter((v): v is number => v !== null);
     return {
-      monthly_revenue: generateMockTrendData(getValue(m.monthly_revenue) || 100000, 6, 0.08),
-      net_burn: generateMockTrendData(Math.abs(getValue(m.net_burn) || 50000), 6, 0.12),
-      cash_balance: generateMockTrendData(getValue(m.cash_balance) || 500000, 6, 0.05),
-      gross_margin: generateMockTrendData((() => {
-            const gm = getValue(m.gross_margin);
-            // P0 FIX #5: Normalize GM - if > 1, it is already a percentage; if <= 1, multiply by 100
-            if (gm == null) return 65;
-            return gm > 1 ? gm : gm * 100;
-          })(), 6, 0.03),
-      revenue_growth: generateMockTrendData((getValue(m.revenue_growth_mom) || 0.1) * 100, 6, 0.15),
-      burn_multiple: generateMockTrendData(getValue(m.burn_multiple) || 2, 6, 0.1),
-      operating_margin: generateMockTrendData((getValue(m.operating_margin) || -0.2) * 100 + 50, 6, 0.08),
-    };
-  }, [truthScan?.metrics]);
+      monthly_revenue: revenue,
+      net_burn: series('netBurn'),
+      cash_balance: series('cashOnHand'),
+      gross_margin: series('grossMargin'),
+      revenue_growth: momGrowth && momGrowth.length > 1 ? momGrowth : undefined,
+      burn_multiple: series('burnMultiple'),
+      operating_margin: undefined,
+    } as Record<string, number[] | undefined>;
+  }, [kpiHistory]);
 
   const suggestedActions = useMemo(
     () => generateSuggestedActions(metrics, flags),
@@ -881,7 +891,7 @@ export default function TruthScanPage() {
                   </Tooltip>
                 </div>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-expand-quality">
+                  <Button variant="ghost" size="icon" data-testid="button-expand-quality" aria-label={qualityExpanded ? "Collapse" : "Expand"}>
                     {qualityExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>
@@ -959,7 +969,7 @@ export default function TruthScanPage() {
                   </Tooltip>
                 </div>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-expand-confidence">
+                  <Button variant="ghost" size="icon" data-testid="button-expand-confidence" aria-label={confidenceExpanded ? "Collapse" : "Expand"}>
                     {confidenceExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>

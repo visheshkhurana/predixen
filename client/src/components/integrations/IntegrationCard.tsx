@@ -3,7 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link2, Settings, Unplug, Clock, Loader2 } from 'lucide-react';
-import { SiGooglesheets, SiGoogleanalytics, SiMixpanel, SiStripe, SiHubspot, SiSalesforce, SiQuickbooks, SiXero } from 'react-icons/si';
+import { SiGooglesheets, SiGoogleanalytics, SiMixpanel, SiStripe, SiHubspot, SiQuickbooks, SiXero } from 'react-icons/si';
+import { FaSalesforce } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
 import { cn } from '@/lib/utils';
 
 interface IntegrationCardProps {
@@ -11,7 +12,8 @@ interface IntegrationCardProps {
   isConnected: boolean;
   onConnect: (integration: IntegrationConfig) => void;
   onDisconnect: (integrationId: string) => void;
-  onConfigure: (integrationId: string) => void;
+  /** Omit when the integration has nothing to configure; the button is hidden. */
+  onConfigure?: (integrationId: string) => void;
   lastSyncAt?: Date;
   status?: IntegrationStatus;
   testId?: string;
@@ -33,7 +35,7 @@ function getIntegrationIcon(iconName: string) {
     case 'chartmogul': return <div className={cn(iconClass, "bg-blue-500 rounded text-white flex items-center justify-center text-xs font-bold")}>CM</div>;
     case 'stripe': return <SiStripe className={cn(iconClass, "text-purple-400")} />;
     case 'hubspot': return <SiHubspot className={cn(iconClass, "text-orange-500")} />;
-    case 'salesforce': return <SiSalesforce className={cn(iconClass, "text-blue-400")} />;
+    case 'salesforce': return <FaSalesforce className={cn(iconClass, "text-blue-400")} />;
     case 'quickbooks': return <SiQuickbooks className={cn(iconClass, "text-green-600")} />;
     case 'xero': return <SiXero className={cn(iconClass, "text-blue-500")} />;
     default: return <Link2 className={iconClass} />;
@@ -127,18 +129,21 @@ export function IntegrationCard({
             </Button>
           ) : isConnected ? (
             <>
-              <Button
-                onClick={() => onConfigure(integration.id)}
-                variant="secondary"
-                className="flex-1"
-                data-testid={`button-configure-${integration.id}`}
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Configure
-              </Button>
+              {onConfigure && (
+                <Button
+                  onClick={() => onConfigure(integration.id)}
+                  variant="secondary"
+                  className="flex-1"
+                  data-testid={`button-configure-${integration.id}`}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configure
+                </Button>
+              )}
               <Button
                 onClick={() => onDisconnect(integration.id)}
                 variant="outline"
+                aria-label={`Disconnect ${integration.name}`}
                 className="text-destructive hover:text-destructive"
                 data-testid={`button-disconnect-${integration.id}`}
               >

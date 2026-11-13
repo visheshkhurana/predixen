@@ -31,6 +31,8 @@ import {
   syncSitemap,
   type Post,
 } from "../../scripts/generate-sitemap.ts";
+import { renderHtmlPage } from "../seo-prerender.ts";
+import { blogPosts as clientPosts } from "../../client/src/data/blog-posts.ts";
 
 let failures = 0;
 
@@ -87,6 +89,40 @@ check(
   diff.length === 0,
   diff.join("\n        "),
 );
+
+// The sitemap is generated from blog-posts.ts. SSR used to read a second list
+// in server/seo-data.ts, so a post could be in the sitemap and still prerender
+// as "Article not found". Every blog <loc> must render that post.
+const SHELL = readFileSync("client/index.html", "utf8");
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+const ssrMisses: string[] = [];
+for (const slug of sitemapSlugs) {
+  const page = renderHtmlPage(SHELL, `/blog/${slug}`);
+  const post = clientPosts.find((p) => p.slug === slug);
+  const hasArticle =
+    !!post &&
+    page.status === 200 &&
+    page.html.includes(`<h1>${escapeHtml(post.title)}</h1>`) &&
+    page.html.includes(`/blog/${slug}`) &&
+    !page.html.includes("Article not found");
+  if (!hasArticle) ssrMisses.push(`${slug} status=${page.status}`);
+}
+check(
+  "every sitemap blog URL has SSR article data",
+  ssrMisses.length === 0,
+  ssrMisses.join("\n        "),
+);
+
+{
+  const missing = renderHtmlPage(SHELL, "/blog/not-a-real-article-zzzz");
+  check(
+    "CONTROL: a blog URL with no post is Article not found and HTTP 404",
+    missing.status === 404 && missing.html.includes("Article not found"),
+    `status=${missing.status}`,
+  );
+}
 
 // Re-rendering what we parsed must reproduce the file exactly. If this ever fails, the
 // generator's parse/render round trip is lossy and every other check here is measuring

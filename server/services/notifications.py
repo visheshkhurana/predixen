@@ -928,6 +928,24 @@ async def check_and_send_publish_notification() -> None:
         logger.error(f"Error in publish notification check: {e}")
 
 
+def _personalize_announcement(email: str, html: str, text: Optional[str]):
+    """Per-recipient unsubscribe link and opt-out for announcement mail.
+
+    Returns None when the recipient opted out (or the check could not run).
+    """
+    from server.core.db import SessionLocal
+    from server.email.lifecycle_guard import prepare_bulk_send
+
+    db = SessionLocal()
+    try:
+        return prepare_bulk_send(db, email, html, text)
+    except Exception as e:
+        logger.error(f"Could not check email preferences for an announcement recipient: {e}")
+        return None
+    finally:
+        db.close()
+
+
 async def send_platform_update(
     to_emails: Optional[List[str]] = None,
     subject: str = "FounderConsole v14: AI Copilot Now Thinks Like a McKinsey Partner",
@@ -981,7 +999,7 @@ AI COPILOT: CONSULTANT-GRADE UPGRADE
 
 - Real-Time Web Research: Ask about competitors, market benchmarks, or industry trends and the Copilot automatically pulls live market data via Perplexity. 8 specialized search types: competitor analysis, benchmark lookup, market sizing, COGS research, market entry, pricing research, trend analysis, and general research.
 
-- Business Context Engine: The Copilot now pulls data from ALL your sources - Truth Scan, financial records, uploaded metrics, simulations, and all 37+ connected services (Stripe, Shopify, QuickBooks, HubSpot, etc.). It sees your complete business picture.
+- Business Context Engine: The Copilot now pulls data from ALL your sources - Truth Scan, financial records, uploaded metrics, simulations, and all 36+ connected services (Stripe, Shopify, QuickBooks, HubSpot, etc.). It sees your complete business picture.
 
 - Data Gap Detection: The Copilot identifies what data is missing and suggests which connectors to link. Orange badges in the UI show exactly what would improve your analysis quality.
 
@@ -1068,7 +1086,7 @@ Visit: https://founderconsole.ai
                     
                     <div style="margin-bottom: 18px; padding-left: 16px; border-left: 3px solid #22c55e;">
                         <h4 style="color: #e2e8f0; font-size: 15px; margin: 0 0 6px; font-weight: 600;">Business Context Engine</h4>
-                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">Pulls from ALL your data sources - Truth Scan, financials, metrics, simulations, and all 37+ connectors (Stripe, Shopify, QuickBooks, HubSpot, etc.).</p>
+                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">Pulls from ALL your data sources - Truth Scan, financials, metrics, simulations, and all 36+ connectors (Stripe, Shopify, QuickBooks, HubSpot, etc.).</p>
                     </div>
                     
                     <div style="padding-left: 16px; border-left: 3px solid #f59e0b;">
@@ -1122,8 +1140,13 @@ Visit: https://founderconsole.ai
         failed = []
         
         async with httpx.AsyncClient() as client:
+            skipped = []
             for i, email in enumerate(to_emails):
                 try:
+                    prepared = _personalize_announcement(email, html_content, text_content)
+                    if prepared is None:
+                        skipped.append(email)
+                        continue
                     # Rate limit: 2 requests per second, so wait 600ms between emails
                     if i > 0:
                         await asyncio.sleep(0.6)
@@ -1138,8 +1161,9 @@ Visit: https://founderconsole.ai
                             "from": from_email,
                             "to": [email],
                             "subject": subject,
-                            "html": html_content,
-                            "text": text_content
+                            "html": prepared.html,
+                            "text": prepared.text,
+                            **({"headers": prepared.headers} if prepared.headers else {}),
                         },
                         timeout=30.0
                     )
@@ -1158,8 +1182,9 @@ Visit: https://founderconsole.ai
             "success": len(failed) == 0,
             "sent": sent,
             "failed": failed,
+            "skipped_opted_out": skipped,
             "total_recipients": len(to_emails),
-            "message": f"Sent {len(sent)} email(s), {len(failed)} failed"
+            "message": f"Sent {len(sent)} email(s), {len(failed)} failed, {len(skipped)} opted out"
         }
         
     except Exception as e:
@@ -1280,7 +1305,12 @@ FounderConsole"""
         failed = []
         
         async with httpx.AsyncClient() as client:
+            skipped = []
             for i, email in enumerate(to_emails):
+                prepared = _personalize_announcement(email, html_content, text_content)
+                if prepared is None:
+                    skipped.append(email)
+                    continue
                 if i > 0:
                     await asyncio.sleep(0.6)
                 try:
@@ -1294,8 +1324,9 @@ FounderConsole"""
                             "from": from_email,
                             "to": [email],
                             "subject": "[FounderConsole] Coming Soon: Major Hybrid Feature Update",
-                            "html": html_content,
-                            "text": text_content
+                            "html": prepared.html,
+                            "text": prepared.text,
+                            **({"headers": prepared.headers} if prepared.headers else {}),
                         },
                         timeout=30.0
                     )
@@ -1312,8 +1343,9 @@ FounderConsole"""
             "success": len(failed) == 0,
             "sent": sent,
             "failed": failed,
+            "skipped_opted_out": skipped,
             "total_recipients": len(to_emails),
-            "message": f"Sent {len(sent)} email(s), {len(failed)} failed"
+            "message": f"Sent {len(sent)} email(s), {len(failed)} failed, {len(skipped)} opted out"
         }
         
     except Exception as e:

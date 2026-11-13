@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -256,7 +257,15 @@ export default function DataInput() {
   const excelInputRef = useRef<HTMLInputElement>(null);
 
   const { data: backendBaseline, isLoading: isLoadingBaseline } = useQuery<FinancialBaselineResponse>({
-    queryKey: ['/api/companies', currentCompany?.id, 'financials/baseline'],
+    // Same key as useFinancialMetrics, which the app shell already fetches.
+    queryKey: ['financials-baseline', currentCompany?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/companies/${currentCompany?.id}/financials/baseline`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
     enabled: !!currentCompany?.id,
   });
 
@@ -685,7 +694,7 @@ export default function DataInput() {
           otherOpex: values.otherOpexExpenses ? Number(values.otherOpexExpenses) : null,
         },
         hasManualExpenseOverride: hasManualExpenseOverride,
-        currency: 'USD',
+        currency: currentCompany.currency || 'USD',
         asOfDate: new Date().toISOString().split('T')[0],
       };
 
@@ -756,6 +765,7 @@ export default function DataInput() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           messages: [...chatMessages, userMessage].map((m) => ({
             role: m.role,
@@ -823,23 +833,7 @@ export default function DataInput() {
 
   const formatCurrency = (value: number) => {
     if (value === null || value === undefined || isNaN(value)) return 'N/A';
-    
-    const absValue = Math.abs(value);
-    const sign = value < 0 ? '-' : '';
-    
-    if (absValue >= 1_000_000_000) {
-      const billions = absValue / 1_000_000_000;
-      return `${sign}$${billions.toFixed(1)}B`;
-    } else if (absValue >= 1_000_000) {
-      const millions = absValue / 1_000_000;
-      return `${sign}$${millions.toFixed(1)}M`;
-    } else if (absValue >= 1_000) {
-      const thousands = absValue / 1_000;
-      return `${sign}$${thousands.toFixed(1)}K`;
-    } else if (absValue > 0) {
-      return `${sign}$${absValue.toFixed(0)}`;
-    }
-    return '$0';
+    return formatCurrencyAbbrev(value);
   };
 
   const getConfidenceBadge = (fieldKey: string) => {
@@ -2446,8 +2440,7 @@ export default function DataInput() {
                   size="icon"
                   onClick={() => sendMessage(chatInput)}
                   disabled={!chatInput.trim() || isStreaming}
-                  data-testid="button-send-chat"
-                >
+                  data-testid="button-send-chat" aria-label="Send message">
                   {isStreaming ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (

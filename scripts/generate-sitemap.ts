@@ -45,6 +45,9 @@ import { fileURLToPath } from "url";
 // extensionless specifier, but plain `node` (which strips types itself) does not.
 // scripts/ is outside tsconfig's `include` and is never bundled, so this costs nothing.
 import { blogPosts } from "../client/src/data/blog-posts.ts";
+// Industry homepages are generated from their config, like the blog: add an entry to
+// INDUSTRY_PAGES and its /for/<slug> sitemap entry appears on the next generate.
+import { INDUSTRY_PAGES } from "../client/src/data/industry-pages.ts";
 
 export const ORIGIN = "https://founderconsole.ai";
 export const BLOG_PREFIX = "/blog/";
@@ -97,10 +100,17 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/blog", lastmod: "2026-08-10", changefreq: "weekly", priority: "0.8" },
   { path: "/default-alive", lastmod: "2026-08-08", changefreq: "monthly", priority: "0.9" },
   { path: "/faq", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.5" },
+  // HAG-449: the hub itself. The four leaves below were in the sitemap while the
+  // page they hang off returned 404, so a crawler had the tools and no index.
+  { path: "/tools", lastmod: "2026-10-19", changefreq: "monthly", priority: "0.9" },
   { path: "/tools/runway-calculator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.8" },
+  { path: "/tools/d2c-contribution-margin", lastmod: "2026-11-12", changefreq: "monthly", priority: "0.9" },
   { path: "/tools/burn-multiple", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
   { path: "/tools/dilution", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
+  { path: "/tools/ltv-cac", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
+  { path: "/vs/runway-calculator-vs-spreadsheet", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
   { path: "/contact", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.5" },
+  { path: "/refund-policy", lastmod: "2026-11-12", changefreq: "yearly", priority: "0.3" },
   { path: "/demo", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.6" },
   { path: "/survival-simulator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.6" },
   { path: "/runway/saas", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
@@ -111,6 +121,12 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/runway/hardware", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
   { path: "/runway/biotech", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
   { path: "/runway/devtools", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  ...INDUSTRY_PAGES.map((page) => ({
+    path: `/for/${page.slug}`,
+    lastmod: "2026-11-12",
+    changefreq: "monthly",
+    priority: "0.9",
+  })),
 ];
 
 const HEADER =

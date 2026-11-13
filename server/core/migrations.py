@@ -1,6 +1,7 @@
 """Database migration helpers for adding new columns to existing tables."""
 import logging
-from sqlalchemy import text
+import re
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
@@ -33,14 +34,38 @@ def ensure_financial_record_columns(engine: Engine) -> None:
         ('marketing_expense', 'FLOAT'),
         ('source_type', 'VARCHAR(20)'),
         ('extraction_summary', 'TEXT'),
+        # Sync provenance (see server/services/input_provenance.py). Nullable,
+        # no default, no index: on Postgres 11+ each add is metadata-only and
+        # existing rows read NULL. Same types as FinancialRecord.
+        ('source', 'VARCHAR(64)'),
+        ('synced_at', 'VARCHAR(40)'),
+        ('synced_fields', 'JSON'),
     ]
-    
+
     with engine.connect() as conn:
+        try:
+            existing = {
+                column["name"]
+                for column in inspect(conn).get_columns("financial_records")
+            }
+        except Exception as e:
+            logger.debug(f"Could not read financial_records columns: {e}")
+            existing = set()
+        # Postgres accepts ADD COLUMN IF NOT EXISTS. SQLite rejects that
+        # clause, so the catalog check above is what makes the SQLite path
+        # idempotent. A column already in `existing` is skipped. Each add runs
+        # in a savepoint so one failure does not abort the rest on Postgres.
+        if_not_exists = conn.dialect.name != "sqlite"
         for col_name, col_type in new_columns:
+            if col_name in existing:
+                continue
+            clause = "IF NOT EXISTS " if if_not_exists else ""
             try:
-                conn.execute(text(
-                    f'ALTER TABLE financial_records ADD COLUMN IF NOT EXISTS {col_name} {col_type}'
-                ))
+                with conn.begin_nested():
+                    conn.execute(text(
+                        f"ALTER TABLE financial_records ADD COLUMN {clause}{col_name} {col_type}"
+                    ))
+                existing.add(col_name)
             except Exception as e:
                 logger.debug(f"Column {col_name} may already exist or error: {e}")
         conn.commit()
@@ -1029,7 +1054,131 @@ def run_migrations(engine: Engine) -> None:
     ensure_agent_simulation_runs_table(engine)
     ensure_subscription_trial_columns(engine)
     ensure_lifecycle_email_tables(engine)
+    ensure_lead_consent_columns(engine)
+    ensure_lead_utm_columns(engine)
     logger.info("Database migrations completed successfully")
+
+
+# #176 lead consent columns. Existing rows take consent FALSE from the
+# column default and NULL for the other three. No UPDATE and no backfill.
+# IF NOT EXISTS / IF EXISTS make a re-run a no-op when production has
+# already added the columns by hand.
+LEAD_CONSENT_UPGRADE_SQL = (
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent BOOLEAN NOT NULL DEFAULT FALSE;",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_at TIMESTAMP;",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_page VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_status VARCHAR(20);",
+)
+
+LEAD_CONSENT_DOWNGRADE_SQL = (
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent_at;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS source_page;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent_status;",
+)
+
+
+def _lead_consent_column(statement: str) -> str:
+    tokens = statement.replace(";", " ").split()
+    return tokens[tokens.index("EXISTS") + 1]
+
+
+def _apply_lead_consent_ddl(
+    engine: Engine,
+    statements: tuple[str, ...],
+    *,
+    adding: bool,
+    done_message: str,
+    label: str = "consent columns",
+) -> None:
+    """Run the lead-consent DDL.
+
+    Postgres runs the statements as written. SQLite rejects IF NOT EXISTS and
+    IF EXISTS on ADD/DROP COLUMN, so tests skip columns that are already in
+    the desired state and execute the same definition without that clause.
+    """
+    is_sqlite = engine.dialect.name == "sqlite"
+    with engine.connect() as conn:
+        existing: set[str] | None = None
+        if is_sqlite:
+            try:
+                rows = conn.execute(text("PRAGMA table_info(leads)")).fetchall()
+            except Exception as e:
+                logger.debug("leads table is missing, skipping %s: %s", label, e)
+                return
+            existing = {row[1] for row in rows}
+            if not existing:
+                return
+        for statement in statements:
+            name = _lead_consent_column(statement)
+            executable = statement
+            if existing is not None:
+                present = name in existing
+                if adding and present:
+                    continue
+                if not adding and not present:
+                    continue
+                executable = executable.replace(" IF NOT EXISTS", "").replace(" IF EXISTS", "")
+            try:
+                conn.execute(text(executable.strip().rstrip(";")))
+            except Exception as e:
+                # Postgres aborts the transaction on the first failed statement,
+                # so a swallowed debug log hides that the rest of this batch did
+                # not apply.
+                logger.warning("leads.%s may already exist or the table is missing: %s", name, e)
+        conn.commit()
+    logger.info(done_message)
+
+
+def ensure_lead_consent_columns(engine: Engine) -> None:
+    """Consent fields on leads. Idempotent; existing rows stay unconsented.
+
+    create_all does not add columns to a table that already exists, and
+    calculator opt-in has to survive a deploy onto the current leads table.
+    """
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_CONSENT_UPGRADE_SQL,
+        adding=True,
+        done_message="Lead consent columns migration complete",
+    )
+
+
+def downgrade_lead_consent_columns(engine: Engine) -> None:
+    """Drop the four #176 lead consent columns. Idempotent. Not run at startup."""
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_CONSENT_DOWNGRADE_SQL,
+        adding=False,
+        done_message="Lead consent columns downgrade complete",
+    )
+
+
+# First-touch campaign columns. Nullable, no default, no UPDATE: existing
+# rows stay NULL. IF NOT EXISTS makes a re-run a no-op, including when the
+# columns were added by hand. Startup calls this even when RUN_MIGRATIONS
+# is off. No IP column.
+LEAD_UTM_UPGRADE_SQL = (
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_source VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_medium VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_campaign VARCHAR(200);",
+)
+
+
+def ensure_lead_utm_columns(engine: Engine) -> None:
+    """Campaign fields on leads. Idempotent. Does not update existing rows.
+
+    create_all does not add columns to a table that already exists, and
+    production leaves RUN_MIGRATIONS off, so `_run_deferred_startup` calls
+    this directly.
+    """
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_UTM_UPGRADE_SQL,
+        adding=True,
+        done_message="Lead utm columns migration complete",
+        label="utm columns",
+    )
 
 
 def ensure_currency_tables(engine: Engine) -> None:
@@ -1648,9 +1797,93 @@ def ensure_cross_company_patterns_table(engine: Engine) -> None:
     logger.info("Cross-company patterns table migration complete")
 
 
+_CREATE_INDEX_RE = re.compile(
+    r"^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\b",
+    re.IGNORECASE,
+)
+_INDEX_PARENT_RE = re.compile(
+    r"\bON\s+(?:ONLY\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)\s*\(",
+    re.IGNORECASE,
+)
+_REFERENCES_PARENT_RE = re.compile(
+    r"\bREFERENCES\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)",
+    re.IGNORECASE,
+)
+
+
+def _referenced_parent_tables(statement: str) -> list[str]:
+    """Parent tables named by a CREATE TABLE REFERENCES clause or a CREATE INDEX."""
+    if _CREATE_INDEX_RE.search(statement):
+        match = _INDEX_PARENT_RE.search(statement)
+        return [match.group(1)] if match else []
+    parents: list[str] = []
+    for name in _REFERENCES_PARENT_RE.findall(statement):
+        if name not in parents:
+            parents.append(name)
+    return parents
+
+
+def _catalog_table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_name = :table_name
+              AND table_type = 'BASE TABLE'
+            """
+        ),
+        {"table_name": table_name.lower()},
+    ).first()
+    return row is not None
+
+
+def _skip_simulation_accuracy_if_parent_missing(conn, statement: str) -> bool:
+    """Return True when the statement was not run because a parent table is missing."""
+    missing = [
+        name
+        for name in _referenced_parent_tables(statement)
+        if not _catalog_table_exists(conn, name)
+    ]
+    if not missing:
+        return False
+    logger.warning(
+        "Skipping simulation accuracy migration statement; referenced parent table %s is missing",
+        ", ".join(missing),
+    )
+    return True
+
+
+def _variance_pct_json_needs_jsonb_alter(conn) -> bool:
+    """True only when information_schema shows the column exists and is not jsonb."""
+    row = conn.execute(
+        text(
+            """
+            SELECT data_type, udt_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'simulation_accuracy'
+              AND column_name = 'variance_pct_json'
+            """
+        )
+    ).first()
+    if row is None:
+        return False
+    kinds = {(row[0] or "").lower(), (row[1] or "").lower()}
+    return "jsonb" not in kinds
+
+
 def ensure_simulation_accuracy_tables(engine: Engine) -> None:
-    with engine.connect() as conn:
-        conn.execute(text("""
+    """Create simulation accuracy tables without an unconditional JSONB rewrite.
+
+    ALTER COLUMN ... TYPE JSONB runs only when information_schema shows
+    variance_pct_json exists and is not already jsonb. Issuing it anyway can
+    abort the Postgres transaction or rewrite the table under an exclusive lock,
+    so the churn-column adds and the commit never land.
+    """
+    create_statements = (
+        """
             CREATE TABLE IF NOT EXISTS simulation_accuracy (
                 id SERIAL PRIMARY KEY,
                 company_id INTEGER NOT NULL,
@@ -1669,8 +1902,8 @@ def ensure_simulation_accuracy_tables(engine: Engine) -> None:
                 accuracy_score FLOAT,
                 computed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        """))
-        conn.execute(text("""
+        """,
+        """
             CREATE TABLE IF NOT EXISTS calibration_biases (
                 id SERIAL PRIMARY KEY,
                 company_id INTEGER NOT NULL,
@@ -1682,27 +1915,55 @@ def ensure_simulation_accuracy_tables(engine: Engine) -> None:
                 applied_at TIMESTAMP WITH TIME ZONE,
                 computed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        """))
-        try:
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_company ON simulation_accuracy(company_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_run ON simulation_accuracy(simulation_run_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_computed ON simulation_accuracy(computed_at)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cal_biases_company ON calibration_biases(company_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cal_biases_active ON calibration_biases(company_id, is_active)"))
-        except Exception:
-            pass
-        try:
-            conn.execute(text("""
+        """,
+    )
+    index_statements = (
+        "CREATE INDEX IF NOT EXISTS ix_sim_accuracy_company ON simulation_accuracy(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_sim_accuracy_run ON simulation_accuracy(simulation_run_id)",
+        "CREATE INDEX IF NOT EXISTS ix_sim_accuracy_computed ON simulation_accuracy(computed_at)",
+        "CREATE INDEX IF NOT EXISTS ix_cal_biases_company ON calibration_biases(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_cal_biases_active ON calibration_biases(company_id, is_active)",
+    )
+    alter_variance_sql = """
                 ALTER TABLE simulation_accuracy
                 ALTER COLUMN variance_pct_json TYPE JSONB USING variance_pct_json::jsonb
-            """))
-        except Exception:
-            pass
+            """
+    with engine.connect() as conn:
+        postgresql = conn.dialect.name == "postgresql"
+        for statement in create_statements:
+            if postgresql and _skip_simulation_accuracy_if_parent_missing(conn, statement):
+                continue
+            conn.execute(text(statement))
+        # Read the catalog before creating indexes. A failed index aborts the
+        # Postgres transaction; a later information_schema query would then raise
+        # even though the old code swallowed that failure.
+        if postgresql and not _catalog_table_exists(conn, "simulation_accuracy"):
+            logger.warning(
+                "Skipping simulation accuracy column changes; referenced parent table simulation_accuracy is missing"
+            )
+            apply_column_changes = False
+            needs_jsonb_alter = False
+        else:
+            apply_column_changes = True
+            needs_jsonb_alter = (not postgresql) or _variance_pct_json_needs_jsonb_alter(conn)
         try:
-            conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS predicted_churn FLOAT"))
-            conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS actual_churn FLOAT"))
+            for statement in index_statements:
+                if postgresql and _skip_simulation_accuracy_if_parent_missing(conn, statement):
+                    continue
+                conn.execute(text(statement))
         except Exception:
             pass
+        if apply_column_changes:
+            if needs_jsonb_alter:
+                try:
+                    conn.execute(text(alter_variance_sql))
+                except Exception:
+                    pass
+            try:
+                conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS predicted_churn FLOAT"))
+                conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS actual_churn FLOAT"))
+            except Exception:
+                pass
         conn.commit()
     logger.info("Simulation accuracy and calibration biases tables migration complete")
 
@@ -1769,6 +2030,51 @@ def ensure_agent_simulation_runs_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Agent simulation runs table migration complete")
+
+
+LEGACY_AGENT_SIM_SHARE_FLAG = "REVOKE_LEGACY_AGENT_SIM_SHARES"
+
+
+def revoke_legacy_agent_sim_shares(engine: Engine, force: bool = False) -> int:
+    """Revoke agent-simulation share links that were created automatically.
+
+    Before #161 every agent run got a public share_token at creation, whether
+    or not the owner shared it. Since #161 a token is only issued by
+    POST .../agent-run/{id}/share, which always writes a "shareExpiresAt" key
+    (null when the link does not expire) into results_json. So a token whose
+    results_json lacks that key was auto-created and is revoked here; links an
+    owner created deliberately are kept. Idempotent: a second run finds nothing.
+
+    Runs only when REVOKE_LEGACY_AGENT_SIM_SHARES=true (or force=True).
+    Returns the number of links revoked.
+    """
+    import json
+    import os
+
+    if not force and os.environ.get(LEGACY_AGENT_SIM_SHARE_FLAG, "").strip().lower() != "true":
+        return 0
+    revoked = 0
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT id, results_json FROM agent_simulation_runs WHERE share_token IS NOT NULL"
+        )).fetchall()
+        legacy_ids = []
+        for run_id, raw in rows:
+            try:
+                results = json.loads(raw) if raw else {}
+            except (TypeError, ValueError):
+                results = {}
+            if not isinstance(results, dict) or "shareExpiresAt" not in results:
+                legacy_ids.append(run_id)
+        for run_id in legacy_ids:
+            conn.execute(
+                text("UPDATE agent_simulation_runs SET share_token = NULL WHERE id = :id"),
+                {"id": run_id},
+            )
+        conn.commit()
+        revoked = len(legacy_ids)
+    logger.info("Revoked %d legacy auto-created agent-simulation share links", revoked)
+    return revoked
 
 
 def ensure_lifecycle_email_tables(engine: Engine) -> None:

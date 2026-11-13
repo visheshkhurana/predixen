@@ -30,20 +30,22 @@ import {
   TrendingUp,
   Settings,
   Briefcase,
-  Bell
+  Bell,
+  Truck,
+  Megaphone,
 } from "lucide-react";
-import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot, SiStripe } from "react-icons/si";
+import { SiQuickbooks, SiXero, SiHubspot, SiStripe } from "react-icons/si";
+import { FaSalesforce } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
 import { apiRequest } from "@/lib/queryClient";
 import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
-import { IntegrationCard, OAuthConnectModal, ApiKeyConnectModal, GoogleSheetsConfigModal, StripeConnectModal } from "@/components/integrations";
+import { IntegrationCard, ApiKeyConnectModal, StripeConnectModal, SlackLinkCard } from "@/components/integrations";
+import { useFounderStore } from "@/store/founderStore";
 import { 
   IntegrationConfig, 
-  integrationRegistry, 
   getIntegrationsByCategory,
-  SheetMapping 
 } from "@/lib/integrations";
 
 interface IntegrationProvider {
@@ -74,10 +76,13 @@ interface ConnectorMetadata extends IntegrationProvider {
 
 type ConnectorCategory = "all" | "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "captable" | "other";
 
+// Catalog id first. razorpayx_payroll is the old id; connections saved under it still resolve.
+const RAZORPAYX_IDS = ["razorpayx", "razorpayx_payroll"];
+
 const providerIcons: Record<string, React.ReactNode> = {
   quickbooks: <SiQuickbooks className="h-6 w-6" />,
   xero: <SiXero className="h-6 w-6" />,
-  salesforce: <SiSalesforce className="h-6 w-6" />,
+  salesforce: <FaSalesforce className="h-6 w-6" />,
   hubspot: <SiHubspot className="h-6 w-6" />,
   stripe: <SiStripe className="h-6 w-6" />,
   plaid: <Link2 className="h-6 w-6" />,
@@ -87,7 +92,9 @@ const providerIcons: Record<string, React.ReactNode> = {
   zoho: <Users className="h-6 w-6" />,
   zoho_books: <FileText className="h-6 w-6" />,
   tally: <Database className="h-6 w-6" />,
-  razorpayx_payroll: <DollarSign className="h-6 w-6" />,
+  shiprocket: <Truck className="h-6 w-6" />,
+  meta_ads: <Megaphone className="h-6 w-6" />,
+  razorpayx: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
   keka: <Users className="h-6 w-6" />,
   peoplestrong: <Users className="h-6 w-6" />,
@@ -99,6 +106,17 @@ const providerIcons: Record<string, React.ReactNode> = {
 };
 
 const integrationBenefits: Record<string, { dataImported: string[]; permissions: string[] }> = {
+  meta_ads: {
+    dataImported: [
+      "Monthly ad spend per ad account (last 3 full months)",
+      "Impressions and clicks",
+      "Purchases and purchase value as Meta reports them (shown as platform-reported, not revenue)",
+    ],
+    permissions: [
+      "ads_read on the ad accounts you list",
+      "Read-only: cannot create, change or pause ads",
+    ],
+  },
   quickbooks: {
     dataImported: [
       "Revenue & expense transactions",
@@ -239,18 +257,14 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
       "View company information",
     ],
   },
-  razorpayx_payroll: {
+  razorpayx: {
     dataImported: [
-      "Employee salary data",
-      "PF/ESI contributions",
-      "TDS deductions",
-      "Reimbursements",
-      "Monthly payroll runs",
+      "Processed salary payouts (INR)",
+      "Active employee contacts",
     ],
     permissions: [
-      "Read employee data",
-      "Access payroll records",
-      "View compliance details",
+      "Read RazorpayX contacts",
+      "Read RazorpayX payouts",
     ],
   },
   greythr: {
@@ -341,13 +355,15 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   paddle: { setupTime: "~10 min", category: "revenue" },
   shopify: { setupTime: "~10 min", category: "revenue" },
   woocommerce: { setupTime: "~10 min", category: "revenue" },
+  shiprocket: { setupTime: "~5 min", category: "revenue" },
+  meta_ads: { setupTime: "~10 min", category: "analytics" },
   brex: { setupTime: "~5 min", category: "revenue" },
   netsuite: { setupTime: "~15 min", category: "accounting" },
   wave: { setupTime: "~10 min", category: "accounting" },
   freshbooks: { setupTime: "~10 min", category: "accounting" },
   zoho_books: { setupTime: "~10 min", category: "accounting" },
   tally: { setupTime: "~15 min", category: "accounting" },
-  razorpayx_payroll: { setupTime: "~10 min", category: "hr" },
+  razorpayx: { setupTime: "~10 min", category: "hr" },
   greythr: { setupTime: "~10 min", category: "hr" },
   keka: { setupTime: "~10 min", category: "hr" },
   peoplestrong: { setupTime: "~15 min", category: "hr" },
@@ -422,10 +438,10 @@ const payrollProviders: IntegrationProvider[] = [
     features: ["Employee Costs", "Payroll Runs", "Headcount Tracking", "Tax Obligations"],
   },
   {
-    id: "razorpayx_payroll",
+    id: "razorpayx",
     name: "RazorpayX Payroll",
-    description: "Automated payroll and compliance for Indian startups",
-    features: ["Employee Salaries", "Statutory Payments (PF, ESI, TDS)", "Reimbursements", "Payslips"],
+    description: "Salary payouts and employee contacts from RazorpayX",
+    features: ["Processed salary payouts", "Employee headcount", "INR payroll cost"],
   },
   {
     id: "greythr",
@@ -511,6 +527,18 @@ const paymentsProviders: IntegrationProvider[] = [
     description: "WordPress e-commerce for D2C brands and online stores",
     features: ["Order Revenue", "COD/Prepaid Split", "Customer Data", "Return Rate Analysis"],
   },
+  {
+    id: "shiprocket",
+    name: "Shiprocket",
+    description: "Shipping for Indian D2C: what shipped, what came back (RTO), and what freight cost",
+    features: ["RTO Rate", "Freight per Order", "COD Share", "Customer Returns"],
+  },
+  {
+    id: "meta_ads",
+    name: "Meta Ads",
+    description: "Facebook and Instagram ad spend per month, for CM3 and MER on the Profit screen. Meta's own purchase numbers are shown as platform-reported, not as revenue.",
+    features: ["Monthly Ad Spend", "MER vs Platform ROAS", "Multiple Ad Accounts", "Read-only"],
+  },
 ];
 
 const capTableProviders: IntegrationProvider[] = [
@@ -575,92 +603,56 @@ function getProviderType(providerId: string): "accounting" | "crm" | "payments" 
 export default function IntegrationsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [companyId] = useState(1);
+  const companyId = useFounderStore((s) => s.currentCompany?.id) ?? 0;
+  // The Slack card always uses the signed-in user's current company.
+  const slackCompanyId = companyId;
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
   const [selectedConnectorCategory, setSelectedConnectorCategory] = useState<ConnectorCategory>("all");
   
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationConfig | null>(null);
-  const [oauthModalOpen, setOauthModalOpen] = useState(false);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
-  const [sheetsConfigOpen, setSheetsConfigOpen] = useState(false);
   const [stripeModalOpen, setStripeModalOpen] = useState(false);
-  const [connectedNewIntegrations, setConnectedNewIntegrations] = useState<Set<string>>(new Set());
-  const [sheetMappings, setSheetMappings] = useState<SheetMapping[]>([]);
 
   const spreadsheetIntegrations = getIntegrationsByCategory('spreadsheets');
   const analyticsIntegrations = getIntegrationsByCategory('analytics');
 
+  // Only integrations with a real backend connector can be connected from these
+  // cards; the rest are flagged isComingSoon in the registry and render disabled.
   const handleConnectIntegration = (integration: IntegrationConfig) => {
+    if (integration.isComingSoon || !integration.connectorProviderId) return;
     setSelectedIntegration(integration);
-    if (integration.authType === 'oauth2') {
-      setOauthModalOpen(true);
-    } else if (integration.authType === 'api_key' || integration.authType === 'basic_auth' || integration.authType === 'service_account') {
-      setApiKeyModalOpen(true);
-    }
+    setApiKeyModalOpen(true);
   };
 
-  const handleModalClose = (modalType: 'oauth' | 'apikey' | 'sheets') => {
-    if (modalType === 'oauth') {
-      setOauthModalOpen(false);
-    } else if (modalType === 'apikey') {
-      setApiKeyModalOpen(false);
-    } else if (modalType === 'sheets') {
-      setSheetsConfigOpen(false);
-    }
-    setSelectedIntegration(null);
-  };
-
-  const handleOAuthConnect = (integrationId: string, selectedDataPoints: string[]) => {
-    setConnectedNewIntegrations(prev => new Set(prev).add(integrationId));
-    trackEvent('integration_connected', { integration_id: integrationId, auth_type: 'oauth2', name: selectedIntegration?.name });
-    toast({
-      title: "Integration Connected",
-      description: `Successfully connected ${selectedIntegration?.name}. Data will sync shortly.`,
-    });
-    setOauthModalOpen(false);
-    
-    if (integrationId === 'google-sheets') {
-      setSheetsConfigOpen(true);
-    } else {
-      setSelectedIntegration(null);
-    }
-  };
-
-  const handleApiKeyConnect = (integrationId: string, credentials: Record<string, string>, selectedDataPoints: string[]) => {
-    setConnectedNewIntegrations(prev => new Set(prev).add(integrationId));
-    trackEvent('integration_connected', { integration_id: integrationId, auth_type: 'api_key', name: selectedIntegration?.name });
-    toast({
-      title: "Integration Connected",
-      description: `Successfully connected ${selectedIntegration?.name}. Initial sync started.`,
-    });
+  const handleApiKeyModalClose = () => {
     setApiKeyModalOpen(false);
     setSelectedIntegration(null);
   };
 
-  const handleDisconnectIntegration = (integrationId: string) => {
-    setConnectedNewIntegrations(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(integrationId);
-      return newSet;
-    });
-    toast({
-      title: "Integration Disconnected",
-      description: "The integration has been removed.",
-    });
-  };
-
-  const handleConfigureIntegration = (integrationId: string) => {
-    if (integrationId === 'google-sheets') {
-      setSheetsConfigOpen(true);
+  const handleApiKeyConnect = async (integrationId: string, credentials: Record<string, string>) => {
+    const integration = selectedIntegration;
+    const providerId = integration?.connectorProviderId;
+    if (!integration || integration.id !== integrationId || !providerId) {
+      throw new Error("This integration cannot be connected yet.");
     }
-  };
-
-  const handleSaveSheetMappings = (mappings: SheetMapping[]) => {
-    setSheetMappings(mappings);
+    if (!companyId) {
+      throw new Error("Select a company before connecting a data source.");
+    }
+    try {
+      // The server checks the credentials with the provider before saving them.
+      await apiRequest("POST", `/api/connectors/companies/${companyId}/connect`, {
+        provider_id: providerId,
+        credentials,
+      });
+    } catch (error) {
+      throw new Error(getErrorMessage(error, "Connection failed. Check your credentials."));
+    }
+    trackEvent('integration_connected', { integration_id: integrationId, auth_type: integration.authType, name: integration.name });
     toast({
-      title: "Configuration Saved",
-      description: `Configured ${mappings.length} sheet mapping(s). Data will sync on schedule.`,
+      title: "Integration Connected",
+      description: `${integration.name} credentials were verified and saved.`,
     });
+    queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
   };
 
   const { data: availableIntegrations } = useQuery<{
@@ -678,6 +670,7 @@ export default function IntegrationsPage() {
     };
   }>({
     queryKey: ["/api/integrations/companies", companyId, "status"],
+    enabled: !!companyId,
   });
   
   const { data: connectorStatus } = useQuery<{
@@ -688,15 +681,18 @@ export default function IntegrationsPage() {
       last_sync: string | null;
       records_synced: number;
       error: string | null;
+      needs_reauth?: boolean;
+      account_hint?: string | null;
     }>;
   }>({
     queryKey: ["/api/connectors/companies", companyId, "status"],
+    enabled: !!companyId,
   });
 
-  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const syncMutation = useMutation({
-    mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp"; provider: string }) => {
+    mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
       setSyncingProvider(provider);
       if (type === "payroll" || type === "erp" || connectorSyncIds.includes(provider)) {
         const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/sync/${provider}`);
@@ -757,8 +753,8 @@ export default function IntegrationsPage() {
         .filter(([, v]: [string, any]) => v.stored !== null && v.stored !== undefined)
         .map(([k]: [string, any]) => k);
       toast({
-        title: "Sample Data Synced",
-        description: `${data.provider_name}: ${metrics.length} metrics stored (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""})`,
+        title: "Sample Preview",
+        description: `${data.provider_name}: ${metrics.length} metrics would sync (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""}). Nothing was saved.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
@@ -789,24 +785,38 @@ export default function IntegrationsPage() {
   type IntegrationType = "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable";
   
   const getConnectorInfo = (providerId: string) => {
-    return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
+    // razorpayx_payroll is the legacy id for razorpayx; rows stored under it still count.
+    const ids = RAZORPAYX_IDS.includes(providerId) ? RAZORPAYX_IDS : [providerId];
+    const matches = connectorStatus?.connectors?.filter(c => ids.includes(c.provider_id)) ?? [];
+    return matches.find(c => c.connected) ?? matches[0];
+  };
+
+  const isRegistryIntegrationConnected = (integration: IntegrationConfig) =>
+    !!integration.connectorProviderId && !!getConnectorInfo(integration.connectorProviderId)?.connected;
+
+  const handleDisconnectRegistryIntegration = (integrationId: string) => {
+    const integration = [...spreadsheetIntegrations, ...analyticsIntegrations].find(i => i.id === integrationId);
+    if (integration?.connectorProviderId) {
+      disconnectMutation.mutate({ provider: integration.connectorProviderId });
+    }
   };
   
-  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
     const isConnectorBacked = type === "payroll" || type === "erp" || connectorBackedIds.includes(provider.id);
+    const legacyType = type === "accounting" || type === "crm" ? type : undefined;
     const isConnected = isConnectorBacked
       ? connectorInfo?.connected || false
       : type === "payments"
         ? status?.integrations.payments?.connected === provider.id
-        : status?.integrations[type]?.connected === provider.id;
+        : legacyType ? status?.integrations[legacyType]?.connected === provider.id : false;
     const integrationStatus = isConnectorBacked
       ? undefined
       : type === "payments"
         ? status?.integrations.payments
-        : status?.integrations[type];
+        : legacyType ? status?.integrations[legacyType] : undefined;
     const lastSync = isConnectorBacked
       ? connectorInfo?.last_sync
       : integrationStatus?.last_sync;
@@ -869,6 +879,7 @@ export default function IntegrationsPage() {
               lastSync={lastSync ?? null}
               syncDetails={syncDetails}
               isSyncing={isSyncing}
+              accountHint={connectorInfo?.account_hint}
             />
           )}
 
@@ -880,6 +891,9 @@ export default function IntegrationsPage() {
               </Button>
             ) : isConnected ? (
               <>
+                {connectorInfo?.needs_reauth && (
+                  <ConnectDialog provider={provider} type={type as React.ComponentProps<typeof ConnectDialog>["type"]} companyId={companyId} triggerLabel="Reconnect" />
+                )}
                 <Button
                   size="sm"
                   variant="default"
@@ -983,6 +997,8 @@ export default function IntegrationsPage() {
           Connect your accounting, payroll, and ERP systems to import financial data automatically
         </p>
       </div>
+
+      <SlackLinkCard companyId={slackCompanyId} />
 
       {/* Quick Setup Banner */}
       {recommendedProviders.length > 0 && (
@@ -1145,17 +1161,19 @@ export default function IntegrationsPage() {
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            {spreadsheetIntegrations.map((integration) => (
-              <IntegrationCard
-                key={integration.id}
-                integration={integration}
-                isConnected={connectedNewIntegrations.has(integration.id)}
-                onConnect={handleConnectIntegration}
-                onDisconnect={handleDisconnectIntegration}
-                onConfigure={handleConfigureIntegration}
-                status={connectedNewIntegrations.has(integration.id) ? 'connected' : 'disconnected'}
-              />
-            ))}
+            {spreadsheetIntegrations.map((integration) => {
+              const connected = isRegistryIntegrationConnected(integration);
+              return (
+                <IntegrationCard
+                  key={integration.id}
+                  integration={integration}
+                  isConnected={connected}
+                  onConnect={handleConnectIntegration}
+                  onDisconnect={handleDisconnectRegistryIntegration}
+                  status={connected ? 'connected' : 'disconnected'}
+                />
+              );
+            })}
           </div>
         </TabsContent>
 
@@ -1167,17 +1185,19 @@ export default function IntegrationsPage() {
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            {analyticsIntegrations.map((integration) => (
-              <IntegrationCard
-                key={integration.id}
-                integration={integration}
-                isConnected={connectedNewIntegrations.has(integration.id)}
-                onConnect={handleConnectIntegration}
-                onDisconnect={handleDisconnectIntegration}
-                onConfigure={handleConfigureIntegration}
-                status={connectedNewIntegrations.has(integration.id) ? 'connected' : 'disconnected'}
-              />
-            ))}
+            {analyticsIntegrations.map((integration) => {
+              const connected = isRegistryIntegrationConnected(integration);
+              return (
+                <IntegrationCard
+                  key={integration.id}
+                  integration={integration}
+                  isConnected={connected}
+                  onConnect={handleConnectIntegration}
+                  onDisconnect={handleDisconnectRegistryIntegration}
+                  status={connected ? 'connected' : 'disconnected'}
+                />
+              );
+            })}
           </div>
         </TabsContent>
 
@@ -1208,7 +1228,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
                 {connectorStatus?.connectors?.some(c => 
-                  ["razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
+                  ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
                 ) ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
@@ -1219,7 +1239,7 @@ export default function IntegrationsPage() {
                 <p className="font-medium">Payroll</p>
                 <p className="text-sm text-muted-foreground truncate">
                   {connectorStatus?.connectors?.find(c => 
-                    ["razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
+                    ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
                   )?.provider_id?.replace(/_/g, " ") || "Not connected"}
                 </p>
               </div>
@@ -1296,28 +1316,11 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {selectedIntegration && (
-        <>
-          <OAuthConnectModal
-            integration={selectedIntegration}
-            isOpen={oauthModalOpen}
-            onClose={() => handleModalClose('oauth')}
-            onConnect={handleOAuthConnect}
-          />
-          <ApiKeyConnectModal
-            integration={selectedIntegration}
-            isOpen={apiKeyModalOpen}
-            onClose={() => handleModalClose('apikey')}
-            onConnect={handleApiKeyConnect}
-          />
-        </>
-      )}
-
-      <GoogleSheetsConfigModal
-        isOpen={sheetsConfigOpen}
-        onClose={() => handleModalClose('sheets')}
-        onSave={handleSaveSheetMappings}
-        existingMappings={sheetMappings}
+      <ApiKeyConnectModal
+        integration={selectedIntegration}
+        isOpen={apiKeyModalOpen}
+        onClose={handleApiKeyModalClose}
+        onConnect={handleApiKeyConnect}
       />
 
       <StripeConnectModal
@@ -1337,14 +1340,22 @@ export default function IntegrationsPage() {
 function SyncStatusDisplay({ 
   lastSync, 
   syncDetails, 
-  isSyncing 
+  isSyncing,
+  accountHint,
 }: { 
   lastSync: string | null; 
   syncDetails?: SyncDetails;
   isSyncing: boolean;
+  accountHint?: string | null;
 }) {
   return (
     <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+      {accountHint && (
+        <div className="flex items-center gap-2 text-sm" data-testid="saved-account-hint">
+          <Shield className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Account {accountHint}</span>
+        </div>
+      )}
       {isSyncing ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm">
@@ -1384,9 +1395,10 @@ function SyncStatusDisplay({
 }
 
 const providerCredentialFields: Record<string, { field: string; label: string; placeholder: string }[]> = {
-  razorpayx_payroll: [
-    { field: "api_key", label: "API Key", placeholder: "Enter RazorpayX API Key" },
-    { field: "api_secret", label: "API Secret", placeholder: "Enter RazorpayX API Secret" },
+  razorpayx: [
+    { field: "api_key", label: "API Key", placeholder: "RazorpayX Key Id" },
+    { field: "api_secret", label: "API Secret", placeholder: "RazorpayX Key Secret" },
+    { field: "account_number", label: "Account number", placeholder: "Customer Identifier or current account number" },
   ],
   greythr: [
     { field: "api_access_id", label: "API Access ID", placeholder: "Enter GreytHR Access ID" },
@@ -1403,7 +1415,7 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "organization_id", label: "Organization ID", placeholder: "Enter Zoho Organization ID" },
   ],
   tally: [
-    { field: "tally_url", label: "Tally Server URL", placeholder: "http://localhost:9000" },
+    { field: "tally_url", label: "Tally Server URL", placeholder: "https://tally.yourcompany.com:9000" },
     { field: "company_name", label: "Company Name", placeholder: "Enter your Tally Company name" },
   ],
   plaid: [
@@ -1460,6 +1472,14 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "client_id", label: "Client ID", placeholder: "Enter Ramp Client ID" },
     { field: "client_secret", label: "Client Secret", placeholder: "Enter Ramp Client Secret" },
     { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
+  ],
+  shiprocket: [
+    { field: "email", label: "API User Email", placeholder: "Shiprocket > Settings > API > Create API user" },
+    { field: "password", label: "API User Password", placeholder: "Password of that API user" },
+  ],
+  meta_ads: [
+    { field: "access_token", label: "Access Token (ads_read)", placeholder: "System user token from Meta Business Settings" },
+    { field: "ad_account_ids", label: "Ad Account IDs", placeholder: "act_1234567890, act_2345678901" },
   ],
   shopify: [
     { field: "shop_domain", label: "Shop Domain", placeholder: "yourstore (without .myshopify.com)" },
@@ -1520,10 +1540,12 @@ function ConnectDialog({
   provider,
   type,
   companyId,
+  triggerLabel = "Connect",
 }: {
   provider: IntegrationProvider;
-  type: "accounting" | "crm" | "payments" | "payroll" | "erp";
+  type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable";
   companyId: number;
+  triggerLabel?: string;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1537,7 +1559,7 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
+  const connectorBackedProviders = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
   const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {
@@ -1615,9 +1637,9 @@ function ConnectDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" data-testid={`button-connect-${provider.id}`}>
+        <Button size="sm" data-testid={`button-${triggerLabel.toLowerCase()}-${provider.id}`}>
           <Link2 className="h-4 w-4 mr-2" />
-          Connect
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
@@ -1778,7 +1800,7 @@ function ConnectDialog({
                     </div>
                   ))}
                   <p className="text-xs text-muted-foreground">
-                    For demo purposes, enter any values to simulate a connection.
+                    Credentials are stored encrypted and used only to read your data.
                   </p>
                 </div>
               ) : (

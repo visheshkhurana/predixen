@@ -27,7 +27,6 @@ import {
   SiQuickbooks, 
   SiXero, 
   SiHubspot, 
-  SiSalesforce, 
   SiGoogleanalytics,
   SiShopify,
   SiMixpanel,
@@ -35,6 +34,7 @@ import {
   SiMysql,
   SiGooglesheets
 } from "react-icons/si";
+import { FaSalesforce } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
 
 interface ConnectorDetailDrawerProps {
   connector: {
@@ -67,7 +67,7 @@ const connectorIcons: Record<string, React.ReactNode> = {
   quickbooks: <SiQuickbooks className="h-12 w-12 text-[#2CA01C]" />,
   xero: <SiXero className="h-12 w-12 text-[#13B5EA]" />,
   hubspot: <SiHubspot className="h-12 w-12 text-[#FF7A59]" />,
-  salesforce: <SiSalesforce className="h-12 w-12 text-[#00A1E0]" />,
+  salesforce: <FaSalesforce className="h-12 w-12 text-[#00A1E0]" />,
   google_analytics: <SiGoogleanalytics className="h-12 w-12 text-[#E37400]" />,
   shopify: <SiShopify className="h-12 w-12 text-[#96BF48]" />,
   mixpanel: <SiMixpanel className="h-12 w-12 text-[#7856FF]" />,

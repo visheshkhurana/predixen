@@ -2,32 +2,59 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { registerJarvisRoutes } from "./jarvis-routes";
 import { serveStatic } from "./static";
+import { registerLlmsFull } from "./llms-full";
 import { createServer } from "http";
 import { spawn, execSync, spawnSync, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupWebSocketServer } from "./websocket";
 import { registerTwilioRoutes } from "./twilio/routes";
-import { requireAuth } from "./middleware/requireAuth";
+import { requireAuth, requirePlatformAdmin } from "./middleware/requireAuth";
 import { existsSync } from "fs";
 import path from "path";
-import { randomUUID } from "crypto";
 import compression from "compression";
 import { geoRestrict } from "./middleware/geoRestrict";
 import { legacyRedirects } from "./middleware/legacyRedirects";
+import { apiProxyGuard } from "./middleware/apiProxyGuard";
+import { aiAgentLog } from "./middleware/aiAgentLog";
+import { requestId } from "./middleware/requestId";
+import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
+import { razorpayBillingEnabled } from "./billing-gate";
+import { securityHeaders } from "./middleware/securityHeaders";
+import { finalErrorHandler } from "./middleware/httpHygiene";
+// The Notion integration is the platform workspace, not a tenant's.
+import { requirePlatformAdmin as requireNotionAdmin } from "./middleware/requireAuth";
 
 const app = express();
 app.disable("x-powered-by");
-// Railway terminates TLS and forwards the real client address in
-// X-Forwarded-For. Without this, req.ip is the proxy and every visitor looks
-// like the same private address.
-app.set("trust proxy", true);
+// Express hop count, measured on this repo's express. `req.ip` is taken from
+// the socket peer and X-Forwarded-For. It is not read from X-Real-IP.
+//
+//   X-Forwarded-For: "1.2.3.4, 5.6.7.8"
+//   trust proxy=true -> req.ip=1.2.3.4
+//   trust proxy=1    -> req.ip=5.6.7.8   (rightmost hop)
+//   trust proxy=2    -> req.ip=1.2.3.4
+//
+// On Railway that rightmost hop is the shared edge, not the visitor. A review
+// of the lead limiter put nine distinct clients behind 152.233.10.4 and
+// req.ip was 152.233.10.4 for every one of them. The count stays 1 so a
+// caller-written leftmost entry is not trusted if it ever arrives. Lead
+// capture does not use req.ip. The edge's X-Real-IP is forwarded unchanged.
+app.set("trust proxy", 1);
 
-app.use((req, res, next) => {
-  const requestId = (req.headers["x-request-id"] as string) || randomUUID();
-  req.headers["x-request-id"] = requestId;
-  res.setHeader("X-Request-ID", requestId);
-  next();
-});
+/**
+ * Request correlation id. Minted here if absent; see
+ * `middleware/requestId.ts` for why the client-supplied value is capped at 64
+ * characters rather than trusted.
+ */
+app.use(requestId());
+
+// Counts AI-agent and crawler traffic, which PostHog structurally cannot see:
+// it attributes a pageview from `document.referrer`, and a crawler never runs
+// the bundle. Registered here, above every route and every redirect, so a
+// crawler is counted whether it ends up on a page, a 301 or a 404 — the status
+// is what the line reports. Measurement only: it writes a log line and calls
+// next() without touching the response.
+app.use(aiAgentLog());
 
 app.use((req, res, next) => {
   const host = req.hostname || req.headers.host || "";
@@ -39,40 +66,13 @@ app.use((req, res, next) => {
 
 app.use(legacyRedirects());
 
-app.use((req, res, next) => {
-  const isEmbed = req.path.startsWith("/embed/");
-  if (!isEmbed) {
-    res.setHeader("X-Frame-Options", "DENY");
-  }
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-XSS-Protection", "0");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  res.setHeader("Content-Security-Policy", [
-    "default-src 'self'",
-    // us-assets.i.posthog.com serves array.js/recorder.js — the snippet in
-    // client/index.html rewrites api_host to it, so omitting it blocks
-    // PostHog analytics and session replay entirely.
-    // static.ads-twitter.com serves uwt.js (the X Ads pixel). Omitting it means
-    // the browser blocks the tag and X reports zero conversions — visually
-    // identical to "the ads didn't work", which is the worst kind of bug.
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net https://static.ads-twitter.com https://analytics.twitter.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    // X fires its conversion beacons as image/pixel requests to t.co and
-    // analytics.twitter.com as well as via fetch.
-    "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com https://t.co https://analytics.twitter.com https://static.ads-twitter.com",
-    // GA4 sends /g/collect beacons to analytics.google.com, stats.g.doubleclick.net
-    // and www.google.com — not just www.google-analytics.com. Google also routes
-    // some traffic through regional endpoints (region1.google-analytics.com /
-    // region1.analytics.google.com). Omitting any of them silently drops a
-    // share of measurement traffic.
-    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com https://analytics.twitter.com https://t.co https://static.ads-twitter.com",
-    isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com",
-  ].join("; "));
-  next();
-});
+// Razorpay Checkout origins. Added to the CSP only when Razorpay is the active
+// billing provider (same rule as server/core/razorpay_billing.razorpay_enabled),
+// so with payments off the policy is byte-for-byte what it was.
+const RAZORPAY_CSP_ENABLED = razorpayBillingEnabled();
+
+// CSP, HSTS and friends. The policy lives in middleware/securityHeaders.ts.
+app.use(securityHeaders({ razorpay: RAZORPAY_CSP_ENABLED }));
 
 app.use(compression());
 
@@ -248,7 +248,9 @@ function startFastAPIServer(): ChildProcess {
   
   killProcessOnPort(port);
   
-  const cmd = [pythonCommand, "-u", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port];
+  // asgi_app records the TCP peer before proxy headers. --no-proxy-headers
+  // keeps Uvicorn from wrapping a second rewrite outside that record.
+  const cmd = [pythonCommand, "-u", "-m", "uvicorn", "server.main:asgi_app", "--host", "0.0.0.0", "--port", port, "--no-proxy-headers"];
   
   console.log(`[fastapi] Starting uvicorn: ${cmd.join(" ")}`);
   
@@ -260,7 +262,7 @@ function startFastAPIServer(): ChildProcess {
   childEnv.NODE_ENV = nodeEnv;
   childEnv.ENVIRONMENT = nodeEnv;
   childEnv.PYTHONUNBUFFERED = "1";
-  const child = spawn(pythonCommand, ["-u", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
+  const child = spawn(pythonCommand, cmd.slice(1), {
     stdio: ["ignore", "pipe", "pipe"],
     shell: false,
     detached: process.platform !== "win32",
@@ -516,12 +518,12 @@ const FASTAPI_URL = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPor
 const messagingRouter = express.Router();
 messagingRouter.use(express.json());
 registerTwilioRoutes(messagingRouter);
-// Auth-gate all messaging routes: unauthenticated SMS/WhatsApp send is toll-fraud/PII risk.
-app.use("/api/messaging", requireAuth, messagingRouter);
+// Messaging sends SMS/WhatsApp from the platform account: platform owner only.
+app.use("/api/messaging", requirePlatformAdmin, messagingRouter);
 
 // Register Notion routes before the API proxy (handled by Express, not FastAPI)
 import { getNotionClient, listPages, listDatabases } from "./notion/client";
-app.get("/api/notion/pages", requireAuth, async (req, res) => {
+app.get("/api/notion/pages", requireNotionAdmin, async (req, res) => {
   try {
     const pages = await listPages();
     const simplified = pages.map((p: any) => ({
@@ -539,7 +541,7 @@ app.get("/api/notion/pages", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res) => {
+app.post("/api/notion/push-report", requireNotionAdmin, express.json(), async (req, res) => {
   try {
     const notion = await getNotionClient();
     const { pageId } = req.body;
@@ -688,7 +690,7 @@ app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res
   }
 });
 
-app.get("/api/notion/databases", requireAuth, async (req, res) => {
+app.get("/api/notion/databases", requireNotionAdmin, async (req, res) => {
   try {
     const dbs = await listDatabases();
     const simplified = dbs.map((d: any) => ({
@@ -710,7 +712,17 @@ const apiProxy = createProxyMiddleware({
   pathRewrite: {
     "^/api": "",
   },
+  // X-Real-IP is the client address Railway's edge wrote. Do not replace it
+  // with req.ip: with trust proxy 1 that is the shared edge hop, and every
+  // visitor would share one lead bucket. http-proxy forwards the header as
+  // received. FastAPI trusts it only when the TCP peer is loopback.
   on: {
+    proxyRes: (proxyRes, req) => {
+      applyUpstreamRedirectRewrite(proxyRes, req, {
+        upstreamOrigin: FASTAPI_URL,
+        publicPrefix: "/api",
+      });
+    },
     error: (err: Error, req, res) => {
       console.error("Proxy error:", err.message);
       if ('writeHead' in res && typeof res.writeHead === 'function') {
@@ -726,13 +738,11 @@ const apiProxy = createProxyMiddleware({
   },
 });
 
-const LOCAL_API_PREFIXES = ["/ai/", "/notion/", "/messaging/"];
-app.use("/api", (req, res, next) => {
-  if (LOCAL_API_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
-    return next();
-  }
-  return apiProxy(req, res, next);
-});
+// Which `/api/*` requests this process answers itself and which belong to FastAPI
+// is decided by asking the router, not by a prefix list. See
+// `server/middleware/apiProxyGuard.ts` for why the list could not be made correct:
+// `/api/ai/` protected two Express routes and shadowed FastAPI's `/api/ai/feedback`.
+app.use("/api", apiProxyGuard(app, apiProxy));
 
 app.use(
   "/notifications",
@@ -743,6 +753,12 @@ app.use(
     proxyTimeout: 30000,
     pathRewrite: (path) => `/notifications${path}`,
     on: {
+      proxyRes: (proxyRes, req) => {
+        applyUpstreamRedirectRewrite(proxyRes, req, {
+          upstreamOrigin: FASTAPI_URL,
+          publicPrefix: "",
+        });
+      },
       error: (err: Error, req, res) => {
         console.error("Notifications proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
@@ -764,6 +780,12 @@ app.use(
     proxyTimeout: 30000,
     pathRewrite: (path) => `/email-tracking${path}`,
     on: {
+      proxyRes: (proxyRes, req) => {
+        applyUpstreamRedirectRewrite(proxyRes, req, {
+          upstreamOrigin: FASTAPI_URL,
+          publicPrefix: "",
+        });
+      },
       error: (err: Error, req, res) => {
         console.error("Email tracking proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
@@ -790,6 +812,12 @@ app.use(
     proxyTimeout: 30000,
     pathRewrite: (path) => `/webhooks/lead-gen${path}`,
     on: {
+      proxyRes: (proxyRes, req) => {
+        applyUpstreamRedirectRewrite(proxyRes, req, {
+          upstreamOrigin: FASTAPI_URL,
+          publicPrefix: "",
+        });
+      },
       error: (err: Error, req, res) => {
         console.error("Lead-gen webhook proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
@@ -859,13 +887,8 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    console.error(`[error] ${status} ${message}`, err.stack || err);
-  });
+  // Before the SPA catch-all in both modes, so it is never answered with the app shell.
+  registerLlmsFull(app);
 
   const isProd = process.env["NODE_ENV"] === "production" || process.env["ENVIRONMENT"] === "production";
   if (isProd) {
@@ -882,6 +905,10 @@ app.use((req, res, next) => {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
+
+  // Registered after static/SPA serving so errors raised there (including a
+  // malformed percent-encoding) are answered here, not by Express's default.
+  app.use(finalErrorHandler);
 
   setupComplete = true;
   console.log("[startup] Application setup complete");

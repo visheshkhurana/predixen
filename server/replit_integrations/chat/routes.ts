@@ -1,5 +1,13 @@
-import type { Express, Request, Response } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import OpenAI from "openai";
+import { requireAuth } from "../../middleware/requireAuth";
+import { aiUserRateLimit, type AiRateLimitOptions } from "../../middleware/aiRateLimit";
+
+export interface ChatRouteOptions {
+  /** Override the OpenAI client. Tests inject a fake so the success path never hits the network. */
+  getOpenAIClient?: () => OpenAI | null;
+  rateLimit?: AiRateLimitOptions;
+}
 
 const configuredOpenAIKey =
   process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
@@ -22,16 +30,61 @@ function getOpenAIClient(): OpenAI | null {
   return cachedOpenAIClient;
 }
 
+// gpt-5* and o-series are reasoning models: they reject `max_tokens` and any
+// temperature other than the default. The cap counts reasoning tokens too, so
+// it has to leave room for the visible answer.
+const CHAT_MODEL = "gpt-5";
+
+export function isReasoningModel(model: string): boolean {
+  return /^(gpt-5|o\d)/i.test(model);
+}
+
+export function completionTokenParams(
+  model: string,
+  maxTokens: number,
+): { max_completion_tokens: number } | { max_tokens: number } {
+  return isReasoningModel(model)
+    ? { max_completion_tokens: maxTokens }
+    : { max_tokens: maxTokens };
+}
+
 interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
 }
 
-export function registerChatRoutes(app: Express): void {
-  app.post("/api/ai/chat", async (req: Request, res: Response) => {
+// The system prompt is ours: callers may only send their own user/assistant
+// turns, bounded in count and length, so a client cannot rewrite the advisor's
+// instructions or pad a request to burn tokens.
+const MAX_MESSAGES = 30;
+const MAX_CONTENT_CHARS = 4000;
+
+export function sanitizeChatMessages(raw: unknown): ChatMessage[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw
+    .filter(
+      (m): m is ChatMessage =>
+        !!m &&
+        typeof m === "object" &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string",
+    )
+    .slice(-MAX_MESSAGES)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_CONTENT_CHARS) }));
+}
+
+export function registerChatRoutes(app: Express, options: ChatRouteOptions = {}): void {
+  const resolveClient = options.getOpenAIClient ?? getOpenAIClient;
+  const limitAi = aiUserRateLimit(options.rateLimit);
+  // Every /api/ai/* path is Express-owned (LOCAL_API_PREFIXES skips the FastAPI proxy).
+  // Auth is mounted on the prefix so a new route cannot ship unauthenticated.
+  const router = express.Router();
+  router.use(requireAuth);
+
+  router.post("/chat", limitAi, async (req: Request, res: Response) => {
     try {
-      const { messages, context } = req.body as {
-        messages: ChatMessage[];
+      const { messages: rawMessages, context } = req.body as {
+        messages: unknown;
         context?: {
           companyName?: string;
           industry?: string;
@@ -45,11 +98,12 @@ export function registerChatRoutes(app: Express): void {
         };
       };
 
-      if (!messages || !Array.isArray(messages)) {
+      const messages = sanitizeChatMessages(rawMessages);
+      if (!messages || messages.length === 0) {
         return res.status(400).json({ error: "Messages array is required" });
       }
 
-      const openai = getOpenAIClient();
+      const openai = resolveClient();
       if (!openai) {
         return res.status(503).json({
           error:
@@ -91,10 +145,10 @@ Be concise but insightful. Use specific numbers from the context when answering 
       res.setHeader("Connection", "keep-alive");
 
       const stream = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: CHAT_MODEL,
         messages: fullMessages,
         stream: true,
-        max_tokens: 1024,
+        ...completionTokenParams(CHAT_MODEL, 4096),
       });
 
       for await (const chunk of stream) {
@@ -117,7 +171,7 @@ Be concise but insightful. Use specific numbers from the context when answering 
     }
   });
 
-  app.post("/api/ai/quick-answer", async (req: Request, res: Response) => {
+  router.post("/quick-answer", limitAi, async (req: Request, res: Response) => {
     try {
       const { question, context } = req.body;
 
@@ -125,7 +179,7 @@ Be concise but insightful. Use specific numbers from the context when answering 
         return res.status(400).json({ error: "Question is required" });
       }
 
-      const openai = getOpenAIClient();
+      const openai = resolveClient();
       if (!openai) {
         return res.status(503).json({
           error:
@@ -137,12 +191,12 @@ Be concise but insightful. Use specific numbers from the context when answering 
 ${context ? `Context: Cash $${context.cashOnHand?.toLocaleString()}, Revenue $${context.monthlyRevenue?.toLocaleString()}/mo, Expenses $${context.monthlyExpenses?.toLocaleString()}/mo, Growth ${context.growthRate}%` : ""}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: CHAT_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: question },
         ],
-        max_tokens: 256,
+        ...completionTokenParams(CHAT_MODEL, 2048),
       });
 
       res.json({
@@ -153,4 +207,6 @@ ${context ? `Context: Cash $${context.cashOnHand?.toLocaleString()}, Revenue $${
       res.status(500).json({ error: "Failed to get AI response" });
     }
   });
+
+  app.use("/api/ai", router);
 }
