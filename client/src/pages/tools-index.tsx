@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { ArrowRight, Calculator } from "lucide-react";
 
 /**
@@ -16,7 +17,7 @@ import { ArrowRight, Calculator } from "lucide-react";
  * advice was "browse the free runway calculator instead"; the sitemap listed the
  * individual tools, so a crawler had the leaves and no hub.
  *
- * The four calculators under `/tools/` are listed first because they share the
+ * The calculators under `/tools/` are listed first because they share the
  * URL segment. The two other free calculators live at the site root and get
  * their own group rather than being quietly omitted from a page called "tools".
  *
@@ -42,6 +43,12 @@ const PRIMARY_TOOLS: readonly ToolEntry[] = [
     name: "Startup Runway Calculator",
     input: "Cash on hand, monthly revenue, monthly expenses, growth rate",
     output: "Months of runway and the month your cash runs out",
+  },
+  {
+    href: "/tools/d2c-contribution-margin",
+    name: "D2C Contribution Margin Calculator",
+    input: "AOV, orders, RTO %, COD share, COGS, shipping, ad spend (in ₹)",
+    output: "CM1, CM2 and CM3 per order, MER and break-even MER",
   },
   {
     href: "/tools/burn-multiple",
@@ -108,9 +115,7 @@ function ToolGrid({ tools }: { tools: readonly ToolEntry[] }) {
 
 export default function ToolsIndexPage() {
   useSEO({
-    title: "Free Startup Finance Tools — Runway, Burn, Dilution, LTV:CAC | FounderConsole",
-    description:
-      "Four free startup finance calculators and two more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
+    ...TOOL_PAGE_META["/tools"],
     path: "/tools",
     jsonLd: [
       {
@@ -147,9 +152,9 @@ export default function ToolsIndexPage() {
             Free startup finance tools
           </h1>
           <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
-            The four numbers that decide how long a company has left: runway, burn multiple,
-            dilution and LTV:CAC. Each one is a calculator you can finish in under a minute —
-            no account, no card, no demo call.
+            The numbers that decide how long a company has left: runway, D2C contribution
+            margin (CM1, CM2, CM3), burn multiple, dilution and LTV:CAC. Each one is a calculator
+            you can finish in under a minute — no account, no card, no demo call.
           </p>
         </div>
       </section>
@@ -157,7 +162,7 @@ export default function ToolsIndexPage() {
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12">
           <h2 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">
-            The four calculators
+            The five calculators
           </h2>
           <ToolGrid tools={PRIMARY_TOOLS} />
         </div>

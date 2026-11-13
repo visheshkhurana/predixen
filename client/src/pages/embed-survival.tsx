@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useCalculatorUsed } from "@/hooks/use-calculator-used";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,7 @@ export default function EmbedSurvivalWidget() {
   const r = calc(cash, burn, revenue);
 
   const targetUrl = `https://founderconsole.ai/survival-simulator?cash=${cash}&burn=${burn}&revenue=${revenue}&utm_source=embed&utm_medium=widget`;
+  useCalculatorUsed("embed-runway", cash !== 500000 || burn !== 80000 || revenue !== 20000, true, [cash, burn, revenue]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 flex items-center justify-center" data-testid="embed-survival-widget">

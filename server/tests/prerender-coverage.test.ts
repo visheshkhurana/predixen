@@ -9,6 +9,8 @@ import {
 // whole point of this section is that it is driven by the client data rather
 // than by a second copy, so a post added tomorrow is covered the day it lands.
 import { blogPosts } from "../../client/src/data/blog-posts";
+// Industry homepages: driven by the same config the page renders, like blogPosts.
+import { INDUSTRY_PAGES } from "../../client/src/data/industry-pages";
 
 // The real built shell, not a hand-written stub. injectSEO REPLACES the
 // canonical and robots tags rather than inserting them, so a minimal shell
@@ -20,8 +22,9 @@ const SHELL = readFileSync("dist/public/index.html", "utf8");  // run from the r
 const WAS_BLANK = ["/pricing", "/demo", "/ai-cfo",
   "/runway/saas", "/runway/ecommerce", "/runway/fintech", "/runway/marketplace",
   "/runway/ai", "/runway/hardware", "/runway/biotech", "/runway/devtools",
-  "/features", "/product", "/about", "/compare", "/customers", "/use-cases", "/how-it-works", "/alternatives", "/signup", "/security", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
+  "/features", "/product", "/about", "/compare", "/customers", "/use-cases", "/how-it-works", "/alternatives", "/signup", "/security", "/faq", "/contact", "/privacy", "/terms", "/refund-policy", "/survival-simulator"];
 const ALREADY_WORKED = ["/", "/tools/runway-calculator", "/default-alive", "/blog"];
+const INDUSTRY_HOMEPAGES = INDUSTRY_PAGES.map((p) => `/for/${p.slug}`);
 
 function textOf(html: string): string {
   const m = html.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/);
@@ -30,7 +33,7 @@ function textOf(html: string): string {
 }
 
 let failures = 0;
-for (const group of [WAS_BLANK, ALREADY_WORKED]) {
+for (const group of [WAS_BLANK, ALREADY_WORKED, INDUSTRY_HOMEPAGES]) {
   for (const path of group) {
     const out = injectSEO(SHELL, path);
     const txt = textOf(out);
@@ -370,7 +373,7 @@ for (const path of RUNWAY_PATHS) {
 // list it walks, and a list that silently shrank would pass every assertion in
 // it. 18 is the number the sitemap generator writes into client/public/
 // sitemap.xml, so this is the join between the two files.
-const EXPECTED_BLOG_POSTS = 18;
+const EXPECTED_BLOG_POSTS = 24;
 console.log(
   `${blogPosts.length === EXPECTED_BLOG_POSTS ? "PASS" : "FAIL"}  blog list has ${blogPosts.length} posts (expected ${EXPECTED_BLOG_POSTS}, the count the sitemap is built from)`,
 );

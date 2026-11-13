@@ -112,8 +112,8 @@ def test_prompt_marks_unknowns_and_forbids_invention():
     }
     prompt = dg._build_section_prompt("investor-memo", "Traction & Metrics", context)
     assert "MRR: $20,000" in prompt
-    assert "CAC:" not in prompt  # estimated placeholder is not presented as data
-    assert "Not available" in prompt and "CAC" in prompt.split("Not available")[1]
+    # estimated placeholder is not presented as data (main's per-line wording)
+    assert "\nCAC: not available" in prompt
     assert "$0" not in prompt
     assert "2026-09-01" in prompt and "revenue $20,000" in prompt
     assert "Never invent" in prompt

@@ -12,6 +12,7 @@ from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
 from server.models.company import Company
+from server.core.company_access import get_user_company
 from server.models.workspace import NotificationPreference
 from server.models.financial import FinancialRecord
 
@@ -28,12 +29,7 @@ def get_digest_preferences(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
 
     pref = db.query(NotificationPreference).filter(
         NotificationPreference.user_id == current_user.id,
@@ -51,12 +47,7 @@ def update_digest_preferences(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
 
     pref = db.query(NotificationPreference).filter(
         NotificationPreference.user_id == current_user.id,
@@ -82,12 +73,7 @@ def send_monthly_digest(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
 
     user = db.query(User).filter(User.id == current_user.id).first()
     email = (user.email if user else None) or getattr(current_user, "email", None)

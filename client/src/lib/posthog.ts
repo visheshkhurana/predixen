@@ -1,4 +1,5 @@
 import { flushPostHogQueue, type PostHogClient, type QueuedPostHogCall } from "./posthog-queue";
+import { hasTrackingConsent, onConsentChange } from "./consent";
 
 // PostHog client tokens are public by design (they ship in the JS bundle).
 // The default below is the real project token — the VITE_POSTHOG_KEY that was
@@ -59,15 +60,26 @@ async function loadAndInit(): Promise<PostHogSdk | null> {
       // no way to tell a broken form from a bored visitor. Cheap insurance on the
       // one funnel step we cannot afford to be blind on.
       capture_exceptions: true,
-      persistence: "localStorage",
+      // Cookieless (in-memory id) until the visitor accepts tracking; see
+      // lib/consent.ts. Accepting upgrades this client in place.
+      persistence: hasTrackingConsent() ? "localStorage" : "memory",
       // Session replay: record marketing + auth funnel sessions so we can watch
-      // where ad visitors drop off. Inputs are masked by default for privacy.
-      disable_session_recording: false,
+      // where ad visitors drop off, only with consent. Inputs are masked.
+      disable_session_recording: !hasTrackingConsent(),
       session_recording: {
         maskAllInputs: true,
       },
     });
     client = sdk;
+    onConsentChange((choice) => {
+      if (choice !== "accepted") return;
+      const upgradable = sdk as PostHogSdk & {
+        set_config?: (config: Record<string, unknown>) => void;
+        startSessionRecording?: () => void;
+      };
+      upgradable.set_config?.({ persistence: "localStorage" });
+      upgradable.startSessionRecording?.();
+    });
     flushPostHogQueue(sdk, pending);
     return sdk;
   } catch (err) {
@@ -141,6 +153,73 @@ export function identifyUser(userId: number, email: string, role?: string) {
   });
 }
 
+/** posthog-js localStorage blob → distinct_id, or null when it isn't one. */
+export function distinctIdFromPersistence(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { distinct_id?: unknown };
+    const id = parsed?.distinct_id;
+    if (typeof id !== "string") return null;
+    const trimmed = id.trim();
+    if (!trimmed || trimmed.length > 200 || trimmed.includes("@")) return null;
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+function readLoadedDistinctId(): string | null {
+  const reader = client as { get_distinct_id?: () => unknown } | null;
+  if (!reader || typeof reader.get_distinct_id !== "function") return null;
+  try {
+    const id = reader.get_distinct_id();
+    return distinctIdFromPersistence(JSON.stringify({ distinct_id: id }));
+  } catch {
+    return null;
+  }
+}
+
+function readPersistedDistinctId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return distinctIdFromPersistence(window.localStorage.getItem(`ph_${POSTHOG_KEY}_posthog`));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Current browser distinct_id, for server events that must join this person.
+ * Prefers the loaded SDK, then localStorage. Waits briefly for init so a
+ * submit on a cold page still has an id. Null means the server should use
+ * its email-hash fallback.
+ */
+export async function getBrowserDistinctId(): Promise<string | null> {
+  if (!POSTHOG_KEY || typeof window === "undefined") return null;
+  const loaded = readLoadedDistinctId();
+  if (loaded) return loaded;
+  const persisted = readPersistedDistinctId();
+  if (persisted) return persisted;
+  let timer: number | null = null;
+  try {
+    const sdk = await Promise.race([
+      ensureClient(),
+      new Promise<PostHogSdk | null>((resolve) => {
+        timer = window.setTimeout(() => resolve(null), 1500);
+      }),
+    ]);
+    if (sdk) {
+      const id = readLoadedDistinctId();
+      if (id) return id;
+    }
+  } catch {
+    // persistence below is the remaining source
+  } finally {
+    if (timer != null) window.clearTimeout(timer);
+  }
+  return readPersistedDistinctId();
+}
+
 /**
  * Clears the current identity. Call this on an actual sign-out, never on a
  * page that merely happens to have no logged-in user.
@@ -170,6 +249,42 @@ export function trackPageView(path: string) {
 
 export function trackEvent(event: string, properties?: Record<string, any>) {
   dispatch({ kind: "capture", event, properties });
+}
+
+/**
+ * Super properties for every later event. `unset` drops keys this session
+ * does not have, so a previous visit's campaign does not stick in
+ * localStorage after a landing URL with no parameters.
+ *
+ * Queued, not loaded. The pageview / idle init flushes this before the
+ * first event. Calling ensureClient here would pull posthog-js forward of
+ * that path on every document.
+ */
+export function registerSuperProperties(
+  properties: Record<string, string>,
+  unset: readonly string[] = [],
+) {
+  if (!POSTHOG_KEY) return;
+  const present: Record<string, string> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (typeof value === "string" && value.length > 0) present[key] = value;
+  }
+  const presentKeys = new Set(Object.keys(present));
+  const call: QueuedPostHogCall = {
+    kind: "register",
+    properties: present,
+    unset: unset.filter((key) => !presentKeys.has(key)),
+  };
+  if (client) {
+    flushPostHogQueue(client, [call]);
+    return;
+  }
+  pending.push(call);
+}
+
+/** Test seam: the calls waiting to become PostHog super properties. */
+export function takeQueuedPostHogCalls(): QueuedPostHogCall[] {
+  return pending.splice(0, pending.length);
 }
 
 export const isPostHogEnabled = () => !!POSTHOG_KEY;

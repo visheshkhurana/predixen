@@ -33,12 +33,14 @@ def test_company_is_sample_ignores_non_dict_metadata():
 
 def test_emit_signup_completed_payload():
     with patch("server.services.activation.posthog_capture") as capture:
-        assert emit_signup_completed(user_id=7, method="email") is True
-        capture.assert_called_once_with(
-            "signup_completed",
-            "user:7",
-            {"method": "email", "user_id": 7},
-        )
+        with patch("server.services.activation.posthog_alias") as alias:
+            assert emit_signup_completed(user_id=7, method="email") is True
+            capture.assert_called_once_with(
+                "signup_completed",
+                "7",
+                {"method": "email", "user_id": 7},
+            )
+            alias.assert_not_called()
 
 
 def test_emit_signup_completed_google():
@@ -50,6 +52,56 @@ def test_emit_signup_completed_google():
 def test_emit_signup_completed_never_raises():
     with patch("server.services.activation.posthog_capture", side_effect=RuntimeError("down")):
         assert emit_signup_completed(user_id=1, method="email") is False
+
+
+def test_signup_uses_browser_id_and_aliases_lead_and_anonymous():
+    from server.services.posthog import lead_distinct_id
+
+    with patch("server.services.activation.posthog_capture") as capture:
+        with patch("server.services.activation.posthog_alias") as alias:
+            assert (
+                emit_signup_completed(
+                    user_id=7,
+                    method="email",
+                    email="Founder@Example.com",
+                    anonymous_distinct_id="anon-browser",
+                )
+                is True
+            )
+            capture.assert_called_once_with(
+                "signup_completed",
+                "7",
+                {"method": "email", "user_id": 7},
+            )
+            previous = [call.kwargs["previous_id"] for call in alias.call_args_list]
+            assert previous == ["anon-browser", lead_distinct_id("founder@example.com")]
+            assert all(call.kwargs["distinct_id"] == "7" for call in alias.call_args_list)
+
+
+def test_signup_skips_alias_when_anonymous_id_is_the_user_or_an_email():
+    with patch("server.services.activation.posthog_capture"):
+        with patch("server.services.activation.posthog_alias") as alias:
+            emit_signup_completed(user_id=7, method="email", anonymous_distinct_id="7")
+            emit_signup_completed(
+                user_id=7, method="google", anonymous_distinct_id="founder@example.com"
+            )
+            alias.assert_not_called()
+
+
+def test_signup_alias_failure_still_reports_capture():
+    with patch("server.services.activation.posthog_capture", return_value=True):
+        with patch(
+            "server.services.activation.posthog_alias", side_effect=RuntimeError("down")
+        ):
+            assert (
+                emit_signup_completed(
+                    user_id=7,
+                    method="email",
+                    email="founder@example.com",
+                    anonymous_distinct_id="anon-browser",
+                )
+                is True
+            )
 
 
 def test_sample_company_never_emits_founder_activated():
@@ -92,7 +144,7 @@ def test_real_first_truth_scan_emits_founder_activated():
             assert emitted is True
             event, distinct_id, properties = capture.call_args.args
             assert event == "founder_activated"
-            assert distinct_id == "user:5"
+            assert distinct_id == "5"
             assert properties["source"] == "truth_scan"
             assert properties["company_id"] == 22
             assert properties["is_sample"] is False

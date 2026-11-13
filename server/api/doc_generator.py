@@ -245,6 +245,18 @@ def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
         })
 
     extracted_metrics = _known_metrics(metrics)
+
+    # A reported financial record fills gaps the truth scan leaves (main 10-15).
+    latest = fin_records_data[0] if fin_records_data else {}
+    for name, record_key in (
+        ("mrr", "mrr"), ("arr", "arr"), ("monthly_revenue", "revenue"),
+        ("burn_rate", "net_burn"), ("cash_balance", "cash_balance"),
+        ("runway_months", "runway_months"), ("gross_margin", "gross_margin"),
+        ("customers", "customers"),
+    ):
+        if extracted_metrics.get(name) is None and latest.get(record_key) is not None:
+            extracted_metrics[name] = float(latest[record_key])
+
     return {
         "company": {
             "id": company.id,
@@ -263,6 +275,9 @@ def _gather_company_context(db: Session, company: Company) -> Dict[str, Any]:
     }
 
 
+NOT_AVAILABLE = "not available"
+
+
 def _fmt_money(v: float) -> str:
     return f"${v:,.0f}"
 
@@ -276,13 +291,13 @@ _PROMPT_METRICS = [
     ("MRR", "mrr", _fmt_money),
     ("ARR", "arr", _fmt_money),
     ("Monthly Revenue", "monthly_revenue", _fmt_money),
-    ("Net Burn (monthly)", "burn_rate", _fmt_money),
-    ("Cash Balance", "cash_balance", _fmt_money),
+    ("Burn Rate", "burn_rate", lambda v: f"${v:,.0f}/mo"),
+    ("Cash", "cash_balance", _fmt_money),
     ("Runway", "runway_months", lambda v: f"{v:.1f} months"),
     ("Gross Margin", "gross_margin", _fmt_pct),
     ("Revenue Growth MoM", "revenue_growth", _fmt_pct),
     ("Customers", "customers", lambda v: f"{v:,.0f}"),
-    ("Monthly Churn", "churn_rate", _fmt_pct),
+    ("Churn", "churn_rate", _fmt_pct),
     ("CAC", "cac", _fmt_money),
     ("LTV", "ltv", _fmt_money),
     ("LTV/CAC", "ltv_cac_ratio", lambda v: f"{v:.1f}x"),
@@ -314,21 +329,19 @@ def _build_section_prompt(doc_type: str, section: str, context: Dict, custom_ins
     m = context["metrics"]
 
     known_lines = []
-    unknown_labels = []
     for label, key, fmt in _PROMPT_METRICS:
         val = m.get(key)
-        if val is None:
-            unknown_labels.append(label)
-        else:
-            known_lines.append(f"{label}: {fmt(val)}")
+        try:
+            shown = NOT_AVAILABLE if val is None else fmt(float(val))
+        except (TypeError, ValueError):
+            shown = NOT_AVAILABLE
+        known_lines.append(f"{label}: {shown}")
 
     data_block = (
         f"Company: {company['name']} ({company.get('industry') or 'industry not available'}, "
         f"{company.get('stage') or 'stage not available'})\n"
     )
     data_block += "\n".join(known_lines) + ("\n" if known_lines else "")
-    if unknown_labels:
-        data_block += "Not available (no reported data): " + ", ".join(unknown_labels) + "\n"
     data_block += f"Data Confidence: {context.get('confidence', 50)}%\n"
     if context.get("is_sample"):
         data_block += (
@@ -368,8 +381,8 @@ def _build_section_prompt(doc_type: str, section: str, context: Dict, custom_ins
     prompt += (
         f"\nWrite the '{section}' section for this {doc_type.replace('-', ' ')}. "
         f"Use only the numbers given above. Never invent, estimate or assume a figure "
-        f"that is not listed; where a metric is marked not available, say it is not yet "
-        f"tracked rather than giving a number. "
+        f"that is not listed. A metric marked '{NOT_AVAILABLE}' is missing, not zero: "
+        f"say it is not yet available, and never state, estimate or imply a figure for it. "
         f"Be concise, professional, and actionable. Write 2-4 paragraphs. "
         f"Do not use markdown headers. Use plain text with clear structure."
     )
