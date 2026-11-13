@@ -15,7 +15,8 @@ import { Loader2, RefreshCw, UserPlus } from 'lucide-react';
  * and finding the card on the login tab. HAG-449 routes it at `/demo/enter` and
  * points the hero, the header CTA and /demo at it.
  *
- * It logs into the shared sample account, selects the sample company, and lands
+ * It opens a private demo workspace (a throwaway account with its own fresh
+ * copy of the sample company, see server/core/demo_workspace.py), selects it, and lands
  * on /overview. No login form is rendered at any point: while the request is in
  * flight the visitor sees a loading line, and on failure a retry plus a real
  * signup link.
@@ -31,7 +32,7 @@ export default function DemoRedirectPage() {
     setError(null);
     setLoading(true);
     try {
-      const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
+      const result = await api.auth.demo();
 
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
 

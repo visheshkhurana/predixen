@@ -77,6 +77,7 @@ EXEMPT_PATHS = [
     "/health",
     "/auth/register",
     "/auth/login",
+    "/auth/demo",
     "/auth/admin/login",
     "/auth/refresh",
     "/companies/*/seed-sample",

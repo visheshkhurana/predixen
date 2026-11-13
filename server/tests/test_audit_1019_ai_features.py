@@ -597,7 +597,15 @@ def test_scan_drops_non_http_urls():
     resp = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
     fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **k: resp)))
     competitor = SimpleNamespace(name="Rival", website=None, blog_url=None, linkedin_url=None, x_handle=None)
-    with patch.object(comp_api, "_get_openai_client", return_value=fake):
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _audited(**_kw):
+        # No API key in CI: hand back the fake instead of the audited wrapper.
+        yield fake
+
+    with patch.object(comp_api, "_get_openai_client", return_value=fake), \
+            patch("server.lib.llm.openai_client.open_audited_openai", _audited):
         items = comp_api._scan_competitor_web(competitor)
     assert [i["url"] for i in items] == [None, "https://ok.example/b"]
 
