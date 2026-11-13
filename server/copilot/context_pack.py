@@ -200,6 +200,7 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
 
 def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[str, Any]]:
     try:
+        from server.decision.cross_company_claims import format_research_insight
         from server.services.pattern_aggregator import get_relevant_patterns
         from server.models.company import Company
 
@@ -234,13 +235,23 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
             companies = p.get("contributing_companies", 0)
             ptype = p.get("pattern_type", "")
             if sample >= 2:
-                source_label = f"{sample} decisions across {companies} companies" if ptype == "decision_outcome" else f"{sample} research studies"
+                if ptype == "research":
+                    insight = format_research_insight(p.get("source"), rate, sample)
+                    kind = "research"
+                else:
+                    source_label = f"{sample} decisions across {companies} companies"
+                    insight = (
+                        f"{rate:.0f}% of similar companies ({source_label}) saw positive outcomes "
+                        f"from {dtype.replace('_', ' ')} decisions."
+                    )
+                    kind = "peer_cohort"
                 insights.append({
                     "type": "decision_pattern",
                     "decision_type": dtype,
-                    "insight": f"{rate:.0f}% of similar companies ({source_label}) saw positive outcomes from {dtype.replace('_', ' ')} decisions.",
+                    "insight": insight,
                     "success_rate": rate,
                     "sample_size": sample,
+                    "cross_company_source": kind,
                 })
 
         for p in benchmark_patterns[:3]:
@@ -248,11 +259,11 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
             median = p.get("median_impact", 0)
             p25 = p.get("p25_impact", 0)
             p75 = p.get("p75_impact", 0)
-            if median > 0:
+            if isinstance(median, str) and median:
                 insights.append({
                     "type": "benchmark",
                     "metric": metric,
-                    "insight": f"Peer {metric.replace('_', ' ')} benchmark: P25=${p25:,.0f}, Median=${median:,.0f}, P75=${p75:,.0f}",
+                    "insight": f"Peer {metric.replace('_', ' ')} benchmark: P25={p25}, Median={median}, P75={p75}",
                     "p25": p25,
                     "median": median,
                     "p75": p75,
@@ -261,12 +272,31 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
         if not insights:
             return None
 
+        has_research = any(item.get("cross_company_source") == "research" for item in insights)
+        has_peers = any(
+            item.get("cross_company_source") == "peer_cohort" or item.get("type") == "benchmark"
+            for item in insights
+        )
+        if has_research and has_peers:
+            disclaimer = (
+                "Peer outcomes are anonymized aggregates from opted-in companies. Individual company data is never exposed. "
+                "Industry research figures cite published studies and are not FounderConsole peer outcomes."
+            )
+        elif has_research:
+            disclaimer = (
+                "Industry research figures cite published studies. They are not outcomes from companies on FounderConsole."
+            )
+        else:
+            disclaimer = (
+                "Based on anonymized, aggregated data from opted-in companies. Individual company data is never exposed."
+            )
+
         return {
             "source": "aggregated_cross_company_data",
             "industry": industry,
             "stage": stage,
             "insights": insights,
-            "disclaimer": "Based on anonymized, aggregated data from opted-in companies. Individual company data is never exposed.",
+            "disclaimer": disclaimer,
         }
     except Exception as e:
         import logging

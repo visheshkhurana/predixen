@@ -717,7 +717,7 @@ export default function KPIBoardPage() {
                 <AreaChart data={historicalData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="time" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={(v) => formatCurrencyAbbrev(v)} tick={{ fontSize: 12 }} />
                   <RechartsTooltip
                     formatter={(value: number) => formatCurrency(value)}
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}
@@ -766,7 +766,7 @@ export default function KPIBoardPage() {
                 <BarChart data={revenueExpenseData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={(v) => formatCurrencyAbbrev(v)} tick={{ fontSize: 12 }} />
                   <RechartsTooltip
                     formatter={(value: number) => formatCurrency(value)}
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}
@@ -803,7 +803,7 @@ export default function KPIBoardPage() {
                 <LineChart data={historicalData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                  <YAxis yAxisId="left" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                  <YAxis yAxisId="left" tickFormatter={(v) => formatCurrencyAbbrev(v)} tick={{ fontSize: 12 }} />
                   <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v}mo`} tick={{ fontSize: 12 }} />
                   <RechartsTooltip
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}
@@ -904,7 +904,7 @@ export default function KPIBoardPage() {
                 <LineChart data={historicalData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={(v) => formatCurrencyAbbrev(v)} tick={{ fontSize: 12 }} />
                   <RechartsTooltip
                     formatter={(value: number) => formatCurrency(value)}
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}

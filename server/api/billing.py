@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Request
@@ -5,13 +6,20 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from server.core.db import get_db, SessionLocal
 from server.core.security import get_current_user
-from server.core.plans import PlanTier, PLAN_DETAILS, Feature, FEATURE_LABELS, TRIAL_DURATION_DAYS, TRIAL_PLAN, minimum_plan_for_feature
+from server.core.plans import (
+    PlanTier, PLAN_DETAILS, Feature, FEATURE_LABELS, TRIAL_DURATION_DAYS, TRIAL_PLAN,
+    minimum_plan_for_feature, ANNUAL_LABEL, ANNUAL_MULTIPLIER, CURRENCY_SYMBOLS,
+    get_regional_price, normalize_currency, regional_tiers,
+)
 from server.core.subscription import get_user_subscription, start_trial
 from server.core import stripe_billing
+from server.core import razorpay_billing
+from server.core.billing_region import resolve_currency
 
 logger = logging.getLogger(__name__)
 
@@ -20,18 +28,81 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 class SubscribeBody(BaseModel):
     interval: str = "monthly"  # "monthly" | "annual"
+    # No currency or amount field on purpose: the Razorpay charge currency is
+    # decided by the server from the company's currency setting.
+
+
+# ---------------------------------------------------------------------------
+# Provider selection
+#
+# BILLING_PROVIDER=razorpay plus all three RAZORPAY_* secrets -> Razorpay.
+# Anything else -> Stripe, exactly as before (itself off unless
+# STRIPE_SECRET_KEY is set). With no billing env vars, payments stay off.
+# ---------------------------------------------------------------------------
+
+def billing_provider() -> str:
+    return "razorpay" if razorpay_billing.razorpay_enabled() else "stripe"
+
+
+def payments_enabled() -> bool:
+    if billing_provider() == "razorpay":
+        return True
+    return stripe_billing.stripe_enabled()
+
+
+def _optional_user_id(request: Request) -> Optional[int]:
+    """Best-effort user id for a public endpoint. Used only to pick a display currency."""
+    try:
+        from server.core.security import decode_token, AUTH_COOKIE_NAME
+        token = None
+        authz = request.headers.get("authorization") or ""
+        if authz.lower().startswith("bearer "):
+            token = authz[7:].strip()
+        token = token or request.cookies.get(AUTH_COOKIE_NAME)
+        payload = decode_token(token) if token else None
+        return _parse_user_id((payload or {}).get("sub"))
+    except Exception:
+        return None
+
+
+def _display_currency(user_id: Optional[int], requested: Optional[str]) -> str:
+    """Currency for the plan list. Signed-in users see what they will be
+    charged (company currency). Signed-out visitors may pass ?currency= to
+    preview a price; it never reaches checkout."""
+    if user_id is None:
+        return normalize_currency(requested) or "USD"
+    db = SessionLocal()
+    try:
+        return resolve_currency(db, user_id)[0]
+    finally:
+        db.close()
 
 
 @router.get("/plans")
-def get_plans():
+def get_plans(request: Request, currency: Optional[str] = None):
+    provider = billing_provider()
+    display_currency = "USD"
+    offered = None
+    if provider == "razorpay":
+        display_currency = _display_currency(_optional_user_id(request), currency)
+        offered = set(regional_tiers(display_currency))
+
     plans = []
     for tier in [PlanTier.FREE, PlanTier.STARTER, PlanTier.GROWTH, PlanTier.SCALE]:
         info = PLAN_DETAILS[tier]
+        price_monthly = info["price_monthly"]
+        price_annual = info["price_annual"]
+        if offered is not None and tier != PlanTier.FREE:
+            # Razorpay: only tiers with a regional price are sold.
+            if tier.value not in offered:
+                continue
+            price_monthly = get_regional_price(tier.value, display_currency, "monthly")["amount"]
+            price_annual = get_regional_price(tier.value, display_currency, "annual")["amount"]
         plans.append({
             "id": tier.value,
             "name": info["name"],
-            "price_monthly": info["price_monthly"],
-            "price_annual": info["price_annual"],
+            "price_monthly": price_monthly,
+            "price_annual": price_annual,
             "tagline": info["tagline"],
             "max_companies": info["max_companies"],
             "max_simulations_per_month": info["max_simulations_per_month"],
@@ -40,7 +111,15 @@ def get_plans():
             "highlights": info["highlights"],
             "features": [f.value for f in info["features"]],
         })
-    return {"plans": plans, "payments_enabled": stripe_billing.stripe_enabled()}
+    return {
+        "plans": plans,
+        "payments_enabled": payments_enabled(),
+        "provider": provider,
+        "currency": display_currency,
+        "currency_symbol": CURRENCY_SYMBOLS.get(display_currency, ""),
+        "annual_label": ANNUAL_LABEL,
+        "annual_multiplier": ANNUAL_MULTIPLIER,
+    }
 
 
 @router.get("/subscription")
@@ -50,14 +129,28 @@ def get_subscription(
 ):
     sub = get_user_subscription(db, current_user.id)
     plan_info = PLAN_DETAILS.get(sub["plan"], PLAN_DETAILS[PlanTier.FREE])
-    return {
+    provider = billing_provider()
+    result = {
         **sub,
         "plan_name": plan_info["name"],
         "plan_price": plan_info["price_monthly"],
         "plan_highlights": plan_info["highlights"],
         "trial_duration_days": TRIAL_DURATION_DAYS,
-        "payments_enabled": stripe_billing.stripe_enabled(),
+        "payments_enabled": payments_enabled(),
+        "provider": provider,
+        "currency": "USD",
     }
+    if provider == "razorpay":
+        rz = _active_razorpay_subscription(db, current_user.id)
+        if rz:
+            monthly = get_regional_price(rz["plan"], rz["currency"], "monthly")
+            result["currency"] = rz["currency"]
+            result["plan_price"] = monthly["amount"] if monthly else rz["amount"]
+            result["has_payment_method"] = True
+            result["razorpay_subscription_id"] = rz["razorpay_subscription_id"]
+        else:
+            result["currency"] = resolve_currency(db, current_user.id)[0]
+    return result
 
 
 @router.post("/start-trial")
@@ -89,6 +182,9 @@ def subscribe(
     plan_info = PLAN_DETAILS[plan_id]
     if plan_info["price_monthly"] == 0:
         return {"message": "Free plan activated", "plan": plan_id}
+
+    if billing_provider() == "razorpay":
+        return _razorpay_subscribe(plan_id, body, current_user, db)
 
     if not stripe_billing.stripe_enabled():
         raise HTTPException(
@@ -143,7 +239,10 @@ def cancel_subscription(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Cancellation is handled through the Stripe customer portal."""
+    """Stripe: cancellation goes through the customer portal.
+    Razorpay: cancel the active subscription at the end of the current cycle."""
+    if billing_provider() == "razorpay":
+        return _razorpay_cancel(current_user, db)
     return billing_portal(current_user=current_user, db=db)
 
 
@@ -540,6 +639,441 @@ async def stripe_webhook(request: Request):
             status_code=500,
             detail="Checkout could not be matched to a user and was saved for reconciliation. Stripe should retry.",
         )
+
+    return {"received": True}
+
+
+# ---------------------------------------------------------------------------
+# Razorpay
+#
+# Flow: POST /billing/subscribe/{plan} creates a Razorpay subscription for the
+# server-chosen (tier, currency, interval) plan id and returns
+# {subscription_id, key_id} for Razorpay Checkout. After payment the client
+# posts the handler response to /billing/razorpay/verify; the signature is
+# checked and the subscription is re-fetched from Razorpay. Access changes
+# only from that fetched state or from a signature-verified webhook at
+# /billing/razorpay/webhook. Amounts and plans from the client are ignored.
+# ---------------------------------------------------------------------------
+
+class RazorpayVerifyBody(BaseModel):
+    razorpay_payment_id: str
+    razorpay_subscription_id: str
+    razorpay_signature: str
+
+
+# Razorpay subscription status -> local subscriptions.status. None = no change
+# (created/authenticated: no money has moved yet, so no access is granted).
+RAZORPAY_STATUS_MAP = {
+    "created": None,
+    "authenticated": None,
+    "active": "active",
+    "pending": "past_due",
+    "halted": "past_due",
+    "cancelled": "canceled",
+    "completed": "canceled",
+    "expired": "canceled",
+}
+
+# Fallback when the payload carries no subscription status.
+RAZORPAY_EVENT_STATUS = {
+    "subscription.activated": "active",
+    "subscription.charged": "active",
+    "subscription.resumed": "active",
+    "subscription.pending": "past_due",
+    "subscription.halted": "past_due",
+    "subscription.cancelled": "canceled",
+    "subscription.completed": "canceled",
+}
+
+RZ_SUB_COLUMNS = (
+    "id, user_id, razorpay_subscription_id, razorpay_customer_id, razorpay_plan_id, "
+    "plan, interval, currency, amount, status, last_event_at"
+)
+
+
+def _rz_row_to_dict(row) -> Optional[dict]:
+    if not row:
+        return None
+    keys = [k.strip() for k in RZ_SUB_COLUMNS.split(",")]
+    return dict(zip(keys, row))
+
+
+def _rz_by_subscription_id(db: Session, subscription_id: Optional[str]) -> Optional[dict]:
+    if not subscription_id:
+        return None
+    row = db.execute(
+        text(f"SELECT {RZ_SUB_COLUMNS} FROM razorpay_subscriptions WHERE razorpay_subscription_id = :sid"),
+        {"sid": subscription_id},
+    ).fetchone()
+    return _rz_row_to_dict(row)
+
+
+def _active_razorpay_subscription(db: Session, user_id: int) -> Optional[dict]:
+    try:
+        row = db.execute(
+            text(f"""SELECT {RZ_SUB_COLUMNS} FROM razorpay_subscriptions
+                     WHERE user_id = :uid AND status = 'active'
+                     ORDER BY id DESC LIMIT 1"""),
+            {"uid": user_id},
+        ).fetchone()
+    except Exception:
+        db.rollback()
+        return None
+    return _rz_row_to_dict(row)
+
+
+def _latest_razorpay_customer_id(db: Session, user_id: int) -> Optional[str]:
+    row = db.execute(
+        text("""SELECT razorpay_customer_id FROM razorpay_subscriptions
+                WHERE user_id = :uid AND razorpay_customer_id IS NOT NULL
+                ORDER BY id DESC LIMIT 1"""),
+        {"uid": user_id},
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _ts(value) -> Optional[datetime]:
+    if value in (None, "", 0):
+        return None
+    try:
+        return datetime.utcfromtimestamp(int(value))
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def _apply_razorpay_state(db: Session, rz: dict, local_status: Optional[str], entity: dict,
+                          event_at: Optional[int] = None) -> bool:
+    """Write verified Razorpay state to razorpay_subscriptions and subscriptions.
+
+    Does not commit; the caller owns the transaction. Returns True if applied.
+    """
+    entity = entity if isinstance(entity, dict) else {}
+    if event_at is not None and rz.get("last_event_at") and int(event_at) < int(rz["last_event_at"]):
+        logger.info(
+            f"Razorpay: ignoring out-of-order event for {rz['razorpay_subscription_id']} "
+            f"({event_at} < {rz['last_event_at']})"
+        )
+        return False
+
+    # Tier comes from the plan Razorpay is charging, else from the row the
+    # server wrote at checkout. Never from the client.
+    plan = rz["plan"]
+    currency = rz["currency"]
+    interval = rz["interval"]
+    mapped = razorpay_billing.tier_for_plan_id(entity.get("plan_id"))
+    if mapped:
+        if mapped["tier"] != plan:
+            logger.warning(
+                f"Razorpay: subscription {rz['razorpay_subscription_id']} plan_id maps to "
+                f"{mapped['tier']}, row says {plan}; using the plan_id"
+            )
+        plan, currency, interval = mapped["tier"], mapped["currency"], mapped["interval"]
+
+    now = datetime.utcnow()
+    rz_status = entity.get("status") or {
+        "active": "active", "past_due": "halted", "canceled": "cancelled",
+    }.get(local_status or "")
+    db.execute(
+        text("""UPDATE razorpay_subscriptions
+                SET status = COALESCE(:status, status), plan = :plan, currency = :currency,
+                    interval = :interval,
+                    razorpay_customer_id = COALESCE(:cid, razorpay_customer_id),
+                    razorpay_plan_id = COALESCE(:pid, razorpay_plan_id),
+                    last_event_at = COALESCE(:eat, last_event_at), updated_at = :now
+                WHERE id = :id"""),
+        {
+            "status": rz_status, "plan": plan, "currency": currency, "interval": interval,
+            "cid": entity.get("customer_id"), "pid": entity.get("plan_id"),
+            "eat": event_at, "now": now, "id": rz["id"],
+        },
+    )
+
+    if local_status is None:
+        return True
+
+    monthly = get_regional_price(plan, currency, "monthly")
+    # subscriptions.monthly_price is USD. Only USD subscriptions get a price
+    # here; INR/AED amounts live in razorpay_subscriptions (amount + currency).
+    # Admin MRR (server/core/admin_mrr.py) counts every active Razorpay
+    # subscription from razorpay_subscriptions, FX-converted, and skips this
+    # row, so nothing is counted twice.
+    monthly_price = float(monthly["amount"]) if (monthly and currency == "USD") else 0.0
+
+    params = {
+        "uid": rz["user_id"],
+        "plan": plan,
+        "status": local_status,
+        "pstart": _ts(entity.get("current_start")),
+        "pend": _ts(entity.get("current_end")),
+        "price": monthly_price,
+        "now": now,
+    }
+    existing = db.execute(
+        text("SELECT id FROM subscriptions WHERE user_id = :uid ORDER BY created_at DESC LIMIT 1"),
+        {"uid": rz["user_id"]},
+    ).fetchone()
+    if existing:
+        db.execute(
+            text("""UPDATE subscriptions
+                    SET plan = :plan, status = :status,
+                        current_period_start = COALESCE(:pstart, current_period_start),
+                        current_period_end = COALESCE(:pend, current_period_end),
+                        monthly_price = :price, updated_at = :now
+                    WHERE id = :sid"""),
+            {**params, "sid": existing[0]},
+        )
+    else:
+        db.execute(
+            text("""INSERT INTO subscriptions
+                        (user_id, plan, status, current_period_start, current_period_end,
+                         monthly_price, created_at, updated_at)
+                    VALUES (:uid, :plan, :status, :pstart, :pend, :price, :now, :now)"""),
+            params,
+        )
+    logger.info(f"Billing (razorpay): user {rz['user_id']} -> plan={plan} status={local_status}")
+    return True
+
+
+def _razorpay_subscribe(plan_id: str, body: Optional[SubscribeBody], current_user, db: Session):
+    interval = body.interval if body else "monthly"
+    if interval not in ("monthly", "annual"):
+        raise HTTPException(status_code=400, detail="interval must be 'monthly' or 'annual'")
+    # Server-decided from the company currency setting; never from the client.
+    currency, _source = resolve_currency(db, current_user.id)
+    price = get_regional_price(plan_id, currency, interval)
+    if not price:
+        raise HTTPException(status_code=404, detail="This plan is not available in your region yet.")
+    rz_plan_id = razorpay_billing.plan_id_for(plan_id, currency, interval)
+    if not rz_plan_id:
+        logger.error(f"Razorpay: {price['plan_env']} is not set")
+        raise HTTPException(status_code=503, detail="Payments are not configured yet. Please try again later.")
+
+    if _active_razorpay_subscription(db, current_user.id):
+        raise HTTPException(status_code=400, detail="You already have an active subscription.")
+
+    email = getattr(current_user, "email", None)
+    name = getattr(current_user, "display_name", None)
+    try:
+        customer_id = razorpay_billing.get_or_create_customer(
+            email, name, current_user.id, _latest_razorpay_customer_id(db, current_user.id)
+        )
+        sub = razorpay_billing.create_subscription(
+            rz_plan_id, interval, current_user.id, plan_id, currency, customer_id
+        )
+    except razorpay_billing.RazorpayError as e:
+        logger.error(f"Razorpay checkout creation failed for user {current_user.id}: {e}")
+        raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
+
+    now = datetime.utcnow()
+    db.execute(
+        text("""INSERT INTO razorpay_subscriptions
+                    (user_id, razorpay_subscription_id, razorpay_customer_id, razorpay_plan_id,
+                     plan, interval, currency, amount, status, created_at, updated_at)
+                VALUES (:uid, :sid, :cid, :pid, :plan, :interval, :currency, :amount,
+                        :status, :now, :now)"""),
+        {
+            "uid": current_user.id, "sid": sub["id"], "cid": customer_id, "pid": rz_plan_id,
+            "plan": plan_id, "interval": interval, "currency": currency,
+            "amount": price["amount"], "status": sub.get("status") or "created", "now": now,
+        },
+    )
+    db.commit()
+
+    return {
+        "provider": "razorpay",
+        "subscription_id": sub["id"],
+        "key_id": razorpay_billing.key_id(),
+        "plan": plan_id,
+        "plan_name": PLAN_DETAILS[plan_id]["name"],
+        "interval": interval,
+        "currency": currency,
+        "amount": price["amount"],
+        "prefill": {"email": email or "", "name": name or ""},
+    }
+
+
+@router.post("/razorpay/verify")
+def razorpay_verify(
+    body: RazorpayVerifyBody,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Verify the Checkout handler signature, then re-fetch the subscription.
+
+    The signature proves the payment belongs to this subscription. Access is
+    granted from the subscription state Razorpay returns, not from the client.
+    """
+    if billing_provider() != "razorpay":
+        raise HTTPException(status_code=503, detail="Payments are not configured yet.")
+
+    rz = _rz_by_subscription_id(db, body.razorpay_subscription_id)
+    if not rz or rz["user_id"] != current_user.id:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    if not razorpay_billing.verify_payment_signature(
+        body.razorpay_payment_id, rz["razorpay_subscription_id"], body.razorpay_signature
+    ):
+        logger.warning(f"Razorpay: bad payment signature for user {current_user.id}")
+        raise HTTPException(status_code=400, detail="Payment verification failed")
+
+    try:
+        entity = razorpay_billing.fetch_subscription(rz["razorpay_subscription_id"])
+    except razorpay_billing.RazorpayError as e:
+        logger.warning(f"Razorpay: fetch after verify failed, waiting for webhook: {e}")
+        return {"verified": True, "status": "pending"}
+
+    local_status = RAZORPAY_STATUS_MAP.get(entity.get("status"))
+    _apply_razorpay_state(db, rz, local_status, entity)
+    db.commit()
+    return {"verified": True, "status": local_status or "pending"}
+
+
+def _razorpay_cancel(current_user, db: Session):
+    rz = _active_razorpay_subscription(db, current_user.id)
+    if not rz:
+        raise HTTPException(status_code=400, detail="No active subscription to cancel.")
+    try:
+        entity = razorpay_billing.cancel_subscription(rz["razorpay_subscription_id"], at_cycle_end=True)
+    except razorpay_billing.RazorpayError as e:
+        logger.error(f"Razorpay cancel failed for user {current_user.id}: {e}")
+        raise HTTPException(status_code=502, detail="Could not cancel. Please try again.")
+    # Access continues until the cycle ends; the subscription.cancelled
+    # webhook downgrades the row then.
+    end = _ts((entity or {}).get("current_end"))
+    return {
+        "cancelled_at_cycle_end": True,
+        "current_period_end": end.isoformat() if end else None,
+        "message": "Your subscription will end at the close of the current billing period.",
+    }
+
+
+def _webhook_event_id(request: Request, raw: bytes) -> str:
+    header_id = (request.headers.get("x-razorpay-event-id") or "").strip()
+    return header_id or ("sha256:" + hashlib.sha256(raw).hexdigest())
+
+
+def _process_razorpay_event(db: Session, etype: str, event: dict) -> Optional[str]:
+    """Apply one verified event. Returns the subscription id it touched, if any."""
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    sub_entity = ((payload.get("subscription") or {}).get("entity")) or {}
+    pay_entity = ((payload.get("payment") or {}).get("entity")) or {}
+    event_at = event.get("created_at")
+    try:
+        event_at = int(event_at) if event_at is not None else None
+    except (TypeError, ValueError):
+        event_at = None
+
+    if etype.startswith("subscription."):
+        sub_id = sub_entity.get("id")
+        rz = _rz_by_subscription_id(db, sub_id)
+        if not rz:
+            rz = _adopt_unknown_subscription(db, sub_entity)
+        if not rz:
+            # Expected on a shared Razorpay account: events for other products' plans.
+            logger.info(f"Razorpay webhook {etype}: ignoring subscription {sub_id} (not ours)")
+            return sub_id
+        if sub_entity.get("status"):
+            local_status = RAZORPAY_STATUS_MAP.get(sub_entity["status"])
+        else:
+            local_status = RAZORPAY_EVENT_STATUS.get(etype)
+        _apply_razorpay_state(db, rz, local_status, sub_entity, event_at)
+        return sub_id
+
+    if etype == "payment.failed":
+        sub_id = pay_entity.get("subscription_id") or sub_entity.get("id")
+        # Match on the subscription id only. The Razorpay account is shared with
+        # other products, so a customer id can belong to someone's payment for a
+        # different product; renewal failures also arrive as subscription.halted.
+        rz = _rz_by_subscription_id(db, sub_id) if sub_id else None
+        # Only a failed renewal of a live subscription downgrades. A declined
+        # first attempt in Checkout must not end an in-app trial.
+        if rz and rz["status"] == "active":
+            _apply_razorpay_state(db, rz, "past_due", {"status": "pending"}, event_at)
+        return rz["razorpay_subscription_id"] if rz else sub_id
+
+    return sub_entity.get("id")
+
+
+def _adopt_unknown_subscription(db: Session, sub_entity: dict) -> Optional[dict]:
+    """A signed event for a subscription with no local row (e.g. the insert at
+    checkout failed). Adopt it only if the server-set notes name a real user
+    and the plan id is one of ours."""
+    notes = sub_entity.get("notes") if isinstance(sub_entity.get("notes"), dict) else {}
+    user_id = _accept_user_id(db, _parse_user_id(notes.get("fc_user_id")))
+    mapped = razorpay_billing.tier_for_plan_id(sub_entity.get("plan_id"))
+    if not user_id or not mapped or not sub_entity.get("id"):
+        return None
+    now = datetime.utcnow()
+    db.execute(
+        text("""INSERT INTO razorpay_subscriptions
+                    (user_id, razorpay_subscription_id, razorpay_customer_id, razorpay_plan_id,
+                     plan, interval, currency, amount, status, created_at, updated_at)
+                VALUES (:uid, :sid, :cid, :pid, :plan, :interval, :currency, :amount,
+                        'created', :now, :now)"""),
+        {
+            "uid": user_id, "sid": sub_entity["id"], "cid": sub_entity.get("customer_id"),
+            "pid": sub_entity.get("plan_id"), "plan": mapped["tier"], "interval": mapped["interval"],
+            "currency": mapped["currency"], "amount": mapped["amount"], "now": now,
+        },
+    )
+    return _rz_by_subscription_id(db, sub_entity["id"])
+
+
+@router.post("/razorpay/webhook")
+async def razorpay_webhook(request: Request):
+    """Razorpay webhook. CSRF-exempt; authenticated by X-Razorpay-Signature.
+
+    Fails closed: with RAZORPAY_WEBHOOK_SECRET unset every delivery is refused.
+    Idempotent on X-Razorpay-Event-Id (falls back to a hash of the raw body).
+    Any processing error returns 500 so Razorpay redelivers.
+    """
+    raw = await request.body()
+    if not razorpay_billing._webhook_secret():
+        raise HTTPException(status_code=503, detail="Payments not configured")
+    if not razorpay_billing.verify_webhook_signature(raw, request.headers.get("x-razorpay-signature")):
+        logger.warning("Razorpay webhook signature verification failed")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    try:
+        event = json.loads(raw)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    if not isinstance(event, dict):
+        raise HTTPException(status_code=400, detail="Invalid payload")
+
+    etype = str(event.get("event") or "")
+    event_id = _webhook_event_id(request, raw)
+
+    db = SessionLocal()
+    try:
+        seen = db.execute(
+            text("SELECT 1 FROM razorpay_webhook_events WHERE event_id = :eid"),
+            {"eid": event_id},
+        ).fetchone()
+        if seen:
+            return {"received": True, "duplicate": True}
+
+        sub_id = _process_razorpay_event(db, etype, event)
+        db.execute(
+            text("""INSERT INTO razorpay_webhook_events
+                        (event_id, event_type, razorpay_subscription_id, processed_at)
+                    VALUES (:eid, :etype, :sid, :now)"""),
+            {"eid": event_id, "etype": etype or "unknown", "sid": sub_id, "now": datetime.utcnow()},
+        )
+        db.commit()
+    except IntegrityError:
+        # A concurrent delivery of the same event committed first.
+        db.rollback()
+        return {"received": True, "duplicate": True}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception(f"Razorpay webhook {etype} ({event_id}) failed; returning 500 for redelivery")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+    finally:
+        db.close()
 
     return {"received": True}
 

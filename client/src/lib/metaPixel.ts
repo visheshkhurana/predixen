@@ -1,17 +1,20 @@
 /**
  * Meta (Facebook) Pixel — privacy-scoped loader.
  *
- * Loads ONLY when VITE_META_PIXEL_ID is set, and only fires on public
+ * Loads ONLY when VITE_META_PIXEL_ID is set and the visitor accepted
+ * tracking (lib/consent.ts), and only fires on public
  * marketing surfaces + the subscription checkout confirmation, per our
  * Privacy Policy. Never active inside the core app.
  */
+
+import { hasTrackingConsent } from './consent';
 
 const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || '';
 
 let loaded = false;
 
 function ensureLoaded(): boolean {
-  if (!PIXEL_ID) return false;
+  if (!PIXEL_ID || !hasTrackingConsent()) return false;
   if (loaded) return true;
   /* eslint-disable */
   (function (f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) {

@@ -14,6 +14,7 @@ import { FCLogo } from "@/components/FCLogo";
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
 import { getBrowserDistinctId } from '@/lib/posthog';
+import { readFirstTouchAttribution } from '@/lib/attribution';
 import {
   forgotPasswordAccepted,
   forgotPasswordFailureCopy,
@@ -335,6 +336,11 @@ export default function AuthPage({
     const distinctId = await getBrowserDistinctId();
     const params = new URLSearchParams();
     if (distinctId) params.set('distinct_id', distinctId);
+    // First-touch campaign rides along so a Google signup is attributed like an
+    // email one; the server keeps it beside the OAuth state, not in Google's URL.
+    for (const [key, value] of Object.entries(readFirstTouchAttribution())) {
+      if (value) params.set(key, String(value));
+    }
     const qs = params.toString();
     window.location.assign(`/api/auth/${provider}/start${qs ? `?${qs}` : ''}`);
   };
@@ -405,7 +411,7 @@ export default function AuthPage({
 
           <div className="mt-12 pt-8 border-t border-white/[0.06]">
             <div className="grid grid-cols-4 gap-6">
-              <AnimatedMetric label="Data Connectors" value="34+" delay={200} />
+              <AnimatedMetric label="Data Connectors" value="36+" delay={200} />
               <AnimatedMetric label="Metrics Tracked" value="24+" delay={400} />
               <AnimatedMetric label="Iterations / Sim" value="10K" delay={600} />
               <AnimatedMetric label="Encryption" value="256-bit" delay={800} />

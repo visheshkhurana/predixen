@@ -81,7 +81,9 @@ class SalesforceConnector(BaseConnector):
             all_records.extend(data.get("records", []))
 
             next_url = data.get("nextRecordsUrl")
-            while next_url:
+            # The page link comes from the remote server: follow a path on the
+            # same instance only, never an absolute URL.
+            while isinstance(next_url, str) and next_url.startswith("/") and not next_url.startswith("//"):
                 resp = await client.get(next_url)
                 if resp.status_code != 200:
                     break
