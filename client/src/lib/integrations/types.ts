@@ -24,6 +24,8 @@ export interface IntegrationConfig {
   authType: AuthType;
   status: IntegrationStatus;
   isComingSoon?: boolean;
+  /** Backend connector id (server/connectors/registry.py) that a connect goes to. */
+  connectorProviderId?: string;
   
   oauthConfig?: {
     authUrl: string;

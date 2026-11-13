@@ -14,6 +14,7 @@ import path from "path";
 import compression from "compression";
 import { geoRestrict } from "./middleware/geoRestrict";
 import { legacyRedirects } from "./middleware/legacyRedirects";
+import { apiProxyGuard } from "./middleware/apiProxyGuard";
 import { aiAgentLog } from "./middleware/aiAgentLog";
 import { requestId } from "./middleware/requestId";
 import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
@@ -768,13 +769,11 @@ const apiProxy = createProxyMiddleware({
   },
 });
 
-const LOCAL_API_PREFIXES = ["/ai/", "/notion/", "/messaging/"];
-app.use("/api", (req, res, next) => {
-  if (LOCAL_API_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
-    return next();
-  }
-  return apiProxy(req, res, next);
-});
+// Which `/api/*` requests this process answers itself and which belong to FastAPI
+// is decided by asking the router, not by a prefix list. See
+// `server/middleware/apiProxyGuard.ts` for why the list could not be made correct:
+// `/api/ai/` protected two Express routes and shadowed FastAPI's `/api/ai/feedback`.
+app.use("/api", apiProxyGuard(app, apiProxy));
 
 app.use(
   "/notifications",
