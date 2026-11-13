@@ -34,7 +34,7 @@ export default function NotFound() {
               Go to Login
             </Button>
           </Link>
-          <Link href="/demo">
+          <Link href="/demo/enter">
             <Button variant="ghost" data-testid="button-see-demo">
               <Sparkles className="h-4 w-4 mr-2" />
               See Demo

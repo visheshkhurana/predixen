@@ -22,6 +22,7 @@ const TERM_MAP: Record<string, Partial<IndustryTerms>> = {
   marketplace: { customer: 'user', customers: 'users', revenue: 'GMV / take-rate', product: 'listing', churn: 'user churn', acquisition: 'user acquisition', unit: 'transaction' },
   climate: { customer: 'customer', customers: 'customers', revenue: 'revenue', product: 'solution', churn: 'contract loss', acquisition: 'customer acquisition', unit: 'installation' },
   agritech: { customer: 'farmer', customers: 'farmers', revenue: 'revenue', product: 'solution', churn: 'farmer attrition', acquisition: 'farmer onboarding', unit: 'farm' },
+  agency: { customer: 'client', customers: 'clients', revenue: 'fee revenue', product: 'service', churn: 'client churn', acquisition: 'client acquisition', unit: 'project' },
   deeptech: { customer: 'client', customers: 'clients', revenue: 'contract revenue', product: 'product', churn: 'client churn', acquisition: 'client acquisition', unit: 'unit' },
 };
 

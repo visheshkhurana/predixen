@@ -32,6 +32,14 @@ test("legacy redirects", async (t) => {
     assert.equal(r.headers.get("location"), "/tools/runway-calculator");
   });
 
+  await t.test("refund / cancellation policy aliases 301 to /refund-policy", async () => {
+    for (const p of ["/cancellation-policy", "/refunds", "/refund", "/Cancellation-Policy/"]) {
+      const r = await get(p);
+      assert.equal(r.status, 301, p);
+      assert.equal(r.headers.get("location"), "/refund-policy", p);
+    }
+  });
+
   await t.test("trailing slash and case are normalised", async () => {
     for (const p of ["/runway-calculator/", "/Runway-Calculator"]) {
       const r = await get(p);

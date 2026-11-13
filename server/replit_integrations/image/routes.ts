@@ -1,8 +1,11 @@
 import type { Express, Request, Response } from "express";
 import { openai } from "./client";
+import { requireAuth } from "../../middleware/requireAuth";
+import { aiUserRateLimit } from "../../middleware/aiRateLimit";
 
 export function registerImageRoutes(app: Express): void {
-  app.post("/api/generate-image", async (req: Request, res: Response) => {
+  // Not mounted by server/index.ts today. If it is, it must not call OpenAI anonymously.
+  app.post("/api/generate-image", requireAuth, aiUserRateLimit(), async (req: Request, res: Response) => {
     try {
       const { prompt, size = "1024x1024" } = req.body;
 

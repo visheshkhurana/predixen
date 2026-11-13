@@ -168,4 +168,4 @@ def test_the_page_is_prerendered_with_its_own_canonical() -> None:
     body = prerender.split("function buildDilutionBodyContent", 1)[1]
     assert "amount raised divided by the post-money valuation" in body
     assert "dilutes existing holders and never the new investor" in body
-    assert 'href="/auth"' in body
+    assert 'href="/signup"' in body

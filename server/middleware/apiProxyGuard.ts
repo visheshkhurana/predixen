@@ -55,20 +55,31 @@ function stackOf(app: Application): RouterLayer[] {
  * conditions below are load-bearing rather than an over-tight check.
  */
 export function isAnsweredLocally(app: Application, method: string, url: string): boolean {
-  const verb = method.toLowerCase();
+  return answeredBy(stackOf(app), method.toLowerCase(), url);
+}
 
-  for (const layer of stackOf(app)) {
+function answeredBy(stack: RouterLayer[], verb: string, url: string): boolean {
+  for (const layer of stack) {
     const regexp = layer.regexp;
-    if (!regexp || !regexp.test(url)) continue;
+    if (!regexp) continue;
+    const match = regexp.exec(url);
+    if (!match) continue;
 
     if (layer.route) {
-      if (layer.route.methods?.[verb]) return true;
+      if (layer.route.methods?.[verb] || layer.route.methods?._all) return true;
       continue; // the path matches but this verb does not, e.g. GET where only POST is routed
     }
 
-    // A mounted sub-router or sub-app: it owns everything under its mount path,
-    // and only it can say whether it has a route for this path.
-    if (Array.isArray(layer.handle?.stack)) return true;
+    // A mounted sub-router or sub-app: only its own routes can say whether it
+    // answers this path. Ask it with the mount prefix trimmed, as Express does.
+    // Claiming the whole mount would shadow FastAPI routes under the same
+    // prefix: `/api/ai` is a sub-router (`router.use(requireAuth)`, #85) and
+    // FastAPI owns `/api/ai/feedback`.
+    const sub = layer.handle?.stack;
+    if (Array.isArray(sub)) {
+      const rest = url.slice(match[0].length);
+      if (answeredBy(sub as RouterLayer[], verb, rest.startsWith("/") ? rest : `/${rest}`)) return true;
+    }
   }
 
   return false;

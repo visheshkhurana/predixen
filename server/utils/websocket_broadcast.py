@@ -12,6 +12,17 @@ logger = logging.getLogger(__name__)
 
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", "http://localhost:5000")
 
+
+def internal_headers() -> Dict[str, str]:
+    """Headers for Express /internal/* routes.
+
+    Express requires ``x-internal-secret`` to equal INTERNAL_API_SECRET
+    (fails closed in production when unset). Read per call so a rotated
+    env value is picked up without re-import.
+    """
+    secret = os.environ.get("INTERNAL_API_SECRET", "")
+    return {"x-internal-secret": secret} if secret else {}
+
 async def broadcast_metric_update(
     company_id: int, 
     metrics: Dict[str, Any], 
@@ -27,6 +38,7 @@ async def broadcast_metric_update(
                     "metrics": metrics,
                     "source": source
                 },
+                headers=internal_headers(),
                 timeout=5.0
             )
             if response.status_code == 200:
@@ -58,6 +70,7 @@ async def broadcast_simulation_update(
                     "progress": progress,
                     "results": results
                 },
+                headers=internal_headers(),
                 timeout=5.0
             )
             if response.status_code == 200:
@@ -87,6 +100,7 @@ async def broadcast_truth_scan_update(
                     "metrics": metrics or {},
                     "status": status
                 },
+                headers=internal_headers(),
                 timeout=5.0
             )
             if response.status_code == 200:
@@ -116,6 +130,7 @@ def broadcast_metric_update_sync(
                     "metrics": metrics,
                     "source": source
                 },
+                headers=internal_headers(),
                 timeout=5.0
             )
             return response.status_code == 200
@@ -139,6 +154,7 @@ def broadcast_truth_scan_update_sync(
                     "metrics": metrics or {},
                     "status": status
                 },
+                headers=internal_headers(),
                 timeout=5.0
             )
             return response.status_code == 200

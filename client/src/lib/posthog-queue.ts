@@ -10,12 +10,15 @@ export type PostHogClient = {
   identify: (distinctId: string, traits?: Record<string, unknown>) => void;
   reset: () => void;
   capture: (event: string, properties?: Record<string, unknown>) => void;
+  register?: (properties: Record<string, unknown>) => void;
+  unregister?: (property: string) => void;
 };
 
 export type QueuedPostHogCall =
   | { kind: "identify"; distinctId: string; traits: Record<string, unknown> }
   | { kind: "reset" }
-  | { kind: "capture"; event: string; properties?: Record<string, unknown> };
+  | { kind: "capture"; event: string; properties?: Record<string, unknown> }
+  | { kind: "register"; properties: Record<string, unknown>; unset?: string[] };
 
 export function flushPostHogQueue(
   client: PostHogClient,
@@ -27,6 +30,13 @@ export function flushPostHogQueue(
       client.identify(call.distinctId, call.traits);
     } else if (call.kind === "reset") {
       client.reset();
+    } else if (call.kind === "register") {
+      for (const key of call.unset ?? []) {
+        client.unregister?.(key);
+      }
+      if (Object.keys(call.properties).length > 0) {
+        client.register?.(call.properties);
+      }
     } else {
       client.capture(call.event, call.properties);
     }
