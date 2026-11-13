@@ -40,7 +40,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
-import { IntegrationCard, ApiKeyConnectModal, StripeConnectModal } from "@/components/integrations";
+import { IntegrationCard, ApiKeyConnectModal, StripeConnectModal, SlackLinkCard } from "@/components/integrations";
 import { useFounderStore } from "@/store/founderStore";
 import { 
   IntegrationConfig, 
@@ -604,6 +604,8 @@ export default function IntegrationsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const companyId = useFounderStore((s) => s.currentCompany?.id) ?? 0;
+  // The Slack card always uses the signed-in user's current company.
+  const slackCompanyId = companyId;
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
   const [selectedConnectorCategory, setSelectedConnectorCategory] = useState<ConnectorCategory>("all");
   
@@ -990,6 +992,8 @@ export default function IntegrationsPage() {
           Connect your accounting, payroll, and ERP systems to import financial data automatically
         </p>
       </div>
+
+      <SlackLinkCard companyId={slackCompanyId} />
 
       {/* Quick Setup Banner */}
       {recommendedProviders.length > 0 && (

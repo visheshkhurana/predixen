@@ -5,7 +5,7 @@ import viteConfig from "../vite.config";
 import fs from "fs";
 import path from "path";
 import { nanoid } from "nanoid";
-import { renderHtmlPage } from "./seo-prerender";
+import { renderHtmlPageWithLookups } from "./survival-share-status";
 
 const viteLogger = createLogger();
 
@@ -55,7 +55,7 @@ export async function setupVite(server: Server, app: Express) {
       );
       const page = await vite.transformIndexHtml(url, template);
       const cleanPath = url.split("?")[0].split("#")[0];
-      const rendered = renderHtmlPage(page, cleanPath);
+      const rendered = await renderHtmlPageWithLookups(page, cleanPath);
       res.status(rendered.status).set({ "Content-Type": "text/html" }).end(rendered.html);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
