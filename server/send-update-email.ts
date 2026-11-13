@@ -1,5 +1,6 @@
 // One-time script to send v1.0.1 Decisions page UI enhancement update email via Resend integration
 import { Resend } from 'resend';
+import { loadRecipientEmails } from './ops-recipients';
 
 async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -39,12 +40,7 @@ async function sendUpdateEmails() {
 
   const resend = new Resend(apiKey);
 
-  const recipients = [
-    'nikita@founderconsole.ai',
-    'nikita.luther@gmail.com',
-    'nikitafl2024@gmail.com',
-    'vysheshk@gmail.com'
-  ];
+  const recipients = loadRecipientEmails();
 
   const senderEmail = 'FounderConsole Updates <new1@founderconsole.ai>';
   const subject = 'FounderConsole v1.0.1: Decisions Page UI Enhancements — Why We Made These Changes';

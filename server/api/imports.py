@@ -101,9 +101,13 @@ def extract_periods_from_rows(rows: List[Dict[str, Any]]) -> List[str]:
     return sorted(list(periods), reverse=True)
 
 
-def parse_excel_to_rows(file_path: str) -> List[Dict[str, Any]]:
+def parse_excel_to_rows(
+    file_path: str,
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """Parse Excel file and convert to row format for classification."""
-    result = process_termina_excel(file_path)
+    result = process_termina_excel(file_path, company_id=company_id, user_id=user_id)
     
     raw_metrics = result.get('raw_metrics', result.get('baseline_data', {}))
     time_series = result.get('time_series', {})
@@ -133,9 +137,13 @@ def parse_excel_to_rows(file_path: str) -> List[Dict[str, Any]]:
     return rows
 
 
-def parse_pdf_to_rows(file_path: str) -> List[Dict[str, Any]]:
+def parse_pdf_to_rows(
+    file_path: str,
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """Parse PDF file and convert to row format for classification."""
-    result = process_termina_pdf(file_path)
+    result = process_termina_pdf(file_path, company_id=company_id, user_id=user_id)
     
     raw_metrics = result.get('raw_metrics', result)
     
@@ -183,7 +191,7 @@ async def upload_excel(
             tmp_path = tmp_file.name
         
         try:
-            rows = parse_excel_to_rows(tmp_path)
+            rows = parse_excel_to_rows(tmp_path, company_id=company_id, user_id=current_user.id)
             
             classification_result = classify_all_rows(rows)
             
@@ -265,7 +273,7 @@ async def upload_pdf(
             tmp_path = tmp_file.name
         
         try:
-            rows = parse_pdf_to_rows(tmp_path)
+            rows = parse_pdf_to_rows(tmp_path, company_id=company_id, user_id=current_user.id)
             
             classification_result = classify_all_rows(rows)
             

@@ -16,7 +16,7 @@ import { ScenarioTagManager } from '@/components/ScenarioTagManager';
 import { ScenarioTemplateGallery, TEMPLATE_CARDS, type TemplateCard } from '@/components/ScenarioTemplateGallery';
 import { GuidedScenarioSlider } from '@/components/GuidedScenarioSlider';
 import { SCENARIO_SLIDER_TOOLTIPS } from '@/lib/metricDefinitions';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 import {
   ChevronLeft,
   ChevronRight,
@@ -171,14 +171,10 @@ function generateNarrativeFeedback(params: ScenarioParams, runwayImpact: ReturnT
   }
   
   if (params.fundraise_amount > 0 && params.fundraise_month) {
-    const amount = params.fundraise_amount >= 1000000 
-      ? `$${(params.fundraise_amount / 1000000).toFixed(1)}M` 
-      : `$${(params.fundraise_amount / 1000).toFixed(0)}K`;
+    const amount = formatCurrencyAbbrev(params.fundraise_amount);
     changes.push(`raising ${amount} in month ${params.fundraise_month}`);
   } else if (params.fundraise_amount > 0) {
-    const amount = params.fundraise_amount >= 1000000 
-      ? `$${(params.fundraise_amount / 1000000).toFixed(1)}M` 
-      : `$${(params.fundraise_amount / 1000).toFixed(0)}K`;
+    const amount = formatCurrencyAbbrev(params.fundraise_amount);
     changes.push(`planning a ${amount} fundraise (month not yet set)`);
   }
   
@@ -437,9 +433,7 @@ export function ScenarioWizard({
   };
 
   const formatCurrency = (value: number) => {
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-    return `$${value}`;
+    return formatCurrencyAbbrev(value);
   };
 
   return (

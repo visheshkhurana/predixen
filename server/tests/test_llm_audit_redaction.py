@@ -352,6 +352,8 @@ def test_smart_chat_redacts_query_and_context_before_gemini(db, monkeypatch):
     app.include_router(llm_api.router)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=9)
+    # Main gates /llm/smart-chat to the platform owner (require_platform_admin).
+    app.dependency_overrides[llm_api.require_platform_admin] = lambda: SimpleNamespace(id=9)
 
     with patch("server.lib.llm.gemini_client.httpx.Client", return_value=http):
         response = TestClient(app).post(
