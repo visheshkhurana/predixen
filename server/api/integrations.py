@@ -44,8 +44,9 @@ def get_integration_status(
     """
     company = get_user_company(db, company_id, current_user)
     
-    demo_user = db.query(User).filter(User.id == company.user_id, User.email == "demo@founderconsole.ai").first()
-    if demo_user:
+    from server.core.demo_workspace import is_demo_email
+    owner = db.query(User).filter(User.id == company.user_id).first()
+    if owner is not None and is_demo_email(owner.email):
         from datetime import datetime, timedelta
         last_sync_time = (datetime.utcnow() - timedelta(hours=2)).isoformat()
         return {

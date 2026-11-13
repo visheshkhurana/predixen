@@ -36,6 +36,7 @@ import { useFounderStore } from '@/store/founderStore';
 import { useCompanies, useUpdateCompany, useDeleteCompany } from '@/api/hooks';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { isDemoEmail } from '@/lib/demo';
 
 // @radix-ui/react-select is the largest vendor still statically reachable from
 // the entry (CompanySwitcher is imported by the always-loaded sidebar). The
@@ -130,7 +131,7 @@ const CURRENCY_LABELS: Record<string, string> = {
 
 export function CompanySwitcher() {
   const { currentCompany, setCurrentCompany, user } = useFounderStore();
-  const isDemoUser = user?.email === 'demo@founderconsole.ai';
+  const isDemoUser = isDemoEmail(user?.email);
   const isSample = !!currentCompany?.is_sample && !isDemoUser;
   const { data: companies, isLoading } = useCompanies();
   const updateCompany = useUpdateCompany();
