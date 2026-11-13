@@ -41,11 +41,12 @@ export async function survivalShareExists(
   const fetchImpl = opts.fetchImpl ?? fetch;
   const url = `${opts.baseUrl ?? backendBaseUrl()}/survival-sim/results/${encodeURIComponent(simId)}`;
   let value: "exists" | "missing";
+  // A plain timer, not AbortSignal.timeout(): that one is unref'd, so a hung
+  // request with nothing else pending lets the event loop exit before it fires.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
-    const res = await fetchImpl(url, {
-      method: "GET",
-      signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-    });
+    const res = await fetchImpl(url, { method: "GET", signal: controller.signal });
     // Drain/abort the body; only the status matters.
     try { await res.body?.cancel(); } catch { /* ignore */ }
     if (res.status === 404) value = "missing";
@@ -53,6 +54,8 @@ export async function survivalShareExists(
     else return "unknown";
   } catch {
     return "unknown";
+  } finally {
+    clearTimeout(timer);
   }
   if (cache.size >= CACHE_MAX) {
     const oldest = cache.keys().next().value;
