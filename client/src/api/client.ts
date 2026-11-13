@@ -5,6 +5,7 @@ import {
   hardRedirectToLogin,
   shouldHardRedirectOn401,
 } from '@/lib/authSession';
+import { backoffMsFor429, readBodyRetryAfter } from '@/lib/rateLimitBackoff';
 export { ApiError };
 
 const API_BASE = '/api';
@@ -24,7 +25,9 @@ function getCSRFToken(): string | null {
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
-const RETRYABLE_STATUS_CODES = [502, 503, 504, 429];
+// 429 is not in this list. A rate limit waits for Retry-After once (below),
+// instead of hammering the same bucket at 1s then 2s.
+const RETRYABLE_STATUS_CODES = [502, 503, 504];
 
 async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -67,6 +70,14 @@ async function request<T>(
             continue;
           }
         } catch {}
+      }
+
+      if (response.status === 429 && attempt < 1 && (!method || method === 'GET')) {
+        const bodyRetryAfter = await readBodyRetryAfter(response);
+        const delay = backoffMsFor429(response.headers.get('Retry-After'), bodyRetryAfter);
+        console.warn(`[API] Rate limited ${endpoint}. Waiting ${delay}ms (Retry-After) before one retry`);
+        await sleep(delay);
+        continue;
       }
 
       if (RETRYABLE_STATUS_CODES.includes(response.status) && attempt < MAX_RETRIES) {
