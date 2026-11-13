@@ -1,3 +1,4 @@
+import { formatCurrencyFull } from '@/lib/utils';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSEO } from "@/lib/seo";
@@ -1230,11 +1231,11 @@ export default function FundraisingPage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Target Raise</span>
-                        <span className="font-medium">${(round.target_raise || 0).toLocaleString()}</span>
+                        <span className="font-medium">{formatCurrencyFull(round.target_raise || 0)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Pre-Money</span>
-                        <span className="font-medium">${(round.pre_money || 0).toLocaleString()}</span>
+                        <span className="font-medium">{formatCurrencyFull(round.pre_money || 0)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Instrument</span>
@@ -1305,7 +1306,7 @@ export default function FundraisingPage() {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Post-Money Valuation</p>
-                        <p className="text-2xl font-bold text-green-500">${(simulationResults.scenarios[0].post_money || 0).toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-green-500">{formatCurrencyFull(simulationResults.scenarios[0].post_money || 0)}</p>
                       </div>
                     </div>
                     {simulationResults.scenarios[0].warnings?.length > 0 && (

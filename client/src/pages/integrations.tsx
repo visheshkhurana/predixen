@@ -30,7 +30,9 @@ import {
   TrendingUp,
   Settings,
   Briefcase,
-  Bell
+  Bell,
+  Truck,
+  Megaphone,
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot, SiStripe } from "react-icons/si";
 import { apiRequest } from "@/lib/queryClient";
@@ -86,6 +88,8 @@ const providerIcons: Record<string, React.ReactNode> = {
   zoho: <Users className="h-6 w-6" />,
   zoho_books: <FileText className="h-6 w-6" />,
   tally: <Database className="h-6 w-6" />,
+  shiprocket: <Truck className="h-6 w-6" />,
+  meta_ads: <Megaphone className="h-6 w-6" />,
   razorpayx_payroll: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
   keka: <Users className="h-6 w-6" />,
@@ -98,6 +102,17 @@ const providerIcons: Record<string, React.ReactNode> = {
 };
 
 const integrationBenefits: Record<string, { dataImported: string[]; permissions: string[] }> = {
+  meta_ads: {
+    dataImported: [
+      "Monthly ad spend per ad account (last 3 full months)",
+      "Impressions and clicks",
+      "Purchases and purchase value as Meta reports them (shown as platform-reported, not revenue)",
+    ],
+    permissions: [
+      "ads_read on the ad accounts you list",
+      "Read-only: cannot create, change or pause ads",
+    ],
+  },
   quickbooks: {
     dataImported: [
       "Revenue & expense transactions",
@@ -340,6 +355,8 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   paddle: { setupTime: "~10 min", category: "revenue" },
   shopify: { setupTime: "~10 min", category: "revenue" },
   woocommerce: { setupTime: "~10 min", category: "revenue" },
+  shiprocket: { setupTime: "~5 min", category: "revenue" },
+  meta_ads: { setupTime: "~10 min", category: "analytics" },
   brex: { setupTime: "~5 min", category: "revenue" },
   netsuite: { setupTime: "~15 min", category: "accounting" },
   wave: { setupTime: "~10 min", category: "accounting" },
@@ -510,6 +527,18 @@ const paymentsProviders: IntegrationProvider[] = [
     description: "WordPress e-commerce for D2C brands and online stores",
     features: ["Order Revenue", "COD/Prepaid Split", "Customer Data", "Return Rate Analysis"],
   },
+  {
+    id: "shiprocket",
+    name: "Shiprocket",
+    description: "Shipping for Indian D2C: what shipped, what came back (RTO), and what freight cost",
+    features: ["RTO Rate", "Freight per Order", "COD Share", "Customer Returns"],
+  },
+  {
+    id: "meta_ads",
+    name: "Meta Ads",
+    description: "Facebook and Instagram ad spend per month, for CM3 and MER on the Profit screen. Meta's own purchase numbers are shown as platform-reported, not as revenue.",
+    features: ["Monthly Ad Spend", "MER vs Platform ROAS", "Multiple Ad Accounts", "Read-only"],
+  },
 ];
 
 const capTableProviders: IntegrationProvider[] = [
@@ -650,13 +679,14 @@ export default function IntegrationsPage() {
       last_sync: string | null;
       records_synced: number;
       error: string | null;
+      needs_reauth?: boolean;
     }>;
   }>({
     queryKey: ["/api/connectors/companies", companyId, "status"],
     enabled: !!companyId,
   });
 
-  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
@@ -720,8 +750,8 @@ export default function IntegrationsPage() {
         .filter(([, v]: [string, any]) => v.stored !== null && v.stored !== undefined)
         .map(([k]: [string, any]) => k);
       toast({
-        title: "Sample Data Synced",
-        description: `${data.provider_name}: ${metrics.length} metrics stored (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""})`,
+        title: "Sample Preview",
+        description: `${data.provider_name}: ${metrics.length} metrics would sync (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""}). Nothing was saved.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
@@ -765,7 +795,7 @@ export default function IntegrationsPage() {
     }
   };
   
-  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -854,6 +884,9 @@ export default function IntegrationsPage() {
               </Button>
             ) : isConnected ? (
               <>
+                {connectorInfo?.needs_reauth && (
+                  <ConnectDialog provider={provider} type={type as React.ComponentProps<typeof ConnectDialog>["type"]} companyId={companyId} triggerLabel="Reconnect" />
+                )}
                 <Button
                   size="sm"
                   variant="default"
@@ -1422,6 +1455,14 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "client_secret", label: "Client Secret", placeholder: "Enter Ramp Client Secret" },
     { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
   ],
+  shiprocket: [
+    { field: "email", label: "API User Email", placeholder: "Shiprocket > Settings > API > Create API user" },
+    { field: "password", label: "API User Password", placeholder: "Password of that API user" },
+  ],
+  meta_ads: [
+    { field: "access_token", label: "Access Token (ads_read)", placeholder: "System user token from Meta Business Settings" },
+    { field: "ad_account_ids", label: "Ad Account IDs", placeholder: "act_1234567890, act_2345678901" },
+  ],
   shopify: [
     { field: "shop_domain", label: "Shop Domain", placeholder: "yourstore (without .myshopify.com)" },
     { field: "access_token", label: "Admin API Token", placeholder: "shpat_..." },
@@ -1481,10 +1522,12 @@ function ConnectDialog({
   provider,
   type,
   companyId,
+  triggerLabel = "Connect",
 }: {
   provider: IntegrationProvider;
   type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable";
   companyId: number;
+  triggerLabel?: string;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1498,7 +1541,7 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
+  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
   const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {
@@ -1576,9 +1619,9 @@ function ConnectDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" data-testid={`button-connect-${provider.id}`}>
+        <Button size="sm" data-testid={`button-${triggerLabel.toLowerCase()}-${provider.id}`}>
           <Link2 className="h-4 w-4 mr-2" />
-          Connect
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
@@ -1739,7 +1782,7 @@ function ConnectDialog({
                     </div>
                   ))}
                   <p className="text-xs text-muted-foreground">
-                    For demo purposes, enter any values to simulate a connection.
+                    Credentials are stored encrypted and used only to read your data.
                   </p>
                 </div>
               ) : (

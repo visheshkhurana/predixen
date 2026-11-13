@@ -43,6 +43,7 @@ def _client(router, db=None, user=None) -> TestClient:
 
 
 UNAUTH_CASES = [
+    (templates_api.router, "GET", "/api/templates"),
     (templates_api.router, "GET", "/api/templates/"),
     (templates_api.router, "GET", "/api/templates/baseline"),
     (templates_api.router, "GET", "/api/templates/category/conservative"),

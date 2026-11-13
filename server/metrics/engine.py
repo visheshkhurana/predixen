@@ -13,8 +13,17 @@ from server.models.raw_data_event import RawDataEvent
 from server.models.metric_definition import MetricDefinition
 from server.models.metric_value import MetricValue
 from server.metrics.formula_parser import FormulaParser, FormulaError
+from server.core.burn import burn_summary
 
 logger = logging.getLogger(__name__)
+
+
+class MetricNoData(Exception):
+    """No source data for the period: nothing is stored (a 0 would shadow real values)."""
+
+
+class MetricComputeError(Exception):
+    """The metric query/formula failed: nothing is stored, the failure is reported."""
 
 
 class MetricEngine:
@@ -42,6 +51,7 @@ class MetricEngine:
             "metrics_processed": 0,
             "metrics_success": 0,
             "metrics_failed": 0,
+            "metrics_no_data": 0,
             "errors": [],
         }
         
@@ -49,6 +59,13 @@ class MetricEngine:
             try:
                 self.compute_metric(metric)
                 results["metrics_success"] += 1
+            except MetricNoData as e:
+                results["metrics_no_data"] += 1
+                results["errors"].append({
+                    "metric_key": metric.key,
+                    "error": str(e),
+                    "status": "no_data",
+                })
             except Exception as e:
                 logger.error(f"Error computing metric {metric.key}: {e}")
                 results["errors"].append({
@@ -106,10 +123,13 @@ class MetricEngine:
                 {f"param_{i+1}": p for i, p in enumerate(compiled.params)}
             )
             row = result.fetchone()
-            value = float(row[1]) if row and row[1] is not None else 0.0
         except Exception as e:
             logger.error(f"SQL execution error for metric {metric.key}: {e}")
-            value = 0.0
+            self.db.rollback()
+            raise MetricComputeError(f"SQL execution error for metric {metric.key}: {e}") from e
+        if not row or row[1] is None:
+            raise MetricNoData(f"No data for metric {metric.key} in {period_start:%Y-%m}")
+        value = float(row[1])
         
         existing = self.db.query(MetricValue).filter(
             MetricValue.metric_id == metric.id,
@@ -168,13 +188,19 @@ class MetricEngine:
         
         data = [e.payload for e in events if e.payload]
         contributing_connectors = list(set(e.connector_id for e in events))
+        if not data:
+            # No raw events: storing 0.0 here would shadow the real value the
+            # financial-record fallback in get_metric_timeseries/latest provides.
+            raise MetricNoData(f"No raw data events for metric {metric.key} in {period_start:%Y-%m}")
         
         try:
             parser = FormulaParser(metric.formula or "count()")
             value = parser.evaluate(data)
         except FormulaError as e:
             logger.error(f"Formula error for metric {metric.key}: {e}")
-            value = 0.0
+            raise MetricComputeError(f"Formula error for metric {metric.key}: {e}") from e
+        if value is None:
+            raise MetricNoData(f"Formula for metric {metric.key} produced no value")
         
         existing = self.db.query(MetricValue).filter(
             MetricValue.metric_id == metric.id,
@@ -270,15 +296,14 @@ class MetricEngine:
             for record in reversed(financials):
                 revenue = record.revenue or 0
                 cogs = record.cogs or 0
-                opex = record.opex or 0
-                payroll = record.payroll or 0
-                other_costs = record.other_costs or 0
-                cash = record.cash_balance or 0
-                headcount = record.headcount or 0
-                total_costs = cogs + opex + payroll + other_costs
-                net_burn = max(0, total_costs - revenue)
+                cash = record.cash_balance
+                headcount = record.headcount  # None when not provided, never 0
+                # Shared rule: signed net burn incl. marketing; runway null when
+                # profitable or cash unknown (no fabricated 12 / 36 months).
+                burn = burn_summary(record)
+                net_burn = burn["net_burn"]
                 gross_margin = ((revenue - cogs) / revenue) if revenue > 0 else 0
-                runway = (cash / net_burn) if net_burn > 0 and cash > 0 else (36 if net_burn <= 0 else 12)
+                runway = burn["runway_months"]
                 
                 snapshot_row = {
                     "mrr": revenue,
@@ -286,10 +311,11 @@ class MetricEngine:
                     "monthly_revenue": revenue,
                     "cash_balance": cash,
                     "net_burn": net_burn,
-                    "runway_months": min(runway, 60),
+                    "runway_months": runway,
                     "gross_margin": gross_margin,
                     "headcount": headcount,
-                    "churn_rate": self._ts_metric_val(ts_metrics, "churn_rate", 0.02),
+                    "customers": record.customers,
+                    "churn_rate": self._ts_metric_val(ts_metrics, "churn_rate", None),
                     "cac": self._ts_metric_val(ts_metrics, "cac", 0),
                     "ltv": self._ts_metric_val(ts_metrics, "ltv", 0),
                     "ltv_cac_ratio": self._ts_metric_val(ts_metrics, "ltv_cac_ratio", 0),
@@ -327,7 +353,7 @@ class MetricEngine:
         "runway": "runway_months",
         "gross_margin": "gross_margin",
         "churn_rate": "churn_rate",
-        "customer_count": "headcount",
+        "customer_count": "customers",
         "cash_balance": "cash_balance",
         "cac": "cac",
         "ltv": "ltv",

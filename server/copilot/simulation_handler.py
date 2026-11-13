@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
+from fastapi import HTTPException
 
 from server.copilot.intent_parser import (
     ParsedIntent, CopilotIntent, SimulationParameters,
@@ -72,6 +73,8 @@ class SimulationHandler:
             })
             conversation_store.save(self.state)
             return result
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error handling intent {parsed.intent}: {e}")
             return {
@@ -101,7 +104,12 @@ class SimulationHandler:
                 'summary': "I need financial data to run a simulation. Please upload your financial documents first.",
                 'intent': parsed.intent.value
             }
-        
+
+        from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
+        reserve_monthly_quota(
+            self.db, self.user_id, PLAN_QUOTA_SIMULATION, company_id=self.company_id
+        )
+
         metrics = truth_scan.outputs_json.get("metrics", {})
         params = parsed.parameters
         

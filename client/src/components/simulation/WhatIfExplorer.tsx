@@ -5,6 +5,7 @@ import { Slider } from '@/components/ui/slider';
 import { SlidersHorizontal, TrendingUp, TrendingDown, Percent, DollarSign, Flame, RotateCcw, Play } from 'lucide-react';
 import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 import { formatRunwayDisplay, isSustainable } from '@/lib/simulation/sensitivityAnalysis';
+import { grossMarginSliderMin, normalizeGrossMarginPct } from '@/lib/finance';
 
 interface SliderConfig {
   key: string;
@@ -42,13 +43,15 @@ export function WhatIfExplorer({
   calculateQuickImpact,
   testId = 'what-if-explorer'
 }: WhatIfExplorerProps) {
+  // -56 is -56%, not -5600%: one normaliser shared with the rest of the app.
+  const baselineGrossMarginPct = Math.round(normalizeGrossMarginPct(baselineState?.grossMargin || null) ?? 70);
   const sliderConfigs: SliderConfig[] = useMemo(() => [
     { key: 'revenueGrowth', label: 'Revenue Growth Rate', icon: TrendingUp, min: -30, max: 60, step: 1, defaultValue: Math.round(baselineState?.monthlyGrowthRate || baselineState?.growthRate || 0), unit: '%' },
     { key: 'churnRate', label: 'Monthly Churn Rate', icon: TrendingDown, min: 0, max: 20, step: 0.5, defaultValue: Math.round((baselineState?.churnRate ? (baselineState.churnRate > 1 ? baselineState.churnRate : baselineState.churnRate * 100) : 5) * 2) / 2, unit: '%' },
-    { key: 'grossMargin', label: 'Gross Margin', icon: Percent, min: 30, max: 95, step: 1, defaultValue: Math.round(baselineState?.grossMargin ? (baselineState.grossMargin > 1 ? baselineState.grossMargin : baselineState.grossMargin * 100) : 70), unit: '%' },
+    { key: 'grossMargin', label: 'Gross Margin', icon: Percent, min: grossMarginSliderMin(baselineGrossMarginPct), max: 95, step: 1, defaultValue: baselineGrossMarginPct, unit: '%' },
     { key: 'burnChange', label: 'Burn Rate Change', icon: Flame, min: -50, max: 100, step: 5, defaultValue: 0, unit: '%' },
     { key: 'fundraising', label: 'Fundraising Amount', icon: DollarSign, min: 0, max: 5000000, step: 100000, defaultValue: 0, unit: '$', format: (v) => formatCurrencyAbbrev(v) },
-  ], [baselineState]);
+  ], [baselineState, baselineGrossMarginPct]);
 
   const [values, setValues] = useState<Record<string, number>>(() => 
     Object.fromEntries(sliderConfigs.map(s => [s.key, s.defaultValue]))

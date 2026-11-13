@@ -206,6 +206,10 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     } else if (netBurn <= 0) {
       runway = Infinity;
       runwayDisplay = '\u221E';
+    } else if (cashOnHand <= 0 && c.cashProvided === false) {
+      // Cash was never provided: runway is unknown, not 0 months.
+      runway = NaN;
+      runwayDisplay = 'Cash not provided';
     } else if (cashOnHand <= 0) {
       runway = 0;
       runwayDisplay = '0.0 mo';

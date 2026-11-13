@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
@@ -113,9 +114,7 @@ const WIDGET_TYPES = [
 
 function formatValue(value: number, formatType: string, unit?: string | null): string {
   if (formatType === 'currency') {
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-    return `$${value.toFixed(0)}`;
+    return formatCurrencyAbbrev(value);
   }
   if (formatType === 'percentage') {
     return `${(value * 100).toFixed(1)}%`;

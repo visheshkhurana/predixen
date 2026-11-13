@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Zap
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 interface SimulationData {
   runway?: {
@@ -202,7 +202,7 @@ function generateNarrativeSummary(simulation: SimulationData, scenarioName: stri
     
     let narrative = `Under the "${scenarioName}" scenario, your company is financially sustainable with positive cash flow. `;
     if (netProfit > 0) {
-      narrative += `You're generating approximately $${(netProfit / 1000).toFixed(0)}K in monthly net profit. `;
+      narrative += `You're generating approximately ${formatCurrencyAbbrev(netProfit)} in monthly net profit. `;
     }
     narrative += `This healthy position allows you to focus on strategic growth initiatives rather than survival. `;
     narrative += `Continue optimizing operations while exploring investment opportunities.`;
@@ -334,7 +334,7 @@ export function SimulationInsights({ simulation, scenarioName, testId = 'simulat
               <p className="text-xs text-muted-foreground mb-1">{isSustainable ? 'Net Profit/mo' : 'Range Spread'}</p>
               <p className="text-lg font-mono font-semibold" data-testid="text-insight-spread">
                 {isSustainable 
-                  ? `$${((monthlyRevenue - monthlyBurn) / 1000).toFixed(0)}K` 
+                  ? formatCurrencyAbbrev(monthlyRevenue - monthlyBurn) 
                   : `${(Math.min(simulation.runway?.p90 || 0, 60) - Math.min(simulation.runway?.p10 || 0, 60)).toFixed(1)} mo`
                 }
               </p>

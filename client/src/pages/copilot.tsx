@@ -4,7 +4,7 @@ import { saveCopilotDraft, loadCopilotDraft, clearCopilotDraft } from "@/lib/cop
 import { FloatingOrbsBackground } from "@/components/motion/floating-orbs-background";
 import { PageTransition } from "@/components/motion/page-transition-wrapper";
 import { useLocation } from 'wouter';
-import { isRunwaySustainable } from '@/lib/utils';
+import { isRunwaySustainable, formatCurrencyAbbrev, formatCurrencyFull } from '@/lib/utils';
 import { trackEvent } from '@/lib/posthog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -261,6 +261,7 @@ interface CopilotApiResponse {
       feasibility: string;
       time_to_implement: number;
     }>;
+    simulation_status?: { ran: boolean; reason?: string | null };
     simulations: Array<{
       scenario: string;
       runway: { p10: number; p50: number; p90: number };
@@ -459,10 +460,10 @@ function CashTrajectoryChart({ chartData }: { chartData: NonNullable<CopilotApiR
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#888' }} tickFormatter={(v) => `M${v}`} />
-          <YAxis tick={{ fontSize: 9, fill: '#888' }} tickFormatter={(v) => `$${v}K`} />
+          <YAxis tick={{ fontSize: 9, fill: '#888' }} tickFormatter={(v) => formatCurrencyAbbrev(v * 1000)} />
           <Tooltip 
             contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-            formatter={(value: number) => [`$${value.toFixed(0)}K`, 'Cash']}
+            formatter={(value: number) => [formatCurrencyAbbrev(value * 1000), 'Cash']}
           />
           {data[0]?.p10K !== undefined && (
             <Area type="monotone" dataKey="p10K" stroke="transparent" fill="#ef444433" />
@@ -553,7 +554,7 @@ function SimulationResultCard({ response, onAction, onTryPrompt }: { response: C
             <div className="text-xs text-muted-foreground">Survival Rate</div>
           </div>
           <div className="p-3 rounded-lg bg-card/50 border border-border/30 text-center">
-            <div className="text-2xl font-bold text-purple-400">${((results.final_cash || 0) / 1000).toFixed(0)}K</div>
+            <div className="text-2xl font-bold text-purple-400">{formatCurrencyAbbrev(results.final_cash || 0)}</div>
             <div className="text-xs text-muted-foreground">Final Cash</div>
           </div>
         </div>
@@ -593,7 +594,7 @@ function SimulationResultCard({ response, onAction, onTryPrompt }: { response: C
               <Badge variant="outline" className="text-xs">Hiring Freeze {params.hiring_freeze_months}mo</Badge>
             )}
             {params.fundraise_amount && (
-              <Badge variant="outline" className="text-xs">Raise ${(params.fundraise_amount / 1000000).toFixed(1)}M</Badge>
+              <Badge variant="outline" className="text-xs">Raise {formatCurrencyAbbrev(params.fundraise_amount)}</Badge>
             )}
             {params.horizon_months && (
               <Badge variant="outline" className="text-xs text-muted-foreground">{params.horizon_months}mo horizon</Badge>
@@ -694,7 +695,7 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const { decision_context, levers, simulations, risk_analysis, recommendation } = advisor;
+  const { decision_context, levers, simulations, risk_analysis, recommendation, simulation_status } = advisor;
 
   return (
     <div className="space-y-4 mt-4" data-testid="decision-advisor-panel">
@@ -765,6 +766,12 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
             <p className="text-xs text-muted-foreground italic">{recommendation.what_changes}</p>
           </CardContent>
         </Card>
+      )}
+
+      {(!simulations || simulations.length === 0) && simulation_status && !simulation_status.ran && (
+        <p className="text-xs text-muted-foreground italic" data-testid="text-no-simulation">
+          No simulation was run{simulation_status.reason ? ` (${simulation_status.reason})` : ''}.
+        </p>
       )}
 
       {simulations && simulations.length > 0 && (
@@ -1430,17 +1437,17 @@ export default function CopilotPage() {
       const userMsg: Message = { role: 'user', content: messageText.trim(), timestamp: new Date() };
       
       const FETCH_METRIC_MAP: Record<string, { key: string; label: string; format: (v: any) => string }> = {
-        'mrr': { key: 'mrr', label: 'Monthly Recurring Revenue', format: (v) => `$${(v || 0).toLocaleString()}` },
-        'arr': { key: 'mrr', label: 'Annual Recurring Revenue', format: (v) => `$${((v || 0) * 12).toLocaleString()}` },
+        'mrr': { key: 'mrr', label: 'Monthly Recurring Revenue', format: (v) => formatCurrencyFull(v || 0) },
+        'arr': { key: 'mrr', label: 'Annual Recurring Revenue', format: (v) => formatCurrencyFull((v || 0) * 12) },
         'runway': { key: 'runway_months', label: 'Runway', format: (v) => v != null && isRunwaySustainable(v) ? 'Sustainable' : `${v?.toFixed(1) || 'N/A'} months` },
-        'burn': { key: 'net_burn', label: 'Net Burn Rate', format: (v) => `$${(v || 0).toLocaleString()}/month` },
-        'cac': { key: 'cac', label: 'Customer Acquisition Cost', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A' },
-        'ltv': { key: 'ltv', label: 'Lifetime Value', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A' },
+        'burn': { key: 'net_burn', label: 'Net Burn Rate', format: (v) => `${formatCurrencyFull(v || 0)}/month` },
+        'cac': { key: 'cac', label: 'Customer Acquisition Cost', format: (v) => v != null && v > 0 ? formatCurrencyFull(v) : 'N/A' },
+        'ltv': { key: 'ltv', label: 'Lifetime Value', format: (v) => v != null && v > 0 ? formatCurrencyFull(v) : 'N/A' },
         'margin': { key: 'gross_margin', label: 'Gross Margin', format: (v) => `${v || 0}%` },
         'churn': { key: 'churn_rate', label: 'Churn Rate', format: (v) => `${v || 0}%` },
         'growth': { key: 'revenue_growth_mom', label: 'Revenue Growth (MoM)', format: (v) => `${v || 0}%` },
-        'cash': { key: 'cash_balance', label: 'Cash Balance', format: (v) => `$${(v || 0).toLocaleString()}` },
-        'revenue': { key: 'mrr', label: 'Monthly Revenue', format: (v) => `$${(v || 0).toLocaleString()}` },
+        'cash': { key: 'cash_balance', label: 'Cash Balance', format: (v) => formatCurrencyFull(v || 0) },
+        'revenue': { key: 'mrr', label: 'Monthly Revenue', format: (v) => formatCurrencyFull(v || 0) },
       };
       
       const metricConfig = FETCH_METRIC_MAP[metricName];
@@ -1571,17 +1578,10 @@ Type **help** for a full list of what I can do.`,
           conversation_history: recentHistory
         };
 
-        let res: Response;
-        try {
-          res = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
-        } catch (firstErr: any) {
-          if (firstErr?.status === 500 || firstErr?.message?.includes('500')) {
-            await new Promise(r => setTimeout(r, 2000));
-            res = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
-          } else {
-            throw firstErr;
-          }
-        }
+        // No client-side retry: the server already retries a failed chat once
+        // and then returns a data fallback. Retrying a 5xx here re-ran the
+        // whole multi-agent pipeline up to 4 times per message.
+        const res: Response = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
         
         const response = await res.json() as CopilotApiResponse;
         
@@ -1757,17 +1757,17 @@ Type **help** for a full list of what I can do.`,
     }
     
     const METRIC_MAP: Record<string, { key: string; format: (v: any) => string; label: string }> = {
-      'burn rate': { key: 'net_burn', format: (v) => `$${(v || 15000).toLocaleString()}/month`, label: 'Net Burn Rate' },
-      'burn': { key: 'net_burn', format: (v) => `$${(v || 15000).toLocaleString()}/month`, label: 'Net Burn Rate' },
-      'mrr': { key: 'mrr', format: (v) => `$${(v || 45000).toLocaleString()}`, label: 'Monthly Recurring Revenue' },
-      'revenue': { key: 'mrr', format: (v) => `$${(v || 45000).toLocaleString()}`, label: 'Monthly Revenue' },
-      'arr': { key: 'mrr', format: (v) => `$${((v || 45000) * 12).toLocaleString()}`, label: 'Annual Recurring Revenue' },
+      'burn rate': { key: 'net_burn', format: (v) => `${formatCurrencyFull(v || 15000)}/month`, label: 'Net Burn Rate' },
+      'burn': { key: 'net_burn', format: (v) => `${formatCurrencyFull(v || 15000)}/month`, label: 'Net Burn Rate' },
+      'mrr': { key: 'mrr', format: (v) => formatCurrencyFull(v || 45000), label: 'Monthly Recurring Revenue' },
+      'revenue': { key: 'mrr', format: (v) => formatCurrencyFull(v || 45000), label: 'Monthly Revenue' },
+      'arr': { key: 'mrr', format: (v) => formatCurrencyFull((v || 45000) * 12), label: 'Annual Recurring Revenue' },
       'margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
       'gross margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
       'runway': { key: 'runway_months', format: (v) => v != null && isRunwaySustainable(v) ? 'Sustainable' : `${v?.toFixed(1) || '16.5'} months`, label: 'Runway' },
-      'cash': { key: 'cash_balance', format: (v) => `$${(v || 500000).toLocaleString()}`, label: 'Cash Balance' },
-      'cac': { key: 'cac', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A', label: 'Customer Acquisition Cost' },
-      'ltv': { key: 'ltv', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A', label: 'Lifetime Value' },
+      'cash': { key: 'cash_balance', format: (v) => formatCurrencyFull(v || 500000), label: 'Cash Balance' },
+      'cac': { key: 'cac', format: (v) => v != null && v > 0 ? formatCurrencyFull(v) : 'N/A', label: 'Customer Acquisition Cost' },
+      'ltv': { key: 'ltv', format: (v) => v != null && v > 0 ? formatCurrencyFull(v) : 'N/A', label: 'Lifetime Value' },
       'churn': { key: 'churn_rate', format: (v) => v != null ? `${Number(v).toFixed(1)}%` : 'N/A', label: 'Churn Rate' },
       'growth': { key: 'revenue_growth_mom', format: (v) => `${v || 5}% MoM`, label: 'Revenue Growth' },
     };
@@ -2473,11 +2473,11 @@ Type **help** for a full list of what I can do.`,
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="p-2 rounded bg-secondary">
                   <p className="text-xs text-muted-foreground">Revenue</p>
-                  <p className="text-sm font-mono font-medium">${(scenarioMetrics.projectedRevenue / 1000).toFixed(0)}K</p>
+                  <p className="text-sm font-mono font-medium">{formatCurrencyAbbrev(scenarioMetrics.projectedRevenue)}</p>
                 </div>
                 <div className="p-2 rounded bg-secondary">
                   <p className="text-xs text-muted-foreground">Cash</p>
-                  <p className="text-sm font-mono font-medium">${(scenarioMetrics.projectedCash / 1000).toFixed(0)}K</p>
+                  <p className="text-sm font-mono font-medium">{formatCurrencyAbbrev(scenarioMetrics.projectedCash)}</p>
                 </div>
                 <div className="p-2 rounded bg-secondary">
                   <p className="text-xs text-muted-foreground">Runway</p>

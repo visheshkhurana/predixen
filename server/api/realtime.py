@@ -14,6 +14,7 @@ from server.core.security import get_current_user
 from server.models import User, Company
 from server.models.financial import FinancialRecord
 from server.models.truth_scan import TruthScan
+from server.core.burn import burn_summary
 
 router = APIRouter(prefix="/realtime", tags=["realtime"])
 
@@ -43,9 +44,9 @@ def get_company_kpi_metrics(company_id: int, db: Session) -> dict:
         "arr": 0,
         "cash_balance": 0,
         "net_burn": 0,
-        "runway_months": 0,
+        "runway_months": None,
         "gross_margin": 0,
-        "churn_rate": 0,
+        "churn_rate": None,
         "cac": 0,
         "ltv": 0,
         "ltv_cac_ratio": 0,
@@ -57,29 +58,22 @@ def get_company_kpi_metrics(company_id: int, db: Session) -> dict:
     if latest_financial:
         revenue = latest_financial.revenue or 0
         cogs = latest_financial.cogs or 0
-        opex = latest_financial.opex or 0
-        payroll = latest_financial.payroll or 0
-        other_costs = latest_financial.other_costs or 0
-        cash = latest_financial.cash_balance or 0
         headcount = latest_financial.headcount or 0
         
-        total_costs = cogs + opex + payroll + other_costs
-        net_burn = total_costs - revenue
+        # Shared rule (server/core/burn.py): signed net burn incl. marketing;
+        # runway is null when profitable (see is_profitable) or cash unknown --
+        # never a fabricated 12 / 36 / 60 months.
+        burn = burn_summary(latest_financial)
         gross_margin = ((revenue - cogs) / revenue) if revenue > 0 else 0
-        # Runway calculation with sensible fallbacks
-        if net_burn > 0 and cash > 0:
-            runway = cash / net_burn
-        elif net_burn <= 0:
-            runway = 36  # If profitable, set to 36 months (3 years)
-        else:
-            runway = 12  # Default fallback
         
         metrics["monthly_revenue"] = revenue
         metrics["mrr"] = revenue
         metrics["arr"] = revenue * 12
-        metrics["cash_balance"] = cash
-        metrics["net_burn"] = max(0, net_burn)
-        metrics["runway_months"] = max(0, min(runway, 60))  # Cap at 60 months
+        metrics["cash_balance"] = burn["cash_balance"]
+        metrics["net_burn"] = burn["net_burn"] if burn["net_burn"] is not None else 0
+        metrics["runway_months"] = burn["runway_months"]
+        metrics["runway_status"] = burn["runway_status"]
+        metrics["is_profitable"] = burn["is_profitable"]
         metrics["gross_margin"] = gross_margin
         metrics["headcount"] = headcount
         metrics["revenue_per_employee"] = (revenue / headcount) if headcount > 0 else 0
@@ -97,23 +91,19 @@ def get_company_kpi_metrics(company_id: int, db: Session) -> dict:
             elif isinstance(val, dict) and "value" in val:
                 metrics[key] = val["value"]
         
-        if metrics.get("churn_rate", 0) > 1:
+        if (metrics.get("churn_rate") or 0) > 1:
             metrics["churn_rate"] = metrics["churn_rate"] / 100
         
-        # Apply sensibility bounds to derived metrics
-        # CAC: minimum $100 (SaaS floor), max $50k
-        if metrics.get("cac", 0) > 0:
-            metrics["cac"] = max(100, min(metrics["cac"], 50000))
-        # LTV: minimum $500, max $500k
-        if metrics.get("ltv", 0) > 0:
-            metrics["ltv"] = max(500, min(metrics["ltv"], 500000))
-        # LTV/CAC ratio: bounded 0.5x - 20x (realistic SaaS range)
-        if metrics.get("ltv_cac_ratio", 0) > 0:
-            metrics["ltv_cac_ratio"] = max(0.5, min(metrics["ltv_cac_ratio"], 20))
+        # CAC / LTV / LTV:CAC are reported as computed. The old clamps (CAC
+        # floor $100, LTV floor $500, ratio 0.5x-20x) replaced real values with
+        # invented ones.
     
-    # Final fallback to metadata
+    # Final fallback to metadata (runway is never back-filled: null means
+    # profitable or cash unknown, and a stored number would contradict that).
     for key in metrics:
-        if metrics[key] == 0 and key in metadata:
+        if key in ("runway_months", "runway_status", "is_profitable"):
+            continue
+        if metrics[key] in (0, None) and key in metadata:
             metrics[key] = metadata.get(key, 0)
     
     return metrics
@@ -255,24 +245,22 @@ def get_kpi_history(
     for record in reversed(financials):
         revenue = record.revenue or 0
         cogs = record.cogs or 0
-        opex = record.opex or 0
-        payroll = record.payroll or 0
-        other_costs = record.other_costs or 0
-        cash = record.cash_balance or 0
+        cash = record.cash_balance
         headcount = record.headcount or 0
 
-        total_costs = cogs + opex + payroll + other_costs
-        net_burn = max(0, total_costs - revenue)
+        burn = burn_summary(record)
+        net_burn = burn["net_burn"] if burn["net_burn"] is not None else 0
         gross_margin = ((revenue - cogs) / revenue) if revenue > 0 else 0
-        runway = (cash / net_burn) if net_burn > 0 and cash > 0 else (36 if net_burn <= 0 else 12)
+        runway = burn["runway_months"]
 
         period_label = record.period_end.strftime("%b %y") if record.period_end else ""
 
         churn_val = ts_metrics.get("churn_rate")
         if isinstance(churn_val, dict):
             churn_val = churn_val.get("value", 0)
-        churn_rate = churn_val if isinstance(churn_val, (int, float)) else 0.02
-        if churn_rate > 1:
+        # No churn data -> null ("not available"), not an invented 2%.
+        churn_rate = churn_val if isinstance(churn_val, (int, float)) else None
+        if churn_rate is not None and churn_rate > 1:
             churn_rate = churn_rate / 100
 
         cac_val = ts_metrics.get("cac")
@@ -297,7 +285,8 @@ def get_kpi_history(
             "arr": revenue * 12,
             "cash_balance": cash,
             "net_burn": net_burn,
-            "runway_months": min(runway, 60),
+            "runway_months": runway,
+            "is_profitable": burn["is_profitable"],
             "gross_margin": gross_margin,
             "churn_rate": churn_rate,
             "cac": cac,

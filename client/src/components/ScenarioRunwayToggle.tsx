@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HelpCircle, Calculator, TrendingUp, TrendingDown, Target } from 'lucide-react';
-import { cn, formatRunway } from '@/lib/utils';
+import { cn, formatRunway, formatCurrencyAbbrev } from '@/lib/utils';
 
 interface ScenarioRunwayToggleProps {
   currentRunway: number | null;
@@ -67,13 +67,6 @@ export function ScenarioRunwayToggle({
 
   const formatRunwayLocal = (months: number | null): string => {
     return formatRunway(months, 36);
-  };
-
-  const formatCurrency = (value: number | null): string => {
-    if (value == null) return 'N/A';
-    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-    return value.toFixed(0);
   };
 
   const getRunwayVariant = (months: number | null): 'success' | 'warning' | 'danger' | 'default' => {
@@ -176,7 +169,7 @@ export function ScenarioRunwayToggle({
               <div className="p-4 rounded-lg bg-muted/30 text-center cursor-help hover:bg-muted/50 transition-colors">
                 <p className="text-sm text-muted-foreground mb-1">Monthly Burn</p>
                 <p className="text-3xl font-bold font-mono" data-testid="scenario-burn-result">
-                  ${formatCurrency(adjustedBurn)}
+                  {formatCurrencyAbbrev(adjustedBurn)}
                 </p>
                 {adjustedBurn !== currentBurn && currentBurn && (
                   <Badge variant="secondary" className="mt-1 text-xs">
