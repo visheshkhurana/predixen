@@ -238,7 +238,8 @@ def get_relevant_patterns(
                 median_impact = _band_published_value(metric_name, median_impact)
                 p25_impact = _band_published_value(metric_name, p25_impact)
                 p75_impact = _band_published_value(metric_name, p75_impact)
-            published.append({
+            metadata = r[11] if len(r) > 11 else None
+            published_row = {
                 "pattern_type": pattern_type,
                 "industry": r[1],
                 "stage": r[2],
@@ -251,7 +252,13 @@ def get_relevant_patterns(
                 "contributing_companies": contributing,
                 "metric_companies": metric_companies,
                 "computed_at": r[10].isoformat() if hasattr(r[10], "isoformat") else (str(r[10]) if r[10] else None),
-            })
+                "source": _research_source(metadata) if pattern_type == "research" else None,
+            }
+            if pattern_type == "research":
+                published_row["cross_company_source"] = "research"
+            elif pattern_type == "decision_outcome":
+                published_row["cross_company_source"] = "peer_cohort"
+            published.append(published_row)
         return published
     except Exception as e:
         logger.debug(f"Error fetching patterns: {e}")
@@ -365,6 +372,24 @@ def _band_percentiles(metric: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _metadata_dict(metadata: Any) -> Dict[str, Any]:
+    if metadata is None:
+        return {}
+    if isinstance(metadata, (bytes, bytearray)):
+        metadata = metadata.decode("utf-8", errors="replace")
+    if isinstance(metadata, str):
+        text_value = metadata.strip()
+        if not text_value:
+            return {}
+        try:
+            metadata = json.loads(text_value)
+        except (TypeError, ValueError):
+            return {}
+    if isinstance(metadata, dict):
+        return metadata
+    return {}
+
+
 def _metric_companies(metadata: Any) -> Optional[int]:
     if metadata is None:
         return None
@@ -382,6 +407,15 @@ def _metric_companies(metadata: Any) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _research_source(metadata: Any) -> Optional[str]:
+    """Publisher title stored on research rows. Absent for peer aggregates."""
+    source = _metadata_dict(metadata).get("source")
+    if not isinstance(source, str):
+        return None
+    source = source.strip()
+    return source or None
 
 
 def _compute_percentiles(values: List[float]) -> Dict[str, Any]:

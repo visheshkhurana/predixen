@@ -12,6 +12,7 @@ from collections import defaultdict
 
 from sqlalchemy.orm import Session
 
+from server.decision.cross_company_claims import insight_text, rate_fields
 from server.services.peer_privacy import MIN_DISTINCT_PEERS
 
 logger = logging.getLogger(__name__)
@@ -309,10 +310,8 @@ class DecisionPatternEngine:
             if cc_rate and cc_rate.get("sample_size", 0) >= 2:
                 rec["cross_company_success_rate"] = f"{cc_rate['success_rate']}%"
                 rec["cross_company_sample_size"] = cc_rate["sample_size"]
-                rec["cross_company_insight"] = (
-                    f"{cc_rate['success_rate']:.0f}% of similar companies saw positive outcomes "
-                    f"from {dtype.replace('_', ' ')} decisions (based on {cc_rate['sample_size']} decisions)."
-                )
+                rec["cross_company_source"] = cc_rate.get("cross_company_source") or "peer_cohort"
+                rec["cross_company_insight"] = insight_text(cc_rate, decision_type=dtype)
 
             recommendations.append(rec)
 
@@ -412,15 +411,9 @@ class DecisionPatternEngine:
                 ptype = p.get("pattern_type")
                 if ptype in ("decision_outcome", "research") and p.get("sample_size", 0) >= 2:
                     dt = p["decision_type"]
-                    if dt in result and result[dt].get("_ptype") == "decision_outcome" and ptype == "research":
+                    if dt in result and result[dt].get("pattern_type") == "decision_outcome" and ptype == "research":
                         continue
-                    result[dt] = {
-                        "success_rate": p["success_rate"],
-                        "sample_size": p["sample_size"],
-                        "_ptype": ptype,
-                    }
-            for v in result.values():
-                v.pop("_ptype", None)
+                    result[dt] = rate_fields(p)
             return result
         except Exception:
             return {}
