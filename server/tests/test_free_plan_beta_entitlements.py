@@ -190,7 +190,7 @@ def _assert_limit(response, limit_key: str):
     assert "temporarily unavailable" not in message
     assert "session" not in message
     assert "expired" not in message
-    assert "the month resets at 00:00 utc (04:00 gst)." in message
+    assert "month to reset at 00:00 utc on the 1st." in message
     assert response.status_code != 403
 
 
@@ -254,6 +254,8 @@ def free_client(monkeypatch):
     monkeypatch.setenv("PAYWALL_ENABLED", "true")
     monkeypatch.delenv("PAYWALL_GRANDFATHER_BEFORE", raising=False)
     monkeypatch.setattr("server.core.subscription.SessionLocal", Session)
+    monkeypatch.setattr("server.core.plan_usage._payments_enabled", lambda: True)
+    monkeypatch.setattr("server.api.simulation_v2.SessionLocal", Session)
 
     captured: list[tuple] = []
 
@@ -312,7 +314,7 @@ def free_client(monkeypatch):
             )
 
     monkeypatch.setattr("server.api.simulation_v2.SimulationEngine", _Engine)
-    monkeypatch.setattr("server.api.simulation_v2.get_openai_client", lambda: object())
+    monkeypatch.setattr("server.api.simulation_v2._audited_simulation_client", lambda db, user: object())
 
     from server.api.copilot import CopilotChatResponse
 
@@ -522,3 +524,14 @@ def test_post_events_cannot_write_plan_quota_names(free_client):
     ]
     db.close()
     assert names == ["page_viewed"]
+
+
+def test_quotas_not_enforced_while_payments_are_off(monkeypatch):
+    """With no billing provider configured the site promises every feature free
+    during the beta, and there is no way to upgrade, so nothing is counted."""
+    from server.core import plan_usage
+
+    monkeypatch.setattr(plan_usage, "_payments_enabled", lambda: False)
+    # A bare object() would raise if the function touched the database.
+    for kind in (plan_usage.PLAN_QUOTA_SIMULATION, plan_usage.PLAN_QUOTA_COPILOT):
+        assert plan_usage.reserve_monthly_quota(object(), 12345, kind) is None

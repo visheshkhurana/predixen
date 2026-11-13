@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev, formatCurrencyFull } from '@/lib/utils';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -231,7 +232,7 @@ export default function InvestorRoomPage() {
                   ) : (
                     rounds.map((round: FundraisingRound) => (
                       <SelectItem key={round.id} value={round.id}>
-                        {round.name} {round.target_raise ? `($${(round.target_raise/1000000).toFixed(1)}M)` : ''}
+                        {round.name} {round.target_raise ? `(${formatCurrencyAbbrev(round.target_raise)})` : ''}
                       </SelectItem>
                     ))
                   )}
@@ -384,7 +385,7 @@ export default function InvestorRoomPage() {
                     <CardContent className="pt-4">
                       <p className="text-sm text-muted-foreground">MRR</p>
                       <p className="text-2xl font-bold">
-                        ${(investorRoomData.kpi_snapshot?.mrr || 0).toLocaleString()}
+                        {formatCurrencyFull(investorRoomData.kpi_snapshot?.mrr || 0)}
                       </p>
                     </CardContent>
                   </Card>
@@ -392,7 +393,7 @@ export default function InvestorRoomPage() {
                     <CardContent className="pt-4">
                       <p className="text-sm text-muted-foreground">ARR</p>
                       <p className="text-2xl font-bold">
-                        ${(investorRoomData.kpi_snapshot?.arr || 0).toLocaleString()}
+                        {formatCurrencyFull(investorRoomData.kpi_snapshot?.arr || 0)}
                       </p>
                     </CardContent>
                   </Card>

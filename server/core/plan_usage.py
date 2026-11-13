@@ -16,6 +16,11 @@ both read the same used count can both insert and both pass.
 
 The reservation commits on its own session, bound to the same engine as the
 request. That commit does not flush work the handler already queued.
+
+Caps apply only while payments are enabled (Razorpay or Stripe configured).
+With payments off the public pages promise every feature free during the
+beta, and a capped Free user would have no way to upgrade, so nothing is
+counted or refused.
 """
 from datetime import datetime
 from typing import Optional, Tuple, Union
@@ -60,6 +65,14 @@ def monthly_usage(db: Session, user_id: int, kind: str, now: Optional[datetime] 
     return int(used or 0)
 
 
+def _payments_enabled() -> bool:
+    try:
+        from server.core import razorpay_billing, stripe_billing
+        return bool(razorpay_billing.razorpay_enabled() or stripe_billing.stripe_enabled())
+    except Exception:
+        return False
+
+
 def _quota_session(db: Session) -> Tuple[Session, bool]:
     """Session that can commit without flushing the request session.
 
@@ -96,7 +109,7 @@ def reserve_monthly_quota(
     if kind not in _LIMIT_KEYS:
         raise ValueError(f"unknown plan quota {kind}")
 
-    if user is None:
+    if user is None or not _payments_enabled():
         return
 
     if isinstance(user, int):
@@ -135,7 +148,8 @@ def reserve_monthly_quota(
                     "message": (
                         f"You've used all {int(limit)} {noun} for this month "
                         f"on the {plan_name} plan. "
-                        "The month resets at 00:00 UTC (04:00 GST)."
+                        "Upgrade your plan for more, or wait for the month to reset "
+                        "at 00:00 UTC on the 1st."
                     ),
                 },
             )

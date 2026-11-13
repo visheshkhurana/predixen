@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -136,9 +137,9 @@ const METRIC_LABELS: Record<string, string> = {
 };
 
 const METRIC_FORMAT: Record<string, (v: number) => string> = {
-  mrr: (v) => `$${v >= 1000 ? (v / 1000).toFixed(1) + "K" : v.toFixed(0)}`,
-  monthly_burn: (v) => `$${v >= 1000 ? (v / 1000).toFixed(1) + "K" : v.toFixed(0)}`,
-  cash_balance: (v) => `$${v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : v >= 1000 ? (v / 1000).toFixed(0) + "K" : v.toFixed(0)}`,
+  mrr: (v) => formatCurrencyAbbrev(v),
+  monthly_burn: (v) => formatCurrencyAbbrev(v),
+  cash_balance: (v) => formatCurrencyAbbrev(v),
   runway_months: (v) => `${v.toFixed(1)} mo`,
   churn_rate: (v) => `${(v * 100).toFixed(1)}%`,
   growth_rate: (v) => `${(v * 100).toFixed(1)}%`,
