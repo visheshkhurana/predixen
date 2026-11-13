@@ -27,28 +27,33 @@ def seed_twin_intelligence(db: Session, company_id: int = 168):
 
     demo_company_ids = _get_demo_company_ids(db)
     for cid in demo_company_ids:
-        # Always refresh the CompanyState financials so the Digital Twin stays
-        # coherent with the canonical dashboard/Truth Scan (burn $24.1K, runway
-        # 21.3mo, customers 20, headcount 12). This used to be skipped once
-        # TwinEvents existed, which froze stale/incoherent values (burn $28K,
-        # headcount 18, LTV $5K) from an earlier seed. _enrich_company_state and
-        # _ensure_financial_records are idempotent (fixed values / skip-if-present).
-        _enrich_company_state(db, cid)
-        _ensure_financial_records(db, cid)
-
-        already = db.query(TwinEvent).filter(
-            TwinEvent.company_id == cid,
-            TwinEvent.source == SEED_MARKER
-        ).first()
-        if already:
-            continue
-        _seed_twin_events(db, cid)
-        _seed_additional_decisions(db, cid)
+        seed_twin_for_company(db, cid)
 
     _seed_peer_companies(db)
 
     db.commit()
     logger.info("Twin/Intelligence seed data complete")
+
+
+def seed_twin_for_company(db: Session, cid: int) -> None:
+    """Twin/Intelligence rows for one company. Caller commits."""
+    # Always refresh the CompanyState financials so the Digital Twin stays
+    # coherent with the canonical dashboard/Truth Scan (burn $24.1K, runway
+    # 21.3mo, customers 20, headcount 12). This used to be skipped once
+    # TwinEvents existed, which froze stale/incoherent values (burn $28K,
+    # headcount 18, LTV $5K) from an earlier seed. _enrich_company_state and
+    # _ensure_financial_records are idempotent (fixed values / skip-if-present).
+    _enrich_company_state(db, cid)
+    _ensure_financial_records(db, cid)
+
+    already = db.query(TwinEvent).filter(
+        TwinEvent.company_id == cid,
+        TwinEvent.source == SEED_MARKER
+    ).first()
+    if already:
+        return
+    _seed_twin_events(db, cid)
+    _seed_additional_decisions(db, cid)
 
 
 def _get_demo_company_ids(db: Session):
