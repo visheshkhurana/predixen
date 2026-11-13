@@ -1,6 +1,8 @@
+import html as html_lib
 import os
 import uuid
 import logging
+from urllib.parse import urlencode, urlsplit
 from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Request, Query, HTTPException, Header, Depends
@@ -38,7 +40,19 @@ async def resend_webhook(request: Request):
     if not resend_webhook_sig.verify(secret, request.headers, raw_body):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
-    body = await request.json()
+    # A signed body that is not a JSON object is the caller's error, not ours.
+    # Without this guard the raise happens ABOVE every try in this handler, so a
+    # delivery Resend considers normal enough to sign comes back 500 and reads
+    # in our logs as an outage on our side. Same shape, same codes, as the
+    # sibling receiver at notifications.py:223-228, and still after the
+    # signature check so an unverified body is never parsed.
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+
     event_type = body.get("type", "")
     data = body.get("data", {})
     email_id = data.get("email_id") or data.get("id", "")
@@ -135,7 +149,15 @@ async def resend_webhook(request: Request):
     except Exception as e:
         db.rollback()
         logger.error(f"Webhook error: {e}")
-        return {"status": "error", "message": str(e)}
+        # Non-2xx on purpose. Returning a plain dict here is HTTP 200, which
+        # tells Resend the delivery was handled: it does not redeliver and the
+        # event is dropped with nothing in the response to show it. 500 is the
+        # honest code for our own write failing -- the body was valid, the fault
+        # was ours -- and it is the code that asks for another attempt.
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)},
+        )
     finally:
         db.close()
 
@@ -206,7 +228,12 @@ async def email_feedback_page(
             db.close()
 
     base_url = "/email-tracking/feedback"
-    params = f"email_id={email_id or ''}&email={email or ''}&campaign={campaign or ''}"
+    # Query values are reflected into the page, so encode them for the URL and
+    # then escape the result for the HTML attribute.
+    params = html_lib.escape(
+        urlencode({"email_id": email_id or "", "email": email or "", "campaign": campaign or ""}),
+        quote=True,
+    )
 
     if submitted:
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -243,7 +270,18 @@ async def email_feedback_page(
 
 @router.post("/feedback")
 async def submit_feedback_api(request: Request):
-    body = await request.json()
+    # Same guard as the receiver above, and for the same reason: this parse sits
+    # above the try that opens two lines down, so a non-object body raised
+    # uncaught and answered 500 for a malformed request. Unlike the receiver
+    # there is no signature here and nothing to redeliver, so this one only
+    # fixes the status code; the `except` below is left as it is, deliberately.
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid feedback payload")
+
     db = next(get_db())
     try:
         fb = EmailFeedback(
@@ -286,20 +324,14 @@ def _verify_admin_jwt(token_str: str) -> bool:
         # Master admin token (issued only to the configured master admin)
         if user_id == "master" and payload.get("is_master"):
             return True
-        admin_email = (os.getenv("ADMIN_MASTER_EMAIL") or "").lower().strip()
         db = next(get_db())
         try:
             from server.models.user import User
+            from server.api.admin import is_platform_admin
             user = db.query(User).filter(User.id == int(user_id)).first()
-            if not user:
-                return False
-            if user.role == "owner":
-                return True
-            if admin_email and user.email.lower().strip() == admin_email:
-                return True
+            return bool(user) and is_platform_admin(user)
         finally:
             db.close()
-        return False
     except Exception:
         return False
 
@@ -406,6 +438,29 @@ async def email_analytics(
         db.close()
 
 
+_REDIRECT_HOSTS = {"founderconsole.ai", "www.founderconsole.ai"}
+_DEFAULT_REDIRECT = "https://founderconsole.ai"
+
+
+def safe_redirect_target(dest: Optional[str]) -> str:
+    """Our own site only: a same-site path or an https URL on a first-party host."""
+    if not dest or not isinstance(dest, str):
+        return _DEFAULT_REDIRECT
+    value = dest.strip()
+    if any(ch in value for ch in ("\\", "\r", "\n", "\t")):
+        return _DEFAULT_REDIRECT
+    if value.startswith("/") and not value.startswith("//"):
+        return value
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return _DEFAULT_REDIRECT
+    host = (parts.hostname or "").lower()
+    if parts.scheme == "https" and host in _REDIRECT_HOSTS and not parts.username and not parts.password:
+        return value
+    return _DEFAULT_REDIRECT
+
+
 @router.get("/welcome")
 async def welcome_redirect(
     request: Request,
@@ -413,6 +468,7 @@ async def welcome_redirect(
     uid: Optional[str] = None,
     dest: str = Query(default="https://founderconsole.ai")
 ):
+    dest = safe_redirect_target(dest)
     db = next(get_db())
     try:
         from server.models.email_event import EmailLinkClick

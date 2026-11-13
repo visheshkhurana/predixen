@@ -250,3 +250,22 @@ def test_evaluate_uses_stored_thresholds_and_enabled(db, monkeypatch):
 
     sa.update_rule(c.id, "default-runway-caution", sa.AlertRuleUpdate(threshold=3), db=db, current_user=USER)
     assert "runway_caution" not in {a["type"] for a in sa._evaluate_alerts(c, db)}
+
+
+def test_runway_alert_does_not_fire_when_cash_was_never_entered(db, monkeypatch):
+    c = _company(db)
+    sa = _rule_store(monkeypatch, c)
+    _rec(db, c.id, 9, revenue=1000, payroll=12000, cash_balance=None)
+
+    types = {a["type"] for a in sa._evaluate_alerts(c, db)}
+    assert "runway_warning" not in types
+    assert "runway_caution" not in types
+
+
+def test_runway_alert_fires_on_cash_entered_as_zero(db, monkeypatch):
+    c = _company(db)
+    sa = _rule_store(monkeypatch, c)
+    _rec(db, c.id, 9, revenue=1000, payroll=12000, cash_balance=0)
+
+    alerts = [a for a in sa._evaluate_alerts(c, db) if a["type"] == "runway_warning"]
+    assert alerts and "Runway is 0.0 months" in alerts[0]["message"]

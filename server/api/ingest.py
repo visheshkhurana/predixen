@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from server.core.uploads import read_upload_capped
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Dict, Any, Optional, List
@@ -8,6 +9,7 @@ import os
 import json
 import logging
 
+from server.core.openai_credentials import chat_sampling_params, is_missing_key_error
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -82,6 +84,15 @@ class ExtractionResponse(BaseModel):
     fileName: str
     uploadId: Optional[int] = None
     calculatedMetrics: Dict[str, Any]
+
+def _detected_currency(value: Any) -> Optional[str]:
+    """A supported ISO code the extractor found, or None."""
+    from server.services.currency import SUPPORTED_CURRENCIES
+    if not isinstance(value, str):
+        return None
+    code = value.strip().upper()
+    return code if code in SUPPORTED_CURRENCIES else None
+
 
 def normalize_currency_value(value: Any) -> Optional[float]:
     """Normalize a currency or percentage value to float, handling various formats.
@@ -336,9 +347,8 @@ async def ingest_financials(
     if fileType == 'excel' and file_ext not in ['.xls', '.xlsx']:
         raise HTTPException(status_code=400, detail="File must be an Excel file (.xls or .xlsx)")
     
+    content = await read_upload_capped(file)
     try:
-        content = await file.read()
-        
         suffix = '.pdf' if fileType == 'pdf' else file_ext
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
             tmp_file.write(content)
@@ -346,16 +356,20 @@ async def ingest_financials(
         
         try:
             if fileType == 'pdf':
-                result = process_termina_pdf(tmp_path)
+                result = process_termina_pdf(
+                    tmp_path, company_id=companyId, user_id=current_user.id
+                )
                 raw_metrics = result.get('raw_metrics', result)
                 extracted_company_name = result.get('company_name')
-                extracted_currency = result.get('currency', 'USD')
+                extracted_currency = result.get('currency')
                 extraction_summary = result.get('summary')
             else:
-                result = process_termina_excel(tmp_path)
+                result = process_termina_excel(
+                    tmp_path, company_id=companyId, user_id=current_user.id
+                )
                 raw_metrics = result.get('raw_metrics', result.get('baseline_data', {}))
                 extracted_company_name = raw_metrics.get('company_name')
-                extracted_currency = raw_metrics.get('currency', 'USD')
+                extracted_currency = raw_metrics.get('currency')
                 extraction_summary = None
             
             extracted = extract_with_confidence(raw_metrics, fileType)
@@ -371,8 +385,12 @@ async def ingest_financials(
             if extracted_company_name and extracted_company_name.strip():
                 company.name = extracted_company_name.strip()
                 logger.info(f"Updated company name to: {extracted_company_name}")
-            if extracted_currency:
-                company.currency = extracted_currency
+            # Only a currency the document actually states may change the
+            # company's. Defaulting a missing one to "USD" here reset every
+            # INR company to dollars on its first upload.
+            detected_currency = _detected_currency(extracted_currency)
+            if detected_currency:
+                company.currency = detected_currency
             db.commit()
             
             dataset = Dataset(
@@ -1116,7 +1134,7 @@ Analyze the provided document and extract the following information. Return ONLY
   "company_info": {
     "name": "string - the company name",
     "website": "string - the company website URL if found, or null",
-    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, other",
+    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, agency, startup, other",
     "stage": "string - one of: pre_seed, seed, series_a, series_b based on funding mentioned"
   },
   "financials": {
@@ -1158,7 +1176,7 @@ Extract company information and financial metrics from these images. Return ONLY
   "company_info": {
     "name": "string - the company name visible in the deck",
     "website": "string - company website if shown, or null",
-    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, other",
+    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, agency, startup, other",
     "stage": "string - one of: pre_seed, seed, series_a, series_b"
   },
   "financials": {
@@ -1198,36 +1216,86 @@ class OnboardingExtractionResponse(BaseModel):
     raw_data_preview: Optional[Dict[str, Any]] = None  # For cross-check UI with Excel/CSV
 
 
-def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
-    """Use OpenAI to extract company info and financials from document text."""
-    from openai import OpenAI
-    
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
-    if not api_key:
-        raise ValueError("OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    
+def _resolve_onboarding_openai() -> tuple[Optional[str], Optional[str]]:
+    """Return ``(api_key, base_url)`` for the onboarding extractors.
+
+    The Replit AI Integrations key only works against its own proxy, so its base
+    URL is returned with it. A plain ``OPENAI_API_KEY`` talks to OpenAI directly
+    and must not inherit the integration base URL. Shared with the PDF and Excel
+    extractors so every onboarding path answers this the same way.
+    """
+    from server.core.openai_credentials import resolve_openai_credentials
+
+    return resolve_openai_credentials()
+
+
+def _known_audit_scope(user) -> tuple[Optional[int], Optional[int]]:
+    """Company and user for an audit row, when this founder already has one.
+
+    Onboarding extract-deck has a user and often no company id in the request.
+    A lookup failure must not block extraction, and the session always closes.
+    """
+    user_id = getattr(user, "id", None)
+    if user_id is None:
+        return None, None
+    from server.core.db import SessionLocal
+
+    db = SessionLocal()
     try:
-        response = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a financial analyst AI. Always respond with valid JSON only."
-                },
-                {
-                    "role": "user",
-                    "content": ONBOARDING_EXTRACTION_PROMPT + "\n\nDocument text:\n\n" + text[:20000]
-                }
-            ],
-            max_tokens=2000,
-            temperature=0.1,
-            timeout=60
+        company = (
+            db.query(Company)
+            .filter(Company.user_id == user_id)
+            .order_by(Company.id.asc())
+            .first()
         )
-        
+        return (company.id if company is not None else None), user_id
+    except Exception:
+        logger.warning("Could not resolve a company for the onboarding audit row", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None, user_id
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
+def extract_onboarding_data_with_openai(
+    text: str,
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Use OpenAI to extract company info and financials from document text."""
+    from server.lib.llm.openai_client import open_audited_openai
+
+    api_key, base_url = _resolve_onboarding_openai()
+
+    if not api_key:
+        raise ValueError(
+            "OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY."
+        )
+
+    try:
+        with open_audited_openai(company_id=company_id, user_id=user_id) as client:
+            response = client.chat.completions.create(
+                model="gpt-5",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a financial analyst AI. Always respond with valid JSON only."
+                    },
+                    {
+                        "role": "user",
+                        "content": ONBOARDING_EXTRACTION_PROMPT + "\n\nDocument text:\n\n" + text[:20000]
+                    }
+                ],
+                **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
+                timeout=60
+            )
+
         content = response.choices[0].message.content.strip()
         # Clean up markdown if present
         if content.startswith("```"):
@@ -1242,20 +1310,23 @@ def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
         raise
 
 
-def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
+def extract_onboarding_data_with_vision(
+    image_base64_list: List[str],
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Use OpenAI Vision to extract company info and financials from images."""
-    from openai import OpenAI
-    
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+    from server.lib.llm.openai_client import open_audited_openai
+
+    api_key, base_url = _resolve_onboarding_openai()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    
+        raise ValueError(
+            "OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY."
+        )
+
     content = [{"type": "text", "text": ONBOARDING_VISION_PROMPT}]
-    
+
     for img_b64 in image_base64_list[:8]:  # Limit to 8 pages
         content.append({
             "type": "image_url",
@@ -1264,25 +1335,25 @@ def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[st
                 "detail": "high"
             }
         })
-    
+
     try:
-        response = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a financial analyst AI. Respond with valid JSON only."
-                },
-                {
-                    "role": "user",
-                    "content": content
-                }
-            ],
-            max_tokens=2000,
-            temperature=0.1,
-            timeout=90
-        )
-        
+        with open_audited_openai(company_id=company_id, user_id=user_id) as client:
+            response = client.chat.completions.create(
+                model="gpt-5",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a financial analyst AI. Respond with valid JSON only."
+                    },
+                    {
+                        "role": "user",
+                        "content": content
+                    }
+                ],
+                **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
+                timeout=90
+            )
+
         result = response.choices[0].message.content.strip()
         if result.startswith("```"):
             result = result.split("```")[1]
@@ -1298,15 +1369,19 @@ def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[st
 
 @router.post("/ingest/onboarding/extract-deck")
 async def extract_onboarding_deck(
-    file: UploadFile = File(...)
+    current_user: User = Depends(get_current_user),
+    file: UploadFile = File(...),
 ):
     """
     Extract company information and financials from a pitch deck or financial document.
     Supports PDF, Excel (XLS/XLSX), and CSV files.
     Uses text extraction with GPT-4o, falling back to vision for image-based PDFs.
-    
-    This endpoint does NOT require authentication - it's used during onboarding before user creation.
+
+    Auth runs before any OpenAI call. An anonymous upload must not reach GPT-4o.
+    ``current_user`` is the gate: FastAPI resolves it before this body runs.
     """
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file uploaded")
     
@@ -1319,6 +1394,7 @@ async def extract_onboarding_deck(
         )
     
     temp_file = None
+    company_id, user_id = _known_audit_scope(current_user)
     try:
         # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp:
@@ -1362,11 +1438,15 @@ async def extract_onboarding_deck(
                 }
                 
                 # Use GPT to extract structured data
-                result = extract_onboarding_data_with_openai(excel_text)
+                result = extract_onboarding_data_with_openai(
+                    excel_text, company_id=company_id, user_id=user_id
+                )
                 
                 # Also try direct structured extraction for known formats
                 try:
-                    structured_result = process_termina_excel(temp_file)
+                    structured_result = process_termina_excel(
+                        temp_file, company_id=company_id, user_id=user_id
+                    )
                     if structured_result and structured_result.get('metrics'):
                         metrics = structured_result['metrics']
                         # Merge structured extraction if we got better data
@@ -1385,6 +1465,8 @@ async def extract_onboarding_deck(
                         if metrics.get('operating_income') and not result['financials'].get('operating_income'):
                             result['financials']['operating_income'] = metrics['operating_income']
                 except Exception as struct_err:
+                    if is_missing_key_error(struct_err):
+                        raise
                     logger.warning(f"Structured Excel extraction failed, using GPT result: {struct_err}")
                 
             except Exception as excel_error:
@@ -1402,7 +1484,9 @@ async def extract_onboarding_deck(
                 
                 if pdf_text and len(pdf_text.strip()) > 500:
                     # Good text content, use text-based extraction
-                    result = extract_onboarding_data_with_openai(pdf_text)
+                    result = extract_onboarding_data_with_openai(
+                        pdf_text, company_id=company_id, user_id=user_id
+                    )
                     extraction_method = "text+gpt4o"
                 else:
                     raise ValueError("Insufficient text content")
@@ -1425,7 +1509,9 @@ async def extract_onboarding_deck(
                         img_b64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
                         image_base64_list.append(img_b64)
                     
-                    result = extract_onboarding_data_with_vision(image_base64_list)
+                    result = extract_onboarding_data_with_vision(
+                        image_base64_list, company_id=company_id, user_id=user_id
+                    )
                     extraction_method = "vision+gpt4o"
                     
                 except Exception as vision_error:
@@ -1478,6 +1564,12 @@ async def extract_onboarding_deck(
             "e-commerce": "ecommerce",
             "retail": "ecommerce",
             "marketplace": "marketplace",
+            "agency": "agency",
+            "services": "agency",
+            "professional services": "agency",
+            "consulting": "agency",
+            "startup": "startup",
+            "pre-revenue": "startup",
             "other": "other",
         }
         industry = industry_mapping.get(industry_raw, "")

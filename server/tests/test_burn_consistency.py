@@ -379,3 +379,75 @@ def test_disconnect_removes_connector_records(db, monkeypatch):
     assert resp["records_removed"] == 1
     left = [r.source_type for r in db.query(FinancialRecord).filter_by(company_id=c.id)]
     assert left == ["manual"]
+
+
+# ---------------------------------------------------------------------------
+# Weekly briefing and /analyze: the same rule, and unknown cash stays unknown
+# ---------------------------------------------------------------------------
+
+def test_weekly_briefing_includes_marketing_and_keeps_cash_unknown(db, monkeypatch):
+    """Sentinel's reproduction: revenue 1000, marketing 4000, no cash.
+
+    The briefing used to report total_costs 0.0 and net_burn -1000.0 (a company
+    taking money in) while the shared rule says it burns 3000.
+    """
+    import server.api.smart_alerts as sa
+
+    c = _company(db)
+    db.add(FinancialRecord(company_id=c.id, period_start=date(2026, 10, 1),
+                           period_end=date(2026, 10, 31), revenue=1000,
+                           marketing_expense=4000, cogs=0, opex=0, payroll=0,
+                           other_costs=0, cash_balance=None))
+    db.commit()
+
+    prompts = []
+
+    class FakeLLM:
+        def chat(self, **kw):
+            prompts.append(kw.get("messages"))
+            return {"content": "briefing"}
+
+    async def no_email(*a, **k):
+        return {"success": False}
+
+    monkeypatch.setattr("server.lib.llm.llm_router.get_llm_router", lambda **k: FakeLLM())
+    monkeypatch.setattr("server.email.service.send_lifecycle_email", no_email)
+
+    founder = SimpleNamespace(id=1, email="founder@example.com")
+    resp = asyncio.run(sa.send_weekly_briefing(c.id, db=db, current_user=founder))
+
+    metrics = resp["metrics"]
+    assert metrics["burn_rate"] == pytest.approx(4000.0)   # was 0.0
+    assert metrics["net_burn"] == pytest.approx(3000.0)    # was -1000.0
+    assert metrics["cash_balance"] is None                 # was 0.0
+    assert metrics["runway_months"] is None
+    assert "4000.0" in prompts[0][0]["content"]
+    assert "-1000" not in prompts[0][0]["content"]
+
+
+def test_analyze_unknown_cash_is_unknown_not_healthy(db):
+    import server.api.alerts as alerts
+
+    c = _company(db)
+    db.add(FinancialRecord(company_id=c.id, period_start=date(2026, 10, 1),
+                           period_end=date(2026, 10, 31), revenue=4000,
+                           opex=8000, cash_balance=None))
+    db.commit()
+
+    resp = alerts._perform_health_analysis(c.id, None, db, USER)
+    assert resp["overall_status"] == "unknown"       # was "healthy"
+    assert resp["drivers"]["runway_months"]["status"] == "unknown"
+    assert resp["drivers"]["runway_months"]["current_value"] is None
+
+
+def test_analyze_zero_cash_is_critical_not_healthy(db):
+    import server.api.alerts as alerts
+
+    c = _company(db)
+    db.add(FinancialRecord(company_id=c.id, period_start=date(2026, 10, 1),
+                           period_end=date(2026, 10, 31), revenue=4000,
+                           opex=8000, cash_balance=0))
+    db.commit()
+
+    resp = alerts._perform_health_analysis(c.id, None, db, USER)
+    assert resp["overall_status"] == "critical"      # was "healthy"

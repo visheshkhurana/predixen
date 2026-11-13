@@ -8,17 +8,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from datetime import datetime
 from server.email.service import _send_email_sync
+from server.email.recipients import load_recipients
 
 CAMPAIGN = "founderconsole_quarterly_jun2026_v39_2500users_runora"
 
 BASE_URL = "https://founderconsole.ai"
 
-RECIPIENTS = [
-    {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
-    {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
-    {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "start@runora.ai", "id": "start_runora", "name": "Team"},
-]
+# Loaded from RECIPIENTS / RECIPIENTS_FILE (never committed); see recipients.py
+RECIPIENTS = load_recipients()
 
 
 def build_plain_text(rcpt: dict) -> str:
@@ -60,7 +57,7 @@ FounderConsole
 
 def build_html(rcpt: dict) -> str:
     email = rcpt['email']
-    open_tracking_url = f"{BASE_URL}/email-tracking/analytics?token=founderconsole-analytics-2026&campaign={CAMPAIGN}&email={email}&event=open"
+    open_tracking_url = f"{BASE_URL}/email-tracking/analytics?campaign={CAMPAIGN}&email={email}&event=open"
     return f"""<!DOCTYPE html>
 <html>
 <head>

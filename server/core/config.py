@@ -16,6 +16,35 @@ def parse_optional_bool(env_var: str) -> Optional[bool]:
         return None
     return val.lower() == "true"
 
+# Approximate FX for reporting only (admin MRR across Stripe and Razorpay
+# currencies). Never used to price or charge anything. Override per currency
+# with USD_PER_<CODE>, e.g. USD_PER_INR=0.0113. Defaults as of Nov 2026:
+# about Rs 88.5 per USD; AED is pegged at 3.6725 per USD.
+DEFAULT_USD_PER_CURRENCY = {
+    "USD": 1.0,
+    "INR": 0.0113,
+    "AED": 0.2723,
+}
+
+
+def usd_per_currency() -> dict:
+    """USD value of one unit of each supported currency (approximate).
+
+    Read on every call so an env override applies without a restart in tests.
+    An unset, unparsable or non-positive override falls back to the default.
+    """
+    rates = {}
+    for code, default in DEFAULT_USD_PER_CURRENCY.items():
+        raw = os.getenv(f"USD_PER_{code}", "").strip()
+        try:
+            value = float(raw) if raw else default
+        except ValueError:
+            value = default
+        rates[code] = value if value > 0 else default
+    rates["USD"] = 1.0
+    return rates
+
+
 class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./founderconsole.db")
     SECRET_KEY: str = os.getenv("SESSION_SECRET", "founderconsole-secret-key-change-in-production")

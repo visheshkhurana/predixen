@@ -96,6 +96,8 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import csv_import as csv_import_api
     from server.api import currency as currency_api
     from server.api import leads as leads_api
+    from server.api import d2c as d2c_api
+    from server.api import contact as contact_api
     from server.api import events as events_api
     from server.api import cap_table as cap_table_api
     from server.api import hiring_planner as hiring_planner_api
@@ -170,6 +172,9 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(csv_import_api.router)
     app.include_router(currency_api.router)
     app.include_router(leads_api.router)
+    app.include_router(d2c_api.router)
+    app.include_router(d2c_api.company_router)
+    app.include_router(contact_api.router)
     app.include_router(events_api.router)
     app.include_router(cap_table_api.router)
     app.include_router(hiring_planner_api.router)
@@ -236,6 +241,14 @@ async def _run_deferred_startup():
             logger.warning(f"Could not ensure competitor tables: {e}")
 
         try:
+            from server.models.d2c_month import D2CAdSpend, D2CMonth
+            D2CMonth.__table__.create(bind=engine, checkfirst=True)
+            D2CAdSpend.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured d2c_months and d2c_ad_spend tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure d2c_months table: {e}")
+
+        try:
             from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
             Base.metadata.create_all(
                 bind=engine,
@@ -244,6 +257,40 @@ async def _run_deferred_startup():
             logger.info("Ensured session-revocation tables exist")
         except Exception as e:
             logger.warning(f"Could not ensure session-revocation tables: {e}")
+
+        try:
+            from server.models.stripe_reconciliation import StripeReconciliationEvent
+            StripeReconciliationEvent.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured stripe reconciliation table exists")
+        except Exception as e:
+            logger.warning(f"Could not ensure stripe reconciliation table: {e}")
+
+        try:
+            from server.models.razorpay_billing import RazorpaySubscription, RazorpayWebhookEvent
+            RazorpaySubscription.__table__.create(bind=engine, checkfirst=True)
+            RazorpayWebhookEvent.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured razorpay billing tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure razorpay billing tables: {e}")
+
+        # #176 columns. create_all does not alter an existing leads table, and
+        # production leaves RUN_MIGRATIONS off, so this is not behind that flag.
+        try:
+            from server.core.migrations import ensure_lead_consent_columns
+            ensure_lead_consent_columns(engine)
+            logger.info("Ensured lead consent columns exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure lead consent columns: {e}")
+
+        # Campaign columns. create_all does not alter an existing leads table,
+        # and production leaves RUN_MIGRATIONS off, so this is not behind that
+        # flag. Nullable VARCHAR(200), no default, no backfill.
+        try:
+            from server.core.migrations import ensure_lead_utm_columns
+            ensure_lead_utm_columns(engine)
+            logger.info("Ensured lead utm columns exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure lead utm columns: {e}")
 
         if settings.should_run_migrations:
             logger.info("Running migrations...")
@@ -465,6 +512,7 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/auth/refresh",
     "/companies/*/seed-sample",
     "/billing/webhook",  # Stripe webhook — authenticated by signature, not session
+    "/billing/razorpay/webhook",  # Razorpay webhook — X-Razorpay-Signature HMAC
     # RFC 8058 one-click POST has no session and no CSRF header.
     "/email/unsubscribe",
     "/api/email/unsubscribe",
@@ -563,3 +611,11 @@ def health():
     }
 
 print(f"[main.py] Module load complete (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
+
+# Outermost ASGI wrapper. Start uvicorn as server.main:asgi_app with
+# --no-proxy-headers. A second proxy-headers wrap outside this class would
+# rewrite the peer before it is recorded, and X-Real-IP would no longer be
+# trusted only from Express.
+from server.middleware.peer import RecordPeer
+
+asgi_app = RecordPeer(app)

@@ -19,7 +19,7 @@ from server.models.company import Company
 from server.models.truth_scan import TruthScan
 from server.models.financial import FinancialRecord
 from server.api.simulations import extract_metric_value
-from server.core.burn import gross_burn
+from server.core.burn import burn_summary, gross_burn
 
 logger = logging.getLogger(__name__)
 
@@ -176,9 +176,16 @@ def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
                 })
 
     if latest:
-        cash = float(latest.cash_balance or 0)
+        # An unentered balance is unknown, not $0. Coalescing it to 0.0 made it
+        # indistinguishable from a founder who entered 0, and the old
+        # `cash > 0` guard suppressed both - so the founder whose cash was
+        # genuinely exhausted got no warning at all. Known-ness decides:
+        # unknown emits nothing, while a real 0.0 divides through to runway
+        # 0.0 and must fire.
+        cash_known = latest.cash_balance is not None
+        cash = float(latest.cash_balance) if cash_known else None
         net_burn = gross_burn(latest) - float(latest.revenue or 0)
-        if net_burn > 0 and cash > 0:
+        if net_burn > 0 and cash_known:
             runway = cash / net_burn
             if runway_warning_mo is not None and runway < runway_warning_mo:
                 new_alerts.append({
@@ -539,20 +546,22 @@ async def send_weekly_briefing(
     key_metrics = {}
     if latest:
         revenue = float(latest.revenue or 0)
-        total_costs = (
-            float(latest.opex or 0) + float(latest.payroll or 0) +
-            float(latest.cogs or 0) + float(latest.other_costs or 0)
-        )
+        # The shared rule, not a local sum: the local sum omitted marketing and
+        # told the model a burning company was taking money in. Cash and runway
+        # come from the same summary, so an unentered balance stays unknown
+        # instead of arriving as a fabricated 0.
+        summary = burn_summary(latest)
+        total_costs = summary["gross_burn"] or 0.0
         net_burn = total_costs - revenue
-        cash = float(latest.cash_balance or 0)
-        runway = cash / net_burn if net_burn > 0 else None
+        cash = summary["cash_balance"]
+        runway = summary["runway_months"]
 
         key_metrics = {
             "mrr": revenue,
             "burn_rate": total_costs,
             "net_burn": net_burn,
             "cash_balance": cash,
-            "runway_months": round(runway, 1) if runway else None,
+            "runway_months": round(runway, 1) if runway is not None else None,
         }
 
     unacknowledged = [a for a in alerts if not a.get("acknowledged")]

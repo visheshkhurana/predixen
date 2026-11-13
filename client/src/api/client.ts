@@ -1,3 +1,4 @@
+import { readFirstTouchAttribution } from '@/lib/attribution';
 import { ApiError, safeParseJSON } from '@/lib/errors';
 import {
   attemptTokenRefresh,
@@ -178,17 +179,20 @@ async function request<T>(
 
 export const api = {
   auth: {
-    // `invite` is the token from /auth?invite=…; the server accepts it when
-    // it was sent to this email (workspace membership or platform role).
-    register: (email: string, password: string, invite?: string | null) =>
+    register: (email: string, password: string, distinctId?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(distinctId ? { distinct_id: distinctId } : {}),
+          ...readFirstTouchAttribution(),
+        }),
       }),
-    login: (email: string, password: string, invite?: string | null) =>
+    login: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
+        body: JSON.stringify({ email, password }),
       }),
     adminLogin: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/admin/login', {
@@ -851,8 +855,6 @@ export const api = {
         sources: string[];
         last_updated: string;
         is_cached: boolean;
-        is_fallback?: boolean;
-        note?: string | null;
       }>('/benchmarks/search', {
         method: 'POST',
         body: JSON.stringify({ industry, stage }),

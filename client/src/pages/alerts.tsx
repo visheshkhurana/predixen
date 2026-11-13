@@ -44,9 +44,10 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import { cn } from "@/lib/utils";
+import { cn, formatRunwayInline, isRunwaySustainable, formatCurrencyAbbrev } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { formatAlertValue, formatMetricChange, isNum, safeFormat } from "@/lib/alertFormat";
 
 interface SmartAlert {
   id: string;
@@ -55,9 +56,9 @@ interface SmartAlert {
   title: string;
   message: string;
   metric: string;
-  currentValue: number;
-  previousValue: number;
-  changePercent: number;
+  currentValue: number | null;
+  previousValue: number | null;
+  changePercent: number | null;
   timestamp: string;
   acknowledged: boolean;
   suggestedAction: string;
@@ -75,8 +76,8 @@ interface AlertRule {
 interface DriverHealth {
   metric: string;
   status: "healthy" | "warning" | "critical" | "unknown";
-  current_value: number;
-  historical_mean: number;
+  current_value: number | null;
+  historical_mean: number | null;
   z_score: number;
   trend_direction: "up" | "down" | "flat";
   alert_count: number;
@@ -227,12 +228,12 @@ function UnknownStatusCard() {
 
 function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> }) {
   const keyMetrics = [
-    { key: "runway_months", label: "Runway", unit: " months", format: (v: number) => v.toFixed(1) },
-    { key: "burn_multiple", label: "Burn Multiple", unit: "x", format: (v: number) => v.toFixed(2) },
-    { key: "revenue_growth_mom", label: "Revenue Growth", unit: "%", format: (v: number) => (v * 100).toFixed(1) },
-    { key: "gross_margin", label: "Gross Margin", unit: "%", format: (v: number) => (v * 100).toFixed(1) },
-    { key: "net_burn", label: "Net Burn", unit: "", format: (v: number) => `$${(v / 1000).toFixed(0)}K` },
-    { key: "churn_rate", label: "Churn Rate", unit: "%", format: (v: number) => (v * 100).toFixed(2) },
+    { key: "runway_months", label: "Runway", unit: " months", format: safeFormat((v: number) => formatRunwayInline(v)) },
+    { key: "burn_multiple", label: "Burn Multiple", unit: "x", format: safeFormat((v: number) => v.toFixed(2)) },
+    { key: "revenue_growth_mom", label: "Revenue Growth", unit: "%", format: safeFormat((v: number) => (v * 100).toFixed(1)) },
+    { key: "gross_margin", label: "Gross Margin", unit: "%", format: safeFormat((v: number) => (v * 100).toFixed(1)) },
+    { key: "net_burn", label: "Net Burn", unit: "", format: safeFormat((v: number) => formatCurrencyAbbrev(v)) },
+    { key: "churn_rate", label: "Churn Rate", unit: "%", format: safeFormat((v: number) => (v * 100).toFixed(2)) },
   ];
 
   const getSparklineColor = (status: string) => {
@@ -254,7 +255,8 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="health-dashboard">
       {keyMetrics.map((metric) => {
         const health = drivers[metric.key];
-        const hasData = health && health.status !== "unknown";
+        const hasData =
+          health && health.status !== "unknown" && health.current_value != null;
 
         return (
           <Card key={metric.key} data-testid={`health-metric-${metric.key}`}>
@@ -273,9 +275,10 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
                   <div className="flex items-end justify-between gap-4">
                     <div className="flex items-baseline gap-1">
                       <span className="text-2xl font-bold font-mono">
-                        {metric.format(health.current_value)}
+                        {metric.format(health.current_value as number)}
                       </span>
-                      {metric.unit && metric.key !== "net_burn" && (
+                      {metric.unit && metric.key !== "net_burn" &&
+                        !(metric.key === "runway_months" && isRunwaySustainable(health.current_value)) && (
                         <span className="text-sm text-muted-foreground">{metric.unit}</span>
                       )}
                     </div>
@@ -317,9 +320,8 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
 function AlertCard({ alert, companyId, onAcknowledge }: { alert: SmartAlert; companyId: number; onAcknowledge: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
-  const formatMetricChange = (current: number, previous: number, changePercent: number) => {
-    const direction = changePercent >= 0 ? "+" : "";
-    return `${direction}${changePercent.toFixed(1)}%`;
+  const formatChange = (changePercent: number | null) => {
+    return formatMetricChange(changePercent) ?? "";
   };
 
   return (
@@ -358,12 +360,12 @@ function AlertCard({ alert, companyId, onAcknowledge }: { alert: SmartAlert; com
                 <span className="text-xs text-muted-foreground" data-testid={`text-alert-time-${alert.id}`}>
                   {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
                 </span>
-                {alert.currentValue !== undefined && alert.previousValue !== undefined && (
+                {isNum(alert.currentValue) && isNum(alert.previousValue) && isNum(alert.changePercent) && (
                   <span className={cn(
                     "text-xs font-mono font-medium",
-                    alert.changePercent >= 0 ? "text-green-500" : "text-red-500"
+                    (alert.changePercent ?? 0) >= 0 ? "text-green-500" : "text-red-500"
                   )} data-testid={`text-alert-change-${alert.id}`}>
-                    {formatMetricChange(alert.currentValue, alert.previousValue, alert.changePercent)}
+                    {formatChange(alert.changePercent)}
                   </span>
                 )}
               </div>
@@ -606,7 +608,7 @@ function generateThresholdAlerts(metrics: ReturnType<typeof useFinancialMetrics>
       type: 'cash_critical',
       severity: 'critical',
       title: 'Cash Balance Critical',
-      message: `Cash reserves at $${(metrics.cashOnHand / 1000).toFixed(0)}K — dangerously low. Immediate fundraising required.`,
+      message: `Cash reserves at ${formatCurrencyAbbrev(metrics.cashOnHand)} — dangerously low. Immediate fundraising required.`,
       metric: 'cash_balance',
       currentValue: metrics.cashOnHand,
       previousValue: 0,
@@ -746,18 +748,10 @@ export default function AlertsPage() {
   const criticalCount = alerts.filter(a => a.severity === "critical" && !a.acknowledged).length;
   const warningCount = alerts.filter(a => a.severity === "warning" && !a.acknowledged).length;
 
-  const formatValue = (value: number, metric: string) => {
-    if (metric.includes("margin") || metric.includes("rate")) {
-      return `${(value * 100).toFixed(1)}%`;
-    }
-    if (value >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-      return `$${(value / 1000).toFixed(1)}K`;
-    }
-    return `$${value.toFixed(0)}`;
-  };
+  const formatValue = (value: unknown, metric: string) =>
+    metric === "runway_months" && isNum(value) && isRunwaySustainable(value)
+      ? "Sustainable"
+      : formatAlertValue(value, metric, (v) => formatCurrencyAbbrev(v));
 
   const getOverallStatusBadge = (status: string) => {
     switch (status) {
@@ -1129,10 +1123,10 @@ export default function AlertsPage() {
                     <div>
                       <div className="flex items-center justify-between text-sm mb-1">
                         <span className="text-muted-foreground">Z-Score</span>
-                        <span>{health.z_score.toFixed(2)}</span>
+                        <span>{isNum(health.z_score) ? health.z_score.toFixed(2) : "N/A"}</span>
                       </div>
                       <Progress
-                        value={Math.min(Math.abs(health.z_score) * 25, 100)}
+                        value={isNum(health.z_score) ? Math.min(Math.abs(health.z_score) * 25, 100) : 0}
                         className={
                           Math.abs(health.z_score) > 2
                             ? "[&>div]:bg-red-500"

@@ -102,6 +102,9 @@ def enhanced_inputs_from_scenario(
         for key, target in BASELINE_FIELDS.items()
     }
 
+    raw_hires = si.get("hiring_plan") or []
+    hiring_plan = [hire for hire in raw_hires if isinstance(hire, dict)] if isinstance(raw_hires, list) else []
+
     return EnhancedSimulationInputs(
         **values,
         pricing_change_pct=si.get("pricing_change_pct", 0),
@@ -110,5 +113,10 @@ def enhanced_inputs_from_scenario(
         fundraise_month=si.get("fundraise_month"),
         fundraise_amount=si.get("fundraise_amount", 0),
         gross_margin_delta_pct=si.get("gross_margin_delta_pct", 0),
+        # These knobs mean "no change" at 0 / empty. Dropping them made the
+        # worker ignore a hiring plan or a churn/CAC delta the scenario stored.
+        churn_change_pct=si.get("churn_change_pct", 0) or 0,
+        cac_change_pct=si.get("cac_change_pct", 0) or 0,
+        hiring_plan=hiring_plan,
         events=events,
     )
