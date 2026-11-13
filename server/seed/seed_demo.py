@@ -274,6 +274,14 @@ def seed_demo_data(db: Session):
             if demo_company.industry in (None, "", "general_saas"):
                 demo_company.industry = "saas"
                 db.commit()
+            # Safe again: this row carries the seed marker (guessed rows returned
+            # above), so the rename only ever heals the seed's own company.
+            if demo_company.name != DEMO_COMPANY_NAME:
+                demo_company.name = DEMO_COMPANY_NAME
+                demo_company.industry = "saas"
+                demo_company.stage = "series_a"
+                db.commit()
+                logger.info("Reset demo company name to TechFlow Analytics")
             fin_count = db.query(FinancialRecord).filter(FinancialRecord.company_id == demo_company.id).count()
             if fin_count == 0:
                 logger.info("Demo company missing financial records, re-creating...")
