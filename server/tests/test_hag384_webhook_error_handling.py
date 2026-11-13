@@ -155,19 +155,26 @@ def test_a_returned_dict_is_200_and_a_jsonresponse_500_is_not():
 def test_no_handler_in_this_file_returns_a_bare_error_dict():
     """The class, not just the two sites: nothing here may report a fault as a 200.
 
-    `submit_feedback_api` is the deliberate exception and it is asserted by name,
-    not excused by a loose pattern — it is a browser-facing form endpoint with no
-    redelivery to preserve, and changing its status would change the contract its
-    caller reads. HAG-384 scoped it out; this test is where that scoping is
-    recorded so it is a decision rather than an oversight.
+    HAG-384 scoped `submit_feedback_api` out and pinned it here as the one
+    deliberate exception, on the grounds that a browser-facing form has no
+    redelivery to preserve. Sentinel filed that as INFO 1 of her #124 review —
+    the surviving half of the same defect — and HAG-391 closed it.
+
+    **The assertion moved from `== 1` to `== 0`, and that is the fix arriving,
+    not the instrument loosening.** The count is over the whole file, so the
+    endpoint that was the permitted exception is now held to the same rule as
+    the rest of the file, and the `offenders[0].start() > feedback` clause that
+    named it has nothing left to name. An assertion that says "exactly one
+    place may do this" becomes "nowhere may", which is the stronger statement.
     """
     src = source()
     offenders = [
         m for m in re.finditer(r'\n[ \t]*return \{"status": "error"', src)
     ]
-    assert len(offenders) == 1, (
-        f"{len(offenders)} bare error-dict returns in {TRACKING.name}, expected exactly 1 "
-        f"(submit_feedback_api, the scoped-out endpoint)"
-    )
     feedback = src.index("async def submit_feedback_api(")
-    assert offenders[0].start() > feedback, "the remaining bare error dict is not the feedback endpoint"
+    named = [m for m in offenders if m.start() > feedback]
+    assert len(offenders) == 0, (
+        f"{len(offenders)} bare error-dict returns in {TRACKING.name}, expected 0; "
+        f"offsets {[m.start() for m in offenders]}, of which {len(named)} are in "
+        f"submit_feedback_api (HAG-391 closed the last one)"
+    )

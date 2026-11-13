@@ -13,6 +13,14 @@ Rules, applied recursively from ``companies``:
     subscriptions, audit logs, notifications): detach it by setting NULL.
 Self-references are skipped; a single DELETE removes the whole set, and
 Postgres checks NO ACTION constraints at statement end.
+
+Tables the ORM metadata cannot see are handled first (see
+``UNLINKED_COMPANY_TABLES`` and ``_live_company_fks``): raw-SQL tables from
+server/core/migrations.py, models whose ``company_id`` has no declared FK, and
+any FK to ``companies`` that exists only in the live database (e.g.
+company_states is created with REFERENCES companies(id) while its model
+declares none). Missing those made the final DELETE FROM companies fail and the
+whole purge roll back.
 """
 from __future__ import annotations
 
@@ -20,7 +28,7 @@ import logging
 from dataclasses import dataclass
 from typing import List, Optional, Set
 
-from sqlalchemy import Table, inspect, select
+from sqlalchemy import Table, inspect, select, text
 from sqlalchemy.orm import Session
 
 from server.core.db import Base
@@ -32,6 +40,27 @@ COMPANY_TABLE = "companies"
 # Nullable FKs default to "detach", but these rows are pure derived data for
 # the company and are deleted instead.
 DELETE_ON_NULLABLE = {"simulation_cache"}
+
+
+# (table, column, action) for company-owned rows the FK walk cannot reach:
+# raw-SQL tables (server/core/migrations.py) and models whose company_id has no
+# ForeignKey. Ordered children first (graph_edges -> graph_nodes; event_payloads
+# cascade from events). Nullable log columns are detached like other logs.
+UNLINKED_COMPANY_TABLES = (
+    ("graph_edges", "company_id", "delete"),
+    ("graph_nodes", "company_id", "delete"),
+    ("events", "company_id", "delete"),
+    ("company_flags", "company_id", "delete"),
+    ("ai_agent_budgets", "company_id", "delete"),
+    ("ai_agent_logs", "company_id", "nullify"),
+    ("autopilot_runs", "company_id", "delete"),
+    ("data_confidence_scores", "company_id", "delete"),
+    ("company_states", "company_id", "delete"),
+    ("shared_scenarios", "company_id", "delete"),
+    ("metric_snapshots", "company_id", "delete"),
+    ("agent_simulation_runs", "company_id", "delete"),
+    ("analytics_events", "company_id", "nullify"),
+)
 
 
 @dataclass
@@ -100,9 +129,77 @@ def plan_company_purge(company_id: int, existing_tables: Optional[Set[str]] = No
     return steps
 
 
+def _metadata_company_fks() -> Set[tuple]:
+    """(table, column) pairs whose FK to companies the ORM already declares."""
+    _load_all_models()
+    companies = Base.metadata.tables[COMPANY_TABLE]
+    return {
+        (t.name, fk.parent.name)
+        for t in Base.metadata.sorted_tables
+        for fk in t.foreign_keys
+        if fk.column.table is companies
+    }
+
+
+def _live_company_fks(inspector, existing: Set[str]) -> List[tuple]:
+    """(table, column, nullable) for single-column FKs to companies in the DB."""
+    found = []
+    for table in sorted(existing):
+        if table == COMPANY_TABLE:
+            continue
+        try:
+            fks = inspector.get_foreign_keys(table)
+        except Exception:
+            continue
+        for fk in fks:
+            cols = fk.get("constrained_columns") or []
+            if fk.get("referred_table") != COMPANY_TABLE or len(cols) != 1:
+                continue
+            nullable = True
+            try:
+                for c in inspector.get_columns(table):
+                    if c["name"] == cols[0]:
+                        nullable = bool(c.get("nullable", True))
+            except Exception:
+                pass
+            found.append((table, cols[0], nullable))
+    return found
+
+
+def plan_unlinked_purge(existing: Set[str], live_fks: List[tuple]) -> List[tuple]:
+    """(table, column, action) to run before the FK-metadata plan. Exposed for tests."""
+    declared = _metadata_company_fks()
+    plan: List[tuple] = []
+    seen = set()
+    for table, column, action in UNLINKED_COMPANY_TABLES:
+        if table in existing and (table, column) not in declared:
+            plan.append((table, column, action))
+            seen.add((table, column))
+    for table, column, nullable in live_fks:
+        if (table, column) in declared or (table, column) in seen:
+            continue
+        action = "nullify" if nullable and table not in DELETE_ON_NULLABLE else "delete"
+        plan.append((table, column, action))
+        seen.add((table, column))
+    return plan
+
+
+def _quote(name: str) -> str:
+    if not name.replace("_", "").isalnum():
+        raise ValueError(f"company_purge: unexpected identifier {name!r}")
+    return f'"{name}"'
+
+
 def purge_company(db: Session, company_id: int) -> None:
     """Remove the company row and everything hanging off it. Caller commits."""
-    existing = set(inspect(db.get_bind()).get_table_names())
+    inspector = inspect(db.get_bind())
+    existing = set(inspector.get_table_names())
+    for table, column, action in plan_unlinked_purge(existing, _live_company_fks(inspector, existing)):
+        if action == "nullify":
+            sql = f"UPDATE {_quote(table)} SET {_quote(column)} = NULL WHERE {_quote(column)} = :cid"
+        else:
+            sql = f"DELETE FROM {_quote(table)} WHERE {_quote(column)} = :cid"
+        db.execute(text(sql), {"cid": company_id})
     for step in plan_company_purge(company_id, existing):
         if step.action == "nullify":
             stmt = (

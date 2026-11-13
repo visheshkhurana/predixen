@@ -1,5 +1,18 @@
-import { beforeSendPostHog } from "./analytics-url";
+import { beforeSendPostHog as stripUrlTokens } from "./analytics-url";
 import { flushPostHogQueue, type PostHogClient, type QueuedPostHogCall } from "./posthog-queue";
+import {
+  beforeSendPostHog as sanitizeCalculatorEvent,
+  bindSessionRecordingClient,
+  installRecordingConsentListener,
+  syncSessionRecording,
+} from "./sessionRecording";
+
+export { setSurface, setTrackingSurface, syncSessionRecording } from "./sessionRecording";
+
+/** before_send: calculator-property scrubbing, then URL query/hash stripping. */
+export function beforeSendPostHog(event: any) {
+  return stripUrlTokens(sanitizeCalculatorEvent(event));
+}
 import { hasTrackingConsent, onConsentChange } from "./consent";
 
 // PostHog client tokens are public by design (they ship in the JS bundle).
@@ -11,6 +24,8 @@ const POSTHOG_HOST = import.meta.env?.VITE_POSTHOG_HOST || 'https://us.i.posthog
 
 type PostHogSdk = PostHogClient & {
   init: (apiKey: string, config: Record<string, unknown>) => void;
+  startSessionRecording?: (...args: unknown[]) => void;
+  stopSessionRecording?: () => void;
 };
 
 let client: PostHogSdk | null = null;
@@ -64,11 +79,18 @@ async function loadAndInit(): Promise<PostHogSdk | null> {
       // Cookieless (in-memory id) until the visitor accepts tracking; see
       // lib/consent.ts. Accepting upgrades this client in place.
       persistence: hasTrackingConsent() ? "localStorage" : "memory",
-      // Session replay: record marketing + auth funnel sessions so we can watch
-      // where ad visitors drop off, only with consent. Inputs are masked.
-      disable_session_recording: !hasTrackingConsent(),
+      // Click autocapture records element text (runway, burn, revenue). Named
+      // events still go through trackEvent / trackPageView.
+      autocapture: false,
+      // Off until syncSessionRecording starts it. That happens only on a
+      // public marketing route after cookie-consent === "accepted". Core routes
+      // call stopSessionRecording. Masks cover a session already in flight.
+      disable_session_recording: true,
+      mask_all_text: true,
       session_recording: {
         maskAllInputs: true,
+        maskAllText: true,
+        maskTextSelector: "*",
       },
       // sanitize_properties logs on every event in posthog-js 1.438+.
       // before_send strips ?query and #hash from URL properties on every path
@@ -77,14 +99,16 @@ async function loadAndInit(): Promise<PostHogSdk | null> {
       before_send: beforeSendPostHog,
     });
     client = sdk;
+    bindSessionRecordingClient(sdk);
+    syncSessionRecording(window.location.pathname);
     onConsentChange((choice) => {
       if (choice !== "accepted") return;
       const upgradable = sdk as PostHogSdk & {
         set_config?: (config: Record<string, unknown>) => void;
-        startSessionRecording?: () => void;
       };
       upgradable.set_config?.({ persistence: "localStorage" });
-      upgradable.startSessionRecording?.();
+      // Recording is not started here: sessionRecording decides by route
+      // (marketing only), and it listens for the same consent change.
     });
     flushPostHogQueue(sdk, pending);
     return sdk;
@@ -132,8 +156,9 @@ function dispatch(call: QueuedPostHogCall) {
  * Single init only — index.html must not also load array.js.
  */
 export function initPostHog() {
-  if (!POSTHOG_KEY || client || loadPromise || idleHandle != null) return;
-  if (typeof window === "undefined") return;
+  if (!POSTHOG_KEY || typeof window === "undefined") return;
+  installRecordingConsentListener();
+  if (client || loadPromise || idleHandle != null) return;
 
   if (typeof window.requestIdleCallback === "function") {
     idleHandle = window.requestIdleCallback(
@@ -151,11 +176,21 @@ export function initPostHog() {
   }
 }
 
+/** Clears calls queued before the SDK loads. Tests only. */
+export function takeQueuedPostHogCallsForTests(): QueuedPostHogCall[] {
+  return pending.splice(0, pending.length);
+}
+
 export function identifyUser(userId: number, email: string, role?: string) {
+  // Callers still pass email. PostHog gets a finite numeric id as distinct_id and role only.
+  // Number(undefined) is NaN, so a session with no id never identifies as "undefined".
+  void email;
+  const id = Number(userId);
+  if (!Number.isFinite(id)) return;
   dispatch({
     kind: "identify",
-    distinctId: String(userId),
-    traits: { email, role: role || "viewer" },
+    distinctId: String(id),
+    traits: { role: role || "viewer" },
   });
 }
 

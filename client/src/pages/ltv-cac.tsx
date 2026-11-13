@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
 import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { trackFunnel } from "@/lib/funnel";
-import { useCalculatorUsed } from "@/hooks/use-calculator-used";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import {
   ArrowRight,
   Calculator,
@@ -141,7 +141,7 @@ export default function LtvCacPage() {
   );
 
   const grade = result.grade;
-  useCalculatorUsed("ltv-cac", JSON.stringify(text) !== JSON.stringify(DEFAULT_TEXT), result.ltv !== null, text);
+  const onCalculatorInput = useCalculatorUsedOnce("ltv-cac");
 
   useSEO({
     ...TOOL_PAGE_META["/tools/ltv-cac"],
@@ -196,7 +196,7 @@ export default function LtvCacPage() {
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12">
           <div className="grid gap-8 lg:grid-cols-5">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6" onInput={onCalculatorInput}>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">

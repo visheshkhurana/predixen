@@ -25,6 +25,7 @@ import { withGtagPage } from "@/lib/analytics-url";
 import { isDemoEmail } from "@/lib/demo";
 import { captureFirstTouchAttribution } from "@/lib/attribution";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
+import { SessionRecordingSync } from "@/components/SessionRecordingSync";
 import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
 import {
@@ -316,6 +317,7 @@ function PublicOrAuthHome() {
 
 function Router() {
   return (
+    <SessionRecordingSync>
     <ErrorBoundary
       onError={(error) => {
         // Log to console with context
@@ -632,6 +634,7 @@ function Router() {
       </Switch>
       </Suspense>
     </ErrorBoundary>
+    </SessionRecordingSync>
   );
 }
 

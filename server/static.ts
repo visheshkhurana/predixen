@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { renderHtmlPageWithLookups, survivalShareId } from "./survival-share-status";
 import { renderHtmlPage, injectNotFoundShell } from "./seo-prerender";
 import { isKnownAppRoute } from "./known-routes";
 
@@ -93,7 +94,7 @@ export function serveStatic(app: Express) {
     },
   }));
 
-  app.use("*", (req, res) => {
+  app.use("*", async (req, res) => {
     const url = req.originalUrl;
     const pathname = url.split("?")[0].split("#")[0];
     if (pathname === "/robots.txt" || pathname === "/sitemap.xml") {
@@ -107,7 +108,12 @@ export function serveStatic(app: Express) {
       res.status(404).type("text/plain").send("Not Found");
       return;
     }
-    const decision = decideShellResponse(indexHtml, normalisePathname(pathname));
+    let decision: ShellDecision = decideShellResponse(indexHtml, normalisePathname(pathname));
+    if (decision.status === 200 && survivalShareId(pathname)) {
+      // /survival/:id: only the backend knows whether the share exists.
+      const page = await renderHtmlPageWithLookups(indexHtml, pathname);
+      if (page.status === 404) decision = { status: 404, html: page.html };
+    }
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Content-Type", "text/html");
     res.status(decision.status).send(decision.html);

@@ -223,7 +223,7 @@ test("production HTML catch-alls use renderHtmlPage for the status", () => {
   assert.match(staticSrc, /const page = renderHtmlPage\(indexHtml, pathname\);/);
   assert.match(staticSrc, /if \(page\.status === 404\)/);
   assert.match(staticSrc, /res\.status\(decision\.status\)\.send\(decision\.html\)/);
-  assert.match(viteSrc, /renderHtmlPage\(page, cleanPath\)/);
+  assert.match(viteSrc, /renderHtmlPage(?:WithLookups)?\(page, cleanPath\)/);
   assert.match(viteSrc, /res\.status\(rendered\.status\)/);
   assert.doesNotMatch(staticSrc, /res\.status\(200\)/);
   assert.doesNotMatch(viteSrc, /res\.status\(200\)/);

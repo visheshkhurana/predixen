@@ -17,6 +17,8 @@ class AgentSimulationRun(Base):
     seed = Column(Integer, nullable=True)
 
     survival_probability = Column(Float, nullable=True)
+    # Holds summary.investorInterestPct: share of investor reads that were
+    # interested in one simulated run. Column name kept for compatibility.
     funding_probability = Column(Float, nullable=True)
     final_cash = Column(Float, nullable=True)
     final_runway = Column(Float, nullable=True)
@@ -40,6 +42,9 @@ class AgentSimulationRun(Base):
             "companyId": self.company_id,
             "numRounds": self.num_rounds,
             "survivalProbability": self.survival_probability,
+            # funding_probability stores the investor-interest share of ONE run
+            # (not a probability); the old key stays as a deprecated alias.
+            "investorInterestPct": self.funding_probability,
             "fundingProbability": self.funding_probability,
             "finalCash": self.final_cash,
             "finalRunway": self.final_runway,

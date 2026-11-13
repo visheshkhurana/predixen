@@ -88,6 +88,12 @@ jobs:
       - name: analytics-single-identity tests
         run: npx tsx server/tests/analytics-single-identity.test.ts
 
+      - name: posthog calls do not send email
+        run: npx tsx server/tests/posthog-no-email-properties.test.ts
+
+      - name: session recording consent tests
+        run: npx tsx --test server/tests/session-recording-consent.test.ts
+
       - name: gtag must not receive user_email
         run: npx tsx --test server/tests/no-gtag-user-email.test.ts
 
@@ -198,6 +204,12 @@ jobs:
 
       - name: share-page noindex, shared tool titles, calculator_used
         run: npx tsx --test server/tests/seo-analytics-audit-1019.test.ts
+
+      - name: unknown /survival/:id answers 404
+        run: npx tsx --test server/tests/survival-share-404.test.ts
+
+      - name: audit 10-19 leftovers (sensitivity bars, agent-sim labels, Slack card)
+        run: npx tsx --test server/tests/audit-1019-leftovers.test.ts
 
       - name: signup CTAs open the register tab
         run: npx tsx server/tests/signup-cta-register-tab.test.ts

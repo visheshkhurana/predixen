@@ -362,6 +362,14 @@ async def _run_deferred_startup():
             logger.warning(f"AI governance init skipped: {e}")
 
         try:
+            # One-off, opt-in: revoke agent-sim share links auto-created before
+            # #161 (REVOKE_LEGACY_AGENT_SIM_SHARES=true). Safe to leave on.
+            from server.core.migrations import revoke_legacy_agent_sim_shares
+            revoke_legacy_agent_sim_shares(engine)
+        except Exception as e:
+            logger.warning(f"Legacy agent-sim share revocation skipped: {e}")
+
+        try:
             from server.core.migrations import ensure_lifecycle_email_tables
             ensure_lifecycle_email_tables(engine)
         except Exception as e:
@@ -480,7 +488,7 @@ app = FastAPI(
 )
 
 print(f"[main.py] Adding middleware... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
-from server.middleware.rate_limiter import RateLimiterMiddleware
+from server.middleware.rate_limiter import CORS_EXPOSE_HEADERS, RateLimiterMiddleware
 from server.middleware.csrf_protection import CSRFProtectionMiddleware
 from server.middleware.security_headers import SecurityHeadersMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -531,8 +539,12 @@ app.add_middleware(
     rate_limit_auth=settings.RATE_LIMIT_AUTH,
     rate_limit_admin_login=settings.RATE_LIMIT_ADMIN_LOGIN,
     rate_limit_api=settings.RATE_LIMIT_API,
+    rate_limit_read=settings.RATE_LIMIT_READ,
+    rate_limit_read_burst=settings.RATE_LIMIT_READ_BURST,
     rate_limit_upload=settings.RATE_LIMIT_UPLOAD,
     rate_limit_simulation=settings.RATE_LIMIT_SIMULATION,
+    rate_limit_llm=settings.RATE_LIMIT_LLM,
+    rate_limit_email=settings.RATE_LIMIT_EMAIL,
 )
 
 app.add_middleware(
@@ -541,7 +553,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-CSRF-Token", "X-Request-ID"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=CORS_EXPOSE_HEADERS,
 )
 
 @app.get("/")

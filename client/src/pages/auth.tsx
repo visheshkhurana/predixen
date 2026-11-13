@@ -36,6 +36,8 @@ const identifyUser = (userId: number) => {
 // trackFunnel so GA4 / PostHog / X stay in sync. Keep the GA4 recommended
 // `sign_up` name alongside `signup_completed` (the product-bet event).
 const trackSignup = (userId: number, email: string, method = 'email') => {
+  // Callers still pass email. PostHog events carry method and user_id only.
+  void email;
   metaTrack('CompleteRegistration', { method });
   trackFunnel('signup_completed', { method, user_id: userId });
   trackFunnel('sign_up', { method, user_id: userId });
