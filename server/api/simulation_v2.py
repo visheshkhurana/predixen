@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from server.core.db import SessionLocal
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
+from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
 from server.models import User
 from server.lib.llm.openai_client import get_audited_client
 from server.services.simulation.engine import SimulationEngine
@@ -180,6 +181,8 @@ async def run_simulation_v2_sse(
             client = _audited_simulation_client(db, current_user)
         except ValueError:
             raise HTTPException(status_code=503, detail="LLM service not configured")
+
+        reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION)
 
         normalized, input_provenance = inputs_for_simulation_request(request)
         initial_state, scenario_params, total_rounds = build_simulation_v2_state(normalized)
