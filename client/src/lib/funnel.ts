@@ -1,5 +1,10 @@
 import { trackEvent as posthogTrack } from './posthog';
 import { trackXConversion } from './xads';
+import {
+  browserFlagStore,
+  rememberFounderActivated,
+  shouldEmitFounderActivated,
+} from './activation-flag';
 
 /**
  * Fire a marketing-funnel step to GA4 (gtag), PostHog and X Ads.
@@ -22,31 +27,34 @@ export function trackFunnel(name: string, params: Record<string, unknown> = {}) 
   trackXConversion(name, params);
 }
 
-const FOUNDER_ACTIVATED_KEY = 'fc_founder_activated';
-
 /**
  * Product-bet activation. Client complement to the server first-success
  * emitter. Sample companies must never count — require an explicit
  * is_sample === false so a stale store object without the flag cannot
  * turn a #21 sample first-run into founder_activated.
+ *
+ * The once-per-browser guard is keyed by user id: a browser-wide flag silenced
+ * every account after the first on a shared browser, which is an undercount the
+ * north star cannot see. See ./activation-flag for why the old key is not read.
+ * With no user id there is nothing to key on, so the event is emitted and not
+ * remembered — a duplicate is recoverable, a dropped activation is not.
  */
 export function trackFounderActivated(params: {
   source: 'truth_scan' | 'simulation';
   company_id: number;
+  user_id?: number | string | null;
   is_sample?: boolean;
 }) {
   if (params.is_sample !== false) return;
-  if (typeof window !== 'undefined') {
-    try {
-      if (window.localStorage.getItem(FOUNDER_ACTIVATED_KEY)) return;
-      window.localStorage.setItem(FOUNDER_ACTIVATED_KEY, '1');
-    } catch {
-      // private mode / blocked storage: still emit this session
-    }
+  if (params.user_id != null) {
+    const store = browserFlagStore();
+    if (!shouldEmitFounderActivated(store, params.user_id)) return;
+    rememberFounderActivated(store, params.user_id);
   }
   trackFunnel('founder_activated', {
     source: params.source,
     company_id: params.company_id,
     is_sample: false,
+    ...(params.user_id != null ? { user_id: params.user_id } : {}),
   });
 }

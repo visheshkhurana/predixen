@@ -99,7 +99,7 @@ export default function ComparePage() {
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-compare-auth">
-            <Link href="/auth?tab=register">
+            <Link href="/signup">
               Get started free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

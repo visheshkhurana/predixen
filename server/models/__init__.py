@@ -1,5 +1,6 @@
 from server.models.user import User, UserRole
 from server.models.company import Company
+from server.models.d2c_month import D2CAdSpend, D2CMonth
 from server.models.dataset import Dataset
 from server.models.financial import (
     FinancialRecord,
@@ -81,8 +82,13 @@ from server.models.lead import Lead
 from server.models.scenario_template import ScenarioTemplate
 from server.models.simulation_accuracy import SimulationAccuracy, CalibrationBias
 from server.models.agent_simulation import AgentSimulationRun
+from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
+from server.models.stripe_reconciliation import StripeReconciliationEvent
+from server.models.razorpay_billing import RazorpaySubscription, RazorpayWebhookEvent
 
 __all__ = [
+    "RazorpaySubscription",
+    "RazorpayWebhookEvent",
     "User",
     "UserRole",
     "Company",
@@ -180,4 +186,7 @@ __all__ = [
     "SimulationAccuracy",
     "CalibrationBias",
     "AgentSimulationRun",
+    "RevokedAccessToken",
+    "UserSessionCutoff",
+    "StripeReconciliationEvent",
 ]

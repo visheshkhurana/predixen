@@ -62,7 +62,7 @@ async def generate_agent_personas(
     prompt = f"""Generate realistic agent personas for a startup simulation.
 
 COMPANY CONTEXT:
-- MRR: ${company_state.mrr:,.0f}, Burn: ${company_state.burn_rate:,.0f}/mo
+- MRR: ${company_state.mrr:,.0f}, Gross spend: ${company_state.burn_rate:,.0f}/mo, Net burn: ${max(0, company_state.burn_rate - company_state.mrr):,.0f}/mo
 - Cash: ${company_state.cash:,.0f}, Runway: {company_state.runway_months:.1f}mo
 - {company_state.customers} customers, {company_state.churn_rate:.1%} churn
 - Team of {company_state.team_size}, morale at {company_state.team_morale:.0%}

@@ -48,6 +48,11 @@ class NotificationSettingsRequest(BaseModel):
     alert_types: dict = {}
     thresholds: dict = {}
     frequency: str = "immediate"
+    # None means "leave whatever is stored alone". The unsubscribe link sets
+    # this false as well as email_enabled, so a client that only sends
+    # email_enabled back cannot restore the digest; the settings page now sends
+    # it explicitly when the product-emails switch is turned back on.
+    monthly_digest: Optional[bool] = None
 
 
 class NotificationSettingsResponse(BaseModel):
@@ -56,6 +61,7 @@ class NotificationSettingsResponse(BaseModel):
     alert_types: dict
     thresholds: dict
     frequency: str
+    monthly_digest: bool
 
 
 def require_workspace_access(company_id: int, user: User, db: Session, min_role: str = "viewer") -> WorkspaceMember:
@@ -329,7 +335,8 @@ def get_notification_preferences(
                 "churn_increase_pct": 20,
                 "cash_low_months": 6
             },
-            frequency="immediate"
+            frequency="immediate",
+            monthly_digest=True,
         )
     
     return NotificationSettingsResponse(
@@ -337,7 +344,8 @@ def get_notification_preferences(
         email_address=prefs.email_address or current_user.email,
         alert_types=prefs.alert_types or {},
         thresholds=prefs.thresholds or {},
-        frequency=prefs.frequency
+        frequency=prefs.frequency,
+        monthly_digest=prefs.monthly_digest if prefs.monthly_digest is not None else True,
     )
 
 
@@ -361,6 +369,8 @@ def update_notification_preferences(
     prefs.alert_types = request.alert_types
     prefs.thresholds = request.thresholds
     prefs.frequency = request.frequency
+    if request.monthly_digest is not None:
+        prefs.monthly_digest = request.monthly_digest
     
     db.commit()
     

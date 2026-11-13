@@ -35,7 +35,7 @@ const REQUIRED_HREFS = [
   "/survival-simulator",
   "/default-alive",
   "/pricing",
-  "/auth",
+  "/signup",
 ];
 
 test("/alternatives SSR body is non-empty and links category destinations", () => {

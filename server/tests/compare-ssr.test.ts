@@ -29,7 +29,7 @@ const REQUIRED_HREFS = [
   "/survival-simulator",
   "/default-alive",
   "/features",
-  "/auth",
+  "/signup",
   "/blog/founderconsole-vs-sturppy-vs-finmark-vs-causal",
 ];
 
