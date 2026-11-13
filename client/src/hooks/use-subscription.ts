@@ -36,7 +36,11 @@ export interface PlansResponse {
 /** Stripe returns a hosted checkout URL; Razorpay returns params for checkout.js. */
 export interface SubscribeResponse {
   checkout_url?: string;
+  /** Stripe: already subscribed, so downgrade/cancel or payment fix happens in the portal. */
+  portal_url?: string;
   message?: string;
+  /** Stripe: an existing subscription was switched in place (prorated). */
+  changed?: boolean;
   provider?: BillingProvider;
   subscription_id?: string;
   key_id?: string;

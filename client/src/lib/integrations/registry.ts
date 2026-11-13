@@ -8,6 +8,8 @@ export const googleSheetsIntegration: IntegrationConfig = {
   category: 'spreadsheets',
   authType: 'oauth2',
   status: 'disconnected',
+  // No backend connect flow for this provider yet: shown as Coming Soon.
+  isComingSoon: true,
   
   oauthConfig: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -60,6 +62,8 @@ export const googleAnalyticsIntegration: IntegrationConfig = {
   category: 'analytics',
   authType: 'oauth2',
   status: 'disconnected',
+  // No backend connect flow for this provider yet: shown as Coming Soon.
+  isComingSoon: true,
   
   oauthConfig: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -95,6 +99,8 @@ export const mixpanelIntegration: IntegrationConfig = {
   category: 'analytics',
   authType: 'api_key',
   status: 'disconnected',
+  // Connects through POST /api/connectors/companies/:id/connect (server/connectors/mixpanel.py).
+  connectorProviderId: 'mixpanel',
   
   apiKeyConfig: {
     fields: [
@@ -127,6 +133,8 @@ export const chartMogulIntegration: IntegrationConfig = {
   category: 'analytics',
   authType: 'api_key',
   status: 'disconnected',
+  // No backend connect flow for this provider yet: shown as Coming Soon.
+  isComingSoon: true,
   
   apiKeyConfig: {
     fields: [

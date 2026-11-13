@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import {
   Brain, Users, Activity, Code2, AlertTriangle, Database, Shield,
-  CheckCircle, XCircle, RefreshCw, Pause, Play, Lock, Unlock, Send,
+  CheckCircle, XCircle, Pause, Play, Lock, Unlock, Send,
   TrendingUp, TrendingDown, AlertOctagon, Zap, Eye, GitBranch, FileCode,
   Clock, ChevronRight, Loader2, ThumbsUp, ThumbsDown, Filter, Search,
   BarChart3, Timer, AlertCircle,
@@ -428,6 +428,7 @@ function BoardroomView({ data }: { data: GovernanceState }) {
                             className="text-emerald-400"
                             onClick={(e) => { e.stopPropagation(); setConfirmApproval({ id: decision.id, requestId: decision.requestId, label: decision.label, action: 'approve' }); }}
                             data-testid={`button-approve-${decision.id}`}
+                            aria-label="Mark as helpful"
                           >
                             <ThumbsUp className="h-4 w-4" />
                           </Button>
@@ -437,6 +438,7 @@ function BoardroomView({ data }: { data: GovernanceState }) {
                             className="text-red-400"
                             onClick={(e) => { e.stopPropagation(); setConfirmApproval({ id: decision.id, requestId: decision.requestId, label: decision.label, action: 'reject' }); }}
                             data-testid={`button-reject-${decision.id}`}
+                            aria-label="Mark as not helpful"
                           >
                             <ThumbsDown className="h-4 w-4" />
                           </Button>
@@ -647,9 +649,6 @@ function DecisionsView({ data }: { data: GovernanceState }) {
                   >
                     <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
                   </Button>
-                  <Button size="sm" variant="outline">
-                    <RefreshCw className="h-3.5 w-3.5 mr-1" /> Rerun
-                  </Button>
                 </div>
               )}
             </CardContent>
@@ -671,6 +670,19 @@ function CodeChangesView({ data }: { data: GovernanceState }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestId, reason: 'Code change approved for merge' }),
       });
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] }),
+  });
+
+  const rejectChangeMutation = useMutation({
+    mutationFn: async ({ requestId }: { requestId: string }) => {
+      const res = await fetch('/admin/ai-governance/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, reason: 'Code change rejected' }),
+      });
+      if (!res.ok) throw new Error(`Reject failed (${res.status})`);
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] }),
@@ -737,7 +749,12 @@ function CodeChangesView({ data }: { data: GovernanceState }) {
                 >
                   <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve Merge
                 </Button>
-                <Button size="sm" variant="destructive">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => rejectChangeMutation.mutate({ requestId: change.requestId })}
+                  disabled={rejectChangeMutation.isPending}
+                >
                   <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
                 </Button>
               </div>

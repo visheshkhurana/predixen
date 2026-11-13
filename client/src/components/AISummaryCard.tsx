@@ -200,7 +200,7 @@ export function AISummaryCard({
               </Badge>
             </div>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="toggle-summary">
+              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="toggle-summary" aria-label={isExpanded ? "Collapse" : "Expand"}>
                 {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </Button>
             </CollapsibleTrigger>
