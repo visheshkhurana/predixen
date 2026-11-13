@@ -45,6 +45,7 @@ export const APP_ROUTE_PATTERNS: readonly string[] = [
   "/admin/lead-gen",
   "/admin/lead-gen/campaigns",
   "/admin/lead-gen/leads",
+  "/admin/lead-gen/live",
   "/admin/lead-gen/settings",
   "/admin/lead-gen/templates",
   "/admin/llm-audit",
