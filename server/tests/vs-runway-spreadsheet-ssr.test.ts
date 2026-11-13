@@ -38,7 +38,7 @@ const REQUIRED_HREFS = [
   "/compare",
   "/features",
   "/pricing",
-  "/auth",
+  "/signup",
 ];
 
 test("the /vs/ page has its own canonical, not the homepage's", () => {

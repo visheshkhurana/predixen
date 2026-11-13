@@ -1,7 +1,9 @@
-import { Shield, Mail, Database, Eye, Cookie, Clock, Users, ExternalLink } from 'lucide-react';
+import { Shield, Mail, Database, Eye, Cookie, Clock, Users, ExternalLink, Scale, Building2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from 'wouter';
 import { useSEO } from '@/lib/seo';
+import { LegalEntityNotice, GrievanceOfficerText } from '@/components/marketing/LegalEntity';
+import { LEGAL_ENTITY_NAME, PRODUCT_OF_LINE } from '@/data/legal';
 
 function Section({ icon: Icon, title, children, testId }: {
   icon: any; title: string; children: React.ReactNode; testId: string;
@@ -38,7 +40,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <p className="text-sm text-muted-foreground leading-relaxed">
-          FounderConsole ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our platform.
+          FounderConsole ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our platform. {PRODUCT_OF_LINE} {LEGAL_ENTITY_NAME} is responsible for your information under this policy.
         </p>
 
         <Section icon={Eye} title="Information We Collect" testId="section-info-collect">
@@ -72,6 +74,7 @@ export default function PrivacyPolicyPage() {
             <li><strong className="text-foreground">Google OAuth:</strong> Social login authentication.</li>
             <li><strong className="text-foreground">QuickBooks Online:</strong> Sync accounting data (P&L, balance sheet, invoices) when you connect your account.</li>
             <li><strong className="text-foreground">Stripe:</strong> Sync payment and revenue data when you connect your account.</li>
+            <li><strong className="text-foreground">Razorpay:</strong> Subscription payment processing. We do not store your full card or bank details; Razorpay handles them under its own privacy policy.</li>
             <li><strong className="text-foreground">Gusto:</strong> Sync payroll data when you connect your account.</li>
             <li><strong className="text-foreground">Resend:</strong> Transactional email delivery.</li>
             <li><strong className="text-foreground">OpenAI, Anthropic, Google Gemini:</strong> AI model providers for copilot and analysis features. Financial data may be sent to these providers to generate insights; data is not retained by them beyond the request.</li>
@@ -131,8 +134,18 @@ export default function PrivacyPolicyPage() {
           </p>
         </Section>
 
+        <Section icon={Scale} title="Grievance Officer" testId="section-grievance">
+          <GrievanceOfficerText />
+        </Section>
+
+        <Section icon={Building2} title="Company" testId="section-privacy-company">
+          <LegalEntityNotice className="space-y-1" showEmail={false} />
+        </Section>
+
         <div className="text-center pt-4 text-xs text-muted-foreground">
           <Link href="/terms" className="text-indigo-400 hover:underline" data-testid="link-terms">Terms of Service</Link>
+          <span className="mx-2">·</span>
+          <Link href="/refund-policy" className="text-indigo-400 hover:underline" data-testid="link-refund-policy">Refund &amp; Cancellation Policy</Link>
           <span className="mx-2">·</span>
           <Link href="/" className="text-indigo-400 hover:underline" data-testid="link-home">Back to FounderConsole</Link>
         </div>

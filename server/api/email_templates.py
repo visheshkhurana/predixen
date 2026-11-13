@@ -8,7 +8,8 @@ from typing import Optional, List
 
 from server.core.db import get_db
 from server.core.security import get_current_user
-from server.models import User, UserRole
+from server.models import User
+from server.api.admin import require_platform_admin
 from server.email.templates import TEMPLATE_CONFIGS, get_template_preview
 from server.email.service import is_email_configured, send_email
 from server.services.notifications import send_ai_copilot_feature_update, send_platform_update, send_hybrid_feature_announcement, NOTIFICATION_RECIPIENTS
@@ -16,12 +17,8 @@ from server.services.notifications import send_ai_copilot_feature_update, send_p
 router = APIRouter(prefix="/email-templates", tags=["email-templates"])
 
 
-def require_admin(current_user: User = Depends(get_current_user)):
-    if current_user.role not in [UserRole.OWNER.value, UserRole.ADMIN.value]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
+def require_admin(current_user: User = Depends(require_platform_admin)):
+    # Platform owner only; company/user roles never grant access here.
     return current_user
 
 

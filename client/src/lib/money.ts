@@ -6,6 +6,55 @@
 
 export type AmountScale = 'units' | 'thousands' | 'millions' | 'crores';
 
+// ---------------------------------------------------------------------------
+// Display currency. The selected company's currency (founderStore keeps this
+// in sync), so formatters that are not handed a currency stop assuming USD.
+// ---------------------------------------------------------------------------
+
+let displayCurrency = 'USD';
+
+export function setDisplayCurrency(code: string | null | undefined): void {
+  const next = (code || 'USD').trim().toUpperCase();
+  displayCurrency = /^[A-Z]{3}$/.test(next) ? next : 'USD';
+}
+
+export function getDisplayCurrency(): string {
+  return displayCurrency;
+}
+
+export function currencySymbol(currency: string = displayCurrency): string {
+  if (currency === 'INR') return '₹';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 })
+      .format(0)
+      .replace(/[0-9]/g, '')
+      .trim();
+  } catch {
+    return '$';
+  }
+}
+
+/**
+ * Indian short form: ₹45K, ₹12.5L (lakh = 1,00,000), ₹3.2Cr (crore = 1,00,00,000).
+ * Indian founders read revenue and burn in lakhs and crores, not millions.
+ */
+export function formatInrCompact(value: number | null | undefined, decimals: number = 1): string {
+  if (value == null || isNaN(value)) return 'N/A';
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  const trim = (n: number) => n.toFixed(decimals).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+  if (abs >= 10_000_000) return `${sign}₹${trim(abs / 10_000_000)}Cr`;
+  if (abs >= 100_000) return `${sign}₹${trim(abs / 100_000)}L`;
+  if (abs >= 1_000) return `${sign}₹${trim(abs / 1_000)}K`;
+  return `${sign}₹${abs.toFixed(0)}`;
+}
+
+/** Full Indian grouping: ₹12,50,000. */
+export function formatInrFull(value: number | null | undefined): string {
+  if (value == null || isNaN(value)) return 'N/A';
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
+}
+
 /** Multiplier to convert from input-scale to base (actual) units */
 export function scaleMultiplier(scale: AmountScale): number {
   switch (scale) {
@@ -93,11 +142,12 @@ export function formatScaleValue(
  */
 export function formatBaseToDisplay(
   baseValue: number | null | undefined,
-  currencyCode: string = 'USD',
+  currencyCode: string = getDisplayCurrency(),
   locale: string = 'en-US',
   decimals: number = 1,
 ): string {
   if (baseValue == null || isNaN(baseValue)) return 'N/A';
+  if (currencyCode === 'INR') return formatInrCompact(baseValue, decimals);
 
   const abs = Math.abs(baseValue);
   const sign = baseValue < 0 ? '-' : '';

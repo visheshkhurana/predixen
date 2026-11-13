@@ -39,6 +39,7 @@ export interface NotificationSettings {
     cash_low_months: number;
   };
   frequency: 'immediate' | 'daily' | 'weekly';
+  monthly_digest: boolean;
 }
 
 export interface Comment {

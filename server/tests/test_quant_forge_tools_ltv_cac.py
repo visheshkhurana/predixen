@@ -201,4 +201,4 @@ def test_the_page_is_prerendered_with_its_own_canonical() -> None:
     assert "gross margin divided by monthly churn" in body
     assert "Fully loaded" in body or "fully loaded" in body
     assert "Monthly churn is not twelve times monthly" in body
-    assert 'href="/auth"' in body
+    assert 'href="/signup"' in body

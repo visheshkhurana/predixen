@@ -1,3 +1,4 @@
+import { currencySymbol } from '@/lib/money';
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 type BuilderStep = 'goal' | 'strategy' | 'customize' | 'results';
 
@@ -304,12 +305,12 @@ export function StrategicScenarioBuilder({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <div className="text-xs text-muted-foreground">Cash on Hand</div>
-                <div className="text-lg font-semibold">${(baseMetrics.cashOnHand / 1000).toFixed(0)}K</div>
+                <div className="text-lg font-semibold">{formatCurrencyAbbrev(baseMetrics.cashOnHand)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Monthly Burn</div>
                 <div className="text-lg font-semibold text-red-500">
-                  ${((baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue) / 1000).toFixed(0)}K
+                  {formatCurrencyAbbrev(baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue)}
                 </div>
               </div>
               <div>
@@ -429,7 +430,7 @@ export function StrategicScenarioBuilder({
                   min={0}
                   max={10000000}
                   step={50000}
-                  unit="$"
+                  unit={currencySymbol()}
                 />
               </div>
 
@@ -574,7 +575,7 @@ export function StrategicScenarioBuilder({
                 <div className="p-4 rounded-lg bg-muted/50">
                   <div className="text-xs text-muted-foreground">End Cash (P50)</div>
                   <div className="text-lg font-semibold">
-                    ${((simulation.summary?.end_cash || 0) / 1000).toFixed(0)}K
+                    {formatCurrencyAbbrev(simulation.summary?.end_cash || 0)}
                   </div>
                 </div>
               </div>
@@ -588,15 +589,15 @@ export function StrategicScenarioBuilder({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                   <div className="p-2 rounded bg-muted/30">
                     <div className="text-muted-foreground">Base Cash</div>
-                    <div className="font-medium">${(baseMetrics.cashOnHand / 1000).toFixed(0)}K</div>
+                    <div className="font-medium">{formatCurrencyAbbrev(baseMetrics.cashOnHand)}</div>
                   </div>
                   <div className="p-2 rounded bg-muted/30">
                     <div className="text-muted-foreground">Monthly Revenue</div>
-                    <div className="font-medium">${(baseMetrics.monthlyRevenue / 1000).toFixed(0)}K</div>
+                    <div className="font-medium">{formatCurrencyAbbrev(baseMetrics.monthlyRevenue)}</div>
                   </div>
                   <div className="p-2 rounded bg-muted/30">
                     <div className="text-muted-foreground">Monthly Expenses</div>
-                    <div className="font-medium">${(baseMetrics.monthlyExpenses / 1000).toFixed(0)}K</div>
+                    <div className="font-medium">{formatCurrencyAbbrev(baseMetrics.monthlyExpenses)}</div>
                   </div>
                   <div className="p-2 rounded bg-muted/30">
                     <div className="text-muted-foreground">Base Growth Rate</div>
