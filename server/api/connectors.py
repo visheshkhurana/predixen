@@ -23,6 +23,7 @@ from server.core.encryption import (
     encrypt_credentials,
     decrypt_credentials,
     mask_credentials,
+    mask_account_number,
 )
 from server.models.user import User
 from server.models.company import Company
@@ -34,7 +35,183 @@ from server.connectors.base import ProviderCategory
 
 load_all_connectors()
 
+from server.connectors.razorpayx import redact_account_number
+
 logger = logging.getLogger(__name__)
+
+_ACCOUNT_NUMBER_KEY = "account_number"
+
+
+def _is_razorpay_family(provider_id: str) -> bool:
+    return ConnectorRegistry.canonical_provider_id(provider_id) == "razorpayx"
+
+
+def _pop_account_number(settings: Dict[str, Any]) -> str:
+    """Remove account_number from settings and return the value."""
+    found = ""
+    for key in list(settings):
+        if key.lower().replace("-", "_") != _ACCOUNT_NUMBER_KEY:
+            continue
+        value = str(settings.pop(key) or "").strip()
+        if value and not found:
+            found = value
+    return found
+
+
+def _account_from_stored(config: Dict[str, Any]) -> str:
+    """Read a RazorpayX account number from a stored config. Never log the return value."""
+    stored = config.get("credentials")
+    creds: Dict[str, Any] = {}
+    if isinstance(stored, dict):
+        creds = stored
+    elif isinstance(stored, str) and stored:
+        try:
+            decrypted = decrypt_credentials(stored)
+        except Exception:
+            decrypted = None
+        if isinstance(decrypted, dict):
+            creds = decrypted
+    settings = config.get("settings") if isinstance(config.get("settings"), dict) else {}
+    return str(creds.get(_ACCOUNT_NUMBER_KEY) or settings.get(_ACCOUNT_NUMBER_KEY) or "").strip()
+
+
+def _seal_razorpay_config(config: Dict[str, Any], provider_id: str) -> Dict[str, Any]:
+    """Keep the RazorpayX account number inside the encrypted credentials blob.
+
+    Other connector secrets are encrypted on connect. A number left in settings
+    (or in a legacy plaintext credential dict) is merged into that blob and
+    removed from settings. Configs with no account number are left alone.
+    """
+    updated = dict(config)
+    if not _is_razorpay_family(provider_id):
+        return updated
+
+    settings = dict(updated["settings"]) if isinstance(updated.get("settings"), dict) else {}
+    stored = updated.get("credentials")
+    was_encrypted = isinstance(stored, str)
+    creds: Dict[str, Any] = {}
+    if was_encrypted and stored:
+        try:
+            decrypted = decrypt_credentials(stored)
+        except Exception:
+            decrypted = None
+        if not isinstance(decrypted, dict):
+            if _pop_account_number(settings):
+                updated["settings"] = settings
+            return updated
+        creds = dict(decrypted)
+    elif isinstance(stored, dict):
+        creds = dict(stored)
+
+    settings_account = _pop_account_number(settings)
+    account = str(creds.get(_ACCOUNT_NUMBER_KEY) or settings_account or "").strip()
+    if account:
+        creds[_ACCOUNT_NUMBER_KEY] = account
+    if account and creds and (not was_encrypted or settings_account):
+        updated["credentials"] = encrypt_credentials(creds)
+    if settings_account:
+        updated["settings"] = settings
+    return updated
+
+
+def _safe_account_text(message: Any, account_number: str = "") -> str:
+    return redact_account_number(message, account_number)
+
+
+def _status_row(provider_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    """Public status for one connector. Never includes credentials."""
+    account = _account_from_stored(config) if _is_razorpay_family(provider_id) else ""
+    error = config.get("last_error")
+    if error:
+        error = _safe_account_text(error, account)
+    row = {
+        "provider_id": provider_id,
+        "connected": config.get("connected", False),
+        "last_sync": config.get("last_sync"),
+        "records_synced": config.get("records_synced", 0),
+        "error": error,
+        "needs_reauth": bool(config.get("needs_reauth")),
+    }
+    if account:
+        row["account_hint"] = mask_account_number(account)
+    return row
+
+
+def _family_ids(provider_id: str) -> List[str]:
+    return ConnectorRegistry.provider_ids_for(provider_id)
+
+
+def _connected_storage_id(connectors: Dict[str, Any], provider_id: str) -> Optional[str]:
+    """Storage key that holds a live connection for this provider or an alias."""
+    requested = connectors.get(provider_id)
+    if isinstance(requested, dict) and requested.get("connected"):
+        return provider_id
+    for candidate in _family_ids(provider_id):
+        config = connectors.get(candidate)
+        if isinstance(config, dict) and config.get("connected"):
+            return candidate
+    return None
+
+
+def _status_config(connectors: Dict[str, Any], provider_id: str) -> Dict[str, Any]:
+    storage_id = _connected_storage_id(connectors, provider_id)
+    if storage_id:
+        config = connectors.get(storage_id)
+        if isinstance(config, dict):
+            return config
+    config = connectors.get(provider_id)
+    return config if isinstance(config, dict) else {}
+
+
+def _record_provider_id(provider_id: str) -> str:
+    """Id written on FinancialRecord.source_type. Aliases share the canonical id."""
+    return ConnectorRegistry.canonical_provider_id(provider_id)
+
+
+def _sample_for(provider_id: str) -> Optional[Dict[str, Any]]:
+    if provider_id in SAMPLE_DATA:
+        return SAMPLE_DATA[provider_id]
+    return SAMPLE_DATA.get(ConnectorRegistry.canonical_provider_id(provider_id))
+
+
+def _record_sync_failure(
+    db: Session,
+    company_id: int,
+    storage_id: str,
+    message: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Persist ``last_error`` after a failed sync, for any connector.
+
+    The connection stays connected so the card can show the error and offer a
+    retry. Runs after the failed transaction is rolled back, and never raises:
+    a failure to record the error must not mask the original sync error.
+    """
+    try:
+        db.rollback()
+    except Exception:
+        logger.exception("rollback before recording sync error failed")
+    try:
+        company = db.query(Company).filter(Company.id == company_id).first()
+        if company is None:
+            return
+        connectors = (company.metadata_json or {}).get("connectors") or {}
+        current = connectors.get(storage_id)
+        if not isinstance(current, dict):
+            return
+        updated = _seal_razorpay_config(dict(current), storage_id)
+        account = _account_from_stored(current) if _is_razorpay_family(storage_id) else ""
+        updated["last_error"] = _safe_account_text(message, account)[:500]
+        updated["last_error_at"] = datetime.utcnow().isoformat()
+        if extra:
+            updated.update(extra)
+        save_metadata_value(db, company, ("connectors", storage_id), updated, commit=True)
+    except Exception:
+        logger.exception("failed to record connector sync error")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
 
@@ -188,15 +365,18 @@ async def list_catalog(
             continue
         
         install_status = None
-        conn_meta = company_connectors.get(p["id"])
+        conn_meta = _status_config(company_connectors, p["id"])
         if conn_meta and conn_meta.get("connected"):
+            public = _status_row(p["id"], conn_meta)
             install_status = {
                 "connector_id": p["id"],
                 "status": "active",
-                "last_sync": conn_meta.get("last_sync"),
-                "record_count": conn_meta.get("records_synced", 0),
-                "error_summary": conn_meta.get("last_error"),
+                "last_sync": public.get("last_sync"),
+                "record_count": public.get("records_synced", 0),
+                "error_summary": public.get("error"),
             }
+            if public.get("account_hint"):
+                install_status["account_hint"] = public["account_hint"]
         
         catalog.append({
             "id": p["id"],
@@ -288,27 +468,15 @@ async def get_connector_status(
     statuses = []
     seen_ids = set()
     for provider_id in ConnectorRegistry.get_available_providers():
-        config = connectors_config.get(provider_id, {})
-        statuses.append({
-            "provider_id": provider_id,
-            "connected": config.get("connected", False),
-            "last_sync": config.get("last_sync"),
-            "records_synced": config.get("records_synced", 0),
-            "error": config.get("last_error"),
-            "needs_reauth": bool(config.get("needs_reauth")),
-        })
+        # A connection stored under a legacy alias (razorpayx_payroll) reports
+        # under the canonical id too.
+        config = _status_config(connectors_config, provider_id)
+        statuses.append(_status_row(provider_id, config))
         seen_ids.add(provider_id)
-    
+
     for provider_id, config in connectors_config.items():
         if provider_id not in seen_ids and isinstance(config, dict):
-            statuses.append({
-                "provider_id": provider_id,
-                "connected": config.get("connected", False),
-                "last_sync": config.get("last_sync"),
-                "records_synced": config.get("records_synced", 0),
-                "error": config.get("last_error"),
-                "needs_reauth": bool(config.get("needs_reauth")),
-            })
+            statuses.append(_status_row(provider_id, config))
     
     return {
         "company_id": company_id,
@@ -339,13 +507,25 @@ async def connect_provider(
     
     if not connector_class:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider_id}")
-    
+
+    # RazorpayX account numbers are financial PII. They belong in the encrypted
+    # credential blob with the key and secret, not in plaintext settings.
+    creds_to_store = dict(credentials.credentials or {})
+    settings_to_store = credentials.settings
+    account_number = ""
+    if _is_razorpay_family(provider_id):
+        settings_to_store = dict(credentials.settings or {})
+        settings_account = _pop_account_number(settings_to_store)
+        account_number = str(creds_to_store.get(_ACCOUNT_NUMBER_KEY) or settings_account or "").strip()
+        if account_number:
+            creds_to_store[_ACCOUNT_NUMBER_KEY] = account_number
+
     # Create connector and test authentication
     config = ConnectorConfig(
         provider_id=provider_id,
         company_id=company_id,
-        credentials=credentials.credentials,
-        settings=credentials.settings or {},
+        credentials=creds_to_store,
+        settings=settings_to_store or {},
     )
     
     try:
@@ -361,7 +541,7 @@ async def connect_provider(
             raise HTTPException(status_code=401, detail=detail)
 
         # Encrypt sensitive credentials before storing in database
-        encrypted_creds = encrypt_credentials(credentials.credentials)
+        encrypted_creds = encrypt_credentials(creds_to_store)
 
         # Write just this provider's entry. A full-blob write here would drop a
         # provider connected by a concurrent request, along with any other
@@ -373,24 +553,28 @@ async def connect_provider(
             {
                 "connected": True,
                 "credentials": encrypted_creds,  # Encrypted string
-                "settings": credentials.settings,
+                "settings": settings_to_store,
                 "connected_at": datetime.utcnow().isoformat(),
             },
         )
 
         logger.info(f"Successfully connected provider {provider_id} for company {company_id}")
 
-        return {
+        payload = {
             "success": True,
             "provider_id": provider_id,
             "message": f"Successfully connected to {connector.PROVIDER_NAME}",
         }
-        
+        if account_number:
+            payload["account_hint"] = mask_account_number(account_number)
+        return payload
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Connection error for {provider_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_error = _safe_account_text(e, account_number)
+        logger.error("Connection error for %s: %s", provider_id, safe_error)
+        raise HTTPException(status_code=500, detail=safe_error)
     finally:
         await connector.close()
 
@@ -416,12 +600,14 @@ async def disconnect_provider(
     # Remove the financial records this connector created (sync path tags them
     # "connector_<id>"; the background worker tags them with the bare id), so a
     # disconnected source stops feeding burn/runway everywhere.
-    source_tags = [f"connector_{provider_id}"]
+    # Aliases (razorpayx / razorpayx_payroll) share one connection family.
+    family = _family_ids(provider_id)
+    source_tags = [f"connector_{pid}" for pid in family]
     if (
         ConnectorRegistry.get_connector_class(provider_id)
         and provider_id not in {"manual", "sample", "excel", "pdf", "benchmark"}
     ):
-        source_tags.append(provider_id)
+        source_tags.extend(family)
     removed = (
         db.query(FinancialRecord)
         .filter(
@@ -437,8 +623,10 @@ async def disconnect_provider(
         ad_rows_removed = d2c_months.remove_ad_source(db, company_id, provider_id)
     db.commit()
 
-    if provider_id in (company.metadata_json or {}).get("connectors", {}):
-        delete_metadata_value(db, company, ("connectors", provider_id))
+    stored_connectors = (company.metadata_json or {}).get("connectors", {}) or {}
+    for candidate in family:
+        if candidate in stored_connectors:
+            delete_metadata_value(db, company, ("connectors", candidate))
 
     return {
         "success": True,
@@ -469,57 +657,69 @@ async def sync_provider(
     
     metadata = company.metadata_json or {}
     connectors = metadata.get("connectors", {})
-    
-    if provider_id not in connectors or not connectors[provider_id].get("connected"):
+    # The row may be stored under a legacy alias (razorpayx_payroll) while the
+    # caller uses the catalog id (razorpayx), or the other way round.
+    storage_id = _connected_storage_id(connectors, provider_id)
+
+    if not storage_id:
         raise HTTPException(status_code=400, detail=f"Provider {provider_id} is not connected")
-    
+
     connector_class = ConnectorRegistry.get_connector_class(provider_id)
     if not connector_class:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider_id}")
-    
+
     # Get stored credentials and decrypt them
-    stored_config = connectors[provider_id]
+    stored_config = connectors[storage_id]
     stored_credentials = stored_config.get("credentials", {})
+    account_number = _account_from_stored(stored_config) if _is_razorpay_family(provider_id) else ""
 
     # Decrypt credentials if they're encrypted (string)
     if isinstance(stored_credentials, str):
         try:
             credentials_dict = decrypt_credentials(stored_credentials)
         except Exception as e:
-            logger.error(f"Failed to decrypt credentials for {provider_id}: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to decrypt stored credentials. Configuration may be corrupted.",
+            logger.error(
+                "Failed to decrypt credentials for %s: %s",
+                provider_id,
+                _safe_account_text(e, account_number),
             )
+            detail = "Failed to decrypt stored credentials. Configuration may be corrupted."
+            _record_sync_failure(db, company_id, storage_id, detail)
+            raise HTTPException(status_code=500, detail=detail)
     else:
         # Fallback for plaintext credentials (migration scenario)
         credentials_dict = stored_credentials or {}
 
     config = ConnectorConfig(
-        provider_id=provider_id,
+        provider_id=connector_class.PROVIDER_ID,
         company_id=company_id,
         credentials=credentials_dict,
-        settings=stored_config.get("settings", {}),
+        settings=stored_config.get("settings") or {},
     )
-    
+
     try:
         connector = connector_class(config)
     except UnsafeTargetError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid connection target: {e}")
-    
+        detail = f"Invalid connection target: {e}"
+        _record_sync_failure(db, company_id, storage_id, detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+    # Extra fields written alongside last_error if this sync fails.
+    failure_extra: Dict[str, Any] = {}
+
     try:
         # STEP 1: Fetch data from connector (no DB changes yet)
         result = await connector.sync_all()
 
         # STEP 2: Validate synced data BEFORE any DB commits
         if not result.success and result.errors:
+            first_error = _safe_account_text(result.errors[0], account_number)
             if result.metadata.get("needs_reauth"):
                 # Expired/revoked token: remember it so the card asks to reconnect.
-                connectors[provider_id]["needs_reauth"] = True
-                connectors[provider_id]["last_error"] = result.errors[0]
-                save_metadata_value(db, company, ("connectors", provider_id), connectors[provider_id])
-            error_msg = f"Connector sync validation failed: {result.errors[0]}"
-            logger.warning(f"Sync validation error for {provider_id}: {error_msg}")
+                # Written by _record_sync_failure in the except block below.
+                failure_extra = {"needs_reauth": True, "last_error": first_error[:500]}
+            error_msg = f"Connector sync validation failed: {first_error}"
+            logger.warning("Sync validation error for %s: %s", provider_id, error_msg)
             raise ValueError(error_msg)
 
         # STEP 3: Build and validate financial records
@@ -527,7 +727,10 @@ async def sync_provider(
         if result.success and result.metadata.get("financials"):
             financials = result.metadata["financials"]
             today = datetime.utcnow().date()
-            financial_record = _build_financial_record(company_id, provider_id, connector.PROVIDER_NAME, financials, today)
+            # Canonical id keeps source_type stable when the caller used an alias.
+            financial_record = _build_financial_record(
+                company_id, _record_provider_id(provider_id), connector.PROVIDER_NAME, financials, today
+            )
 
             # Validate financial record has meaningful data
             if (financial_record.revenue is None and
@@ -538,11 +741,14 @@ async def sync_provider(
 
         # STEP 4: All validations passed, now commit in single transaction
         try:
-            # Update sync status in metadata
-            connectors[provider_id]["last_sync"] = datetime.utcnow().isoformat()
-            connectors[provider_id]["records_synced"] = result.records_synced
-            connectors[provider_id]["last_error"] = None  # Clear previous errors on success
-            connectors[provider_id].pop("needs_reauth", None)
+            # Update sync status in metadata. RazorpayX rows also get any
+            # plaintext account number moved into the encrypted blob.
+            updated = _seal_razorpay_config(dict(connectors[storage_id]), storage_id)
+            updated["last_sync"] = datetime.utcnow().isoformat()
+            updated["records_synced"] = result.records_synced
+            updated["last_error"] = None  # Clear previous errors on success
+            updated.pop("last_error_at", None)
+            updated.pop("needs_reauth", None)
 
             logger.info(
                 f"Sync completed for provider {provider_id}, company {company_id}: "
@@ -554,8 +760,8 @@ async def sync_provider(
             save_metadata_value(
                 db,
                 company,
-                ("connectors", provider_id),
-                connectors[provider_id],
+                ("connectors", storage_id),
+                updated,
                 commit=False,
             )
 
@@ -611,28 +817,34 @@ async def sync_provider(
         except Exception as commit_error:
             # STEP 5: Rollback on commit error
             db.rollback()
-            logger.error(f"Failed to commit sync data for {provider_id}: {commit_error}")
+            logger.error(
+                "Failed to commit sync data for %s: %s",
+                provider_id,
+                _safe_account_text(commit_error, account_number),
+            )
             raise ValueError(f"Database commit failed: {str(commit_error)}")
 
         return {
             "success": result.success,
             "provider_id": provider_id,
             "records_synced": result.records_synced,
-            "errors": result.errors,
-            "warnings": result.warnings,
+            "errors": [_safe_account_text(e, account_number) for e in result.errors],
+            "warnings": [_safe_account_text(w, account_number) for w in result.warnings],
             "sync_completed": result.sync_completed.isoformat() if result.sync_completed else None,
         }
 
     except ValueError as validation_error:
-        # Validation error - ensure rollback
-        db.rollback()
-        logger.error(f"Sync validation error for {provider_id}: {validation_error}")
-        raise HTTPException(status_code=400, detail=str(validation_error))
+        # Validation error: roll back, then record last_error on the connection.
+        safe_error = _safe_account_text(validation_error, account_number)
+        logger.error("Sync validation error for %s: %s", provider_id, safe_error)
+        _record_sync_failure(db, company_id, storage_id, safe_error, failure_extra)
+        raise HTTPException(status_code=400, detail=safe_error)
     except Exception as e:
-        # Unexpected error - ensure rollback
-        db.rollback()
-        logger.error(f"Sync error for {provider_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Unexpected error: roll back, then record last_error on the connection.
+        safe_error = _safe_account_text(e, account_number)
+        logger.error("Sync error for %s: %s", provider_id, safe_error)
+        _record_sync_failure(db, company_id, storage_id, safe_error, failure_extra)
+        raise HTTPException(status_code=500, detail=safe_error)
     finally:
         await connector.close()
 
@@ -663,7 +875,8 @@ async def get_sync_history(
     )
     
     if provider_id:
-        query = query.filter(FinancialRecord.source_type == f"connector_{provider_id}")
+        source_types = [f"connector_{pid}" for pid in _family_ids(provider_id)]
+        query = query.filter(FinancialRecord.source_type.in_(source_types))
     
     records = query.order_by(FinancialRecord.created_at.desc()).limit(limit).all()
     
@@ -993,7 +1206,7 @@ async def test_with_sample_data(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    sample = SAMPLE_DATA.get(provider_id)
+    sample = _sample_for(provider_id)
     if not sample:
         raise HTTPException(status_code=400, detail=f"No sample data available for {provider_id}")
 
@@ -1005,7 +1218,9 @@ async def test_with_sample_data(
     # FinancialRecord in the founder's company and mark the connector
     # connected, so fake revenue/burn flowed into every page. Build the record
     # in memory to show what a sync would store, and persist nothing.
-    preview = _build_financial_record(company_id, provider_id, provider_name, sample, today)
+    preview = _build_financial_record(
+        company_id, _record_provider_id(provider_id), provider_name, sample, today
+    )
 
     verification = {}
     for field_name in ["revenue", "cogs", "opex", "payroll", "cash_balance", "mrr", "arr",
