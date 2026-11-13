@@ -1,6 +1,8 @@
+import html as html_lib
 import os
 import uuid
 import logging
+from urllib.parse import urlencode, urlsplit
 from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Request, Query, HTTPException, Header, Depends
@@ -38,9 +40,34 @@ async def resend_webhook(request: Request):
     if not resend_webhook_sig.verify(secret, request.headers, raw_body):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
-    body = await request.json()
+    # A signed body that is not a JSON object is the caller's error, not ours.
+    # Without this guard the raise happens ABOVE every try in this handler, so a
+    # delivery Resend considers normal enough to sign comes back 500 and reads
+    # in our logs as an outage on our side. Same shape, same codes, as the
+    # sibling receiver at notifications.py:223-228, and still after the
+    # signature check so an unverified body is never parsed.
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+
     event_type = body.get("type", "")
     data = body.get("data", {})
+    # `:51` checks the ENVELOPE, not its contents. A signed body carrying
+    # {"data": "a string"} passes that guard and then raises AttributeError on the
+    # `.get()` below, because a str has no `.get`. That raise sits BETWEEN the parse
+    # guard and the db try, so it is caught by neither: it escapes this handler's own
+    # `except`, skips the rollback and the `logger.error` line, and answers 500 --
+    # the code that asks Resend to retry a body that can never succeed. Same class as
+    # `:51`, one level down, which is what "the guard is not sufficient one line
+    # below itself" names. 400, not 500: a signed body whose `data` is not an object
+    # is the caller's error, exactly like the envelope guard above it.
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=400, detail="Invalid webhook payload: data is not an object"
+        )
     email_id = data.get("email_id") or data.get("id", "")
     timestamp = body.get("created_at") or datetime.utcnow().isoformat()
 
@@ -118,7 +145,24 @@ async def resend_webhook(request: Request):
             event_record.click_count = (event_record.click_count or 0) + 1
             if not event_record.clicked_at:
                 event_record.clicked_at = ts
-            clicked_url = data.get("click", {}).get("link") or data.get("url", "")
+            # HAG-391 scope extension. The same class as the `data` guard above, one
+            # nesting level deeper: the envelope guard pins `body`, and the guard at
+            # :55 pins `data`, but nothing pins `click`, so the second `.get` below
+            # raised AttributeError on a signed delivery carrying `click` as a
+            # string, a list or a number. Here that raise is worse than above: this
+            # branch sits INSIDE the db try, so it is caught by the handler's own
+            # `except Exception` and answered 500 -- Resend redelivers a body that
+            # can never succeed. Deliberately tolerant rather than a 400: a 400
+            # raised here would be swallowed by that same `except Exception`
+            # (HTTPException is an Exception) and become the very 500 it exists to
+            # remove. A click with no usable link is a real event, so it is recorded
+            # as one. Measured: the old line raised AttributeError -- 'str' object
+            # has no attribute 'get' -- for {"click": "https://link.example/x"}; for
+            # {"click": {"link": ...}} and {"click": {...no link...}} the two
+            # expressions are equal.
+            click = data.get("click")
+            click_link = click.get("link") if isinstance(click, dict) else ""
+            clicked_url = click_link or data.get("url", "")
             if clicked_url:
                 urls = event_record.clicked_urls or []
                 urls.append({"url": clicked_url, "at": ts.isoformat()})
@@ -135,7 +179,15 @@ async def resend_webhook(request: Request):
     except Exception as e:
         db.rollback()
         logger.error(f"Webhook error: {e}")
-        return {"status": "error", "message": str(e)}
+        # Non-2xx on purpose. Returning a plain dict here is HTTP 200, which
+        # tells Resend the delivery was handled: it does not redeliver and the
+        # event is dropped with nothing in the response to show it. 500 is the
+        # honest code for our own write failing -- the body was valid, the fault
+        # was ours -- and it is the code that asks for another attempt.
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)},
+        )
     finally:
         db.close()
 
@@ -206,7 +258,12 @@ async def email_feedback_page(
             db.close()
 
     base_url = "/email-tracking/feedback"
-    params = f"email_id={email_id or ''}&email={email or ''}&campaign={campaign or ''}"
+    # Query values are reflected into the page, so encode them for the URL and
+    # then escape the result for the HTML attribute.
+    params = html_lib.escape(
+        urlencode({"email_id": email_id or "", "email": email or "", "campaign": campaign or ""}),
+        quote=True,
+    )
 
     if submitted:
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -243,7 +300,18 @@ async def email_feedback_page(
 
 @router.post("/feedback")
 async def submit_feedback_api(request: Request):
-    body = await request.json()
+    # Same guards as the receiver above, and for the same reason: this parse sits
+    # above the try that opens below, so a non-object body raised uncaught and
+    # answered 500 for a malformed request. There is no signature here and nothing
+    # to redeliver, so the codes below are chosen for the caller reading the status,
+    # not to ask anyone for a retry.
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid feedback payload")
+
     db = next(get_db())
     try:
         fb = EmailFeedback(
@@ -259,7 +327,16 @@ async def submit_feedback_api(request: Request):
         return {"status": "ok"}
     except Exception as e:
         db.rollback()
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Feedback save error: {e}")
+        # Non-2xx on purpose, for the same reason as the receiver's failure path
+        # above: a plain dict here is HTTP 200, which reports a row that was never
+        # written as recorded. The caller is a form, so the status is the only part
+        # of this response a generic client reads -- the message in the body was
+        # always correct and was always ignored by anything that checks `res.ok`.
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)},
+        )
     finally:
         db.close()
 
@@ -286,20 +363,14 @@ def _verify_admin_jwt(token_str: str) -> bool:
         # Master admin token (issued only to the configured master admin)
         if user_id == "master" and payload.get("is_master"):
             return True
-        admin_email = (os.getenv("ADMIN_MASTER_EMAIL") or "").lower().strip()
         db = next(get_db())
         try:
             from server.models.user import User
+            from server.api.admin import is_platform_admin
             user = db.query(User).filter(User.id == int(user_id)).first()
-            if not user:
-                return False
-            if user.role == "owner":
-                return True
-            if admin_email and user.email.lower().strip() == admin_email:
-                return True
+            return bool(user) and is_platform_admin(user)
         finally:
             db.close()
-        return False
     except Exception:
         return False
 
@@ -406,6 +477,29 @@ async def email_analytics(
         db.close()
 
 
+_REDIRECT_HOSTS = {"founderconsole.ai", "www.founderconsole.ai"}
+_DEFAULT_REDIRECT = "https://founderconsole.ai"
+
+
+def safe_redirect_target(dest: Optional[str]) -> str:
+    """Our own site only: a same-site path or an https URL on a first-party host."""
+    if not dest or not isinstance(dest, str):
+        return _DEFAULT_REDIRECT
+    value = dest.strip()
+    if any(ch in value for ch in ("\\", "\r", "\n", "\t")):
+        return _DEFAULT_REDIRECT
+    if value.startswith("/") and not value.startswith("//"):
+        return value
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return _DEFAULT_REDIRECT
+    host = (parts.hostname or "").lower()
+    if parts.scheme == "https" and host in _REDIRECT_HOSTS and not parts.username and not parts.password:
+        return value
+    return _DEFAULT_REDIRECT
+
+
 @router.get("/welcome")
 async def welcome_redirect(
     request: Request,
@@ -413,6 +507,7 @@ async def welcome_redirect(
     uid: Optional[str] = None,
     dest: str = Query(default="https://founderconsole.ai")
 ):
+    dest = safe_redirect_target(dest)
     db = next(get_db())
     try:
         from server.models.email_event import EmailLinkClick

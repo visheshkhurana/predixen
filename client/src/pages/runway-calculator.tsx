@@ -1,14 +1,20 @@
-import { useState, useMemo, useEffect, useRef, type FormEvent } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import {
+  CALCULATOR_EMAIL_CAPTURE_ENABLED,
+  CalculatorEmailOptIn,
+} from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { founderFaqs } from "@/data/founder-faqs";
 import { trackFunnel } from "@/lib/funnel";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
 import {
   ArrowRight,
@@ -18,9 +24,6 @@ import {
   DollarSign,
   Percent,
   BarChart3,
-  Mail,
-  Check,
-  Loader2,
 } from "lucide-react";
 
 function formatCurrency(val: number): string {
@@ -33,6 +36,24 @@ function formatDate(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() + Math.floor(months));
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+/** Plain decimal. The lead API accepts a number, not currency or "36+". */
+function leadNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  const sign = value < 0 ? "-" : "";
+  const trimmed = Math.abs(value).toFixed(2).replace(/\.?0+$/, "");
+  return `${sign}${trimmed}`;
+}
+
+/** YYYY-MM-DD. The lead API rejects prose dates such as "March 2027". */
+function leadIsoDate(months: number): string {
+  const whole = Number.isFinite(months) ? Math.max(0, Math.floor(months)) : 0;
+  const d = new Date();
+  d.setMonth(d.getMonth() + whole);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 const DEFAULTS = { cash: 500000, revenue: 20000, expenses: 60000, growthRate: 5 };
@@ -67,18 +88,12 @@ export default function RunwayCalculatorPage() {
   const expenses = toNumber(expensesText);
   const growthRate = toNumber(growthText);
 
-  // Fire once, the first time a visitor changes any input away from the
-  // pre-filled example.
-  //
-  // Page views told us nothing useful: 28 people viewed this page and 26 never
-  // touched it, which is invisible if the only event is the CTA click at the
-  // bottom. This is the step that separates "landed here" from "actually asked
-  // the question", and it is the signal ad platforms should optimise toward —
-  // waiting for signups gives them almost no data to learn from.
-  const usageTracked = useRef(false);
+  // Once per page load, on the first input event. Page views do not say
+  // whether anyone asked the question.
+  const onCalculatorInput = useCalculatorUsedOnce("runway");
 
   // The prompt further down is only for the visitor who actually ran the
-  // numbers. The 26-of-28 who bounce off the pre-filled example keep the free
+  // numbers. The ones who bounce off the pre-filled example keep the free
   // tool and nothing else. It starts false, so the prompt is also absent from
   // the prerendered HTML and costs the crawlers nothing.
   const [hasRunNumbers, setHasRunNumbers] = useState(false);
@@ -87,17 +102,15 @@ export default function RunwayCalculatorPage() {
   });
 
   useEffect(() => {
-    if (usageTracked.current) return;
+    if (hasRunNumbers) return;
     const touched =
       cash !== DEFAULTS.cash ||
       revenue !== DEFAULTS.revenue ||
       expenses !== DEFAULTS.expenses ||
       growthRate !== DEFAULTS.growthRate;
     if (!touched) return;
-    usageTracked.current = true;
     setHasRunNumbers(true);
-    trackFunnel("calculator_used", { calculator: "runway" });
-  }, [cash, revenue, expenses, growthRate]);
+  }, [cash, revenue, expenses, growthRate, hasRunNumbers]);
 
   const results = useMemo(() => {
     const monthlyBurn = expenses - revenue;
@@ -124,62 +137,8 @@ export default function RunwayCalculatorPage() {
     return { monthlyBurn, runwayMonths, runwayDate, months, maxCash };
   }, [cash, revenue, expenses, growthRate]);
 
-  // The one conversion on this page that does not cost the visitor an account.
-  //
-  // Until now the only way to convert was "Connect Your Real Data" -> full
-  // signup. That asks someone who has known this product for forty seconds to
-  // hand over their company's financials. Nobody did: across 15-19 August,
-  // zero signup_view, zero signup_start, zero cta_click, on AED 1,900 of ads.
-  //
-  // This asks for one field, and gives something back — their own result,
-  // in their inbox, where it can be forwarded to a co-founder.
-  const [email, setEmail] = useState("");
-  const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
-  const leadFormRef = useViewedOnce("lead_form_viewed", {
-    location: "runway-calculator",
-  });
-
-  async function handleEmailResult(e: FormEvent) {
-    e.preventDefault();
-    if (sendState === "sending" || !email.trim()) return;
-    setSendState("sending");
-    try {
-      const res = await fetch("/api/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          source: "runway-calculator",
-          plan: "runway-calculator",
-          // The numbers matter more than the address. An email alone is a
-          // stranger; an email plus "4 months of runway, burning $40K" is a
-          // conversation with an opening line.
-          notes: `Runway ${results.runwayMonths >= 36 ? "36+" : results.runwayMonths} months (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`,
-          // The server keys the outbound email off these three. Send them or
-          // the lead is stored silently and the "check your inbox" line above
-          // becomes a lie.
-          runway_months: results.runwayMonths >= 36 ? "36+" : String(results.runwayMonths),
-          runway_date: results.runwayMonths >= 36 ? "beyond 36 months" : results.runwayDate,
-          monthly_burn: formatCurrency(results.monthlyBurn) + "/mo",
-        }),
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      setSendState("done");
-      trackFunnel("lead_captured", {
-        location: "runway-calculator",
-        runway_months: results.runwayMonths,
-      });
-    } catch {
-      // Deliberately not a toast. If this fails the visitor still has their
-      // answer on screen; the worst outcome is asking them to try again.
-      setSendState("error");
-    }
-  }
-
   useSEO({
-    title: "Free Startup Runway Calculator — How Long Until You Run Out of Cash | FounderConsole",
-    description:
-      "Calculate your startup runway in seconds. Enter cash on hand, monthly revenue, expenses, and growth rate to see how many months until you need to raise. Free interactive tool with chart.",
+    ...TOOL_PAGE_META["/tools/runway-calculator"],
     path: "/tools/runway-calculator",
     jsonLd: [
       {
@@ -244,7 +203,7 @@ export default function RunwayCalculatorPage() {
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12">
           <div className="grid gap-8 lg:grid-cols-5">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6" onInput={onCalculatorInput}>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -473,62 +432,23 @@ export default function RunwayCalculatorPage() {
         </section>
       )}
 
-      <section className="border-b">
-        <div className="mx-auto max-w-6xl px-4 pt-12">
-          <div className="rounded-xl border bg-card/50 p-6 max-w-2xl mx-auto">
-            {sendState === "done" ? (
-              <div className="flex items-center gap-3 justify-center py-2" data-testid="text-email-sent">
-                <Check className="h-5 w-5 text-emerald-500 shrink-0" />
-                <p className="text-sm text-foreground">
-                  Sent. Check your inbox for your runway summary.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-primary shrink-0" />
-                  <h3 className="text-base font-semibold text-foreground" data-testid="text-email-heading">
-                    Email me this result
-                  </h3>
-                </div>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  Your runway, burn rate and cash-out date, sent to you so you can
-                  forward it to a co-founder or investor. No account needed.
-                </p>
-                <form ref={leadFormRef} onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    type="email"
-                    required
-                    autoComplete="email"
-                    inputMode="email"
-                    placeholder="you@yourstartup.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="sm:flex-1"
-                    aria-label="Your email address"
-                    data-testid="input-lead-email"
-                  />
-                  <Button type="submit" disabled={sendState === "sending"} data-testid="button-email-result">
-                    {sendState === "sending" ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Sending
-                      </>
-                    ) : (
-                      "Send it to me"
-                    )}
-                  </Button>
-                </form>
-                {sendState === "error" && (
-                  <p className="mt-2 text-sm text-destructive" data-testid="text-email-error">
-                    That did not go through. Try again in a moment.
-                  </p>
-                )}
-              </>
-            )}
+      {CALCULATOR_EMAIL_CAPTURE_ENABLED && (
+        <section className="border-b" data-testid="section-email-opt-in">
+          <div className="mx-auto max-w-6xl px-4 py-12">
+            <CalculatorEmailOptIn
+              className="max-w-2xl mx-auto"
+              source="runway-calculator"
+              sourcePage="/tools/runway-calculator"
+              plan="runway-calculator"
+              resultByEmail={false}
+              notes={`Runway ${results.runwayMonths >= 36 ? "36+" : results.runwayMonths} months (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`}
+              runwayMonths={leadNumber(results.runwayMonths)}
+              runwayDate={leadIsoDate(results.runwayMonths)}
+              monthlyBurn={leadNumber(results.monthlyBurn)}
+            />
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12 text-center">

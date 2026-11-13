@@ -28,6 +28,11 @@ from .base import (
     InvoiceRecord,
 )
 from .registry import ConnectorRegistry
+from server.core.url_safety import (
+    SAFE_CLIENT_KWARGS,
+    UnsafeTargetError,
+    assert_public_url_before_request,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +207,11 @@ class TallyConnector(BaseConnector):
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
         # For on-prem Tally
-        self._tally_url = config.credentials.get("tally_url", "http://localhost:9000")
+        # User-supplied and fetched server-side. No default: an unset URL used
+        # to mean http://localhost:9000, i.e. a request to this server itself.
+        # The base class checks it at construction; _get_client checks it
+        # again, with DNS, before the first request.
+        self._tally_url = (config.credentials.get("tally_url") or "").strip()
         self._company_name = config.credentials.get("company_name", "")
         # For Tally Forms API
         self._api_key = config.credentials.get("api_key", "")
@@ -220,12 +229,17 @@ class TallyConnector(BaseConnector):
                         "Content-Type": "application/json",
                     },
                     timeout=30.0,
+                    **SAFE_CLIENT_KWARGS,
                 )
             else:
+                if not self._tally_url:
+                    raise UnsafeTargetError("Tally server URL is required")
+                await assert_public_url_before_request(self._tally_url)
                 self._client = httpx.AsyncClient(
                     base_url=self._tally_url,
                     headers={"Content-Type": "application/xml"},
                     timeout=60.0,  # Tally can be slow
+                    **SAFE_CLIENT_KWARGS,
                 )
         return self._client
     

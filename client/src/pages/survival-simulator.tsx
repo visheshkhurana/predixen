@@ -1,6 +1,9 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { isSustainableRunway } from "@/lib/simulation/runwayFormat";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +15,7 @@ import {
   Rocket, TrendingUp, DollarSign, Users, AlertTriangle,
   Share2, ArrowRight, BarChart3, Shield, Target, ChevronDown,
   Zap, CheckCircle, UserPlus, Clock, Copy, Twitter, Linkedin,
-  Gauge, ArrowLeft, Download, Mail, Check, Loader2
+  Gauge, ArrowLeft, Download
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -21,7 +24,12 @@ import {
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 import { trackFunnel } from "@/lib/funnel";
-import { useViewedOnce } from "@/hooks/use-viewed-once";
+
+// 999 is the engine's "revenue covers costs" sentinel; never show "999mo".
+function runwayLabel(value: number, unit = "mo"): string {
+  if (isSustainableRunway(value)) return "Sustainable";
+  return `${value}${unit}`;
+}
 
 const STORAGE_KEY = "fc_survival_sim_count";
 
@@ -47,10 +55,22 @@ const formatCurrency = (val: number) => {
   return `$${val.toFixed(0)}`;
 };
 
-function formatDate(months: number): string {
+/** Plain decimal. The lead API accepts a number, not "$12K/mo" or "Sustainable". */
+function leadNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  const sign = value < 0 ? "-" : "";
+  const trimmed = Math.abs(value).toFixed(2).replace(/\.?0+$/, "");
+  return `${sign}${trimmed}`;
+}
+
+/** YYYY-MM-DD. The lead API rejects prose dates. */
+function leadIsoDate(months: number): string {
+  const whole = Number.isFinite(months) ? Math.max(0, Math.floor(months)) : 0;
   const d = new Date();
-  d.setMonth(d.getMonth() + Math.floor(months));
-  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  d.setMonth(d.getMonth() + whole);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 const gradeColors: Record<string, string> = {
@@ -120,12 +140,15 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
 }) {
   const [inputs, setInputs] = useState<SimInputs>(defaultInputs);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const onCalculatorInput = useCalculatorUsedOnce("survival-simulator");
 
-  const set = (key: keyof SimInputs, val: number | null) =>
+  const set = (key: keyof SimInputs, val: number | null) => {
+    onCalculatorInput();
     setInputs(prev => ({ ...prev, [key]: val }));
+  };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/80 backdrop-blur" data-testid="simulator-input-form">
+    <Card className="border-zinc-800 bg-zinc-900/80 backdrop-blur" data-testid="simulator-input-form" onInput={onCalculatorInput}>
       <CardHeader className="pb-4">
         <CardTitle className="text-xl flex items-center gap-2">
           <Target className="h-5 w-5 text-primary" />
@@ -185,7 +208,7 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <Label className="text-sm font-medium">Growth Rate</Label>
+              <Label className="text-sm font-medium">Growth Rate (before churn)</Label>
               <span className="text-sm text-primary font-mono">{inputs.growth_rate}% /mo</span>
             </div>
             <Slider
@@ -227,8 +250,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
         {showAdvanced && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 animate-in fade-in duration-200">
             <div className="space-y-2">
-              <Label className="text-sm">Planned Hires (next 12 months)</Label>
-              <Input
+              <Label htmlFor="survival-simulator-planned-hires-next-12-months" className="text-sm">Planned Hires (next 12 months)</Label>
+              <Input id="survival-simulator-planned-hires-next-12-months"
                 data-testid="input-planned-hires"
                 type="number"
                 value={inputs.planned_hires}
@@ -237,8 +260,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Avg Monthly Cost per Hire</Label>
-              <Input
+              <Label htmlFor="survival-simulator-avg-monthly-cost-per-hire" className="text-sm">Avg Monthly Cost per Hire</Label>
+              <Input id="survival-simulator-avg-monthly-cost-per-hire"
                 data-testid="input-avg-hire-cost"
                 type="number"
                 value={inputs.avg_hire_cost}
@@ -247,8 +270,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Fundraising Month (1-24)</Label>
-              <Input
+              <Label htmlFor="survival-simulator-fundraising-month-1-24" className="text-sm">Fundraising Month (1-24)</Label>
+              <Input id="survival-simulator-fundraising-month-1-24"
                 data-testid="input-fundraising-month"
                 type="number"
                 value={inputs.fundraising_month ?? ""}
@@ -258,8 +281,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Fundraising Amount</Label>
-              <Input
+              <Label htmlFor="survival-simulator-fundraising-amount" className="text-sm">Fundraising Amount</Label>
+              <Input id="survival-simulator-fundraising-amount"
                 data-testid="input-fundraising-amount"
                 type="number"
                 value={inputs.fundraising_amount}
@@ -417,8 +440,8 @@ function SimulationResultsCard({ results }: { results: SimResults }) {
               Your startup has a <span className={gradeTextColors[grade.color]}>{survival["12m"]}%</span> chance of surviving 12 months
             </h3>
             <p className="text-muted-foreground">
-              Median runway: <span className="text-white font-semibold">{runway.p50} months</span>
-              {" "}(range: {runway.p10} – {runway.p90} months)
+              Median runway: <span className="text-white font-semibold">{runwayLabel(runway.p50, " months")}</span>
+              {" "}(range: {runwayLabel(runway.p10, "")} – {runwayLabel(runway.p90, " months")})
             </p>
           </div>
         </div>
@@ -433,17 +456,17 @@ function SimulationResultsCard({ results }: { results: SimResults }) {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Pessimistic</p>
-            <p className="text-lg font-bold text-red-400">{runway.p10}mo</p>
+            <p className="text-lg font-bold text-red-400">{runwayLabel(runway.p10)}</p>
             <p className="text-xs text-muted-foreground">P10 Runway</p>
           </div>
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Most Likely</p>
-            <p className="text-lg font-bold text-white">{runway.p50}mo</p>
+            <p className="text-lg font-bold text-white">{runwayLabel(runway.p50)}</p>
             <p className="text-xs text-muted-foreground">P50 Runway</p>
           </div>
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Optimistic</p>
-            <p className="text-lg font-bold text-emerald-400">{runway.p90}mo</p>
+            <p className="text-lg font-bold text-emerald-400">{runwayLabel(runway.p90)}</p>
             <p className="text-xs text-muted-foreground">P90 Runway</p>
           </div>
         </div>
@@ -510,108 +533,25 @@ function RecommendationsPanel({ recommendations }: { recommendations: SimResults
 }
 
 function EmailResultPanel({ results }: { results: SimResults }) {
-  // Same conversion as /tools/runway-calculator: one field, no account, the
-  // result in their inbox so they can forward it. Server /api/leads already
-  // stores the lead and queues lead_captured; we still track client-side
-  // after a 2xx, matching the calculator.
-  const [email, setEmail] = useState("");
-  const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
-  const leadFormRef = useViewedOnce("lead_form_viewed", {
-    location: "survival-simulator",
-  });
-
+  // Shown only after a simulation result exists. Same consent opt-in as the
+  // other public calculators. resultByEmail stays false: this page does not
+  // send the result, so the offer must not promise an inbox.
   const p50 = results.runway.p50;
   const monthlyBurn = results.inputs.monthly_expenses - results.inputs.monthly_revenue;
-  const runwayDate = formatDate(p50);
-
-  async function handleEmailResult(e: FormEvent) {
-    e.preventDefault();
-    if (sendState === "sending" || !email.trim()) return;
-    setSendState("sending");
-    try {
-      const res = await fetch("/api/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          source: "survival-simulator",
-          plan: "survival-simulator",
-          notes: `Grade ${results.grade.letter} (${results.grade.label}). Median runway ${p50} months (P10 ${results.runway.p10} – P90 ${results.runway.p90}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`,
-          // Server only queues the outbound email when these three are present.
-          runway_months: String(p50),
-          runway_date: runwayDate,
-          monthly_burn: formatCurrency(monthlyBurn) + "/mo",
-        }),
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      setSendState("done");
-      trackFunnel("lead_captured", {
-        location: "survival-simulator",
-        runway_months: p50,
-        grade: results.grade.letter,
-        survival_12m: results.survival["12m"],
-      });
-    } catch {
-      // Deliberately not a toast. The visitor still has their result on screen.
-      setSendState("error");
-    }
-  }
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/80" data-testid="email-result-panel">
-      <CardContent className="pt-6">
-        {sendState === "done" ? (
-          <div className="flex items-center gap-3 justify-center py-2" data-testid="text-email-sent">
-            <Check className="h-5 w-5 text-emerald-500 shrink-0" />
-            <p className="text-sm text-foreground">
-              Sent. Check your inbox for your survival summary.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-primary shrink-0" />
-              <h3 className="text-base font-semibold text-foreground" data-testid="text-email-heading">
-                Email me this result
-              </h3>
-            </div>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Your survival grade, median runway and 12-month odds, sent to you so you can
-              forward it to a co-founder or investor. No account needed.
-            </p>
-            <form ref={leadFormRef} onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <Input
-                type="email"
-                required
-                autoComplete="email"
-                inputMode="email"
-                placeholder="you@yourstartup.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="sm:flex-1 bg-zinc-800 border-zinc-700"
-                aria-label="Your email address"
-                data-testid="input-lead-email"
-              />
-              <Button type="submit" disabled={sendState === "sending"} data-testid="button-email-result">
-                {sendState === "sending" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending
-                  </>
-                ) : (
-                  "Send it to me"
-                )}
-              </Button>
-            </form>
-            {sendState === "error" && (
-              <p className="mt-2 text-sm text-destructive" data-testid="text-email-error">
-                That did not go through. Try again in a moment.
-              </p>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <CalculatorEmailOptIn
+      className="border-zinc-800 bg-zinc-900/80"
+      inputClassName="bg-zinc-800 border-zinc-700"
+      source="survival-simulator"
+      sourcePage="/survival-simulator"
+      plan="survival-simulator"
+      resultByEmail={false}
+      notes={`Grade ${results.grade.letter} (${results.grade.label}). Median runway ${runwayLabel(p50, " months")} (P10 ${runwayLabel(results.runway.p10, "")} – P90 ${runwayLabel(results.runway.p90, "")}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`}
+      runwayMonths={leadNumber(p50)}
+      runwayDate={leadIsoDate(p50)}
+      monthlyBurn={leadNumber(monthlyBurn)}
+    />
   );
 }
 
@@ -625,7 +565,7 @@ function ShareResultPanel({ results }: { results: SimResults }) {
   const p50 = results.runway?.p50 ?? 0;
   const surv12 = results.survival?.["12m"] ?? 0;
 
-  const shareText = `My startup scored a ${grade} on the FounderConsole Survival Simulator — ${p50} months median runway, ${surv12}% chance of surviving 12 months. What's yours?`;
+  const shareText = `My startup scored a ${grade} on the FounderConsole Survival Simulator — ${runwayLabel(p50, " months")} median runway, ${surv12}% chance of surviving 12 months. What's yours?`;
 
   const copy = (value: string, label: string) => {
     navigator.clipboard.writeText(value);
@@ -823,9 +763,9 @@ function ExportButton({ results }: { results: SimResults }) {
 </div>
 <h2>Runway Projections</h2>
 <div class="metrics">
-  <div class="metric"><div class="metric-value" style="color:#ef4444">${runway.p10}mo</div><div class="metric-label">Pessimistic (P10)</div></div>
-  <div class="metric"><div class="metric-value">${runway.p50}mo</div><div class="metric-label">Most Likely (P50)</div></div>
-  <div class="metric"><div class="metric-value" style="color:#10b981">${runway.p90}mo</div><div class="metric-label">Optimistic (P90)</div></div>
+  <div class="metric"><div class="metric-value" style="color:#ef4444">${runwayLabel(runway.p10)}</div><div class="metric-label">Pessimistic (P10)</div></div>
+  <div class="metric"><div class="metric-value">${runwayLabel(runway.p50)}</div><div class="metric-label">Most Likely (P50)</div></div>
+  <div class="metric"><div class="metric-value" style="color:#10b981">${runwayLabel(runway.p90)}</div><div class="metric-label">Optimistic (P90)</div></div>
 </div>
 <h2>Survival Probability</h2>
 <div class="survival">
@@ -897,6 +837,7 @@ export default function SurvivalSimulatorPage() {
     },
     onSuccess: (data) => {
       setResults(data);
+      trackFunnel("survival_simulation_run", { calculator: "survival-simulator" });
       const count = incrementSimCount();
       if (count >= 2) setGated(true);
       window.scrollTo({ top: 0, behavior: "smooth" });

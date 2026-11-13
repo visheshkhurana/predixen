@@ -563,6 +563,9 @@ def run_simulation(
     
     if not truth_scan:
         raise HTTPException(status_code=400, detail="Run a truth scan first")
+
+    from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
+    reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION, company_id=company.id)
     
     try:
         metrics = truth_scan.outputs_json.get("metrics", {})
@@ -1130,6 +1133,9 @@ def simulate_multiple_scenarios(
     
     if not truth_scan:
         raise HTTPException(status_code=400, detail="Run a truth scan first")
+
+    from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
+    reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION, company_id=company.id)
     
     metrics = truth_scan.outputs_json.get("metrics", {})
     
@@ -1232,6 +1238,9 @@ def simulate_enhanced(
     
     if not truth_scan:
         raise HTTPException(status_code=400, detail="Run a truth scan first")
+
+    from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
+    reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION, company_id=company.id)
     
     metrics = truth_scan.outputs_json.get("metrics", {})
     
@@ -1313,6 +1322,9 @@ def simulate_scenarios_enhanced(
     
     if not truth_scan:
         raise HTTPException(status_code=400, detail="Run a truth scan first")
+
+    from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
+    reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION, company_id=company.id)
     
     metrics = truth_scan.outputs_json.get("metrics", {})
     

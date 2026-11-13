@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { trackFunnel } from "@/lib/funnel";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import {
   ArrowRight,
   Calculator,
@@ -144,11 +147,10 @@ export default function DilutionPage() {
 
   const shares = result.shares;
   const hasModel = result.founderPct !== null && result.investorPct !== null;
+  const onCalculatorInput = useCalculatorUsedOnce("dilution");
 
   useSEO({
-    title: "Free Dilution Calculator — What a Round Really Costs Founders | FounderConsole",
-    description:
-      "Free dilution calculator with the option pool shuffle. Enter your pre-money valuation, raise, shares and pool target to see founder, investor and pool ownership post-money — and why founders lose more than the raise implies.",
+    ...TOOL_PAGE_META["/tools/dilution"],
     path: "/tools/dilution",
     jsonLd: [
       {
@@ -201,7 +203,7 @@ export default function DilutionPage() {
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-12">
           <div className="grid gap-8 lg:grid-cols-5">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6" onInput={onCalculatorInput}>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -363,6 +365,15 @@ export default function DilutionPage() {
 
                 </CardContent>
               </Card>
+
+              <CalculatorEmailOptIn
+                source="dilution"
+                sourcePage="/tools/dilution"
+                plan="dilution"
+                resultByEmail={false}
+                visible={result.outcome !== "invalid"}
+                notes={`Dilution ${result.outcome}. Founder ${result.founderPct === null ? "n/a" : formatPct(result.founderPct)}, investor ${result.investorPct === null ? "n/a" : formatPct(result.investorPct)}.`}
+              />
 
               <Card>
                 <CardHeader>

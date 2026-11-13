@@ -1,10 +1,13 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryFunction } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import { createDedupedNotifier } from "./queryErrorToast";
 import { ApiError, safeParseJSON } from "./errors";
 import {
   attemptTokenRefresh,
   hardRedirectToLogin,
   shouldHardRedirectOn401,
 } from "./authSession";
+import { backoffMsFor429, readBodyRetryAfter } from "./rateLimitBackoff";
 
 // A 401 on a mutation (after refresh) means the auth cookie is actually gone.
 // GET 401s on /onboarding and /overview must not hard-redirect — that was the
@@ -122,6 +125,18 @@ export async function apiRequest(
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
+async function fetchQuery(url: string): Promise<Response> {
+  const init: RequestInit = { credentials: "include" };
+  let res = await fetch(url, init);
+  if (res.status !== 429) return res;
+  const delay = backoffMsFor429(
+    res.headers.get("Retry-After"),
+    await readBodyRetryAfter(res),
+  );
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  return fetch(url, init);
+}
+
 export const getQueryFn = <T>(options: {
   on401: UnauthorizedBehavior;
 }): QueryFunction<T | null> =>
@@ -130,9 +145,7 @@ export const getQueryFn = <T>(options: {
     let res: Response;
 
     try {
-      res = await fetch(queryKey.join("/") as string, {
-        credentials: "include",
-      });
+      res = await fetchQuery(queryKey.join("/") as string);
     } catch (error) {
       const networkError = error instanceof Error ? error.message : String(error);
       console.error(`Network error for query ${queryKey.join("/")}:`, error);
@@ -143,9 +156,7 @@ export const getQueryFn = <T>(options: {
       const refreshed = await attemptTokenRefresh();
       if (refreshed) {
         try {
-          res = await fetch(queryKey.join("/") as string, {
-            credentials: "include",
-          });
+          res = await fetchQuery(queryKey.join("/") as string);
         } catch (error) {
           const networkError = error instanceof Error ? error.message : String(error);
           throw new ApiError(0, `Network request failed: ${networkError}`);
@@ -169,7 +180,18 @@ export const getQueryFn = <T>(options: {
     }
   };
 
+// Failed fetches must not look like empty data. 401s are left to the session
+// flow; a query can opt out with meta: { suppressErrorToast: true }.
+const notifyQueryError = createDedupedNotifier((description) => {
+  toast({ title: "Couldn't load data", description, variant: "destructive" });
+});
+
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      notifyQueryError(error, query.meta);
+    },
+  }),
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
@@ -177,7 +199,7 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000,
       retry: (failureCount, error) => {
-        if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404)) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404 || error.status === 429)) {
           return false;
         }
         return failureCount < 1;

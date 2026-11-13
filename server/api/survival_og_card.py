@@ -79,6 +79,16 @@ def _load_sim(sim_id: str) -> Optional[dict]:
         return None
 
 
+def og_runway_text(runway_p50) -> tuple:
+    """Big-number text for the card. 999 is the "revenue covers costs" sentinel
+    and used to print as "999 months"."""
+    if not isinstance(runway_p50, (int, float)):
+        return "—", "months"
+    if runway_p50 >= 900:
+        return "36+", "months · sustainable"
+    return f"{int(runway_p50)}", "months"
+
+
 def _render_card(sim: dict) -> bytes:
     img = Image.new("RGB", (CARD_W, CARD_H), BG)
     draw = ImageDraw.Draw(img)
@@ -100,8 +110,7 @@ def _render_card(sim: dict) -> bytes:
     f_label = _font(34, bold=True)
     f_sub = _font(26, bold=False)
 
-    runway_str = f"{int(runway_p50)}" if isinstance(runway_p50, (int, float)) else "—"
-    runway_unit = "months"
+    runway_str, runway_unit = og_runway_text(runway_p50)
     draw.text((60, 175), runway_str, font=f_huge, fill=TEXT)
     rw_w, _ = _text_size(draw, runway_str, f_huge)
     draw.text((70 + rw_w, 305), runway_unit, font=f_label, fill=MUTED)

@@ -395,7 +395,7 @@ export default function AdminUsers() {
                       <td className="p-3 text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button size="icon" variant="ghost" data-testid={`button-actions-${user.id}`}>
+                            <Button size="icon" variant="ghost" data-testid={`button-actions-${user.id}`} aria-label="More options">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>

@@ -30,9 +30,47 @@ function getOpenAIClient(): OpenAI | null {
   return cachedOpenAIClient;
 }
 
+// gpt-5* and o-series are reasoning models: they reject `max_tokens` and any
+// temperature other than the default. The cap counts reasoning tokens too, so
+// it has to leave room for the visible answer.
+const CHAT_MODEL = "gpt-5";
+
+export function isReasoningModel(model: string): boolean {
+  return /^(gpt-5|o\d)/i.test(model);
+}
+
+export function completionTokenParams(
+  model: string,
+  maxTokens: number,
+): { max_completion_tokens: number } | { max_tokens: number } {
+  return isReasoningModel(model)
+    ? { max_completion_tokens: maxTokens }
+    : { max_tokens: maxTokens };
+}
+
 interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
+}
+
+// The system prompt is ours: callers may only send their own user/assistant
+// turns, bounded in count and length, so a client cannot rewrite the advisor's
+// instructions or pad a request to burn tokens.
+const MAX_MESSAGES = 30;
+const MAX_CONTENT_CHARS = 4000;
+
+export function sanitizeChatMessages(raw: unknown): ChatMessage[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw
+    .filter(
+      (m): m is ChatMessage =>
+        !!m &&
+        typeof m === "object" &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string",
+    )
+    .slice(-MAX_MESSAGES)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_CONTENT_CHARS) }));
 }
 
 export function registerChatRoutes(app: Express, options: ChatRouteOptions = {}): void {
@@ -45,8 +83,8 @@ export function registerChatRoutes(app: Express, options: ChatRouteOptions = {})
 
   router.post("/chat", limitAi, async (req: Request, res: Response) => {
     try {
-      const { messages, context } = req.body as {
-        messages: ChatMessage[];
+      const { messages: rawMessages, context } = req.body as {
+        messages: unknown;
         context?: {
           companyName?: string;
           industry?: string;
@@ -60,7 +98,8 @@ export function registerChatRoutes(app: Express, options: ChatRouteOptions = {})
         };
       };
 
-      if (!messages || !Array.isArray(messages)) {
+      const messages = sanitizeChatMessages(rawMessages);
+      if (!messages || messages.length === 0) {
         return res.status(400).json({ error: "Messages array is required" });
       }
 
@@ -106,10 +145,10 @@ Be concise but insightful. Use specific numbers from the context when answering 
       res.setHeader("Connection", "keep-alive");
 
       const stream = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: CHAT_MODEL,
         messages: fullMessages,
         stream: true,
-        max_tokens: 1024,
+        ...completionTokenParams(CHAT_MODEL, 4096),
       });
 
       for await (const chunk of stream) {
@@ -152,12 +191,12 @@ Be concise but insightful. Use specific numbers from the context when answering 
 ${context ? `Context: Cash $${context.cashOnHand?.toLocaleString()}, Revenue $${context.monthlyRevenue?.toLocaleString()}/mo, Expenses $${context.monthlyExpenses?.toLocaleString()}/mo, Growth ${context.growthRate}%` : ""}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: CHAT_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: question },
         ],
-        max_tokens: 256,
+        ...completionTokenParams(CHAT_MODEL, 2048),
       });
 
       res.json({

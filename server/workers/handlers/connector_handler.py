@@ -39,6 +39,14 @@ def handle_connector_sync(payload: Dict[str, Any]) -> Dict[str, Any]:
             if financials:
                 from server.models.financial import FinancialRecord
                 from datetime import date
+                from server.services.input_provenance import (
+                    provided_input_fields,
+                    stamp_sync_provenance,
+                )
+                provenance = stamp_sync_provenance(
+                    connector_type,
+                    provided_input_fields(financials) if isinstance(financials, dict) else [],
+                )
                 record = FinancialRecord(
                     company_id=company_id,
                     period_start=financials.get("period_start", date.today().replace(day=1)),
@@ -49,6 +57,9 @@ def handle_connector_sync(payload: Dict[str, Any]) -> Dict[str, Any]:
                     payroll=financials.get("payroll", 0),
                     cash_balance=financials.get("cash_balance", 0),
                     source_type=connector_type,
+                    source=provenance["source"],
+                    synced_at=provenance["synced_at"],
+                    synced_fields=provenance["synced_fields"],
                 )
                 db.add(record)
                 from server.services.sample_data import on_real_financials_written

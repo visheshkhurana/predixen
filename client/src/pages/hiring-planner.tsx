@@ -1,6 +1,8 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useTruthScan } from "@/api/hooks";
 import { useFounderStore } from "@/store/founderStore";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -36,6 +38,8 @@ import {
   ArrowRight,
   Ban,
 } from "lucide-react";
+import { currentRunwayMonths, runwayAfterHires } from "@/lib/hiringRunway";
+import { formatRunway, survival12mPct } from "@/lib/hiringSimResults";
 
 interface RoleDefinition {
   id: string;
@@ -92,9 +96,7 @@ interface PlannedHire {
 }
 
 function formatCurrency(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+  return formatCurrencyAbbrev(value);
 }
 
 export default function HiringPlannerPage() {
@@ -110,10 +112,7 @@ export default function HiringPlannerPage() {
   const [savedPlanId, setSavedPlanId] = useState<string | null>(null);
   const [simResults, setSimResults] = useState<any>(null);
 
-  const { data: truthScan, isLoading: truthScanLoading } = useQuery<any>({
-    queryKey: ["/api/companies", companyId, "truth-scan", "latest"],
-    enabled: !!companyId,
-  });
+  const { data: truthScan, isLoading: truthScanLoading } = useTruthScan(companyId ?? null);
 
   const { data: plansData } = useQuery<any>({
     queryKey: ["/api/companies", companyId, "hiring-plans"],
@@ -197,21 +196,11 @@ export default function HiringPlannerPage() {
     return { totalMonthly, totalAnnual, totalHeadcount, oneTimeCosts };
   }, [hires]);
 
-  const currentRunway = useMemo(() => {
-    if (!truthScan?.metrics) return null;
-    const m = truthScan.metrics;
-    return m.runway_months ?? m.cash_runway_months ?? null;
-  }, [truthScan]);
+  const currentRunway = useMemo(() => currentRunwayMonths(truthScan), [truthScan]);
 
   const afterPlanRunway = useMemo(() => {
-    if (currentRunway === null || !truthScan?.metrics) return null;
-    const m = truthScan.metrics;
-    const currentBurn = m.net_burn ?? m.monthly_burn ?? m.total_monthly_expenses ?? 0;
-    const cash = m.cash_on_hand ?? m.cash_balance ?? 0;
-    if (currentBurn <= 0 || cash <= 0) return null;
-    const newBurn = currentBurn + costSummary.totalMonthly;
-    if (newBurn <= 0) return null;
-    return Math.round((cash / newBurn) * 10) / 10;
+    if (currentRunway === null) return null;
+    return runwayAfterHires(truthScan, costSummary.totalMonthly);
   }, [currentRunway, truthScan, costSummary.totalMonthly]);
 
   const handleQuickAction = (action: "engineers" | "sales" | "freeze") => {
@@ -600,32 +589,30 @@ export default function HiringPlannerPage() {
                     <div className="text-center space-y-1 p-3 rounded-md bg-muted/50">
                       <span className="text-xs text-muted-foreground">P10 (Bear)</span>
                       <p className="text-lg font-bold font-mono text-red-500" data-testid="text-sim-p10">
-                        {simResults.p10_runway ?? simResults.runway_p10 ?? "N/A"}
+                        {formatRunway(simResults.runway?.p10 ?? simResults.p10_runway ?? simResults.runway_p10)}
                       </p>
                       <span className="text-[10px] text-muted-foreground">months</span>
                     </div>
                     <div className="text-center space-y-1 p-3 rounded-md bg-muted/50">
                       <span className="text-xs text-muted-foreground">P50 (Base)</span>
                       <p className="text-lg font-bold font-mono text-amber-500" data-testid="text-sim-p50">
-                        {simResults.p50_runway ?? simResults.runway_p50 ?? "N/A"}
+                        {formatRunway(simResults.runway?.p50 ?? simResults.p50_runway ?? simResults.runway_p50)}
                       </p>
                       <span className="text-[10px] text-muted-foreground">months</span>
                     </div>
                     <div className="text-center space-y-1 p-3 rounded-md bg-muted/50">
                       <span className="text-xs text-muted-foreground">P90 (Bull)</span>
                       <p className="text-lg font-bold font-mono text-emerald-500" data-testid="text-sim-p90">
-                        {simResults.p90_runway ?? simResults.runway_p90 ?? "N/A"}
+                        {formatRunway(simResults.runway?.p90 ?? simResults.p90_runway ?? simResults.runway_p90)}
                       </p>
                       <span className="text-[10px] text-muted-foreground">months</span>
                     </div>
                   </div>
-                  {simResults.survival_probability != null && (
+                  {survival12mPct(simResults) != null && (
                     <div className="flex items-center justify-between gap-2 text-sm px-1">
                       <span className="text-muted-foreground">12-Month Survival</span>
                       <span className="font-bold font-mono" data-testid="text-sim-survival">
-                        {typeof simResults.survival_probability === "number"
-                          ? `${(simResults.survival_probability * 100).toFixed(0)}%`
-                          : simResults.survival_probability}
+                        {`${survival12mPct(simResults)!.toFixed(0)}%`}
                       </span>
                     </div>
                   )}

@@ -30,6 +30,13 @@ from server.models.company_state import CompanyState
 from server.models.simulation_run import SimulationRun
 from server.models.scenario import Scenario
 from server.models.twin_event import TwinEvent
+from server.services.peer_privacy import (
+    INSUFFICIENT_PEERS,
+    MIN_DISTINCT_PEERS,
+    band_counts,
+    empty_peer_view,
+    opted_in,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +165,9 @@ def get_company_profile(db: Session, company_id: int) -> Dict[str, Any]:
     }
 
 
-def _bulk_load_company_profiles(db: Session, exclude_id: int = None) -> Dict[int, Dict[str, Any]]:
+def _bulk_load_company_profiles(
+    db: Session, exclude_id: int = None, opted_in_only: bool = False
+) -> Dict[int, Dict[str, Any]]:
     from sqlalchemy import func as sqlfunc
 
     latest_fin_subq = (
@@ -181,9 +190,13 @@ def _bulk_load_company_profiles(db: Session, exclude_id: int = None) -> Dict[int
     )
     if exclude_id:
         query = query.filter(Company.id != exclude_id)
+    if opted_in_only:
+        query = query.filter(Company.data_sharing_enabled == True)
 
     profiles = {}
     for company, fin in query.all():
+        if opted_in_only and not opted_in(company):
+            continue
         mrr = float(fin.mrr or fin.revenue or 0) if fin else 0
         headcount = int(fin.headcount or 0) if fin and hasattr(fin, "headcount") else 0
         emp_range = "1-5"
@@ -205,6 +218,7 @@ def _bulk_load_company_profiles(db: Session, exclude_id: int = None) -> Dict[int
             "growth_tier": _classify_growth_tier(0),
             "headcount": headcount,
             "employee_range": emp_range,
+            "opted_in": opted_in(company),
         }
 
     return profiles
@@ -212,59 +226,82 @@ def _bulk_load_company_profiles(db: Session, exclude_id: int = None) -> Dict[int
 
 def find_similar_companies(
     db: Session, company_id: int, min_similarity: float = 0.25, limit: int = 10
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
+    """Opted-in peer cohort as aggregates, or an empty list.
+
+    Individual peer names, ids, revenue, and revenue bands are never returned.
+    A band is included only when at least MIN_DISTINCT_PEERS distinct opted-in
+    companies share it. ``limit`` is accepted for existing callers and does not
+    truncate the cohort: a cap would either publish a group under the threshold
+    or hide a publishable one.
+    """
+    _ = limit
     target_profile = get_company_profile(db, company_id)
     if not target_profile:
-        return []
+        return empty_peer_view()
 
-    peer_profiles = _bulk_load_company_profiles(db, exclude_id=company_id)
-    results = []
+    peer_profiles = _bulk_load_company_profiles(
+        db, exclude_id=company_id, opted_in_only=True
+    )
+    matched_ids = set()
+    mrr_ids: Dict[str, set] = defaultdict(set)
+    stage_ids: Dict[str, set] = defaultdict(set)
+    industry_ids: Dict[str, set] = defaultdict(set)
+    growth_ids: Dict[str, set] = defaultdict(set)
+    employee_ids: Dict[str, set] = defaultdict(set)
 
-    for i, (cid, profile) in enumerate(peer_profiles.items()):
+    for cid, profile in peer_profiles.items():
+        if not profile.get("opted_in"):
+            continue
         similarity = _compute_company_similarity(target_profile, profile)
-        if similarity >= min_similarity:
-            results.append({
-                "peer_rank": i + 1,
-                "similarity_score": similarity,
-                "industry": profile["industry"],
-                "stage": profile["stage"],
-                "mrr_range": profile["mrr_range"],
-                "growth_tier": profile["growth_tier"],
-                "employee_range": profile["employee_range"],
-                "shared_traits": _get_shared_traits(target_profile, profile),
-            })
+        if similarity < min_similarity:
+            continue
+        matched_ids.add(cid)
+        mrr_ids[profile["mrr_range"]].add(cid)
+        stage_ids[profile["stage"]].add(cid)
+        industry_ids[profile["industry"]].add(cid)
+        growth_ids[profile["growth_tier"]].add(cid)
+        employee_ids[profile["employee_range"]].add(cid)
 
-    results.sort(key=lambda x: x["similarity_score"], reverse=True)
-    for i, r in enumerate(results):
-        r["peer_rank"] = i + 1
-    return results[:limit]
+    if len(matched_ids) < MIN_DISTINCT_PEERS:
+        return empty_peer_view()
 
-
-def _get_shared_traits(a: Dict, b: Dict) -> List[str]:
-    traits = []
-    if a.get("industry") == b.get("industry") and a["industry"] != "unknown":
-        traits.append(f"Same industry: {a['industry']}")
-    if a.get("stage") == b.get("stage") and a["stage"] != "unknown":
-        traits.append(f"Same stage: {a['stage']}")
-    if a.get("mrr_range") == b.get("mrr_range"):
-        traits.append(f"Similar MRR: {a['mrr_range']}")
-    if a.get("growth_tier") == b.get("growth_tier"):
-        traits.append(f"Similar growth: {a['growth_tier']}")
-    if a.get("employee_range") == b.get("employee_range"):
-        traits.append(f"Similar team size: {a['employee_range']}")
-    return traits
+    return {
+        "similar_companies": [],
+        "aggregates": {
+            "peer_count": len(matched_ids),
+            "mrr_bands": band_counts(mrr_ids),
+            "stages": band_counts(stage_ids),
+            "industries": band_counts(industry_ids),
+            "growth_tiers": band_counts(growth_ids),
+            "employee_ranges": band_counts(employee_ids),
+        },
+        "peer_count": len(matched_ids),
+        "reason": None,
+    }
 
 
 def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
-    decisions = db.query(CompanyDecision).limit(500).all()
-    if not decisions:
-        return _default_decision_patterns()
+    from server.services.data_anonymizer import get_opted_in_company_ids
 
-    type_stats = defaultdict(lambda: {"total": 0, "accepted": 0, "rejected": 0, "high_confidence": 0})
+    peer_ids = get_opted_in_company_ids(db, exclude_company_id=company_id)
+    decisions = []
+    if peer_ids:
+        decisions = (
+            db.query(CompanyDecision)
+            .filter(CompanyDecision.company_id.in_(peer_ids))
+            .limit(500)
+            .all()
+        )
+
+    type_stats = defaultdict(lambda: {
+        "total": 0, "accepted": 0, "rejected": 0, "high_confidence": 0, "companies": set(),
+    })
 
     for d in decisions:
         dtype = _classify_decision_type(d.title)
         type_stats[dtype]["total"] += 1
+        type_stats[dtype]["companies"].add(d.company_id)
         if d.status in ("accepted", "implemented", "resolved", "completed", "decided"):
             type_stats[dtype]["accepted"] += 1
         elif d.status == "rejected":
@@ -274,6 +311,8 @@ def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
 
     patterns = []
     for dtype, stats in type_stats.items():
+        if len(stats["companies"]) < MIN_DISTINCT_PEERS:
+            continue
         acceptance_rate = (stats["accepted"] / stats["total"] * 100) if stats["total"] > 0 else 0
         patterns.append({
             "decision_type": dtype,
@@ -281,6 +320,7 @@ def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
             "acceptance_rate": round(acceptance_rate, 1),
             "high_confidence_count": stats["high_confidence"],
             "rejection_count": stats["rejected"],
+            "company_count": len(stats["companies"]),
         })
 
     patterns.sort(key=lambda p: p["total_count"], reverse=True)
@@ -305,8 +345,9 @@ def get_decision_patterns(db: Session, company_id: int) -> Dict[str, Any]:
 
     return {
         "patterns": patterns[:8],
-        "total_decisions": sum(s["total"] for s in type_stats.values()),
+        "total_decisions": sum(p["total_count"] for p in patterns),
         "your_recent_decisions": recent,
+        "reason": None if patterns else INSUFFICIENT_PEERS,
     }
 
 
@@ -323,17 +364,27 @@ def _default_decision_patterns() -> Dict[str, Any]:
     }
 
 
-def get_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
+def get_strategy_insights(
+    db: Session, company_id: int, include_peer_benchmarks: bool = False
+) -> Dict[str, Any]:
     profile = get_company_profile(db, company_id)
     if not profile:
         return {"strategies": [], "peer_insights": []}
 
-    all_decisions = (
-        db.query(CompanyDecision)
-        .filter(CompanyDecision.status.in_(["accepted", "implemented", "resolved", "completed", "decided"]))
-        .limit(300)
-        .all()
-    )
+    from server.services.data_anonymizer import get_opted_in_company_ids
+
+    peer_ids = get_opted_in_company_ids(db, exclude_company_id=company_id)
+    all_decisions = []
+    if peer_ids:
+        all_decisions = (
+            db.query(CompanyDecision)
+            .filter(
+                CompanyDecision.company_id.in_(peer_ids),
+                CompanyDecision.status.in_(["accepted", "implemented", "resolved", "completed", "decided"]),
+            )
+            .limit(300)
+            .all()
+        )
 
     strategy_outcomes = defaultdict(lambda: {"count": 0, "high_conf": 0, "companies": set()})
     for d in all_decisions:
@@ -345,6 +396,8 @@ def get_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
 
     strategies = []
     for stype, data in strategy_outcomes.items():
+        if len(data["companies"]) < MIN_DISTINCT_PEERS:
+            continue
         strategies.append({
             "strategy": stype,
             "adoption_count": data["count"],
@@ -355,7 +408,15 @@ def get_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
 
     strategies.sort(key=lambda s: s["adoption_count"], reverse=True)
 
-    peer_insights = _generate_peer_insights(db, profile)
+    # Off by default. _generate_peer_insights medians other companies' raw
+    # FinancialRecord revenue and runway. Pass True only for a future opt-in
+    # design that also enforces a minimum group size.
+    if include_peer_benchmarks:
+        peer_insights = _generate_peer_insights(db, profile)
+    else:
+        peer_insights = _default_peer_insights(profile)
+
+    peer_view = find_similar_companies(db, company_id)
 
     return {
         "strategies": strategies[:6],
@@ -366,6 +427,9 @@ def get_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
             "mrr_range": profile["mrr_range"],
             "growth_tier": profile["growth_tier"],
         },
+        "similar_companies": peer_view["similar_companies"],
+        "similar_company_aggregates": peer_view["aggregates"],
+        "similar_companies_reason": peer_view["reason"],
     }
 
 
@@ -395,27 +459,78 @@ def _strategy_recommendation(strategy: str, profile: Dict[str, Any]) -> str:
     return base
 
 
+# Cross-tenant aggregates need at least this many distinct other companies per
+# bucket, or a "median" is one identifiable company's numbers.
+MIN_PEER_COMPANIES = 5
+
+
+def _eligible_peers(companies) -> List[Any]:
+    """Opted-in, non-sample companies only."""
+    out = []
+    for c in companies:
+        if not getattr(c, "data_sharing_enabled", False):
+            continue
+        if getattr(c, "is_sample", False):
+            continue
+        out.append(c)
+    return out
+
+
+def _median(values: List[float]) -> float:
+    ordered = sorted(values)
+    return ordered[len(ordered) // 2]
+
+
+def _insufficient_peers_insight(peer_count: int) -> Dict[str, Any]:
+    return {
+        "type": "insufficient_peers",
+        "title": "Not enough peers yet",
+        "description": (
+            f"Peer comparisons need at least {MIN_PEER_COMPANIES} comparable companies "
+            "that share data. There are not enough yet."
+        ),
+        "peer_count": peer_count,
+        "min_peers": MIN_PEER_COMPANIES,
+    }
+
+
+def _latest_per_company(peer_fins, attr: str, valid) -> List[float]:
+    """One value per company (its most recent valid record)."""
+    seen: Dict[int, float] = {}
+    for f in peer_fins:
+        if f.company_id in seen:
+            continue
+        raw = getattr(f, attr, None)
+        if raw is None:
+            continue
+        value = float(raw)
+        if valid(value):
+            seen[f.company_id] = value
+    return list(seen.values())
+
+
 def _generate_peer_insights(db: Session, profile: Dict[str, Any]) -> List[Dict[str, Any]]:
     insights = []
 
     stage = profile.get("stage", "seed")
     industry = profile.get("industry", "unknown")
 
-    peer_companies = (
+    peer_companies = _eligible_peers(
         db.query(Company)
         .filter(
             Company.id != profile.get("company_id"),
+            Company.data_sharing_enabled == True,  # noqa: E712
             or_(
                 Company.industry.ilike(f"%{industry}%"),
                 Company.stage == stage,
             ),
         )
-        .limit(50)
+        .limit(200)
         .all()
     )
 
-    if not peer_companies:
-        return _default_peer_insights(profile)
+    if len(peer_companies) < MIN_PEER_COMPANIES:
+        return [_insufficient_peers_insight(len(peer_companies))]
 
     peer_ids = [c.id for c in peer_companies]
 
@@ -423,30 +538,30 @@ def _generate_peer_insights(db: Session, profile: Dict[str, Any]) -> List[Dict[s
         db.query(FinancialRecord)
         .filter(FinancialRecord.company_id.in_(peer_ids))
         .order_by(FinancialRecord.period_start.desc())
-        .limit(200)
+        .limit(2000)
         .all()
     )
 
     if peer_fins:
-        revenues = [float(f.revenue or 0) for f in peer_fins if f.revenue and f.revenue > 0]
-        burns = [float(f.net_burn or 0) for f in peer_fins if hasattr(f, "net_burn") and f.net_burn]
-        runways = [float(f.runway_months or 0) for f in peer_fins if hasattr(f, "runway_months") and f.runway_months and 0 < f.runway_months <= 120]
+        revenues = _latest_per_company(peer_fins, "revenue", lambda v: v > 0)
+        runways = _latest_per_company(peer_fins, "runway_months", lambda v: 0 < v <= 120)
 
-        if revenues:
-            median_rev = sorted(revenues)[len(revenues) // 2]
+        if len(revenues) >= MIN_PEER_COMPANIES:
+            median_rev = _median(revenues)
             your_mrr = profile.get("mrr", 0)
             position = "above" if your_mrr > median_rev else "below" if your_mrr < median_rev else "at"
             insights.append({
                 "type": "revenue_benchmark",
                 "title": "Revenue vs Peers",
-                "description": f"Your MRR is {position} the peer median of ${median_rev:,.0f}/mo across {len(revenues)} data points.",
+                "description": f"Your MRR is {position} the peer median of ${median_rev:,.0f}/mo across {len(revenues)} companies.",
                 "metric": f"${median_rev:,.0f}",
                 "your_value": f"${your_mrr:,.0f}",
                 "position": position,
+                "peer_count": len(revenues),
             })
 
-        if runways:
-            median_runway = sorted(runways)[len(runways) // 2]
+        if len(runways) >= MIN_PEER_COMPANIES:
+            median_runway = _median(runways)
             your_runway = profile.get("runway_months", 0)
             insights.append({
                 "type": "runway_benchmark",
@@ -455,6 +570,7 @@ def _generate_peer_insights(db: Session, profile: Dict[str, Any]) -> List[Dict[s
                 "metric": f"{median_runway:.0f}mo",
                 "your_value": f"{your_runway:.0f}mo",
                 "position": "above" if your_runway > median_runway else "below",
+                "peer_count": len(runways),
             })
 
     peer_decisions = (
@@ -463,17 +579,21 @@ def _generate_peer_insights(db: Session, profile: Dict[str, Any]) -> List[Dict[s
             CompanyDecision.company_id.in_(peer_ids),
             CompanyDecision.status.in_(["accepted", "implemented"]),
         )
-        .limit(100)
+        .limit(500)
         .all()
     )
 
-    if peer_decisions:
+    if len({d.company_id for d in peer_decisions}) >= MIN_PEER_COMPANIES:
+        type_companies: Dict[str, set] = defaultdict(set)
         type_counts = defaultdict(int)
         for d in peer_decisions:
-            type_counts[_classify_decision_type(d.title)] += 1
+            t = _classify_decision_type(d.title)
+            type_counts[t] += 1
+            type_companies[t].add(d.company_id)
 
-        if type_counts:
-            top_type = max(type_counts, key=type_counts.get)
+        eligible = {t: n for t, n in type_counts.items() if len(type_companies[t]) >= MIN_PEER_COMPANIES}
+        if eligible:
+            top_type = max(eligible, key=eligible.get)
             insights.append({
                 "type": "decision_trend",
                 "title": "Top Peer Strategy",
@@ -482,7 +602,7 @@ def _generate_peer_insights(db: Session, profile: Dict[str, Any]) -> List[Dict[s
                 "count": type_counts[top_type],
             })
 
-    return insights if insights else _default_peer_insights(profile)
+    return insights if insights else [_insufficient_peers_insight(len(peer_companies))]
 
 
 def _default_peer_insights(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -504,43 +624,59 @@ def _default_peer_insights(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def get_growth_benchmarks(db: Session, company_id: int) -> Dict[str, Any]:
+    """Raw cross-company revenue percentiles.
+
+    Unsafe for tenant-facing responses: the newest 500 FinancialRecords across
+    every company, with no opt-in, no is_sample filter, and no minimum group
+    size. p25/median/p75 can be another company's exact revenue. The
+    intelligence benchmarks and summary endpoints must not call this.
+    """
     profile = get_company_profile(db, company_id)
 
-    records_with_company = (
-        db.query(FinancialRecord, Company.stage, Company.industry)
-        .join(Company, FinancialRecord.company_id == Company.id)
-        .order_by(FinancialRecord.period_start.desc())
-        .limit(500)
+    peers = _eligible_peers(
+        db.query(Company)
+        .filter(Company.id != company_id, Company.data_sharing_enabled == True)  # noqa: E712
         .all()
     )
+    peer_stage = {c.id: (c.stage or "unknown").lower() for c in peers}
 
-    stage_groups = defaultdict(list)
-    industry_groups = defaultdict(list)
-    company_ids_seen = set()
+    records = []
+    if peer_stage:
+        records = (
+            db.query(FinancialRecord)
+            .filter(FinancialRecord.company_id.in_(list(peer_stage)))
+            .order_by(FinancialRecord.period_start.desc())
+            .limit(5000)
+            .all()
+        )
 
-    for rec, stage, industry in records_with_company:
-        stage_key = (stage or "unknown").lower()
-        industry_key = (industry or "unknown").lower()
-        company_ids_seen.add(rec.company_id)
+    # Latest positive revenue per company, bucketed by stage.
+    latest_rev: Dict[int, float] = {}
+    for rec in records:
+        if rec.company_id in latest_rev:
+            continue
         rev = float(rec.revenue or 0)
-        burn = float(rec.net_burn or 0) if hasattr(rec, "net_burn") and rec.net_burn else 0
-
         if rev > 0:
-            stage_groups[stage_key].append(rev)
-        if burn > 0:
-            industry_groups[industry_key].append(burn)
+            latest_rev[rec.company_id] = rev
+
+    stage_groups: Dict[str, List[float]] = defaultdict(list)
+    for cid, rev in latest_rev.items():
+        stage_groups[peer_stage[cid]].append(rev)
 
     stage_benchmarks = {}
+    insufficient_stages: Dict[str, int] = {}
     for stage, revenues in stage_groups.items():
-        if revenues:
-            sorted_r = sorted(revenues)
-            n = len(sorted_r)
-            stage_benchmarks[stage] = {
-                "p25": sorted_r[n // 4] if n >= 4 else sorted_r[0],
-                "median": sorted_r[n // 2],
-                "p75": sorted_r[3 * n // 4] if n >= 4 else sorted_r[-1],
-                "sample_size": n,
-            }
+        n = len(revenues)
+        if n < MIN_PEER_COMPANIES:
+            insufficient_stages[stage] = n
+            continue
+        sorted_r = sorted(revenues)
+        stage_benchmarks[stage] = {
+            "p25": sorted_r[n // 4],
+            "median": sorted_r[n // 2],
+            "p75": sorted_r[3 * n // 4],
+            "sample_size": n,
+        }
 
     return {
         "your_profile": {
@@ -551,8 +687,11 @@ def get_growth_benchmarks(db: Session, company_id: int) -> Dict[str, Any]:
             "runway_months": profile.get("runway_months", 0),
         },
         "stage_benchmarks": stage_benchmarks,
-        "total_companies_analyzed": len(company_ids_seen),
-        "total_data_points": len(records_with_company),
+        # Stages with fewer than MIN_PEER_COMPANIES opted-in peers: count only.
+        "insufficient_peers": insufficient_stages,
+        "min_peers": MIN_PEER_COMPANIES,
+        "total_companies_analyzed": len(latest_rev),
+        "total_data_points": len(records),
     }
 
 
@@ -562,12 +701,37 @@ def get_cross_company_patterns(db: Session, company_id: int) -> Dict[str, Any]:
         return {"patterns": [], "source": "no_profile"}
 
     try:
-        from server.services.pattern_aggregator import get_relevant_patterns
-        patterns = get_relevant_patterns(
+        from server.services.pattern_aggregator import (
+            aggregate_benchmark_updates,
+            aggregate_decision_patterns,
+            get_relevant_patterns,
+        )
+        # Recompute without this company and without writing the global rows.
+        live = aggregate_decision_patterns(db, exclude_company_id=company_id)
+        benchmarks = aggregate_benchmark_updates(db, exclude_company_id=company_id)
+        patterns = []
+        for row in live.get("patterns") or []:
+            patterns.append({**row, "pattern_type": "decision_outcome"})
+        for stage, stats in (benchmarks.get("benchmarks") or {}).items():
+            for metric_name, percentiles in stats.items():
+                if metric_name == "sample_size" or not isinstance(percentiles, dict):
+                    continue
+                patterns.append({
+                    "pattern_type": "benchmark",
+                    "stage": stage,
+                    "decision_type": metric_name,
+                    "sample_size": percentiles.get("sample_size", 0),
+                    "contributing_companies": percentiles.get("companies", 0),
+                    "p25_impact": percentiles.get("p25"),
+                    "median_impact": percentiles.get("median"),
+                    "p75_impact": percentiles.get("p75"),
+                })
+        stored = get_relevant_patterns(
             db,
             industry=profile.get("industry", "unknown"),
             stage=profile.get("stage", "unknown"),
         )
+        patterns.extend(row for row in stored if row.get("pattern_type") == "research")
         if patterns:
             return {
                 "patterns": patterns,
@@ -586,41 +750,32 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
     if not profile:
         return {"error": "Company not found"}
 
-    similar = find_similar_companies(db, company_id, limit=5)
+    peer_view = find_similar_companies(db, company_id, limit=5)
     patterns = get_decision_patterns(db, company_id)
-    strategies = get_strategy_insights(db, company_id)
-    benchmarks = get_growth_benchmarks(db, company_id)
+    # Do not call get_growth_benchmarks or peer financial benchmarks. Both
+    # aggregate other companies' FinancialRecord.revenue with no opt-in and
+    # no minimum group size. Own profile and non-financial blocks stay.
+    strategies = get_strategy_insights(db, company_id, include_peer_benchmarks=False)
     cross_company = get_cross_company_patterns(db, company_id)
 
-    total_companies = db.query(func.count(Company.id)).scalar() or 0
-    total_decisions = db.query(func.count(CompanyDecision.id)).scalar() or 0
-    total_records = db.query(func.count(FinancialRecord.id)).scalar() or 0
     total_events = (
         db.query(func.count(TwinEvent.id))
         .filter(TwinEvent.company_id == company_id)
         .scalar() or 0
     )
 
-    contributing_companies = (
-        db.query(func.count(Company.id))
-        .filter(Company.data_sharing_enabled == True)
-        .scalar() or 0
-    )
-
     return {
         "company_profile": profile,
-        "similar_companies": similar,
+        "similar_companies": peer_view["similar_companies"],
+        "similar_company_aggregates": peer_view["aggregates"],
+        "similar_companies_reason": peer_view["reason"],
         "decision_patterns": patterns,
         "strategy_insights": strategies,
-        "growth_benchmarks": benchmarks,
+        "growth_benchmarks": None,
         "cross_company_patterns": cross_company,
         "graph_stats": {
-            "total_companies": total_companies,
-            "total_decisions": total_decisions,
-            "total_financial_records": total_records,
             "total_events": total_events,
-            "similar_companies_found": len(similar),
-            "contributing_companies": contributing_companies,
+            "similar_companies_found": peer_view["peer_count"],
         },
     }
 
@@ -699,9 +854,11 @@ def process_graph_event(
                 "change": payload.get("change"),
             })
 
-        similar_count = len(find_similar_companies(db, company_id, limit=3))
+        peer_view = find_similar_companies(db, company_id, limit=3)
         result["similarity_recalculated"] = True
-        result["similar_companies_count"] = similar_count
+        result["similar_companies_count"] = peer_view["peer_count"]
+        if peer_view["reason"]:
+            result["similar_companies_reason"] = peer_view["reason"]
 
     except Exception as e:
         logger.error(f"Graph event processing error: {e}")
@@ -807,13 +964,13 @@ def sync_twin_to_graph(db: Session, company_id: int) -> Dict[str, Any]:
             "relationship": "USED_STRATEGY",
         })
 
-    similar = find_similar_companies(db, company_id, limit=5)
-    for peer in similar:
+    peer_view = find_similar_companies(db, company_id, limit=5)
+    if peer_view["aggregates"]:
         relationships.append({
             "from": {"type": "Company", "id": company_id},
-            "to": {"type": "Company", "peer_rank": peer["peer_rank"]},
+            "to": {"type": "PeerCohort", "peer_count": peer_view["peer_count"]},
             "relationship": "SIMILAR_TO",
-            "properties": {"similarity_score": peer["similarity_score"]},
+            "properties": {"peer_count": peer_view["peer_count"]},
         })
 
     return {
@@ -828,41 +985,23 @@ def sync_twin_to_graph(db: Session, company_id: int) -> Dict[str, Any]:
     }
 
 
-def generate_ai_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
+def generate_ai_strategy_insights(
+    db: Session, company_id: int, include_peer_benchmarks: bool = False
+) -> Dict[str, Any]:
     profile = get_company_profile(db, company_id)
     if not profile:
         return {"insights": [], "error": "Company not found"}
 
-    similar = find_similar_companies(db, company_id, limit=10)
+    peer_view = find_similar_companies(db, company_id, limit=10)
     patterns = get_decision_patterns(db, company_id)
-    strategies = get_strategy_insights(db, company_id)
-    benchmarks = get_growth_benchmarks(db, company_id)
+    strategies = get_strategy_insights(
+        db, company_id, include_peer_benchmarks=include_peer_benchmarks
+    )
+    # Do not call get_growth_benchmarks. Its stage median is another company's
+    # raw revenue, and recommendations copies that sentence into its response.
+    # This handler does not call an LLM, so there is no prompt to scrub.
 
     insights = []
-
-    stage_data = benchmarks.get("stage_benchmarks", {}).get(profile.get("stage", ""), {})
-    if stage_data:
-        median_mrr = stage_data.get("median", 0)
-        your_mrr = profile.get("mrr", 0)
-        if median_mrr > 0:
-            percentile = "above median" if your_mrr > median_mrr else "below median"
-            ratio = your_mrr / median_mrr if median_mrr > 0 else 0
-            if ratio < 0.5:
-                insights.append({
-                    "type": "revenue_gap",
-                    "severity": "high",
-                    "title": "Revenue significantly below peers",
-                    "description": f"Your MRR (${your_mrr:,.0f}) is {(1-ratio)*100:.0f}% below the peer median (${median_mrr:,.0f}). Companies that closed this gap typically focused on pricing optimization and sales efficiency.",
-                    "recommended_strategies": ["pricing", "growth"],
-                })
-            elif ratio > 1.5:
-                insights.append({
-                    "type": "revenue_leader",
-                    "severity": "low",
-                    "title": "Revenue outperforming peers",
-                    "description": f"Your MRR (${your_mrr:,.0f}) is {(ratio-1)*100:.0f}% above the peer median. Consider this advantage when planning your next fundraise.",
-                    "recommended_strategies": ["fundraising"],
-                })
 
     peer_strategies = strategies.get("strategies", [])
     your_decisions = patterns.get("your_recent_decisions", [])
@@ -874,7 +1013,7 @@ def generate_ai_strategy_insights(db: Session, company_id: int) -> Dict[str, Any
                 "type": "strategy_gap",
                 "severity": "medium",
                 "title": f"Peers are adopting '{ps['strategy'].replace('_', ' ')}' strategy",
-                "description": f"{ps['adoption_count']} companies have implemented {ps['strategy'].replace('_', ' ')} decisions with {ps['high_confidence_rate']}% high-confidence outcomes. You haven't explored this strategy yet.",
+                "description": f"{ps['company_count']} companies have implemented {ps['strategy'].replace('_', ' ')} decisions with {ps['high_confidence_rate']}% high-confidence outcomes. You haven't explored this strategy yet.",
                 "recommended_strategies": [ps["strategy"]],
                 "peer_evidence": {
                     "adoption_count": ps["adoption_count"],
@@ -883,21 +1022,17 @@ def generate_ai_strategy_insights(db: Session, company_id: int) -> Dict[str, Any
                 },
             })
 
-    if similar:
-        avg_similarity = sum(s["similarity_score"] for s in similar) / len(similar)
-        most_common_traits = defaultdict(int)
-        for s in similar:
-            for trait in s.get("shared_traits", []):
-                most_common_traits[trait] += 1
-        top_traits = sorted(most_common_traits.items(), key=lambda x: x[1], reverse=True)[:3]
+    if peer_view["aggregates"]:
         insights.append({
             "type": "peer_network",
             "severity": "info",
-            "title": f"Connected to {len(similar)} similar companies",
-            "description": f"Average similarity score: {avg_similarity*100:.0f}%. Strongest shared traits: {', '.join(t[0] for t in top_traits)}.",
-            "peer_count": len(similar),
-            "avg_similarity": round(avg_similarity, 3),
-            "top_shared_traits": [t[0] for t in top_traits],
+            "title": f"Aggregated cohort of {peer_view['peer_count']} similar companies",
+            "description": (
+                f"Aggregated from {peer_view['peer_count']} opted-in companies. "
+                "Individual companies are not listed."
+            ),
+            "peer_count": peer_view["peer_count"],
+            "aggregates": peer_view["aggregates"],
         })
 
     growth_tier = profile.get("growth_tier", "moderate")
@@ -931,7 +1066,10 @@ def generate_ai_strategy_insights(db: Session, company_id: int) -> Dict[str, Any
             "growth_tier": growth_tier,
             "runway_months": runway,
         },
-        "peer_count": len(similar),
+        "similar_companies": peer_view["similar_companies"],
+        "similar_company_aggregates": peer_view["aggregates"],
+        "similar_companies_reason": peer_view["reason"],
+        "peer_count": peer_view["peer_count"],
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -943,9 +1081,9 @@ def get_simulation_graph_recommendations(
     if not profile:
         return {"recommendations": []}
 
-    similar = find_similar_companies(db, company_id, limit=10)
-    strategies = get_strategy_insights(db, company_id)
-    ai_insights = generate_ai_strategy_insights(db, company_id)
+    peer_view = find_similar_companies(db, company_id, limit=10)
+    strategies = get_strategy_insights(db, company_id, include_peer_benchmarks=False)
+    ai_insights = generate_ai_strategy_insights(db, company_id, include_peer_benchmarks=False)
 
     if not simulation_result:
         latest_sim = (
@@ -974,7 +1112,11 @@ def get_simulation_graph_recommendations(
                 "title": "Low survival probability detected",
                 "description": f"Simulation shows {survival_prob*100:.0f}% survival probability. Peer companies that improved survival focused on cost reduction and revenue acceleration.",
                 "suggested_actions": ["Reduce burn by 20-30%", "Accelerate top revenue channel", "Consider bridge financing"],
-                "peer_evidence": f"{len(similar)} similar companies tracked",
+                "peer_evidence": (
+                    f"Aggregated from {peer_view['peer_count']} opted-in companies"
+                    if peer_view["aggregates"]
+                    else "Peer detail withheld"
+                ),
             })
         elif survival_prob is not None and survival_prob > 0.8:
             recommendations.append({
@@ -983,7 +1125,11 @@ def get_simulation_graph_recommendations(
                 "title": "Strong survival — consider growth investments",
                 "description": f"With {survival_prob*100:.0f}% survival probability, you have room to invest in growth. Peers at this confidence level typically accelerate hiring and market expansion.",
                 "suggested_actions": ["Invest in sales team", "Explore new channels", "Consider fundraising"],
-                "peer_evidence": f"Based on {len(similar)} peer companies",
+                "peer_evidence": (
+                    f"Aggregated from {peer_view['peer_count']} opted-in companies"
+                    if peer_view["aggregates"]
+                    else "Peer detail withheld"
+                ),
             })
 
     peer_strategies = strategies.get("strategies", [])
@@ -993,7 +1139,7 @@ def get_simulation_graph_recommendations(
                 "type": "peer_strategy",
                 "priority": "medium",
                 "title": f"Peer-validated strategy: {ps['strategy'].replace('_', ' ').title()}",
-                "description": ps.get("recommendation", f"{ps['adoption_count']} peer companies have successfully used this strategy."),
+                "description": ps.get("recommendation", f"{ps['company_count']} peer companies have successfully used this strategy."),
                 "adoption_count": ps["adoption_count"],
                 "confidence_rate": ps["high_confidence_rate"],
             })
@@ -1015,7 +1161,10 @@ def get_simulation_graph_recommendations(
         "company_id": company_id,
         "recommendations": recommendations[:8],
         "simulation_available": simulation_result is not None,
-        "peer_count": len(similar),
+        "similar_companies": peer_view["similar_companies"],
+        "similar_company_aggregates": peer_view["aggregates"],
+        "similar_companies_reason": peer_view["reason"],
+        "peer_count": peer_view["peer_count"],
         "profile_summary": {
             "stage": profile.get("stage"),
             "mrr": profile.get("mrr"),
@@ -1131,26 +1280,20 @@ def get_network_graph_data(db: Session, company_id: int) -> Dict[str, Any]:
                 "relationship": "RESULTED_IN",
             })
 
-    similar = find_similar_companies(db, company_id, limit=5)
-    for peer in similar:
-        peer_id = f"peer_{peer['peer_rank']}"
+    peer_view = find_similar_companies(db, company_id, limit=5)
+    if peer_view["aggregates"]:
         nodes.append({
-            "id": peer_id,
-            "type": "Company",
-            "label": f"Peer #{peer['peer_rank']}",
-            "properties": {
-                "industry": peer["industry"],
-                "stage": peer["stage"],
-                "mrr_range": peer["mrr_range"],
-                "similarity_score": peer["similarity_score"],
-            },
+            "id": "peer_cohort",
+            "type": "PeerCohort",
+            "label": f"{peer_view['peer_count']} similar companies",
+            "properties": {"peer_count": peer_view["peer_count"]},
             "is_self": False,
         })
         edges.append({
             "from": f"company_{company_id}",
-            "to": peer_id,
+            "to": "peer_cohort",
             "relationship": "SIMILAR_TO",
-            "properties": {"score": peer["similarity_score"]},
+            "properties": {"peer_count": peer_view["peer_count"]},
         })
 
     latest_sim = (

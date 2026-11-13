@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
@@ -113,9 +114,7 @@ const WIDGET_TYPES = [
 
 function formatValue(value: number, formatType: string, unit?: string | null): string {
   if (formatType === 'currency') {
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-    return `$${value.toFixed(0)}`;
+    return formatCurrencyAbbrev(value);
   }
   if (formatType === 'percentage') {
     return `${(value * 100).toFixed(1)}%`;
@@ -162,7 +161,7 @@ function KPIWidget({ widget, companyId }: { widget: Widget; companyId: number })
         </CardTitle>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" data-testid={`widget-info-${widget.id}`}>
+            <Button variant="ghost" size="icon" data-testid={`widget-info-${widget.id}`} aria-label="More information">
               <Info className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
@@ -491,7 +490,7 @@ export default function DashboardBuilderPage() {
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setLocation('/dashboards')} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={() => setLocation('/dashboards')} data-testid="button-back" aria-label="Go back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -542,6 +541,7 @@ export default function DashboardBuilderPage() {
                   variant="ghost"
                   onClick={() => deleteWidgetMutation.mutate(widget.id)}
                   data-testid={`button-delete-widget-${widget.id}`}
+                  aria-label="Delete"
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>

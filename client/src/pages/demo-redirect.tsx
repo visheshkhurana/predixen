@@ -3,6 +3,7 @@ import { useLocation, Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { api, ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
+import { withGtagPage } from '@/lib/analytics-url';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw, UserPlus } from 'lucide-react';
 
@@ -15,7 +16,8 @@ import { Loader2, RefreshCw, UserPlus } from 'lucide-react';
  * and finding the card on the login tab. HAG-449 routes it at `/demo/enter` and
  * points the hero, the header CTA and /demo at it.
  *
- * It logs into the shared sample account, selects the sample company, and lands
+ * It opens a private demo workspace (a throwaway account with its own fresh
+ * copy of the sample company, see server/core/demo_workspace.py), selects it, and lands
  * on /overview. No login form is rendered at any point: while the request is in
  * flight the visitor sees a loading line, and on failure a retry plus a real
  * signup link.
@@ -31,14 +33,13 @@ export default function DemoRedirectPage() {
     setError(null);
     setLoading(true);
     try {
-      const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
+      const result = await api.auth.demo();
 
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
 
       if (typeof window !== 'undefined' && (window as any).gtag) {
-        (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(result.user_id) });
-        (window as any).gtag('set', 'user_properties', { user_email: result.email });
-        (window as any).gtag('event', 'login', { method: 'demo' });
+        (window as any).gtag('config', 'G-NJKW0TGC4C', withGtagPage({ user_id: String(result.user_id) }));
+        (window as any).gtag('event', 'login', withGtagPage({ method: 'demo' }));
       }
 
       // HAG-453: this used to swallow a failed or empty companies.list() and

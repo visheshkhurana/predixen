@@ -137,18 +137,43 @@ def test_baselines_entered_on_the_scenario_still_win(db):
     assert inputs.churn_rate == 1
 
 
+def test_hiring_and_churn_knobs_reach_the_engine(db):
+    scenario = _scenario(db, _company(db), {
+        "baseline_revenue": 1_234,
+        "baseline_growth_rate": 2,
+        "gross_margin": 40,
+        "opex": 10,
+        "payroll": 20,
+        "other_costs": 30,
+        "cash_balance": 456,
+        "churn_rate": 1,
+        "churn_change_pct": 1.5,
+        "cac_change_pct": -10,
+        "hiring_plan": [{"count": 2, "start_month": 3, "monthly_cost": 8000}],
+    })
+
+    inputs = enhanced_inputs_from_scenario(db, scenario)
+
+    assert inputs.churn_change_pct == 1.5
+    assert inputs.cac_change_pct == -10
+    assert inputs.hiring_plan == [{"count": 2, "start_month": 3, "monthly_cost": 8000}]
+
+
 def test_no_call_site_can_reintroduce_the_invented_baseline():
-    """A source guard, so a fourth copy of the old constructor fails here rather
-    than shipping. The three sites were the only ones carrying the constants."""
+    """A source guard, so another copy of the old constructor fails here rather
+    than shipping. The job route, the handler, and the worker Node starts
+    are the sites that used to carry the constants."""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
     sites = [
         root / "server/api/simulation_jobs.py",
         root / "server/workers/handlers/simulation_handler.py",
+        root / "server/workers/simulation_worker.py",
     ]
     for path in sites:
         source = path.read_text()
         assert "enhanced_inputs_from_scenario" in source, f"{path.name}: not using the shared builder"
         assert 'inputs_json.get("baseline_revenue", 100000)' not in source, f"{path.name}: invented baseline is back"
         assert 'inputs_json.get("cash_balance", 500000)' not in source, f"{path.name}: invented baseline is back"
+        assert 'inputs_json.get("churn_rate", 5)' not in source, f"{path.name}: invented churn is back"

@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
@@ -15,10 +16,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Badge } from '@/components/ui/badge';
 import { HelpCircle, Sparkles, Check, AlertCircle, Loader2, ArrowRight, ArrowLeft, TrendingDown, DollarSign, Activity, FileUp, FileText, X } from 'lucide-react';
 import type { AmountScale } from '@/lib/utils';
+import { withGtagPage } from '@/lib/analytics-url';
 import { trackEvent } from '@/lib/posthog';
 import { SAMPLE_COMPANY, SAMPLE_FINANCIALS } from '@/lib/sampleCompany';
 import { SampleFirstRunCard } from '@/components/sample-data/SampleFirstRunCard';
 import { toNumber } from '@/lib/clearableNumber';
+import { onboardingIndustryPrefill, readStoredIndustry } from '@/lib/industryPicker';
 
 const STEPS = [
   { id: 1, title: 'Welcome', description: 'Tell us about your startup' },
@@ -37,10 +40,9 @@ const STAGE_DEFAULTS: Record<string, { monthly_revenue: number; gross_margin_pct
   growth: { monthly_revenue: 1000000, gross_margin_pct: 75, opex: 200000, payroll: 400000, other_costs: 50000, cash_balance: 10000000, headcount: 120 },
 };
 
-function formatCurrency(value: number): string {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${value.toLocaleString()}`;
+// Onboarding runs before the company exists, so use the currency picked on this form.
+function formatCurrency(value: number, currency: string): string {
+  return formatCurrencyAbbrev(value, currency);
 }
 
 type BaselineNumbers = {
@@ -90,6 +92,26 @@ function baselineTextToNumbers(text: BaselineText): BaselineNumbers {
   };
 }
 
+// India is the primary market: a browser on India time starts in rupees.
+function defaultCurrencyForBrowser(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta') return 'INR';
+  } catch {
+    // fall through
+  }
+  return 'USD';
+}
+
+const ONBOARDING_CURRENCIES: Array<{ code: string; label: string }> = [
+  { code: 'INR', label: '₹ Indian Rupee (INR)' },
+  { code: 'USD', label: '$ US Dollar (USD)' },
+  { code: 'AED', label: 'AED UAE Dirham' },
+  { code: 'SGD', label: 'S$ Singapore Dollar (SGD)' },
+  { code: 'GBP', label: '£ British Pound (GBP)' },
+  { code: 'EUR', label: '€ Euro (EUR)' },
+];
+
 export default function OnboardingPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -111,14 +133,17 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [companyData, setCompanyData] = useState({
+  const [companyData, setCompanyData] = useState(() => ({
     name: '',
     website: '',
-    industry: '',
+    // Prefill only: the industry chosen on the homepage picker or carried by an
+    // industry page's signup link (`?industry=`). The founder can change it, and
+    // an existing company's industry (effect below) still wins.
+    industry: typeof window === 'undefined' ? '' : onboardingIndustryPrefill(window.location.search, readStoredIndustry()),
     stage: '',
-    currency: 'USD',
+    currency: defaultCurrencyForBrowser(),
     amount_scale: 'UNITS' as AmountScale,
-  });
+  }));
   // Optional financials hold TEXT, same as the runway calculator. Parsing
   // Number(e.target.value) on every keystroke made Number("") snap a cleared
   // field back to 0 (session 01a08122 @ t=50s on #payroll / #opex / #gross-margin).
@@ -456,7 +481,7 @@ export default function OnboardingPage() {
     localStorage.setItem('founderConsoleOnboardingComplete', 'true');
     // Activation conversion: the new user reached a live dashboard.
     if (typeof window !== 'undefined' && (window as any).gtag) {
-      (window as any).gtag('event', 'onboarding_complete', {});
+      (window as any).gtag('event', 'onboarding_complete', withGtagPage({}));
     }
     trackEvent('onboarding_complete', { company_id: currentCompany?.id });
     toast({ title: 'Setup complete!', description: 'Your dashboard is ready.' });
@@ -743,6 +768,8 @@ export default function OnboardingPage() {
                         <SelectItem value="logistics">Logistics / Supply Chain</SelectItem>
                         <SelectItem value="real_estate">Real Estate / PropTech</SelectItem>
                         <SelectItem value="food">Food / CPG</SelectItem>
+                        <SelectItem value="agency">Agency / services</SelectItem>
+                        <SelectItem value="startup">Early-stage / pre-revenue</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
@@ -769,6 +796,26 @@ export default function OnboardingPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Reporting currency</Label>
+                  <Select
+                    value={companyData.currency}
+                    onValueChange={(v) => setCompanyData({ ...companyData, currency: v })}
+                  >
+                    <SelectTrigger data-testid="select-currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ONBOARDING_CURRENCIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Amounts are shown in this currency{companyData.currency === 'INR' ? ', in lakhs and crores' : ''}.
+                  </p>
                 </div>
 
                 <Button
@@ -904,6 +951,7 @@ export default function OnboardingPage() {
                                 if (uploadInputRef.current) uploadInputRef.current.value = '';
                               }}
                               data-testid="button-clear-onboarding-file"
+                              aria-label="Clear file"
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -1091,7 +1139,7 @@ export default function OnboardingPage() {
                         <span className="text-sm font-medium text-muted-foreground">Net Burn Rate</span>
                       </div>
                       <p className="text-2xl font-bold" data-testid="text-burn-value">
-                        {hasBaselineNumbers && totalExpenses > 0 ? formatCurrency(Math.abs(netBurn)) : 'N/A'}
+                        {hasBaselineNumbers && totalExpenses > 0 ? formatCurrency(Math.abs(netBurn), companyData.currency) : 'N/A'}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {!hasBaselineNumbers || totalExpenses === 0

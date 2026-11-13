@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, Float, DateTime, Date, ForeignKey, String, Boolean, Enum, Text, Index, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, Float, DateTime, Date, ForeignKey, String, Boolean, Enum, Text, Index, JSON, event
+from sqlalchemy.orm import deferred, relationship
 from datetime import datetime
 from server.core.db import Base
 import enum
@@ -147,7 +147,10 @@ class FinancialRecord(Base):
     opex = Column(Float, default=0)
     payroll = Column(Float, default=0)
     other_costs = Column(Float, default=0)
-    cash_balance = Column(Float, default=0)
+    # No default: NULL means "cash not provided" and makes runway unknown. A
+    # silent 0 read as "out of cash" (runway 0), and writers used to invent a
+    # balance (burn x 12 / $2M) to avoid it.
+    cash_balance = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     import_session_id = Column(Integer, ForeignKey("import_sessions.id"), nullable=True, index=True)
@@ -182,5 +185,31 @@ class FinancialRecord(Base):
     
     source_type = Column(String(20), nullable=True)
     extraction_summary = Column(Text, nullable=True)
-    
+
+    # Sync provenance. `source` is a canonical connector id only
+    # (tally, razorpayx, stripe, zoho_books, csv_import, ...) -- never an
+    # account number, credential, or other identifier. `synced_at` is a UTC
+    # ISO-8601 timestamp. `synced_fields` names the input columns the sync
+    # actually supplied, so derived numbers are not labeled as synced. Manual
+    # rows leave all three null.
+    #
+    # Deferred so a SELECT of this model still succeeds when the live table
+    # has not been migrated yet (production runs startup migrations only with
+    # RUN_MIGRATIONS=true). The flush listener below omits the columns from
+    # INSERT/UPDATE in that case. Reads that need them undefer explicitly.
+    source = deferred(Column(String(64), nullable=True))
+    synced_at = deferred(Column(String(40), nullable=True))
+    synced_fields = deferred(Column(JSON, nullable=True))
+
     company = relationship("Company", back_populates="financial_records")
+
+
+def _omit_unmigrated_provenance(mapper, connection, state):
+    # Lazy import: this module is imported by the provenance service.
+    from server.services.input_provenance import omit_provenance_if_columns_missing
+
+    omit_provenance_if_columns_missing(mapper, connection, state)
+
+
+event.listen(FinancialRecord, "before_insert", _omit_unmigrated_provenance, raw=True)
+event.listen(FinancialRecord, "before_update", _omit_unmigrated_provenance, raw=True)

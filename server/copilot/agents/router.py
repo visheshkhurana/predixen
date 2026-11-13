@@ -304,7 +304,9 @@ class RouterAgent(BaseAgent):
             elif task_labels[i] == "strategy" and result.structured_output.get("strategy"):
                 ckb.strategy.update(result.structured_output.get("strategy", {}))
         
-        merged = self._merge_responses(agent_responses, ckb, context)
+        # _merge_responses makes a blocking synthesis LLM call; keep it off the
+        # event loop.
+        merged = await asyncio.to_thread(self._merge_responses, agent_responses, ckb, context)
         
         if len(agent_responses) > 1:
             try:

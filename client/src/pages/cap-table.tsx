@@ -1,7 +1,8 @@
+import { getDisplayCurrency } from '@/lib/money';
 import { useState, useMemo, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSEO } from "@/lib/seo";
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -173,7 +174,8 @@ function formatNumber(n: number): string {
 }
 
 function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+  const currency = getDisplayCurrency();
+  return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', { style: 'currency', currency }).format(n);
 }
 
 function TypeBadge({ type }: { type: string }) {
@@ -1082,8 +1084,7 @@ export default function CapTablePage() {
                                   size="icon"
                                   variant="ghost"
                                   onClick={(e) => { e.stopPropagation(); setExpandedShareholder(isExpanded ? null : sh.id); }}
-                                  data-testid={`button-expand-${sh.id}`}
-                                >
+                                  data-testid={`button-expand-${sh.id}`} aria-label={isExpanded ? "Collapse" : "Expand"}>
                                   {isExpanded ? <ChevronUp /> : <ChevronDown />}
                                 </Button>
                               </TableCell>
@@ -1447,8 +1448,8 @@ export default function CapTablePage() {
                 <>
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="space-y-2">
-                      <Label>Pre-Money Valuation ($)</Label>
-                      <Input
+                      <Label htmlFor="cap-table-pre-money-valuation">Pre-Money Valuation ($)</Label>
+                      <Input id="cap-table-pre-money-valuation"
                         type="number"
                         placeholder="10000000"
                         value={scenarioFormData.pre_money}
@@ -1457,8 +1458,8 @@ export default function CapTablePage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Raise Amount ($)</Label>
-                      <Input
+                      <Label htmlFor="cap-table-raise-amount">Raise Amount ($)</Label>
+                      <Input id="cap-table-raise-amount"
                         type="number"
                         placeholder="3000000"
                         value={scenarioFormData.raise_amount}
@@ -1467,8 +1468,8 @@ export default function CapTablePage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Option Pool Refresh (%)</Label>
-                      <Input
+                      <Label htmlFor="cap-table-option-pool-refresh">Option Pool Refresh (%)</Label>
+                      <Input id="cap-table-option-pool-refresh"
                         type="number"
                         placeholder="10"
                         value={scenarioFormData.option_pool_refresh}
@@ -1573,7 +1574,7 @@ export default function CapTablePage() {
                         <BarChart data={waterfallResult.payouts}>
                           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                           <XAxis dataKey="name" className="text-xs" />
-                          <YAxis tickFormatter={(v: number) => `$${(v / 1e6).toFixed(1)}M`} className="text-xs" />
+                          <YAxis tickFormatter={(v: number) => formatCurrencyAbbrev(v)} className="text-xs" />
                           <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
                           <Bar dataKey="payout" fill="#10b981" radius={[4, 4, 0, 0]} />
                         </BarChart>
@@ -1649,6 +1650,7 @@ export default function CapTablePage() {
                           variant="ghost"
                           onClick={() => deleteScenarioMutation.mutate(sc.id)}
                           data-testid={`button-delete-scenario-${sc.id}`}
+                          aria-label="Delete"
                         >
                           <Trash2 />
                         </Button>
@@ -1819,8 +1821,8 @@ export default function CapTablePage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Name</Label>
-              <Input
+              <Label htmlFor="cap-table-name">Name</Label>
+              <Input id="cap-table-name"
                 value={newShareholder.name}
                 onChange={(e) => setNewShareholder({ ...newShareholder, name: e.target.value })}
                 placeholder="Jane Smith"
@@ -1828,8 +1830,8 @@ export default function CapTablePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
+              <Label htmlFor="cap-table-email">Email</Label>
+              <Input id="cap-table-email"
                 value={newShareholder.email}
                 onChange={(e) => setNewShareholder({ ...newShareholder, email: e.target.value })}
                 placeholder="jane@company.com"
@@ -1849,8 +1851,8 @@ export default function CapTablePage() {
             </div>
             <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
-                <Label>Tax ID (optional)</Label>
-                <Input
+                <Label htmlFor="cap-table-tax-id-optional">Tax ID (optional)</Label>
+                <Input id="cap-table-tax-id-optional"
                   value={newShareholder.tax_id}
                   onChange={(e) => setNewShareholder({ ...newShareholder, tax_id: e.target.value })}
                   placeholder="XX-XXXXXXX"
@@ -1858,8 +1860,8 @@ export default function CapTablePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Address (optional)</Label>
-                <Input
+                <Label htmlFor="cap-table-address-optional">Address (optional)</Label>
+                <Input id="cap-table-address-optional"
                   value={newShareholder.address}
                   onChange={(e) => setNewShareholder({ ...newShareholder, address: e.target.value })}
                   placeholder="123 Main St"
@@ -1912,8 +1914,8 @@ export default function CapTablePage() {
               </div>
               {issueData.share_class === 'preferred' && (
                 <div className="space-y-2">
-                  <Label>Series</Label>
-                  <Input
+                  <Label htmlFor="cap-table-series">Series</Label>
+                  <Input id="cap-table-series"
                     value={issueData.series}
                     onChange={(e) => setIssueData({ ...issueData, series: e.target.value })}
                     placeholder="Series A"
@@ -1924,8 +1926,8 @@ export default function CapTablePage() {
             </div>
             <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
-                <Label>Number of Shares</Label>
-                <Input
+                <Label htmlFor="cap-table-number-of-shares">Number of Shares</Label>
+                <Input id="cap-table-number-of-shares"
                   type="number"
                   value={issueData.shares}
                   onChange={(e) => setIssueData({ ...issueData, shares: e.target.value })}
@@ -1934,8 +1936,8 @@ export default function CapTablePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Price per Share ($)</Label>
-                <Input
+                <Label htmlFor="cap-table-price-per-share">Price per Share ($)</Label>
+                <Input id="cap-table-price-per-share"
                   type="number"
                   value={issueData.price_per_share}
                   onChange={(e) => setIssueData({ ...issueData, price_per_share: e.target.value })}
@@ -1945,8 +1947,8 @@ export default function CapTablePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Notes</Label>
-              <Input
+              <Label htmlFor="cap-table-notes">Notes</Label>
+              <Input id="cap-table-notes"
                 value={issueData.notes}
                 onChange={(e) => setIssueData({ ...issueData, notes: e.target.value })}
                 placeholder="Founder shares at incorporation"
@@ -2018,8 +2020,8 @@ export default function CapTablePage() {
             </div>
             <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
-                <Label>Shares to Grant</Label>
-                <Input
+                <Label htmlFor="cap-table-shares-to-grant">Shares to Grant</Label>
+                <Input id="cap-table-shares-to-grant"
                   type="number"
                   value={grantData.shares_granted}
                   onChange={(e) => setGrantData({ ...grantData, shares_granted: e.target.value })}
@@ -2028,8 +2030,8 @@ export default function CapTablePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Exercise Price ($)</Label>
-                <Input
+                <Label htmlFor="cap-table-exercise-price">Exercise Price ($)</Label>
+                <Input id="cap-table-exercise-price"
                   type="number"
                   value={grantData.exercise_price}
                   onChange={(e) => setGrantData({ ...grantData, exercise_price: e.target.value })}
@@ -2039,8 +2041,8 @@ export default function CapTablePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Grant Date</Label>
-              <Input
+              <Label htmlFor="cap-table-grant-date">Grant Date</Label>
+              <Input id="cap-table-grant-date"
                 type="date"
                 value={grantData.grant_date}
                 onChange={(e) => setGrantData({ ...grantData, grant_date: e.target.value })}
@@ -2050,8 +2052,8 @@ export default function CapTablePage() {
             {grantData.vesting_type === 'custom' && (
               <div className="grid gap-4 grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Cliff (months)</Label>
-                  <Input
+                  <Label htmlFor="cap-table-cliff-months">Cliff (months)</Label>
+                  <Input id="cap-table-cliff-months"
                     type="number"
                     value={grantData.cliff_months}
                     onChange={(e) => setGrantData({ ...grantData, cliff_months: e.target.value })}
@@ -2059,8 +2061,8 @@ export default function CapTablePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Total Vesting (months)</Label>
-                  <Input
+                  <Label htmlFor="cap-table-total-vesting-months">Total Vesting (months)</Label>
+                  <Input id="cap-table-total-vesting-months"
                     type="number"
                     value={grantData.vesting_months}
                     onChange={(e) => setGrantData({ ...grantData, vesting_months: e.target.value })}
@@ -2100,8 +2102,8 @@ export default function CapTablePage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Shares to Exercise</Label>
-              <Input
+              <Label htmlFor="cap-table-shares-to-exercise">Shares to Exercise</Label>
+              <Input id="cap-table-shares-to-exercise"
                 type="number"
                 value={exerciseData.shares_to_exercise}
                 onChange={(e) => setExerciseData({ ...exerciseData, shares_to_exercise: e.target.value })}
@@ -2110,8 +2112,8 @@ export default function CapTablePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Notes</Label>
-              <Input
+              <Label htmlFor="cap-table-notes-2">Notes</Label>
+              <Input id="cap-table-notes-2"
                 value={exerciseData.notes}
                 onChange={(e) => setExerciseData({ ...exerciseData, notes: e.target.value })}
                 placeholder="Optional notes"
@@ -2181,8 +2183,8 @@ export default function CapTablePage() {
             </div>
             <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
-                <Label>Shares to Transfer</Label>
-                <Input
+                <Label htmlFor="cap-table-shares-to-transfer">Shares to Transfer</Label>
+                <Input id="cap-table-shares-to-transfer"
                   type="number"
                   value={transferData.shares}
                   onChange={(e) => setTransferData({ ...transferData, shares: e.target.value })}
@@ -2191,8 +2193,8 @@ export default function CapTablePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Price per Share ($)</Label>
-                <Input
+                <Label htmlFor="cap-table-price-per-share-2">Price per Share ($)</Label>
+                <Input id="cap-table-price-per-share-2"
                   type="number"
                   value={transferData.price_per_share}
                   onChange={(e) => setTransferData({ ...transferData, price_per_share: e.target.value })}
@@ -2202,8 +2204,8 @@ export default function CapTablePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Notes</Label>
-              <Input
+              <Label htmlFor="cap-table-notes-3">Notes</Label>
+              <Input id="cap-table-notes-3"
                 value={transferData.notes}
                 onChange={(e) => setTransferData({ ...transferData, notes: e.target.value })}
                 placeholder="Transfer notes"
@@ -2251,8 +2253,8 @@ export default function CapTablePage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Holder Name</Label>
-                <Input
+                <Label htmlFor="cap-table-holder-name">Holder Name</Label>
+                <Input id="cap-table-holder-name"
                   value={convertibleData.holder}
                   onChange={(e) => setConvertibleData({ ...convertibleData, holder: e.target.value })}
                   placeholder="Investor name"
@@ -2262,8 +2264,8 @@ export default function CapTablePage() {
             </div>
             <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
-                <Label>Principal ($)</Label>
-                <Input
+                <Label htmlFor="cap-table-principal">Principal ($)</Label>
+                <Input id="cap-table-principal"
                   type="number"
                   value={convertibleData.principal}
                   onChange={(e) => setConvertibleData({ ...convertibleData, principal: e.target.value })}
@@ -2272,8 +2274,8 @@ export default function CapTablePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Valuation Cap ($)</Label>
-                <Input
+                <Label htmlFor="cap-table-valuation-cap">Valuation Cap ($)</Label>
+                <Input id="cap-table-valuation-cap"
                   type="number"
                   value={convertibleData.valuation_cap}
                   onChange={(e) => setConvertibleData({ ...convertibleData, valuation_cap: e.target.value })}
@@ -2284,8 +2286,8 @@ export default function CapTablePage() {
             </div>
             <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
-                <Label>Discount Rate (%)</Label>
-                <Input
+                <Label htmlFor="cap-table-discount-rate">Discount Rate (%)</Label>
+                <Input id="cap-table-discount-rate"
                   type="number"
                   value={convertibleData.discount_rate}
                   onChange={(e) => setConvertibleData({ ...convertibleData, discount_rate: e.target.value })}
@@ -2295,8 +2297,8 @@ export default function CapTablePage() {
               </div>
               {(convertibleData.type === 'convertible_note') && (
                 <div className="space-y-2">
-                  <Label>Interest Rate (%)</Label>
-                  <Input
+                  <Label htmlFor="cap-table-interest-rate">Interest Rate (%)</Label>
+                  <Input id="cap-table-interest-rate"
                     type="number"
                     value={convertibleData.interest_rate}
                     onChange={(e) => setConvertibleData({ ...convertibleData, interest_rate: e.target.value })}
@@ -2308,8 +2310,8 @@ export default function CapTablePage() {
             </div>
             {(convertibleData.type === 'convertible_note' || convertibleData.type === 'warrant') && (
               <div className="space-y-2">
-                <Label>Maturity Date</Label>
-                <Input
+                <Label htmlFor="cap-table-maturity-date">Maturity Date</Label>
+                <Input id="cap-table-maturity-date"
                   type="date"
                   value={convertibleData.maturity_date}
                   onChange={(e) => setConvertibleData({ ...convertibleData, maturity_date: e.target.value })}
@@ -2347,8 +2349,8 @@ export default function CapTablePage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Scenario Name</Label>
-              <Input
+              <Label htmlFor="cap-table-scenario-name">Scenario Name</Label>
+              <Input id="cap-table-scenario-name"
                 value={scenarioFormData.name}
                 onChange={(e) => setScenarioFormData({ ...scenarioFormData, name: e.target.value })}
                 placeholder="Series A Round"
@@ -2367,8 +2369,8 @@ export default function CapTablePage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
-              <Input
+              <Label htmlFor="cap-table-description">Description</Label>
+              <Input id="cap-table-description"
                 value={scenarioFormData.description}
                 onChange={(e) => setScenarioFormData({ ...scenarioFormData, description: e.target.value })}
                 placeholder="Model the impact of..."
@@ -2379,8 +2381,8 @@ export default function CapTablePage() {
               <>
                 <div className="grid gap-4 grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Pre-Money ($)</Label>
-                    <Input
+                    <Label htmlFor="cap-table-pre-money">Pre-Money ($)</Label>
+                    <Input id="cap-table-pre-money"
                       type="number"
                       value={scenarioFormData.pre_money}
                       onChange={(e) => setScenarioFormData({ ...scenarioFormData, pre_money: e.target.value })}
@@ -2389,8 +2391,8 @@ export default function CapTablePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Raise Amount ($)</Label>
-                    <Input
+                    <Label htmlFor="cap-table-raise-amount-2">Raise Amount ($)</Label>
+                    <Input id="cap-table-raise-amount-2"
                       type="number"
                       value={scenarioFormData.raise_amount}
                       onChange={(e) => setScenarioFormData({ ...scenarioFormData, raise_amount: e.target.value })}
@@ -2401,8 +2403,8 @@ export default function CapTablePage() {
                 </div>
                 <div className="grid gap-4 grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Option Pool Refresh (%)</Label>
-                    <Input
+                    <Label htmlFor="cap-table-option-pool-refresh-2">Option Pool Refresh (%)</Label>
+                    <Input id="cap-table-option-pool-refresh-2"
                       type="number"
                       value={scenarioFormData.option_pool_refresh}
                       onChange={(e) => setScenarioFormData({ ...scenarioFormData, option_pool_refresh: e.target.value })}
@@ -2411,8 +2413,8 @@ export default function CapTablePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Investor Name</Label>
-                    <Input
+                    <Label htmlFor="cap-table-investor-name">Investor Name</Label>
+                    <Input id="cap-table-investor-name"
                       value={scenarioFormData.investor_name}
                       onChange={(e) => setScenarioFormData({ ...scenarioFormData, investor_name: e.target.value })}
                       placeholder="Acme Ventures"
@@ -2424,8 +2426,8 @@ export default function CapTablePage() {
             )}
             {scenarioFormData.scenario_type === 'exit_waterfall' && (
               <div className="space-y-2">
-                <Label>Exit Value ($)</Label>
-                <Input
+                <Label htmlFor="cap-table-exit-value">Exit Value ($)</Label>
+                <Input id="cap-table-exit-value"
                   type="number"
                   value={scenarioFormData.exit_value}
                   onChange={(e) => setScenarioFormData({ ...scenarioFormData, exit_value: e.target.value })}
@@ -2472,8 +2474,8 @@ export default function CapTablePage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Exit Value ($)</Label>
-              <Input
+              <Label htmlFor="cap-table-exit-value-2">Exit Value ($)</Label>
+              <Input id="cap-table-exit-value-2"
                 type="number"
                 value={waterfallExitValue}
                 onChange={(e) => setWaterfallExitValue(e.target.value)}

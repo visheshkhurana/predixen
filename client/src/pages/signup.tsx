@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useSEO } from "@/lib/seo";
+import { industryParam, storeIndustry } from "@/lib/industryPicker";
 
 /**
  * /signup — the create-account page, and it can now create an account.
@@ -31,6 +32,14 @@ import { useSEO } from "@/lib/seo";
 const AuthPage = lazy(() => import("@/pages/auth"));
 
 export default function SignupPage() {
+  // `/signup?industry=d2c` comes from an industry homepage's "Start free" CTA.
+  // Remember it so onboarding can PREFILL its Industry field after the account
+  // exists. storeIndustry ignores unknown values and never throws.
+  useEffect(() => {
+    const industry = industryParam(window.location.search);
+    if (industry) storeIndustry(industry);
+  }, []);
+
   useSEO({
     title: "Get Started — Create a Free FounderConsole Account",
     description:

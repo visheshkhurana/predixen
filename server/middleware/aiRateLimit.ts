@@ -51,9 +51,16 @@ export function aiUserRateLimit(options: AiRateLimitOptions = {}) {
       buckets.set(key, bucket);
     }
 
+    const expose = "Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset";
     if (bucket.count >= limit) {
       const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - t) / 1000));
       res.setHeader("Retry-After", String(retryAfter));
+      res.setHeader("X-RateLimit-Limit", String(limit));
+      res.setHeader("X-RateLimit-Remaining", "0");
+      res.setHeader("RateLimit-Limit", String(limit));
+      res.setHeader("RateLimit-Remaining", "0");
+      res.setHeader("RateLimit-Reset", String(retryAfter));
+      res.setHeader("Access-Control-Expose-Headers", expose);
       res.status(429).json({
         error: "Too many AI requests. Try again shortly.",
         retryAfter,
@@ -62,8 +69,14 @@ export function aiUserRateLimit(options: AiRateLimitOptions = {}) {
     }
 
     bucket.count += 1;
+    const remaining = Math.max(0, limit - bucket.count);
+    const reset = Math.max(1, Math.ceil((bucket.resetAt - t) / 1000));
     res.setHeader("X-RateLimit-Limit", String(limit));
-    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, limit - bucket.count)));
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+    res.setHeader("RateLimit-Limit", String(limit));
+    res.setHeader("RateLimit-Remaining", String(remaining));
+    res.setHeader("RateLimit-Reset", String(reset));
+    res.setHeader("Access-Control-Expose-Headers", expose);
     next();
   };
 }
