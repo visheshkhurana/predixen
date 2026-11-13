@@ -33,7 +33,22 @@ import server.models.scenario_version
 QA_LAB_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATASETS_FILE = os.path.join(QA_LAB_DIR, "datasets", "all-datasets.json")
 SCENARIOS_FILE = os.path.join(QA_LAB_DIR, "scenarios", "all-scenarios.json")
-REPORT_FILE = os.path.join(QA_LAB_DIR, "latest-report.md")
+# HAG-392. The DEFAULT here does not move, because this path is load-bearing:
+# `qa-lab/run.sh:6` pushes the file to Notion, and `server/index.ts:552` reads it at
+# runtime from `process.cwd()` for `POST /api/notion/push-report` -- where a missing
+# file is a 500 with no fallback. So both remedies proposed for the dirty tree are
+# closed: `git rm --cached` (the gitignore route) takes the file out of the deployed
+# image, and a move outside the working tree takes it out of `process.cwd()`. Either
+# one breaks a production endpoint to fix a local annoyance.
+#
+# The dirty tree is real, and its cause is measured: `datetime.now()` at :429 is
+# written as `**Generated**: {now}` at :458, so the report is non-deterministic and
+# every run rewrites a tracked file. This override is the one lever that lets a run
+# whose output will be thrown away -- a CI gate step, or a local check -- leave the
+# tracked copy alone, without changing where the deployed app reads from.
+REPORT_FILE = os.environ.get(
+    "QA_LAB_REPORT", os.path.join(QA_LAB_DIR, "latest-report.md")
+)
 
 TOLERANCE = 0.02
 MC_SEED = 42
@@ -805,10 +820,58 @@ def main():
         failed_total = total - passed_total
 
         print("=" * 60)
+        # HAG-400. `total == 0` is not a pass, and nothing on `main` says so:
+        # measured, an empty dataset fixture printed `RESULTS: 0/0 PASSED, 0 FAILED`
+        # and the process exited 0 - the same answer a clean 150/150 run gives.
+        #
+        # This is a THIRD state, and it is NOT the one PR #125 fixes. #125 adds
+        # `raise SystemExit(1 if failed_total else 0)` at this exact site; when
+        # `total == 0` that expression computes `failed_total == 0` and exits 0. So
+        # #125 makes the script fail on a real failure and still cannot see a run in
+        # which nothing executed. The branch below must therefore sit ABOVE that line.
+        #
+        # UNKNOWN takes exit 2 so a caller reading only the status can tell it apart
+        # from 1 (a real failure) and 0 (a real pass). 2 is the code HAG-375 picked for
+        # its own unreadable-compiler branch. The sibling gate on `main` today does NOT
+        # do this: `scripts/tsc-error-budget.sh:26` prints `::error::tsc failed without
+        # emitting error TS diagnostics` for its UNKNOWN state but answers 1 for it,
+        # the same code a real over-budget regression gets at `:34`. Two codes for three
+        # states is the weaker instrument, and this one does not copy it.
+        #
+        # REACHABILITY, measured and not argued, because two people had two
+        # different answers. `total == 0` happens iff the datasets fixture is an
+        # empty array. Both other candidate routes are closed:
+        #   - `len(dataset_results) == len(datasets)` always: the append in PHASE 1
+        #     is unconditional, so nothing skips a dataset. Measured - one dataset in
+        #     the fixture printed `RESULTS: 10/10 PASSED` (1 baseline + 8 scenarios +
+        #     1 reproducibility), never 0.
+        #   - the `if not company: continue` in PHASE 3 is UNREACHABLE: `seed_company`
+        #     has no None path and PHASE 1 sets `company_map[ds_id]` unconditionally.
+        #     Measured by forcing `seed_company` to return None: PHASE 1 aborts with
+        #     `AttributeError: 'NoneType' object has no attribute 'id'` and the run
+        #     exits 1 - it never reaches that `continue`, so it cannot zero `total`.
+        if total == 0:
+            print("  RESULTS: UNKNOWN - NOTHING RAN (0 datasets, 0 scenario runs, 0 reproducibility checks)")
+            print("  This is NOT a pass. No assertion was executed.")
+            print("=" * 60)
+            # `SystemExit` is a `BaseException`, not an `Exception`, so the
+            # `finally: db.close()` below still runs and no handler can swallow it.
+            raise SystemExit(2)
+
         print(f"  RESULTS: {passed_total}/{total} PASSED, {failed_total} FAILED")
         if all_bugs:
             print(f"  BUGS FOUND: {len(all_bugs)}")
         print("=" * 60)
+
+        # The rest of the ladder, with the reconciliation to #125 made explicit rather
+        # than silent. On `main` there is no exit code AT ALL: measured, a run with
+        # `147/150 PASSED, 3 FAILED` exited 0. Shipping only the UNKNOWN branch above
+        # would therefore leave a gate that still cannot fail on a real failure - this
+        # card's own defect, one line down. This line is byte-identical to the one
+        # #125 adds (verified with `gh pr diff 125`, its qa_runner.py hunk), so
+        # whichever of the two lands second is a one-line reconciliation and not a
+        # redesign.
+        raise SystemExit(1 if failed_total else 0)
 
     finally:
         db.close()

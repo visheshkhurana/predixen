@@ -89,6 +89,7 @@ export default function SecurityPage() {
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-security-signup">
+            {/* HAG-236: was /signup, which has no form and no SSO. */}
             <Link href="/signup">
               Get started free
               <ArrowRight className="ml-2 h-4 w-4" />

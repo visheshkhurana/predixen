@@ -39,7 +39,16 @@ for (const path of live) {
   );
 }
 
-assertAlias("/unsubscribe", "/settings");
+assert.match(
+  app,
+  /<Route path="\/unsubscribe" component=\{UnsubscribePage\} \/>/,
+  "/unsubscribe must be a public page that does not require login",
+);
+assert.doesNotMatch(
+  app,
+  /path="\/unsubscribe"[\s\S]{0,220}?Redirect to="\/settings"/,
+  "/unsubscribe must not bounce to the logged-in settings page",
+);
 assertAlias("/apply", "/signup");
 assertAlias("/matches", "/");
 assertAlias("/referral", "/signup");

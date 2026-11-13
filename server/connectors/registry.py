@@ -61,17 +61,31 @@ class ConnectorRegistry:
         """
         connectors = []
         for provider_id, connector_class in cls._connectors.items():
-            if category and connector_class.PROVIDER_CATEGORY != category:
-                continue
-            
-            # Create temp instance to get provider info
-            temp_config = ConnectorConfig(
-                provider_id=provider_id,
-                company_id=0,
-            )
-            temp_instance = connector_class(temp_config)
-            connectors.append(temp_instance.get_provider_info())
-        
+            # One malformed connector must not take the whole catalogue down.
+            # This loop used to raise straight through: `google_sheets` and
+            # `rest_api` were registered while still abstract, so every call to
+            # GET /connectors/providers answered 500 for EVERY provider, and
+            # because `load_all_connectors()` runs at import the failure was
+            # unconditional. Skipping is the safe half; the other half is the
+            # test that asserts every registered class is constructible, so a
+            # skip is loud in CI instead of silent in production.
+            try:
+                if category and connector_class.PROVIDER_CATEGORY != category:
+                    continue
+
+                # Create temp instance to get provider info
+                temp_config = ConnectorConfig(
+                    provider_id=provider_id,
+                    company_id=0,
+                )
+                temp_instance = connector_class(temp_config)
+                connectors.append(temp_instance.get_provider_info())
+            except Exception as e:
+                logger.error(
+                    f"Skipping connector '{provider_id}': cannot be instantiated "
+                    f"({type(e).__name__}: {e})"
+                )
+
         return connectors
     
     @classmethod

@@ -360,20 +360,20 @@ export default function AdminTeam() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {member.github_url && (
-                      <Button size="icon" variant="ghost" asChild data-testid={`link-github-${member.id}`}>
+                      <Button size="icon" variant="ghost" asChild data-testid={`link-github-${member.id}`} aria-label="GitHub profile">
                         <a href={member.github_url} target="_blank" rel="noopener noreferrer">
                           <Github className="h-4 w-4" />
                         </a>
                       </Button>
                     )}
                     {member.linkedin_url && (
-                      <Button size="icon" variant="ghost" asChild data-testid={`link-linkedin-${member.id}`}>
+                      <Button size="icon" variant="ghost" asChild data-testid={`link-linkedin-${member.id}`} aria-label="LinkedIn profile">
                         <a href={member.linkedin_url} target="_blank" rel="noopener noreferrer">
                           <Linkedin className="h-4 w-4" />
                         </a>
                       </Button>
                     )}
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(member)} data-testid={`button-edit-${member.id}`}>
+                    <Button size="icon" variant="ghost" onClick={() => openEdit(member)} data-testid={`button-edit-${member.id}`} aria-label="Edit">
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </div>

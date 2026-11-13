@@ -35,12 +35,10 @@ function suggestedActionEventProps(attr: SimulationAttribution | null) {
 /**
  * Every query key that depends on a company's financial data.
  *
- * These live under several different key namespaces (`useTruthScan` reads
- * ['truth', id] while `useFinancialMetrics` reads ['truth-latest', id], and
- * some callers used a nonexistent ['/api/companies', id]), so invalidating
- * only one of them left the dashboard showing pre-import confidence and
- * metric cards after a successful upload. Any mutation that changes a
- * company's financials must call this rather than picking keys by hand.
+ * useTruthScan and useFinancialMetrics share ['truth', id]. `truth-latest`
+ * stays in the list so an older cache entry from before that share is still
+ * dropped after an upload. Any mutation that changes a company's financials
+ * must call this rather than picking keys by hand.
  */
 export const COMPANY_FINANCIAL_QUERY_KEYS = [
   'companies',
@@ -172,6 +170,7 @@ export function useRunTruthScan() {
         trackFounderActivated({
           source: 'truth_scan',
           company_id: companyId,
+          user_id: useFounderStore.getState().user?.id ?? null,
           is_sample: false,
         });
       }
@@ -228,6 +227,7 @@ export function useRunSimulation() {
         trackFounderActivated({
           source: 'simulation',
           company_id: company.id,
+          user_id: useFounderStore.getState().user?.id ?? null,
           is_sample: false,
         });
       }

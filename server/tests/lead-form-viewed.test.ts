@@ -1,6 +1,7 @@
-// Growth E4: lead form view → capture. lead_captured already fires on submit
-// through trackFunnel (PostHog + GA4 + X). The view must be PostHog-only, once
-// per mount, and only after the form is actually on screen.
+// Growth E4: lead form view → submit. lead_form_submitted fires on a successful
+// save through trackFunnel (PostHog + GA4 + X). lead_captured is server-only.
+// The view must be PostHog-only, once per mount, and only after the form is
+// actually on screen.
 //
 // Run: npx tsx server/tests/lead-form-viewed.test.ts
 import test from "node:test";
@@ -60,26 +61,25 @@ function withMockObserver(fn: () => void) {
 }
 
 test("both lead forms wire lead_form_viewed with the lead_captured location", () => {
-  assert.match(
-    runway,
-    /useViewedOnce\(\s*"lead_form_viewed",\s*\{\s*location:\s*"runway-calculator",?\s*\}\s*\)/,
-  );
-  assert.match(
-    survival,
-    /useViewedOnce\(\s*"lead_form_viewed",\s*\{\s*location:\s*"survival-simulator",?\s*\}\s*\)/,
-  );
-  assert.match(runway, /import\s*\{\s*useViewedOnce\s*\}\s*from\s*["']@\/hooks\/use-viewed-once["']/);
-  assert.match(survival, /import\s*\{\s*useViewedOnce\s*\}\s*from\s*["']@\/hooks\/use-viewed-once["']/);
-  assert.match(runway, /<form ref=\{leadFormRef\}/);
-  assert.match(survival, /<form ref=\{leadFormRef\}/);
+  const optIn = readFileSync("client/src/components/marketing/CalculatorEmailOptIn.tsx", "utf8");
+  // The form lives in one component. Each page passes its own location as source.
+  assert.match(optIn, /useViewedOnce\(\s*"lead_form_viewed",\s*\{\s*location:\s*source\s*\}\s*\)/);
+  assert.match(optIn, /import\s*\{\s*useViewedOnce\s*\}\s*from\s*["']@\/hooks\/use-viewed-once["']/);
+  assert.match(optIn, /<form ref=\{leadFormRef\}/);
+  assert.match(runway, /source="runway-calculator"/);
+  assert.match(survival, /source="survival-simulator"/);
+  assert.match(runway, /CalculatorEmailOptIn/);
+  assert.match(survival, /CalculatorEmailOptIn/);
 
-  // Capture stays on trackFunnel. The view must not join that path.
-  assert.match(runway, /trackFunnel\(\s*"lead_captured"/);
-  assert.match(survival, /trackFunnel\(\s*"lead_captured"/);
+  // The form event stays on trackFunnel. The view must not join that path.
+  // lead_captured is not a client event.
+  assert.match(optIn, /trackFunnel\(\s*"lead_form_submitted"/);
+  assert.doesNotMatch(optIn, /lead_captured/);
+  assert.doesNotMatch(optIn, /trackFunnel\(\s*"lead_form_viewed"/);
   assert.doesNotMatch(runway, /trackFunnel\(\s*"lead_form_viewed"/);
   assert.doesNotMatch(survival, /trackFunnel\(\s*"lead_form_viewed"/);
-  assert.match(runway, /location:\s*"runway-calculator"/);
-  assert.match(survival, /location:\s*"survival-simulator"/);
+  assert.match(runway, /source="runway-calculator"/);
+  assert.match(survival, /source="survival-simulator"/);
 });
 
 test("the hook sends the view through trackEvent, not trackFunnel", () => {

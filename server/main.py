@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 print(f"[main.py] Importing FastAPI... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 print(f"[main.py] FastAPI imported (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
@@ -40,6 +40,7 @@ def _register_critical_routers(app: FastAPI):
     from server.api import oauth as oauth_api
 
     from server.api import feedback as feedback_api
+    from server.api import email_unsubscribe as email_unsubscribe_api
 
     app.include_router(auth.router)
     app.include_router(oauth_api.router)
@@ -49,6 +50,7 @@ def _register_critical_routers(app: FastAPI):
     app.include_router(billing_api.router)
     app.include_router(onboarding_api.router)
     app.include_router(feedback_api.router)
+    app.include_router(email_unsubscribe_api.router)
 
     logger.info(f"Critical routes registered in {time.time() - t0:.1f}s")
 
@@ -80,7 +82,6 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import export as export_api
     from server.api import company_lookup as company_lookup_api
     from server.api import benchmark_search as benchmark_search_api
-    from server.api import connector_catalog as connector_catalog_api
     from server.api import dashboards as dashboards_api
     from server.api import metrics as metrics_api
     from server.api import suggestions as suggestions_api
@@ -95,6 +96,8 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import csv_import as csv_import_api
     from server.api import currency as currency_api
     from server.api import leads as leads_api
+    from server.api import d2c as d2c_api
+    from server.api import contact as contact_api
     from server.api import events as events_api
     from server.api import cap_table as cap_table_api
     from server.api import hiring_planner as hiring_planner_api
@@ -155,7 +158,6 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(export_api.router)
     app.include_router(company_lookup_api.router)
     app.include_router(benchmark_search_api.router)
-    app.include_router(connector_catalog_api.router)
     app.include_router(dashboards_api.router)
     app.include_router(metrics_api.router)
     app.include_router(suggestions_api.router)
@@ -170,6 +172,9 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(csv_import_api.router)
     app.include_router(currency_api.router)
     app.include_router(leads_api.router)
+    app.include_router(d2c_api.router)
+    app.include_router(d2c_api.company_router)
+    app.include_router(contact_api.router)
     app.include_router(events_api.router)
     app.include_router(cap_table_api.router)
     app.include_router(hiring_planner_api.router)
@@ -181,6 +186,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(llm_usage_api.router)
     app.include_router(doc_generator_api.router)
     app.include_router(slack_bot_api.router)
+    app.include_router(slack_bot_api.link_router)
     app.include_router(digital_twin_api.router)
     app.include_router(intelligence_graph_api.router)
     app.include_router(agent_simulation_api.router)
@@ -234,6 +240,58 @@ async def _run_deferred_startup():
         except Exception as e:
             logger.warning(f"Could not ensure competitor tables: {e}")
 
+        try:
+            from server.models.d2c_month import D2CAdSpend, D2CMonth
+            D2CMonth.__table__.create(bind=engine, checkfirst=True)
+            D2CAdSpend.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured d2c_months and d2c_ad_spend tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure d2c_months table: {e}")
+
+        try:
+            from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
+            Base.metadata.create_all(
+                bind=engine,
+                tables=[RevokedAccessToken.__table__, UserSessionCutoff.__table__],
+            )
+            logger.info("Ensured session-revocation tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure session-revocation tables: {e}")
+
+        try:
+            from server.models.stripe_reconciliation import StripeReconciliationEvent
+            StripeReconciliationEvent.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured stripe reconciliation table exists")
+        except Exception as e:
+            logger.warning(f"Could not ensure stripe reconciliation table: {e}")
+
+        try:
+            from server.models.razorpay_billing import RazorpaySubscription, RazorpayWebhookEvent
+            RazorpaySubscription.__table__.create(bind=engine, checkfirst=True)
+            RazorpayWebhookEvent.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured razorpay billing tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure razorpay billing tables: {e}")
+
+        # #176 columns. create_all does not alter an existing leads table, and
+        # production leaves RUN_MIGRATIONS off, so this is not behind that flag.
+        try:
+            from server.core.migrations import ensure_lead_consent_columns
+            ensure_lead_consent_columns(engine)
+            logger.info("Ensured lead consent columns exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure lead consent columns: {e}")
+
+        # Campaign columns. create_all does not alter an existing leads table,
+        # and production leaves RUN_MIGRATIONS off, so this is not behind that
+        # flag. Nullable VARCHAR(200), no default, no backfill.
+        try:
+            from server.core.migrations import ensure_lead_utm_columns
+            ensure_lead_utm_columns(engine)
+            logger.info("Ensured lead utm columns exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure lead utm columns: {e}")
+
         if settings.should_run_migrations:
             logger.info("Running migrations...")
             from server.core.migrations import run_migrations
@@ -275,6 +333,17 @@ async def _run_deferred_startup():
                 logger.info("Skipping demo data seeding (SEED_DEMO_DATA=false)")
         except Exception as e:
             logger.error(f"Error during seeding: {e}")
+        try:
+            # Per-visitor demo workspaces past their TTL, and the opt-in
+            # one-time reset of the legacy shared demo account
+            # (DEMO_LEGACY_CLEANUP=true). Both only touch demo-owned rows.
+            from server.core.demo_workspace import cleanup_expired_demo_users, cleanup_legacy_demo_account
+            db.rollback()
+            cleanup_legacy_demo_account(db)
+            cleanup_expired_demo_users(db)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Demo workspace cleanup skipped: {e}")
         finally:
             db.close()
 
@@ -291,6 +360,20 @@ async def _run_deferred_startup():
             logger.info("AI governance permissions initialized")
         except Exception as e:
             logger.warning(f"AI governance init skipped: {e}")
+
+        try:
+            # One-off, opt-in: revoke agent-sim share links auto-created before
+            # #161 (REVOKE_LEGACY_AGENT_SIM_SHARES=true). Safe to leave on.
+            from server.core.migrations import revoke_legacy_agent_sim_shares
+            revoke_legacy_agent_sim_shares(engine)
+        except Exception as e:
+            logger.warning(f"Legacy agent-sim share revocation skipped: {e}")
+
+        try:
+            from server.core.migrations import ensure_lifecycle_email_tables
+            ensure_lifecycle_email_tables(engine)
+        except Exception as e:
+            logger.warning(f"Lifecycle email tables ensure skipped: {e}")
 
         try:
             from server.email.onboarding_sequence import ensure_table, run_scheduler_loop
@@ -405,7 +488,7 @@ app = FastAPI(
 )
 
 print(f"[main.py] Adding middleware... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
-from server.middleware.rate_limiter import RateLimiterMiddleware
+from server.middleware.rate_limiter import CORS_EXPOSE_HEADERS, RateLimiterMiddleware
 from server.middleware.csrf_protection import CSRFProtectionMiddleware
 from server.middleware.security_headers import SecurityHeadersMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -436,19 +519,32 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",
     "/auth/register",
     "/auth/login",
+    "/auth/demo",
     "/auth/admin/login",
     "/auth/refresh",
     "/companies/*/seed-sample",
     "/billing/webhook",  # Stripe webhook — authenticated by signature, not session
+    "/billing/razorpay/webhook",  # Razorpay webhook — X-Razorpay-Signature HMAC
+    # RFC 8058 one-click POST has no session and no CSRF header.
+    "/email/unsubscribe",
+    "/api/email/unsubscribe",
 ])
+
+# Demo sessions: no admin, no email/invite/share/billing/integration writes.
+from server.middleware.demo_guard import DemoGuardMiddleware
+app.add_middleware(DemoGuardMiddleware)
 
 app.add_middleware(
     RateLimiterMiddleware,
     rate_limit_auth=settings.RATE_LIMIT_AUTH,
     rate_limit_admin_login=settings.RATE_LIMIT_ADMIN_LOGIN,
     rate_limit_api=settings.RATE_LIMIT_API,
+    rate_limit_read=settings.RATE_LIMIT_READ,
+    rate_limit_read_burst=settings.RATE_LIMIT_READ_BURST,
     rate_limit_upload=settings.RATE_LIMIT_UPLOAD,
     rate_limit_simulation=settings.RATE_LIMIT_SIMULATION,
+    rate_limit_llm=settings.RATE_LIMIT_LLM,
+    rate_limit_email=settings.RATE_LIMIT_EMAIL,
 )
 
 app.add_middleware(
@@ -457,7 +553,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-CSRF-Token", "X-Request-ID"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=CORS_EXPOSE_HEADERS,
 )
 
 @app.get("/")
@@ -483,13 +579,21 @@ def demo_metrics():
         "message": "Sign up to see your real metrics"
     }
 
-@app.get("/metrics/internal")
+from server.core.security import get_current_user
+
+@app.get("/metrics/internal", dependencies=[Depends(get_current_user)])
 def internal_metrics():
+    """In-process timing summary. Internal, so it requires a session.
+
+    Failures stay generic: the previous handler returned str(e), which put
+    driver and query text on an unauthenticated 200.
+    """
     try:
         from server.core.observability import get_metrics_summary
         return {"metrics": get_metrics_summary()}
-    except Exception as e:
-        return {"metrics": {}, "error": str(e)}
+    except Exception:
+        logger.exception("internal metrics summary failed")
+        return {"metrics": {}, "error": "Internal metrics unavailable"}
 
 
 @app.get("/health")
@@ -513,6 +617,13 @@ def health():
         pass
 
     overall_status = "healthy" if db_healthy and _startup_state["ready"] else "degraded"
+    # Public endpoint. The raw startup exception can carry file paths, module
+    # names or connection strings, so it goes to the log; the body only says
+    # whether there was one. scripts/launch_gate.sh still reads
+    # "startup_error":null on a clean start.
+    startup_error = _startup_state["error"]
+    if startup_error:
+        logger.warning("Health check: startup error recorded: %s", startup_error)
     return {
         "status": overall_status,
         "version": APP_VERSION,
@@ -523,7 +634,15 @@ def health():
         "routers_loaded": _startup_state["routers_loaded"],
         "database": "connected" if db_healthy else "unavailable",
         "redis": "connected" if redis_healthy else "unavailable",
-        "startup_error": _startup_state["error"],
+        "startup_error": "startup failed; see server logs" if startup_error else None,
     }
 
 print(f"[main.py] Module load complete (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
+
+# Outermost ASGI wrapper. Start uvicorn as server.main:asgi_app with
+# --no-proxy-headers. A second proxy-headers wrap outside this class would
+# rewrite the peer before it is recorded, and X-Real-IP would no longer be
+# trusted only from Express.
+from server.middleware.peer import RecordPeer
+
+asgi_app = RecordPeer(app)

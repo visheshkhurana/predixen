@@ -88,8 +88,9 @@ export default function ConnectorMarketplace() {
     c.installStatus?.status === "active" || c.installStatus?.status === "paused"
   ).length;
   
-  const handleConnect = (connectorId: string) => {
-    setLocation(`/add-data-source?connector=${connectorId}`);
+  const handleConnect = (_connectorId: string) => {
+    // Real connect flow (credentials verified server-side) lives on Integrations.
+    setLocation(`/integrations`);
   };
   
   const handleManage = (connectorId: string) => {

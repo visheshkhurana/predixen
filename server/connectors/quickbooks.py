@@ -823,6 +823,13 @@ class QuickBooksConnector(BaseConnector):
         return {
             "source_type": "connector_quickbooks",
             "extraction_summary": f"Synced from QuickBooks Online",
+            # The window the figures below were measured over. `get_profit_and_loss()`
+            # is called with no arguments above, so it falls back to its own default of
+            # a rolling 90 days ending now - a period the caller never chose and, before
+            # this, was never told. Declared here so `revenue` / `opex` / `net_income`
+            # are not read downstream as all-time or as the current month.
+            "period_start": pnl.get("period_start"),
+            "period_end": pnl.get("period_end"),
             "revenue": revenue,
             "cogs": pnl.get("total_cogs", 0),
             "opex": pnl.get("total_expenses", 0),

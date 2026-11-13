@@ -1,6 +1,7 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import { generateSitemap } from "../scripts/generate-sitemap.ts";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -33,6 +34,13 @@ const allowlist = [
 ];
 
 async function buildAll() {
+  // HAG-204: the sitemap is generated from the app's own data before anything is
+  // built, so a route that ships without an entry is a build-time fact, not a
+  // thing someone has to remember. Runs before the `rm` so a failure here stops
+  // the build with the previous output still on disk. It is a no-op when the
+  // committed file is already in sync.
+  await generateSitemap();
+
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");

@@ -6,8 +6,56 @@
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+      // Consent Mode: no analytics/ad storage until the visitor accepts
+      // (client/src/lib/consent.ts updates this when they choose).
+      var fcConsent = null;
+      try { fcConsent = localStorage.getItem('cookie-consent'); } catch (e) {}
+      var fcGranted = fcConsent === 'accepted' ? 'granted' : 'denied';
+      gtag('consent', 'default', {
+        analytics_storage: fcGranted,
+        ad_storage: fcGranted,
+        ad_user_data: fcGranted,
+        ad_personalization: fcGranted
+      });
       gtag('js', new Date());
-      gtag('config', 'G-NJKW0TGC4C');
+      // Same allow-list as client/src/lib/analytics-url.ts GA_QUERY_ALLOW.
+      // campaignValueHasEmail matches analytics-url.ts: decoded "@" or "%40".
+      // Keep those campaign params. Drop token, code, fbclid, the hash, and
+      // any allowed value that looks like an email.
+      function campaignValueHasEmail(value) {
+        var current = value;
+        for (var i = 0; i < 5; i++) {
+          var decoded;
+          try {
+            decoded = decodeURIComponent(current);
+          } catch (e) {
+            break;
+          }
+          if (decoded === current) break;
+          current = decoded;
+        }
+        return current.indexOf('@') !== -1 || /%40/i.test(current);
+      }
+      function fcGaUrl(raw) {
+        if (!raw) return '';
+        var allow = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid'];
+        try {
+          var u = new URL(raw, location.origin);
+          var kept = new URLSearchParams();
+          for (var i = 0; i < allow.length; i++) {
+            var value = u.searchParams.get(allow[i]);
+            if (value && !campaignValueHasEmail(value)) kept.append(allow[i], value);
+          }
+          var search = kept.toString();
+          return u.origin + u.pathname + (search ? '?' + search : '');
+        } catch (e) {
+          return String(raw).split('#')[0].split('?')[0];
+        }
+      }
+      gtag('config', 'G-NJKW0TGC4C', {
+        page_location: fcGaUrl(location.href),
+        page_referrer: fcGaUrl(document.referrer || '')
+      });
     </script>
     <!-- PostHog is initialized once, from client/src/lib/posthog.ts (initPostHog).
          An inline array.js snippet used to live here as well, which meant two
@@ -16,16 +64,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>FounderConsole - AI Decision Simulator for Founders</title>
-    <meta name="description" content="FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 37 data connectors — replace spreadsheets with simulations." />
+    <meta name="description" content="FounderConsole is the AI-powered decision simulator for startup founders and D2C brands. Runway, burn and contribution margin with Monte Carlo simulations, an AI copilot, fundraising CRM and 36 data connectors. Free during public beta." />
     <meta property="og:title" content="FounderConsole — AI Decision Simulator for Founders" />
-    <meta property="og:description" content="FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 37 data connectors." />
+    <meta property="og:description" content="FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 36 data connectors." />
     <meta property="og:image" content="https://founderconsole.ai/og-image.png" />
     <meta property="og:url" content="https://founderconsole.ai/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="FounderConsole" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="FounderConsole — AI Decision Simulator for Founders" />
-    <meta name="twitter:description" content="AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, and 37 data connectors." />
+    <meta name="twitter:description" content="AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, and 36 data connectors." />
     <meta name="twitter:site" content="@founderconsole" />
     <meta name="twitter:image" content="https://founderconsole.ai/og-image.png" />
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
@@ -41,8 +89,7 @@
       "description": "AI-powered financial intelligence platform for startups. Investor-grade diligence, probabilistic simulation, and ranked decision recommendations.",
       "sameAs": [
         "https://twitter.com/founderconsole",
-        "https://linkedin.com/company/founderconsole",
-        "https://github.com/founderconsole"
+        "https://linkedin.com/company/founderconsole"
       ],
       "contactPoint": {
         "@type": "ContactPoint",
@@ -59,14 +106,14 @@
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "Web",
       "url": "https://founderconsole.ai",
-      "description": "AI-powered financial intelligence platform for startups with Monte Carlo simulations, fundraising CRM, and 37 data connectors.",
+      "description": "AI-powered financial intelligence platform for startups with Monte Carlo simulations, fundraising CRM, and 36 data connectors.",
       "offers": {
         "@type": "Offer",
         "price": "0",
         "priceCurrency": "USD",
         "description": "Free during public beta — all features unlocked, no credit card required"
       },
-      "featureList": "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
+      "featureList": "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 36 Data Connectors, Digital Twin, Strategic Briefings",
       "screenshot": "https://founderconsole.ai/og-image.png"
     }
     </script>

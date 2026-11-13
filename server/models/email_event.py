@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean, ForeignKey, Index
 from datetime import datetime
 from server.core.db import Base
 
@@ -57,6 +57,27 @@ class EmailLinkClick(Base):
     user_agent = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class LifecycleEmailLog(Base):
+    """Send ledger for product/lifecycle mail.
+
+    Opt-out itself lives on NotificationPreference.email_enabled. This table
+    is the cap window (status='sent') and the skip audit.
+    """
+
+    __tablename__ = "lifecycle_email_log"
+    __table_args__ = (
+        Index("idx_lifecycle_email_log_cap", "user_id", "status", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind = Column(String(32), nullable=False)
+    campaign = Column(String(120), nullable=True)
+    status = Column(String(32), nullable=False)
+    reason = Column(String(120), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class EmailFeedback(Base):

@@ -1,5 +1,6 @@
 from server.models.user import User, UserRole
 from server.models.company import Company
+from server.models.d2c_month import D2CAdSpend, D2CMonth
 from server.models.dataset import Dataset
 from server.models.financial import (
     FinancialRecord,
@@ -63,7 +64,7 @@ from server.models.raw_data_event import RawDataEvent
 from server.models.metric_definition import MetricDefinition
 from server.models.metric_value import MetricValue
 from server.models.dashboard import Dashboard, DashboardWidget
-from server.models.email_event import EmailEvent
+from server.models.email_event import EmailEvent, LifecycleEmailLog
 from server.models.connector_capability import ConnectorCapability
 from server.models.metric_suggestion import MetricSuggestion, SuggestionEvent
 from server.models.team_member import TeamMember, TeamMemberType, TeamMemberStatus
@@ -81,8 +82,13 @@ from server.models.lead import Lead
 from server.models.scenario_template import ScenarioTemplate
 from server.models.simulation_accuracy import SimulationAccuracy, CalibrationBias
 from server.models.agent_simulation import AgentSimulationRun
+from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
+from server.models.stripe_reconciliation import StripeReconciliationEvent
+from server.models.razorpay_billing import RazorpaySubscription, RazorpayWebhookEvent
 
 __all__ = [
+    "RazorpaySubscription",
+    "RazorpayWebhookEvent",
     "User",
     "UserRole",
     "Company",
@@ -164,6 +170,7 @@ __all__ = [
     "SharedScenario",
     "MetricSnapshot",
     "NotificationPreference",
+    "LifecycleEmailLog",
     "TwinEvent",
     "CopilotFeedback",
     "Conversation",
@@ -179,4 +186,7 @@ __all__ = [
     "SimulationAccuracy",
     "CalibrationBias",
     "AgentSimulationRun",
+    "RevokedAccessToken",
+    "UserSessionCutoff",
+    "StripeReconciliationEvent",
 ]

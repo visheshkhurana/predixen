@@ -27,20 +27,33 @@ def _send_in_background(coro):
         thread.start()
 
 
-async def _send_activity_email(to: str, subject: str, html: str):
+def _unsubscribe_url(email: str) -> Optional[str]:
     try:
-        from server.email.service import send_email, is_email_configured
+        from server.email.lifecycle_guard import page_unsubscribe_url_for_email
+        return page_unsubscribe_url_for_email(email)
+    except Exception as e:
+        logger.warning(f"Could not build unsubscribe url: {e}")
+        return None
+
+
+async def _send_activity_email(to: str, subject: str, html: str, campaign: str):
+    try:
+        from server.email.service import send_lifecycle_email, is_email_configured
         if not is_email_configured():
             logger.debug("Email not configured, skipping activity email")
             return
-        result = await send_email(
+        result = await send_lifecycle_email(
             to=to,
             subject=subject,
             html_content=html,
-            from_email=None,
+            category="lifecycle",
+            template=campaign,
+            campaign=campaign,
         )
         if result.get("success"):
             logger.info(f"Activity email sent to {to}: {subject}")
+        elif result.get("skipped"):
+            logger.info("Activity email skipped for %s reason=%s", to, result.get("reason"))
         else:
             logger.warning(f"Activity email failed for {to}: {result.get('error')}")
     except Exception as e:
@@ -67,9 +80,10 @@ def trigger_simulation_report_email(
             n_simulations=n_simulations,
             horizon_months=horizon_months,
             comparison=comparison,
+            unsubscribe_url=_unsubscribe_url(user_email),
         )
         subject = f"Simulation Complete — {scenario_name} Results for {company_name}"
-        _send_in_background(_send_activity_email(user_email, subject, html))
+        _send_in_background(_send_activity_email(user_email, subject, html, "activity_simulation"))
     except Exception as e:
         logger.warning(f"Failed to trigger simulation report email: {e}")
 
@@ -90,9 +104,10 @@ def trigger_document_generated_email(
             doc_name=doc_name,
             sections_count=sections_count,
             sections=sections,
+            unsubscribe_url=_unsubscribe_url(user_email),
         )
         subject = f"Your {doc_name} is Ready — {company_name}"
-        _send_in_background(_send_activity_email(user_email, subject, html))
+        _send_in_background(_send_activity_email(user_email, subject, html, "activity_document"))
     except Exception as e:
         logger.warning(f"Failed to trigger document generated email: {e}")
 
@@ -109,8 +124,9 @@ def trigger_decision_report_email(
             company_name=company_name,
             recommendations_count=recommendations_count,
             top_recommendations=top_recommendations,
+            unsubscribe_url=_unsubscribe_url(user_email),
         )
         subject = f"Decision Recommendations Ready — {company_name}"
-        _send_in_background(_send_activity_email(user_email, subject, html))
+        _send_in_background(_send_activity_email(user_email, subject, html, "activity_decision"))
     except Exception as e:
         logger.warning(f"Failed to trigger decision report email: {e}")

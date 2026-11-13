@@ -1,6 +1,7 @@
 export interface FinancialState {
   monthlyRevenue: number;
   grossMargin: number;
+  /** opex, payroll and otherCosts EXCLUDE COGS: COGS enters via grossMargin. */
   opex: number;
   payroll: number;
   otherCosts: number;
@@ -10,6 +11,95 @@ export interface FinancialState {
   cac: number;
   ltv: number;
   monthlyBurn?: number;
+  /** Inputs the company has no data for; consumers show "not available". */
+  unavailable?: string[];
+}
+
+export interface MetricsForFinancialState {
+  mrr?: number | null;
+  cashOnHand?: number | null;
+  burnRate?: number | null; // NET burn
+  totalMonthlyExpenses?: number | null; // total costs incl. COGS
+  grossMarginPct?: number | null;
+  monthlyGrowthRate?: number | null;
+  churnRatePct?: number | null;
+  cac?: number | null;
+  ltv?: number | null;
+  expenseBreakdown?: { payroll?: number; operating?: number; marketing?: number; otherOpex?: number } | null;
+}
+
+function finite(v: number | null | undefined): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/**
+ * Dashboard metrics -> what-if / stress state, on the canonical burn.
+ *
+ * The old builder split TOTAL expenses (COGS included) into opex/payroll/other
+ * and then also charged COGS through a 70% default margin, so COGS was counted
+ * twice; it used net burn as total expenses when expenses were missing; and it
+ * invented growth 10%, churn 5%, CAC 500, LTV 5000. Now:
+ *  - total costs = reported total expenses, else net burn + revenue;
+ *  - cost lines = total - revenue * (1 - margin), so runway equals the
+ *    dashboard's cash / net burn;
+ *  - unknown margin -> 100% (COGS is then carried as a fixed cost, still exact
+ *    at today's revenue) and listed in `unavailable`;
+ *  - the split follows the real expense breakdown when present, else all opex;
+ *  - unknown growth/churn/CAC/LTV are 0 and listed in `unavailable`.
+ */
+export function financialStateFromMetrics(metrics: MetricsForFinancialState): FinancialState {
+  const unavailable: string[] = [];
+  const revenue = finite(metrics.mrr) ? Math.max(0, metrics.mrr) : 0;
+  const net = finite(metrics.burnRate) ? metrics.burnRate : null;
+  const reportedTotal = finite(metrics.totalMonthlyExpenses) && metrics.totalMonthlyExpenses > 0
+    ? metrics.totalMonthlyExpenses : null;
+  // Net burn is clamped at 0 on the dashboard, so it only reconstructs total
+  // costs while the company is burning.
+  const totalCosts = net !== null && net > 0 ? net + revenue : (reportedTotal ?? Math.max(0, net ?? 0) + revenue);
+
+  let grossMargin: number;
+  if (finite(metrics.grossMarginPct) && metrics.grossMarginPct !== 0) {
+    grossMargin = metrics.grossMarginPct;
+  } else {
+    grossMargin = 100;
+    if (revenue > 0) unavailable.push('grossMargin');
+  }
+  const costsExCogs = Math.max(0, totalCosts - revenue * (1 - grossMargin / 100));
+
+  const b = metrics.expenseBreakdown;
+  const payrollPart = Math.max(0, b?.payroll ?? 0);
+  const opexPart = Math.max(0, (b?.operating ?? 0) + (b?.marketing ?? 0));
+  const otherPart = Math.max(0, b?.otherOpex ?? 0);
+  const partSum = payrollPart + opexPart + otherPart;
+  let opex = costsExCogs, payroll = 0, otherCosts = 0;
+  if (partSum > 0) {
+    opex = costsExCogs * (opexPart / partSum);
+    payroll = costsExCogs * (payrollPart / partSum);
+    otherCosts = costsExCogs * (otherPart / partSum);
+  } else {
+    unavailable.push('payroll');
+  }
+
+  const orUnavailable = (key: string, v: number | null | undefined, positiveOnly = false): number => {
+    if (finite(v) && (positiveOnly ? v > 0 : v !== 0)) return v;
+    unavailable.push(key);
+    return 0;
+  };
+
+  return {
+    cashBalance: finite(metrics.cashOnHand) ? metrics.cashOnHand : 0,
+    monthlyRevenue: revenue,
+    monthlyBurn: Math.max(0, totalCosts - revenue),
+    growthRate: orUnavailable('growthRate', metrics.monthlyGrowthRate),
+    churnRate: orUnavailable('churnRate', metrics.churnRatePct),
+    grossMargin,
+    opex,
+    payroll,
+    otherCosts,
+    cac: orUnavailable('cac', metrics.cac, true),
+    ltv: orUnavailable('ltv', metrics.ltv, true),
+    unavailable,
+  };
 }
 
 export interface SensitivityResult {
@@ -89,7 +179,12 @@ export function calculateSensitivity(
     { name: 'opex', displayName: 'Operating Expenses', key: 'opex', unit: 'currency', invert: true },
   ];
 
-  return variables.map(v => {
+  // calculateRunway is cash / (costs - revenue * margin): churn, CAC and
+  // growth do not enter it, so their bars were always zero -- which read as
+  // "does not matter". Leave them out, and leave out inputs with no data.
+  const modelled = new Set(['grossMargin', 'payroll', 'opex']);
+  const unavailable = new Set(baseState.unavailable ?? []);
+  return variables.filter(v => modelled.has(v.key) && !unavailable.has(v.key)).map(v => {
     const baseValue = baseState[v.key as keyof FinancialState] as number;
     
     // Calculate impact when variable decreases by percentSwing%
@@ -111,6 +206,38 @@ export function calculateSensitivity(
       highImpact: v.invert ? lowImpact : highImpact,
       currentValue: baseValue,
     };
+  });
+}
+
+export interface SensitivityBar {
+  label: string;
+  /** 0-100, relative to the largest runway swing among the modelled inputs. */
+  impact: number;
+  level: 'high' | 'med' | 'low';
+  /** Largest runway change (months) from a +/-swing in this input. */
+  swingMonths: number;
+}
+
+/**
+ * Bars for the "Key Sensitivity Levers" list, from calculateSensitivity.
+ * Ranked by the larger absolute runway swing; scaled to the top lever.
+ * Returns [] when nothing is computable (no inputs, or every swing is zero),
+ * so the caller can hide the list instead of showing invented numbers.
+ */
+export function sensitivityBarsFromResults(results: SensitivityResult[]): SensitivityBar[] {
+  const rows = results
+    .map(r => ({
+      label: r.displayName,
+      swing: Math.max(Math.abs(r.lowImpact), Math.abs(r.highImpact)),
+    }))
+    .filter(r => Number.isFinite(r.swing) && r.swing > 0)
+    .sort((a, b) => b.swing - a.swing);
+  if (rows.length === 0) return [];
+  const top = rows[0].swing;
+  return rows.map(r => {
+    const impact = Math.max(1, Math.round((r.swing / top) * 100));
+    const level: SensitivityBar['level'] = impact >= 67 ? 'high' : impact >= 34 ? 'med' : 'low';
+    return { label: r.label, impact, level, swingMonths: Math.round(r.swing * 10) / 10 };
   });
 }
 

@@ -16,6 +16,35 @@ def parse_optional_bool(env_var: str) -> Optional[bool]:
         return None
     return val.lower() == "true"
 
+# Approximate FX for reporting only (admin MRR across Stripe and Razorpay
+# currencies). Never used to price or charge anything. Override per currency
+# with USD_PER_<CODE>, e.g. USD_PER_INR=0.0113. Defaults as of Nov 2026:
+# about Rs 88.5 per USD; AED is pegged at 3.6725 per USD.
+DEFAULT_USD_PER_CURRENCY = {
+    "USD": 1.0,
+    "INR": 0.0113,
+    "AED": 0.2723,
+}
+
+
+def usd_per_currency() -> dict:
+    """USD value of one unit of each supported currency (approximate).
+
+    Read on every call so an env override applies without a restart in tests.
+    An unset, unparsable or non-positive override falls back to the default.
+    """
+    rates = {}
+    for code, default in DEFAULT_USD_PER_CURRENCY.items():
+        raw = os.getenv(f"USD_PER_{code}", "").strip()
+        try:
+            value = float(raw) if raw else default
+        except ValueError:
+            value = default
+        rates[code] = value if value > 0 else default
+    rates["USD"] = 1.0
+    return rates
+
+
 class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./founderconsole.db")
     SECRET_KEY: str = os.getenv("SESSION_SECRET", "founderconsole-secret-key-change-in-production")
@@ -52,12 +81,19 @@ class Settings(BaseSettings):
     # CORS configuration - comma-separated list of allowed origins
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
 
-    # Rate limiting configuration (requests per minute)
+    # Rate limiting configuration (requests per minute unless noted).
+    # RATE_LIMIT_API stays the anonymous / ordinary-write cap. Signed-in reads
+    # use RATE_LIMIT_READ so a normal page (about 10-20 calls) can be opened
+    # several times a minute. RATE_LIMIT_READ_BURST is requests per 10 seconds.
     RATE_LIMIT_AUTH: int = int(os.getenv("RATE_LIMIT_AUTH", "5"))
     RATE_LIMIT_ADMIN_LOGIN: int = int(os.getenv("RATE_LIMIT_ADMIN_LOGIN", "3"))  # Stricter for admin
     RATE_LIMIT_API: int = int(os.getenv("RATE_LIMIT_API", "60"))
+    RATE_LIMIT_READ: int = int(os.getenv("RATE_LIMIT_READ", "480"))
+    RATE_LIMIT_READ_BURST: int = int(os.getenv("RATE_LIMIT_READ_BURST", "120"))
     RATE_LIMIT_UPLOAD: int = int(os.getenv("RATE_LIMIT_UPLOAD", "10"))
     RATE_LIMIT_SIMULATION: int = int(os.getenv("RATE_LIMIT_SIMULATION", "10"))
+    RATE_LIMIT_LLM: int = int(os.getenv("RATE_LIMIT_LLM", "20"))
+    RATE_LIMIT_EMAIL: int = int(os.getenv("RATE_LIMIT_EMAIL", "5"))
 
     # Database connection pool settings
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))

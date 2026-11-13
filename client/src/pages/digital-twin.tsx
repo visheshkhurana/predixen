@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -11,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
+import { formatRunwayMonths, twinSummary } from "@/lib/simulation/runwayFormat";
 import {
   Activity,
   Cpu,
@@ -32,11 +34,12 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 
+// Matches TWIN_ITERATIONS in server/services/digital_twin.py.
+const TWIN_ITERATIONS = 500;
+
 function formatCurrency(value: number | null | undefined): string {
   if (value == null) return "N/A";
-  if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+  return formatCurrencyAbbrev(value);
 }
 
 function formatNumber(value: number | null | undefined): string {
@@ -95,12 +98,14 @@ function MetricCard({
   icon: Icon,
   trend,
   testId,
+  assumption,
 }: {
   label: string;
   value: string;
   icon: any;
   trend?: "up" | "down" | null;
   testId: string;
+  assumption?: boolean;
 }) {
   return (
     <Card className="bg-card/50 border-border/50" data-testid={testId}>
@@ -112,6 +117,11 @@ function MetricCard({
         </div>
         <div className="text-xl font-bold font-mono" data-testid={`${testId}-value`}>{value}</div>
         <div className="text-xs text-muted-foreground mt-1">{label}</div>
+        {assumption && (
+          <div className="text-[10px] uppercase tracking-wide text-amber-400/90 mt-0.5" data-testid={`${testId}-assumption`}>
+            Assumption
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -150,7 +160,7 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
     });
   };
 
-  const results = simMutation.data?.results;
+  const results = twinSummary(simMutation.data);
 
   return (
     <Card data-testid="simulation-explorer">
@@ -234,34 +244,40 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
           data-testid="button-run-simulation"
         >
           {simMutation.isPending ? (
-            <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Running 1,000 Simulations...</>
+            <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Running {TWIN_ITERATIONS} Simulations...</>
           ) : (
             <><Play className="h-4 w-4 mr-2" /> Run Monte Carlo Simulation</>
           )}
         </Button>
 
-        {results && (
+        {simMutation.isError && (
+          <p className="mt-4 text-sm text-red-400" data-testid="simulation-error">
+            The simulation could not run, so there are no results to show.
+          </p>
+        )}
+
+        {results && !simMutation.isError && (
           <div className="mt-4 space-y-3" data-testid="simulation-results">
             <div className="text-sm font-medium">Results</div>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-center">
                 <div className="text-[10px] text-red-400 uppercase tracking-wider mb-1">P10 (Worst)</div>
                 <div className="text-lg font-bold font-mono text-red-400" data-testid="text-p10-runway">
-                  {results.p10_runway?.toFixed(1) ?? "—"}
+                  {formatRunwayMonths(results.p10_runway)}
                 </div>
                 <div className="text-[10px] text-muted-foreground">months</div>
               </div>
               <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-center">
                 <div className="text-[10px] text-blue-400 uppercase tracking-wider mb-1">P50 (Median)</div>
                 <div className="text-lg font-bold font-mono text-blue-400" data-testid="text-p50-runway">
-                  {results.p50_runway?.toFixed(1) ?? "—"}
+                  {formatRunwayMonths(results.p50_runway)}
                 </div>
                 <div className="text-[10px] text-muted-foreground">months</div>
               </div>
               <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
                 <div className="text-[10px] text-emerald-400 uppercase tracking-wider mb-1">P90 (Best)</div>
                 <div className="text-lg font-bold font-mono text-emerald-400" data-testid="text-p90-runway">
-                  {results.p90_runway?.toFixed(1) ?? "—"}
+                  {formatRunwayMonths(results.p90_runway)}
                 </div>
                 <div className="text-[10px] text-muted-foreground">months</div>
               </div>
@@ -274,9 +290,9 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
                 </span>
               </div>
             )}
-            {simMutation.data?.fallback && (
-              <p className="text-[11px] text-muted-foreground italic">
-                Using simplified model (enhanced Monte Carlo unavailable)
+            {results.iterations != null && (
+              <p className="text-[11px] text-muted-foreground">
+                {results.iterations.toLocaleString()} simulated paths over {results.horizon_months ?? 24} months
               </p>
             )}
           </div>
@@ -287,7 +303,7 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
 }
 
 function DecisionTimeline({ companyId }: { companyId: number }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ decisions?: any[] }>({
     queryKey: ["/api/companies", companyId, "twin", "decisions"],
     enabled: !!companyId,
   });
@@ -346,7 +362,7 @@ function DecisionTimeline({ companyId }: { companyId: number }) {
 }
 
 function EventLog({ companyId }: { companyId: number }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ events?: any[] }>({
     queryKey: ["/api/companies", companyId, "twin", "events"],
     enabled: !!companyId,
   });
@@ -445,6 +461,7 @@ export default function DigitalTwinPage() {
   const derived = twinState?.derived_metrics || {};
   const risks = twinState?.risk_indicators || [];
   const hasCriticalRisk = risks.some((r: any) => r.severity === "critical");
+  const assumed = new Set<string>(twinState?.assumption_fields || fin.assumption_fields || []);
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto" data-testid="digital-twin-page">
@@ -483,13 +500,15 @@ export default function DigitalTwinPage() {
           value={formatCurrency(fin.cash_balance)}
           icon={DollarSign}
           testId="metric-cash"
+          assumption={assumed.has("cash_balance")}
         />
         <MetricCard
           label="Monthly Burn"
           value={formatCurrency(fin.monthly_burn)}
           icon={TrendingDown}
-          trend="down"
+          trend={fin.monthly_burn != null ? "down" : null}
           testId="metric-burn"
+          assumption={assumed.has("monthly_burn")}
         />
         <MetricCard
           label="Monthly Revenue"
@@ -497,6 +516,7 @@ export default function DigitalTwinPage() {
           icon={TrendingUp}
           trend={fin.revenue_growth_rate > 0 ? "up" : fin.revenue_growth_rate < 0 ? "down" : null}
           testId="metric-revenue"
+          assumption={assumed.has("revenue_monthly")}
         />
         <MetricCard
           label="Runway"
@@ -504,6 +524,7 @@ export default function DigitalTwinPage() {
           icon={Clock}
           trend={derived.runway_months != null && derived.runway_months < 6 ? "down" : null}
           testId="metric-runway"
+          assumption={assumed.has("runway_months")}
         />
       </div>
 

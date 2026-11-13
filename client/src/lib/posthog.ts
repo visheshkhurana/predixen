@@ -1,4 +1,19 @@
+import { beforeSendPostHog as stripUrlTokens } from "./analytics-url";
 import { flushPostHogQueue, type PostHogClient, type QueuedPostHogCall } from "./posthog-queue";
+import {
+  beforeSendPostHog as sanitizeCalculatorEvent,
+  bindSessionRecordingClient,
+  installRecordingConsentListener,
+  syncSessionRecording,
+} from "./sessionRecording";
+
+export { setSurface, setTrackingSurface, syncSessionRecording } from "./sessionRecording";
+
+/** before_send: calculator-property scrubbing, then URL query/hash stripping. */
+export function beforeSendPostHog(event: any) {
+  return stripUrlTokens(sanitizeCalculatorEvent(event));
+}
+import { hasTrackingConsent, onConsentChange } from "./consent";
 
 // PostHog client tokens are public by design (they ship in the JS bundle).
 // The default below is the real project token — the VITE_POSTHOG_KEY that was
@@ -9,6 +24,8 @@ const POSTHOG_HOST = import.meta.env?.VITE_POSTHOG_HOST || 'https://us.i.posthog
 
 type PostHogSdk = PostHogClient & {
   init: (apiKey: string, config: Record<string, unknown>) => void;
+  startSessionRecording?: (...args: unknown[]) => void;
+  stopSessionRecording?: () => void;
 };
 
 let client: PostHogSdk | null = null;
@@ -59,15 +76,40 @@ async function loadAndInit(): Promise<PostHogSdk | null> {
       // no way to tell a broken form from a bored visitor. Cheap insurance on the
       // one funnel step we cannot afford to be blind on.
       capture_exceptions: true,
-      persistence: "localStorage",
-      // Session replay: record marketing + auth funnel sessions so we can watch
-      // where ad visitors drop off. Inputs are masked by default for privacy.
-      disable_session_recording: false,
+      // Cookieless (in-memory id) until the visitor accepts tracking; see
+      // lib/consent.ts. Accepting upgrades this client in place.
+      persistence: hasTrackingConsent() ? "localStorage" : "memory",
+      // Click autocapture records element text (runway, burn, revenue). Named
+      // events still go through trackEvent / trackPageView.
+      autocapture: false,
+      // Off until syncSessionRecording starts it. That happens only on a
+      // public marketing route after cookie-consent === "accepted". Core routes
+      // call stopSessionRecording. Masks cover a session already in flight.
+      disable_session_recording: true,
+      mask_all_text: true,
       session_recording: {
         maskAllInputs: true,
+        maskAllText: true,
+        maskTextSelector: "*",
       },
+      // sanitize_properties logs on every event in posthog-js 1.438+.
+      // before_send strips ?query and #hash from URL properties on every path
+      // so verify / unsubscribe / reset / oauth tokens never leave the browser.
+      // Event names, including $pageview, are unchanged. utm_* stays.
+      before_send: beforeSendPostHog,
     });
     client = sdk;
+    bindSessionRecordingClient(sdk);
+    syncSessionRecording(window.location.pathname);
+    onConsentChange((choice) => {
+      if (choice !== "accepted") return;
+      const upgradable = sdk as PostHogSdk & {
+        set_config?: (config: Record<string, unknown>) => void;
+      };
+      upgradable.set_config?.({ persistence: "localStorage" });
+      // Recording is not started here: sessionRecording decides by route
+      // (marketing only), and it listens for the same consent change.
+    });
     flushPostHogQueue(sdk, pending);
     return sdk;
   } catch (err) {
@@ -114,8 +156,9 @@ function dispatch(call: QueuedPostHogCall) {
  * Single init only — index.html must not also load array.js.
  */
 export function initPostHog() {
-  if (!POSTHOG_KEY || client || loadPromise || idleHandle != null) return;
-  if (typeof window === "undefined") return;
+  if (!POSTHOG_KEY || typeof window === "undefined") return;
+  installRecordingConsentListener();
+  if (client || loadPromise || idleHandle != null) return;
 
   if (typeof window.requestIdleCallback === "function") {
     idleHandle = window.requestIdleCallback(
@@ -133,12 +176,89 @@ export function initPostHog() {
   }
 }
 
+/** Clears calls queued before the SDK loads. Tests only. */
+export function takeQueuedPostHogCallsForTests(): QueuedPostHogCall[] {
+  return pending.splice(0, pending.length);
+}
+
 export function identifyUser(userId: number, email: string, role?: string) {
+  // Callers still pass email. PostHog gets a finite numeric id as distinct_id and role only.
+  // Number(undefined) is NaN, so a session with no id never identifies as "undefined".
+  void email;
+  const id = Number(userId);
+  if (!Number.isFinite(id)) return;
   dispatch({
     kind: "identify",
-    distinctId: String(userId),
-    traits: { email, role: role || "viewer" },
+    distinctId: String(id),
+    traits: { role: role || "viewer" },
   });
+}
+
+/** posthog-js localStorage blob → distinct_id, or null when it isn't one. */
+export function distinctIdFromPersistence(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { distinct_id?: unknown };
+    const id = parsed?.distinct_id;
+    if (typeof id !== "string") return null;
+    const trimmed = id.trim();
+    if (!trimmed || trimmed.length > 200 || trimmed.includes("@")) return null;
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+function readLoadedDistinctId(): string | null {
+  const reader = client as { get_distinct_id?: () => unknown } | null;
+  if (!reader || typeof reader.get_distinct_id !== "function") return null;
+  try {
+    const id = reader.get_distinct_id();
+    return distinctIdFromPersistence(JSON.stringify({ distinct_id: id }));
+  } catch {
+    return null;
+  }
+}
+
+function readPersistedDistinctId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return distinctIdFromPersistence(window.localStorage.getItem(`ph_${POSTHOG_KEY}_posthog`));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Current browser distinct_id, for server events that must join this person.
+ * Prefers the loaded SDK, then localStorage. Waits briefly for init so a
+ * submit on a cold page still has an id. Null means the server should use
+ * its email-hash fallback.
+ */
+export async function getBrowserDistinctId(): Promise<string | null> {
+  if (!POSTHOG_KEY || typeof window === "undefined") return null;
+  const loaded = readLoadedDistinctId();
+  if (loaded) return loaded;
+  const persisted = readPersistedDistinctId();
+  if (persisted) return persisted;
+  let timer: number | null = null;
+  try {
+    const sdk = await Promise.race([
+      ensureClient(),
+      new Promise<PostHogSdk | null>((resolve) => {
+        timer = window.setTimeout(() => resolve(null), 1500);
+      }),
+    ]);
+    if (sdk) {
+      const id = readLoadedDistinctId();
+      if (id) return id;
+    }
+  } catch {
+    // persistence below is the remaining source
+  } finally {
+    if (timer != null) window.clearTimeout(timer);
+  }
+  return readPersistedDistinctId();
 }
 
 /**
@@ -170,6 +290,42 @@ export function trackPageView(path: string) {
 
 export function trackEvent(event: string, properties?: Record<string, any>) {
   dispatch({ kind: "capture", event, properties });
+}
+
+/**
+ * Super properties for every later event. `unset` drops keys this session
+ * does not have, so a previous visit's campaign does not stick in
+ * localStorage after a landing URL with no parameters.
+ *
+ * Queued, not loaded. The pageview / idle init flushes this before the
+ * first event. Calling ensureClient here would pull posthog-js forward of
+ * that path on every document.
+ */
+export function registerSuperProperties(
+  properties: Record<string, string>,
+  unset: readonly string[] = [],
+) {
+  if (!POSTHOG_KEY) return;
+  const present: Record<string, string> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (typeof value === "string" && value.length > 0) present[key] = value;
+  }
+  const presentKeys = new Set(Object.keys(present));
+  const call: QueuedPostHogCall = {
+    kind: "register",
+    properties: present,
+    unset: unset.filter((key) => !presentKeys.has(key)),
+  };
+  if (client) {
+    flushPostHogQueue(client, [call]);
+    return;
+  }
+  pending.push(call);
+}
+
+/** Test seam: the calls waiting to become PostHog super properties. */
+export function takeQueuedPostHogCalls(): QueuedPostHogCall[] {
+  return pending.splice(0, pending.length);
 }
 
 export const isPostHogEnabled = () => !!POSTHOG_KEY;

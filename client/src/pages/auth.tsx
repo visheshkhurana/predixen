@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, type RouteComponentProps } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,13 +13,22 @@ import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
+import { withGtagPage } from '@/lib/analytics-url';
+import { readNextFromSearch } from "@/lib/loginNext";
+import { getBrowserDistinctId } from '@/lib/posthog';
+import { readFirstTouchAttribution } from '@/lib/attribution';
+import {
+  forgotPasswordAccepted,
+  forgotPasswordFailureCopy,
+  postLoginDestination,
+  type CompanyListOutcome,
+} from '@/lib/authFlow';
 
 
-const identifyUser = (userId: number, email: string) => {
+const identifyUser = (userId: number) => {
   if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(userId) });
-    (window as any).gtag('set', 'user_properties', { user_email: email });
-    (window as any).gtag('event', 'login', { method: 'email' });
+    (window as any).gtag('config', 'G-NJKW0TGC4C', withGtagPage({ user_id: String(userId) }));
+    (window as any).gtag('event', 'login', withGtagPage({ method: 'email' }));
   }
 };
 
@@ -27,6 +36,8 @@ const identifyUser = (userId: number, email: string) => {
 // trackFunnel so GA4 / PostHog / X stay in sync. Keep the GA4 recommended
 // `sign_up` name alongside `signup_completed` (the product-bet event).
 const trackSignup = (userId: number, email: string, method = 'email') => {
+  // Callers still pass email. PostHog events carry method and user_id only.
+  void email;
   metaTrack('CompleteRegistration', { method });
   trackFunnel('signup_completed', { method, user_id: userId });
   trackFunnel('sign_up', { method, user_id: userId });
@@ -46,7 +57,15 @@ function AnimatedMetric({ label, value, delay }: { label: string; value: string;
   );
 }
 
-export default function AuthPage() {
+export default function AuthPage({
+  initialTab = 'login',
+}: {
+  initialTab?: 'login' | 'register';
+  // /auth renders this through wouter's `component={AuthPage}` prop, which
+  // hands the component its route props. Declaring that here is what keeps the
+  // page routable while it accepts a prop of its own; /signup passes
+  // initialTab and /auth is unchanged. Nothing reads these.
+} & Partial<RouteComponentProps>) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { setUser, setCurrentCompany, setCompanies } = useFounderStore();
@@ -54,11 +73,13 @@ export default function AuthPage() {
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [socialLoadingProvider, setSocialLoadingProvider] = useState<'google' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState('login');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+  const [forgotPasswordError, setForgotPasswordError] = useState<string | null>(null);
   const [isForgotLoading, setIsForgotLoading] = useState(false);
+  const [companyLoadError, setCompanyLoadError] = useState(false);
 
   // Surface an expired session (redirected here with ?expired=1 by the API
   // client) so the user understands why they're back at sign-in.
@@ -74,6 +95,32 @@ export default function AuthPage() {
       window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
     }
   }, [toast]);
+
+  // Invite emails link to /auth?invite=<token>. The token rides along with
+  // login/register; an already-signed-in visitor accepts it directly.
+  const [inviteToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('invite'),
+  );
+  // Only a session that existed when the page opened; a login on this page
+  // already carried the token.
+  const [signedInAtLoad] = useState(() => useFounderStore.getState().user);
+  useEffect(() => {
+    if (!inviteToken || !signedInAtLoad) return;
+    fetch('/api/workspace/invites/accept', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    })
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}));
+        toast(res.ok
+          ? { title: 'Invite accepted' }
+          : { title: 'Could not accept invite', description: typeof body.detail === 'string' ? body.detail : undefined, variant: 'destructive' });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ email: '', password: '' });
@@ -114,6 +161,8 @@ export default function AuthPage() {
         google_denied: 'Google sign-in was cancelled.',
         google_token_failed: 'Could not complete Google sign-in. Please try again.',
         google_no_email: 'No email found on your Google account.',
+        google_unverified_email: 'Your Google account email is not verified. Verify it with Google, then try again.',
+        google_account_mismatch: 'This email is already linked to a different Google account.',
       };
       toast({
         title: 'Sign-in issue',
@@ -142,18 +191,65 @@ export default function AuthPage() {
       return;
     }
     setIsForgotLoading(true);
+    setForgotPasswordError(null);
     try {
-      await fetch('/api/auth/forgot-password', {
+      const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotPasswordEmail })
       });
+      // A network error or a non-2xx used to take the same path as success,
+      // so the form said "check your email" when nothing was sent.
+      if (!forgotPasswordAccepted(res.ok)) {
+        const copy = forgotPasswordFailureCopy(res.status);
+        setForgotPasswordError(copy.description);
+        toast({ title: copy.title, description: copy.description, variant: 'destructive' });
+        return;
+      }
       setForgotPasswordSent(true);
     } catch {
-      setForgotPasswordSent(true);
+      const copy = forgotPasswordFailureCopy(null);
+      setForgotPasswordError(copy.description);
+      toast({ title: copy.title, description: copy.description, variant: 'destructive' });
     } finally {
       setIsForgotLoading(false);
     }
+  };
+
+  const continueAfterLogin = async (isPlatformAdmin: boolean) => {
+    let companies: CompanyListOutcome;
+    try {
+      const userCompanies = await api.companies.list();
+      if (!Array.isArray(userCompanies)) {
+        companies = { status: 'error' };
+      } else {
+        companies = { status: 'ok', companies: userCompanies };
+        if (userCompanies.length > 0) {
+          setCompanies(userCompanies);
+          setCurrentCompany(userCompanies[0]);
+        } else {
+          setCompanies([]);
+          setCurrentCompany(null);
+        }
+      }
+    } catch {
+      companies = { status: 'error' };
+    }
+
+    const dest = postLoginDestination(isPlatformAdmin, companies);
+    if (dest === 'retry') {
+      setCompanyLoadError(true);
+      toast({
+        title: "Couldn't load your workspace",
+        description: "You're signed in, but we couldn't load your companies. Retry to continue.",
+        variant: 'destructive',
+      });
+      return;
+    }
+    setCompanyLoadError(false);
+    toast({ title: 'Welcome back!' });
+    // Back to the page the session expired on (validated same-origin path).
+    setLocation(dest === '/' ? (readNextFromSearch(window.location.search) ?? '/') : dest);
   };
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -166,27 +262,12 @@ export default function AuthPage() {
     }
     
     setIsLoading(true);
+    setCompanyLoadError(false);
     try {
-      const result = await api.auth.login(loginForm.email, loginForm.password);
+      const result = await api.auth.login(loginForm.email, loginForm.password, inviteToken);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
-
-      let userCompanies: any[] = [];
-      try {
-        userCompanies = await api.companies.list();
-        if (userCompanies && userCompanies.length > 0) {
-          setCompanies(userCompanies);
-          setCurrentCompany(userCompanies[0]);
-        }
-      } catch {
-      }
-
-      toast({ title: 'Welcome back!' });
-      if (!result.is_platform_admin && (!userCompanies || userCompanies.length === 0)) {
-        setLocation('/onboarding');
-        return;
-      }
-      setLocation('/');
+      identifyUser(result.user_id);
+      await continueAfterLogin(!!result.is_platform_admin);
     } catch (err) {
       let description = 'An unexpected error occurred. Please try again.';
       if (err instanceof ApiError) {
@@ -224,9 +305,10 @@ export default function AuthPage() {
     
     setIsLoading(true);
     try {
-      const result = await api.auth.register(registerForm.email, registerForm.password);
+      const distinctId = await getBrowserDistinctId();
+      const result = await api.auth.register(registerForm.email, registerForm.password, distinctId, inviteToken);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
+      identifyUser(result.user_id);
       trackSignup(result.user_id, result.email);
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
@@ -248,9 +330,9 @@ export default function AuthPage() {
   const handleDemoLogin = async () => {
     setIsDemoLoading(true);
     try {
-      const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
+      const result = await api.auth.demo();
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
+      identifyUser(result.user_id);
       
       try {
         const companies = await api.companies.list();
@@ -280,9 +362,18 @@ export default function AuthPage() {
     }
   };
 
-  const handleSocialLogin = (provider: 'google') => {
+  const handleSocialLogin = async (provider: 'google') => {
     setSocialLoadingProvider(provider);
-    window.location.assign(`/api/auth/${provider}/start`);
+    const distinctId = await getBrowserDistinctId();
+    const params = new URLSearchParams();
+    if (distinctId) params.set('distinct_id', distinctId);
+    // First-touch campaign rides along so a Google signup is attributed like an
+    // email one; the server keeps it beside the OAuth state, not in Google's URL.
+    for (const [key, value] of Object.entries(readFirstTouchAttribution())) {
+      if (value) params.set(key, String(value));
+    }
+    const qs = params.toString();
+    window.location.assign(`/api/auth/${provider}/start${qs ? `?${qs}` : ''}`);
   };
 
   const capabilities = [
@@ -351,7 +442,7 @@ export default function AuthPage() {
 
           <div className="mt-12 pt-8 border-t border-white/[0.06]">
             <div className="grid grid-cols-4 gap-6">
-              <AnimatedMetric label="Data Connectors" value="37+" delay={200} />
+              <AnimatedMetric label="Data Connectors" value="36+" delay={200} />
               <AnimatedMetric label="Metrics Tracked" value="24+" delay={400} />
               <AnimatedMetric label="Iterations / Sim" value="10K" delay={600} />
               <AnimatedMetric label="Encryption" value="256-bit" delay={800} />
@@ -422,7 +513,11 @@ export default function AuthPage() {
             </div>
           </div>
           
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value === 'register' ? 'register' : 'login')}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-2 mb-6 h-10 p-1 bg-muted/50" role="tablist">
               <TabsTrigger 
                 value="login" 
@@ -445,6 +540,32 @@ export default function AuthPage() {
             </TabsList>
             
             <TabsContent value="login" className="mt-0">
+              {companyLoadError && (
+                <div
+                  className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-3"
+                  data-testid="login-companies-error"
+                >
+                  <p className="text-sm text-destructive flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>You're signed in, but we couldn't load your companies.</span>
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-3 w-full"
+                    onClick={() => {
+                      const isAdmin = !!useFounderStore.getState().user?.is_platform_admin;
+                      setIsLoading(true);
+                      continueAfterLogin(isAdmin).finally(() => setIsLoading(false));
+                    }}
+                    disabled={isLoading}
+                    data-testid="button-retry-companies"
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Retry
+                  </Button>
+                </div>
+              )}
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="login-email" className="text-sm font-medium">
@@ -484,7 +605,7 @@ export default function AuthPage() {
                     <button 
                       type="button"
                       className="text-xs text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
-                      onClick={() => { setShowForgotPassword(true); setForgotPasswordSent(false); setForgotPasswordEmail(loginForm.email); }}
+                      onClick={() => { setShowForgotPassword(true); setForgotPasswordSent(false); setForgotPasswordError(null); setForgotPasswordEmail(loginForm.email); }}
                       data-testid="link-forgot-password"
                     >
                       Forgot password?
@@ -746,6 +867,12 @@ export default function AuthPage() {
                         data-testid="input-forgot-email"
                       />
                     </div>
+                    {forgotPasswordError && (
+                      <p className="text-xs text-destructive flex items-center gap-1" data-testid="text-forgot-error">
+                        <AlertCircle className="h-3 w-3" />
+                        {forgotPasswordError}
+                      </p>
+                    )}
                   </div>
                   <Button type="submit" className="w-full" disabled={isForgotLoading} data-testid="button-send-reset">
                     {isForgotLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
