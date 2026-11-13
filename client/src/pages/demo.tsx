@@ -2,21 +2,28 @@ import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
-import { Play, ArrowRight, CheckCircle } from "lucide-react";
+import { ArrowRight, CheckCircle, Sparkles } from "lucide-react";
 
-const chapters = [
-  { time: "0:00", label: "Connect data (Stripe, QuickBooks, Gusto, Mercury)" },
-  { time: "0:20", label: "Baseline forecast in real time" },
-  { time: "0:40", label: "Monte Carlo confidence intervals (P10/P50/P90)" },
-  { time: "1:05", label: "Explainability: what drives the risk" },
-  { time: "1:30", label: "Scenario comparison and decision scoring" },
-  { time: "2:00", label: "Investor-ready summary and reporting" },
-];
-
+/**
+ * /demo — HAG-449.
+ *
+ * This page used to promise a video: "a fast walkthrough in under 5 minutes",
+ * six chapter timestamps, and a play triangle on an empty 16:9 box. There was
+ * no <video> and no <iframe> behind any of it, and the play icon was a
+ * decorative SVG. The only working link went to /auth, which opens on "Welcome
+ * back" — so the site's second CTA, the one for visitors who are interested but
+ * not convinced, ended in a login form.
+ *
+ * The recording does not exist, and inventing a promise we cannot keep is the
+ * bug. So the player and the timestamps are gone, and the page now does what
+ * the product can actually do: one button into the sample workspace, in Demo
+ * Mode, with no account.
+ */
 export default function DemoPage() {
   useSEO({
     title: "Demo | FounderConsole",
-    description: "Watch the FounderConsole demo: connect data, forecast, simulate confidence intervals, decide.",
+    description:
+      "Open a live FounderConsole workspace preloaded with a sample company. Forecasts, Monte Carlo simulations and the AI copilot, with no account needed.",
     path: "/demo",
   });
 
@@ -28,7 +35,7 @@ export default function DemoPage() {
             See FounderConsole in action
           </h1>
           <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
-            A fast walkthrough for founders. See how you go from raw data to defensible decisions in under 5 minutes.
+            Open a real workspace loaded with a sample company. No account, no card, no call.
           </p>
         </div>
       </section>
@@ -36,63 +43,36 @@ export default function DemoPage() {
       <section className="border-t">
         <div className="mx-auto max-w-4xl px-4 py-10">
           <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="aspect-video flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-              <div className="text-center px-6">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/20" role="img" aria-label="Interactive demo" data-testid="icon-play-demo">
-                  <Play className="h-8 w-8 text-primary ml-1" />
-                </div>
-                <p className="mt-4 text-base font-semibold text-foreground">Take the interactive tour</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Explore a live founder workspace preloaded with sample company data — forecasts, simulations, and the AI copilot.
-                </p>
-                <div className="mt-4">
-                  <Button asChild data-testid="button-demo-launch">
-                    <Link href="/auth">
-                      Launch interactive demo
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                </div>
+            <div className="px-6 py-14 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/20" role="img" aria-label="Live demo" data-testid="icon-play-demo">
+                <Sparkles className="h-8 w-8 text-primary" />
               </div>
-            </div>
-
-            <div className="p-6">
-              <h2 className="text-base font-semibold text-foreground">Chapters</h2>
-              <ul className="mt-4 space-y-3">
-                {chapters.map((ch) => (
-                  <li key={ch.time} className="flex gap-3 text-sm" data-testid={`text-chapter-${ch.time.replace(":", "")}`}>
-                    <span className="font-mono text-primary shrink-0 w-10">{ch.time}</span>
-                    <span className="text-muted-foreground">{ch.label}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-2">
-            <div className="rounded-xl border bg-card p-6">
-              <h3 className="text-base font-semibold text-foreground">Try it yourself</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Sign in with demo credentials to explore simulations, the AI copilot, and reporting features with sample company data.
+              <p className="mt-4 text-base font-semibold text-foreground">Take the live demo</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                Explore a founder workspace preloaded with sample company data — forecasts,
+                simulations, and the AI copilot. It opens straight into the product.
               </p>
-              <div className="mt-4">
-                <Button asChild data-testid="button-demo-try">
-                  <Link href="/auth">
-                    Try the Demo
+              <div className="mt-5">
+                <Button asChild data-testid="button-demo-launch">
+                  <Link href="/demo/enter">
+                    Launch the live demo
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">No account needed. Nothing you do here is saved to your data.</p>
             </div>
 
-            <div className="rounded-xl border bg-card p-6">
-              <h3 className="text-base font-semibold text-foreground">What you'll see</h3>
-              <ul className="mt-3 space-y-2">
+            <div className="border-t p-6">
+              <h2 className="text-base font-semibold text-foreground">What the demo covers</h2>
+              <ul className="mt-4 grid gap-3 sm:grid-cols-2">
                 {[
-                  "Real-time forecast with connected data sources",
-                  "Monte Carlo simulation with confidence bands",
-                  "AI-generated risk narratives",
+                  "The baseline forecast built from the sample company's numbers",
+                  "Monte Carlo confidence intervals (P10/P50/P90) instead of one runway date",
+                  "Explainability: what is actually driving the risk",
                   "Scenario comparison and decision scoring",
+                  "The AI copilot answering a question about the model",
+                  "An investor-ready summary",
                 ].map((item) => (
                   <li key={item} className="flex gap-2 text-sm text-muted-foreground">
                     <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" />
@@ -100,6 +80,28 @@ export default function DemoPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+
+          <div className="mt-10 rounded-xl border bg-card p-6">
+            <h3 className="text-base font-semibold text-foreground">Want your own numbers instead?</h3>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              The free calculators need no account and answer in under a minute. Or create an
+              account to connect live data and get an ongoing forecast.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button asChild data-testid="button-demo-try">
+                <Link href="/demo/enter">
+                  Launch the live demo
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/signup">Create a free account</Link>
+              </Button>
+              <Button variant="ghost" asChild>
+                <Link href="/tools/runway-calculator">Free runway calculator</Link>
+              </Button>
             </div>
           </div>
         </div>

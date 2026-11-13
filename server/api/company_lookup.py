@@ -3,8 +3,11 @@ Company lookup API using Perplexity AI to fetch business details from website.
 """
 import os
 import httpx
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
+from server.core.security import get_current_user
+from server.models.user import User
 from typing import Optional
 
 router = APIRouter(prefix="/lookup", tags=["lookup"])
@@ -14,7 +17,7 @@ PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 
 
 class WebsiteLookupRequest(BaseModel):
-    website: str
+    website: str = Field(..., max_length=253)
 
 
 class CompanyDetails(BaseModel):
@@ -37,7 +40,10 @@ class WebsiteLookupResponse(BaseModel):
 
 
 @router.post("/company-from-website", response_model=WebsiteLookupResponse)
-async def lookup_company_from_website(request: WebsiteLookupRequest):
+async def lookup_company_from_website(
+    request: WebsiteLookupRequest,
+    current_user: User = Depends(get_current_user),
+):
     """
     Use Perplexity AI to fetch company details from a website URL.
     """
@@ -47,7 +53,9 @@ async def lookup_company_from_website(request: WebsiteLookupRequest):
     website = request.website.strip()
     if not website:
         raise HTTPException(status_code=400, detail="Website URL is required")
-    
+    if any(ch.isspace() for ch in website):
+        raise HTTPException(status_code=400, detail="Website URL is not valid")
+
     # Ensure URL has protocol
     if not website.startswith(('http://', 'https://')):
         website = f"https://{website}"

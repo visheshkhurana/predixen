@@ -373,11 +373,11 @@ test("the server-rendered text carries the formula, the trap and a signup link",
   assert.match(body, /gross margin divided by monthly churn/);
   assert.match(body, /fully loaded sales and marketing divided by customers won/);
   assert.match(body, /Monthly churn is not twelve times monthly/);
-  assert.match(body, /href="\/auth"/);
+  assert.match(body, /href="\/signup"/);
 });
 
 test("the page ends in the same signup CTA as /tools/runway-calculator", () => {
-  assert.match(page, /href="\/auth\?tab=register"/);
+  assert.match(page, /href="\/signup"/);
   assert.match(page, /data-testid="button-cta-connect"/);
   assert.match(page, /location: "ltv-cac"/);
 });

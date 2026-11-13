@@ -155,6 +155,10 @@ class BaseConnector(ABC):
     SUPPORTS_INVOICES: bool = False
     
     def __init__(self, config: ConnectorConfig):
+        # User-supplied servers and hostname labels must point at the public
+        # internet. Raises UnsafeTargetError (a ValueError) otherwise.
+        from server.core.url_safety import validate_connector_targets
+        validate_connector_targets(config.credentials, config.settings)
         self.config = config
         self._authenticated = False
         self._last_sync: Optional[datetime] = None

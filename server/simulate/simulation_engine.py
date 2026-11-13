@@ -1,6 +1,7 @@
 from server.lib.lazy_imports import np
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
+from server.core.units import GROSS_MARGIN_MAX_PCT, GROSS_MARGIN_MIN_PCT, clamp_gross_margin_pct
 
 DEFAULT_SCENARIOS = {
     "baseline": {
@@ -94,7 +95,7 @@ def run_monte_carlo(
     horizon = inputs.horizon_months
     
     adjusted_growth = inputs.baseline_growth_rate + inputs.growth_uplift_pct
-    adjusted_margin = max(0, min(100, inputs.gross_margin + inputs.gross_margin_delta_pct))
+    adjusted_margin = clamp_gross_margin_pct(inputs.gross_margin + inputs.gross_margin_delta_pct)
     
     burn_reduction_mult = 1 - (inputs.burn_reduction_pct / 100)
     base_opex = inputs.opex * burn_reduction_mult
@@ -118,9 +119,11 @@ def run_monte_carlo(
         for month in range(horizon):
             growth_rate = rng.normal(adjusted_growth, inputs.growth_sigma) / 100
             growth_rate = np.clip(growth_rate, -0.5, 0.5)
+            # Bound the sample, but around the real margin: the old [10, 95]
+            # clip turned a -56% margin into +10% on every draw.
             margin = np.clip(
                 rng.normal(adjusted_margin, inputs.margin_sigma),
-                10, 95
+                GROSS_MARGIN_MIN_PCT, GROSS_MARGIN_MAX_PCT
             ) / 100
             
             revenue = revenue * (1 + growth_rate)
@@ -304,7 +307,7 @@ def run_multi_scenario_simulation(
         scenario_inputs = SimulationInputs(
             baseline_revenue=base_inputs.baseline_revenue,
             baseline_growth_rate=base_inputs.baseline_growth_rate,
-            gross_margin=max(0, min(100, base_inputs.gross_margin + scenario_params.get("gross_margin_delta_pct", 0))),
+            gross_margin=clamp_gross_margin_pct(base_inputs.gross_margin + scenario_params.get("gross_margin_delta_pct", 0)),
             opex=base_inputs.opex,
             payroll=base_inputs.payroll,
             other_costs=base_inputs.other_costs,

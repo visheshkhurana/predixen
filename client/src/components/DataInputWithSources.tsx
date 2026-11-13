@@ -8,6 +8,7 @@
  * - Data confidence indicators
  */
 
+import { formatCurrencyFull } from '@/lib/utils';
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -272,7 +273,7 @@ export function DataInputWithSources({
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <div className="p-3 bg-muted rounded-md font-semibold text-lg">
-                  ${formData.cogsExpenses.toLocaleString()}
+                  {formatCurrencyFull(formData.cogsExpenses)}
                 </div>
               </div>
               <SourceBadge
@@ -318,7 +319,7 @@ export function DataInputWithSources({
                 <div className={`p-3 rounded-md font-semibold text-lg ${
                   burnRate > 0 ? 'bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400'
                 }`}>
-                  ${burnRate.toLocaleString()}
+                  {formatCurrencyFull(burnRate)}
                 </div>
               </div>
               <SourceBadge

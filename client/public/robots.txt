@@ -1,36 +1,104 @@
+# FounderConsole robots.txt
+#
+# Marketing pages, free tools, the blog and /llms.txt are open to every crawler,
+# including AI search and answer engines, so they can be indexed and cited.
+# The logged-in app is served with `noindex` (see server/seo-prerender.ts);
+# /api and admin/auth flows are blocked outright.
+
 User-agent: GPTBot
 Allow: /
 Disallow: /api/
-Disallow: /admin/
+Disallow: /admin
 Disallow: /auth
 Disallow: /onboarding
+Disallow: /demo/enter
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /auth
+Disallow: /onboarding
+Disallow: /demo/enter
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /auth
+Disallow: /onboarding
+Disallow: /demo/enter
 
 User-agent: ClaudeBot
 Allow: /
 Disallow: /api/
-Disallow: /admin/
+Disallow: /admin
 Disallow: /auth
 Disallow: /onboarding
+Disallow: /demo/enter
+
+User-agent: Claude-SearchBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /auth
+Disallow: /onboarding
+Disallow: /demo/enter
+
+User-agent: Claude-User
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /auth
+Disallow: /onboarding
+Disallow: /demo/enter
 
 User-agent: PerplexityBot
 Allow: /
 Disallow: /api/
-Disallow: /admin/
+Disallow: /admin
 Disallow: /auth
 Disallow: /onboarding
+Disallow: /demo/enter
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /auth
+Disallow: /onboarding
+Disallow: /demo/enter
 
 User-agent: Google-Extended
 Allow: /
 Disallow: /api/
-Disallow: /admin/
+Disallow: /admin
 Disallow: /auth
 Disallow: /onboarding
+Disallow: /demo/enter
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /auth
+Disallow: /onboarding
+Disallow: /demo/enter
+
+User-agent: CCBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /auth
+Disallow: /onboarding
+Disallow: /demo/enter
 
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /admin/
+Disallow: /admin
 Disallow: /auth
 Disallow: /onboarding
+Disallow: /demo/enter
 
 Sitemap: https://founderconsole.ai/sitemap.xml

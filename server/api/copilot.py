@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Dict, Any, Optional, List, Literal
 from datetime import datetime
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
 from server.models.company import Company
+from server.core.company_access import get_user_company
 from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
@@ -17,6 +18,7 @@ from server.copilot.trust import (
     apply_not_available_guard,
     apply_not_available_guard_to_text,
     extract_available_metrics,
+    merge_available_metrics,
 )
 from server.copilot.prompt_injection_defense import PromptInjectionDefense
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
@@ -44,13 +46,7 @@ def get_context(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     context = build_context_pack(company, db)
     return context
@@ -62,13 +58,7 @@ def quick_simulate(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -132,13 +122,7 @@ def compare_decisions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -171,9 +155,30 @@ def compare_decisions(
     }
 
 
+def coerce_pii_mode(value: Any) -> Literal["standard", "strict"]:
+    """Accept only redacting modes. "off", blank, and anything else become standard.
+
+    The client must not be able to disable redaction by sending pii_mode="off".
+    Unknown values are coerced rather than rejected so a bad payload cannot 500.
+    """
+    mode = value.strip().lower() if isinstance(value, str) else ""
+    if mode == "strict":
+        return "strict"
+    return "standard"
+
+
 class PrivacySettings(BaseModel):
-    """Privacy settings for PII redaction."""
-    pii_mode: str = "standard"
+    """Privacy settings for PII redaction.
+
+    pii_mode is client-supplied and therefore untrusted. Only "standard" and
+    "strict" are honored; every other value is stored as "standard".
+    """
+    pii_mode: Literal["standard", "strict"] = "standard"
+
+    @field_validator("pii_mode", mode="before")
+    @classmethod
+    def _coerce_pii_mode(cls, value: Any) -> str:
+        return coerce_pii_mode(value)
 
 
 class CopilotContextRequest(BaseModel):
@@ -186,9 +191,20 @@ class CopilotContextRequest(BaseModel):
 
 
 class ConversationMessage(BaseModel):
-    """A message in conversation history."""
-    role: str
+    """A message in conversation history.
+
+    Only "user" and "assistant" turns reach the model. Anything else (notably
+    a client-supplied "system" turn, which would carry system-prompt authority)
+    is downgraded to "user".
+    """
+    role: Literal["user", "assistant"]
     content: str
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _restrict_role(cls, value: Any) -> str:
+        role = str(value or "").strip().lower()
+        return "assistant" if role == "assistant" else "user"
 
 
 class CopilotChatRequest(BaseModel):
@@ -361,11 +377,39 @@ a product and then ask "what about pricing?", analyze pricing for that specific 
 """
 
 
+def _format_burn_status(burn: Optional[Dict[str, Any]], currency: str = "USD") -> str:
+    """Authoritative burn/runway line for the LLM, with the sign spelled out.
+
+    The model used to see a bare "net_burn" number and, for a profitable
+    company, report it as a positive burn with a finite runway. State the sign
+    and an explicit profitable flag so it cannot flip either.
+    """
+    if not burn or burn.get("net_burn") is None:
+        return ""
+    nb = float(burn["net_burn"])
+    lines = ["\n--- Burn & Runway (AUTHORITATIVE -- quote these, do not recompute) ---"]
+    lines.append(f"  net_burn_monthly: {nb:+,.0f} {currency} (negative = net cash INFLOW)")
+    if burn.get("is_profitable"):
+        lines.append(f"  is_profitable: TRUE -- the company generates {abs(nb):,.0f} {currency}/month net cash.")
+        lines.append("  runway: NOT APPLICABLE (cash-flow positive). Never state a burn amount or a runway in months.")
+    else:
+        lines.append(f"  is_profitable: FALSE -- the company burns {nb:,.0f} {currency}/month net.")
+        if burn.get("runway_months") is not None:
+            lines.append(f"  runway_months: {burn['runway_months']:.1f}")
+        else:
+            lines.append("  runway_months: UNKNOWN (cash balance not provided). Do not estimate it.")
+    return "\n".join(lines)
+
+
 def _build_data_summary(context: Dict[str, Any]) -> str:
     """Build a compact data summary string for the LLM from context pack."""
     parts = []
     company = context.get("company", {})
     parts.append(f"Company: {company.get('name', 'Unknown')} | Industry: {company.get('industry', 'N/A')} | Stage: {company.get('stage', 'N/A')} | Currency: {company.get('currency', 'USD')}")
+
+    burn_line = _format_burn_status(context.get("burn_status"), company.get("currency", "USD"))
+    if burn_line:
+        parts.append(burn_line)
 
     ts = context.get("truth_scan")
     if ts:
@@ -380,11 +424,15 @@ def _build_data_summary(context: Dict[str, Any]) -> str:
         parts.append(f"\n--- Financial History ({len(history)} months, newest first) ---")
         for rec in history:
             period = rec.get("period", "?")
-            line = f"  {period}: rev=${rec.get('revenue', 0):,.0f} payroll=${rec.get('payroll', 0):,.0f} opex=${rec.get('opex', 0):,.0f} cogs=${rec.get('cogs', 0):,.0f} other=${rec.get('other_costs', 0):,.0f} cash=${rec.get('cash_balance', 0):,.0f}"
+            cash_txt = f"${rec['cash_balance']:,.0f}" if rec.get("cash_balance") is not None else "not provided"
+            line = f"  {period}: rev=${rec.get('revenue', 0):,.0f} payroll=${rec.get('payroll', 0):,.0f} marketing=${rec.get('marketing_expense') or 0:,.0f} opex=${rec.get('opex', 0):,.0f} cogs=${rec.get('cogs', 0):,.0f} other=${rec.get('other_costs', 0):,.0f} cash={cash_txt}"
             if rec.get("mrr") is not None:
                 line += f" mrr=${rec['mrr']:,.0f}"
             if rec.get("net_burn") is not None:
-                line += f" net_burn=${rec['net_burn']:,.0f}"
+                # Signed on purpose: negative = cash-flow positive.
+                line += f" net_burn={rec['net_burn']:+,.0f}"
+                if rec.get("is_profitable"):
+                    line += " (PROFITABLE: net cash inflow, no runway limit)"
             if rec.get("runway_months") is not None:
                 line += f" runway={rec['runway_months']:.1f}mo"
             if rec.get("headcount") is not None:
@@ -513,7 +561,9 @@ async def _do_web_research(
             _logger.info("Perplexity not available, skipping web research")
             return None
 
-        result = client.search(
+        import asyncio
+        result = await asyncio.to_thread(
+            client.search,
             query=query,
             model="sonar",
             system_prompt="You are a financial research assistant. Provide concise, data-driven answers with specific numbers, benchmarks, and statistics relevant to startups and SaaS businesses. Focus on the most recent and reliable data.",
@@ -526,6 +576,22 @@ async def _do_web_research(
     except Exception as e:
         _logger.warning(f"Web research failed (non-critical): {e}")
         return None
+
+
+def _guard_available_metrics(db: Session, company_id: int, truth_scan: Optional[TruthScan]) -> Dict[str, Any]:
+    """Verified metrics for the grounding guard: truth scan + latest financial record."""
+    from server.models.financial import FinancialRecord
+    latest_record = None
+    try:
+        latest_record = db.query(FinancialRecord).filter(
+            FinancialRecord.company_id == company_id
+        ).order_by(FinancialRecord.period_end.desc()).first()
+    except Exception:
+        latest_record = None
+    return merge_available_metrics(
+        truth_scan.outputs_json if truth_scan else None,
+        latest_record,
+    )
 
 
 @router.post("/companies/{company_id}/quick-chat", response_model=QuickChatResponse)
@@ -542,15 +608,9 @@ async def copilot_quick_chat(
     """
     import logging
     _logger = logging.getLogger(__name__)
-    from server.lib.llm.llm_router import get_llm_router, TaskType
+    from server.lib.llm.llm_router import get_llm_router, TaskType, LLMBudgetExceeded
 
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
 
     try:
         from server.copilot.context_pack import build_context_pack
@@ -567,6 +627,10 @@ async def copilot_quick_chat(
             )
 
         sanitized_message = PromptInjectionDefense.sanitize_user_input(request.message)
+        # Same gate as the main /chat path: redact founder PII before any model
+        # sees the text. The router writes the llm_audit_logs row.
+        pii_mode = "standard"
+        redacted_message = redact_text(sanitized_message, mode=pii_mode).redacted_text
 
         context = build_context_pack(company, db)
         data_summary = _build_data_summary(context)
@@ -578,7 +642,7 @@ async def copilot_quick_chat(
         today_str = dt.utcnow().strftime("%B %d, %Y")
 
         web_research = await search_for_copilot(
-            message=sanitized_message,
+            message=redacted_message,
             company_industry=company.industry or "",
             company_stage=company.stage or "",
             company_name=company.name or "",
@@ -597,10 +661,10 @@ async def copilot_quick_chat(
         messages = []
         if request.conversation_history:
             for msg in request.conversation_history[-10:]:
-                # Also sanitize conversation history
                 sanitized_content = PromptInjectionDefense.sanitize_user_input(msg.content)
-                messages.append({"role": msg.role, "content": sanitized_content})
-        messages.append({"role": "user", "content": PromptInjectionDefense.wrap_user_message(sanitized_message)})
+                redacted_content = redact_text(sanitized_content, mode=pii_mode).redacted_text
+                messages.append({"role": msg.role, "content": redacted_content})
+        messages.append({"role": "user", "content": PromptInjectionDefense.wrap_user_message(redacted_message)})
 
         system_prompt = QUICK_CHAT_SYSTEM_PROMPT + f"\n\nToday's date: {today_str}\n\n--- COMPANY DATA ---\n{data_summary}\n--- END DATA ---"
 
@@ -630,19 +694,33 @@ async def copilot_quick_chat(
         if data_gaps:
             system_prompt += f"\n\n--- DATA GAPS ---\nThe following data is not yet available: {'; '.join(data_gaps)}\nMention relevant gaps when they would improve the analysis quality.\n--- END GAPS ---"
 
+        system_prompt = redact_text(system_prompt, mode=pii_mode).redacted_text
+
         llm_router = get_llm_router(
             db_session=db,
             company_id=company_id,
-            user_id=current_user.id
+            user_id=current_user.id,
+            pii_mode=pii_mode,
         )
 
-        result = llm_router.chat(
-            messages=messages,
-            task_type=TaskType.FINANCIAL_ANALYSIS,
-            system=system_prompt,
-            temperature=0.4,
-            max_tokens=2000,
-        )
+        import asyncio
+        try:
+            # Blocking provider call: run it in a worker thread so it does not
+            # stall the event loop (and every other request on this worker).
+            result = await asyncio.to_thread(
+                llm_router.chat,
+                messages=messages,
+                task_type=TaskType.FINANCIAL_ANALYSIS,
+                system=system_prompt,
+                temperature=0.4,
+                max_tokens=2000,
+            )
+        except LLMBudgetExceeded as budget_err:
+            return QuickChatResponse(
+                response=str(budget_err),
+                sources_used=[],
+                suggested_followups=[],
+            )
 
         response_text = result.get("content", "I wasn't able to generate a response. Please try again.")
 
@@ -650,9 +728,7 @@ async def copilot_quick_chat(
         truth_scan = db.query(TruthScan).filter(
             TruthScan.company_id == company_id
         ).order_by(TruthScan.created_at.desc()).first()
-        available_metrics = extract_available_metrics(
-            truth_scan.outputs_json if truth_scan else None
-        )
+        available_metrics = _guard_available_metrics(db, company_id, truth_scan)
         guarded = apply_not_available_guard_to_text(
             response_text,
             run_result.grounding_status,
@@ -872,13 +948,7 @@ async def copilot_chat(
     from server.copilot.prompt_templates import detect_response_mode, detect_clarification_needed, get_mode_instructions
     import uuid as uuid_lib
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     import asyncio
     try:
@@ -888,18 +958,25 @@ async def copilot_chat(
         )
     except asyncio.TimeoutError:
         _logger.warning(f"Copilot chat timed out for company {company_id}")
-        from server.schemas.canonical import CopilotChatResponse
         return CopilotChatResponse(
-            response="I'm taking longer than expected to analyze this. Please try asking again or simplify your question.",
-            follow_up_suggestions=["Can you rephrase that more specifically?"],
-            sources=[],
-            confidence=0.3,
-            response_metadata={}
+            executive_summary=[
+                "I'm taking longer than expected to analyze this. Please try asking again or simplify your question."
+            ],
+            company_snapshot=[],
+            assumptions=[],
+            risks=[],
+            next_questions=["Can you rephrase that more specifically?"],
+            confidence="Low",
+            intent_detected="timeout",
         )
     except HTTPException:
         raise
     except Exception as e:
         _logger.warning(f"Copilot chat first attempt failed for company {company_id}: {e}, retrying...")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         try:
             return await asyncio.wait_for(
                 _copilot_chat_inner(company_id, company, request, db, current_user),
@@ -911,11 +988,10 @@ async def copilot_chat(
         truth_scan_summary = []
         financial_snapshot = []
         try:
-            from server.models.truth_scan import TruthScanResult
             from server.models.financial import FinancialRecord
-            ts = db.query(TruthScanResult).filter(
-                TruthScanResult.company_id == company_id
-            ).order_by(TruthScanResult.created_at.desc()).first()
+            ts = db.query(TruthScan).filter(
+                TruthScan.company_id == company_id
+            ).order_by(TruthScan.created_at.desc()).first()
             if ts and ts.outputs_json:
                 outputs = ts.outputs_json
                 if outputs.get("revenue"):
@@ -924,9 +1000,12 @@ async def copilot_chat(
                     financial_snapshot.append(f"MRR: ${outputs['mrr']:,.0f}")
                 if outputs.get("cash_balance"):
                     financial_snapshot.append(f"Cash Balance: ${outputs['cash_balance']:,.0f}")
-                if outputs.get("net_burn"):
-                    financial_snapshot.append(f"Net Burn: ${outputs['net_burn']:,.0f}/mo")
-                if outputs.get("runway_months"):
+                _nb = outputs.get("net_burn")
+                if isinstance(_nb, (int, float)) and _nb < 0:
+                    financial_snapshot.append(f"Profitable: net cash inflow ${abs(_nb):,.0f}/mo (no runway limit)")
+                elif _nb:
+                    financial_snapshot.append(f"Net Burn: ${_nb:,.0f}/mo")
+                if outputs.get("runway_months") and not (isinstance(_nb, (int, float)) and _nb < 0):
                     financial_snapshot.append(f"Runway: {outputs['runway_months']:.1f} months")
                 if outputs.get("gross_margin"):
                     financial_snapshot.append(f"Gross Margin: {outputs['gross_margin']:.1f}%")
@@ -937,7 +1016,7 @@ async def copilot_chat(
 
             latest_fin = db.query(FinancialRecord).filter(
                 FinancialRecord.company_id == company_id
-            ).order_by(FinancialRecord.date.desc()).first()
+            ).order_by(FinancialRecord.period_end.desc()).first()
             if latest_fin and not financial_snapshot:
                 if latest_fin.revenue: financial_snapshot.append(f"Revenue: ${latest_fin.revenue:,.0f}/mo")
                 if latest_fin.mrr: financial_snapshot.append(f"MRR: ${latest_fin.mrr:,.0f}")
@@ -1091,9 +1170,11 @@ async def _copilot_chat_inner(
             session_context=session_context
         )
 
-    pii_mode = "standard"
-    if request.privacy and request.privacy.pii_mode:
-        pii_mode = request.privacy.pii_mode
+    # Guard again at the read site. Model validation already coerces the field,
+    # but a constructed request (or a future caller) must not be able to pass
+    # "off" through to redact_text or the LLM router.
+    requested_mode = request.privacy.pii_mode if request.privacy is not None else None
+    pii_mode = coerce_pii_mode(requested_mode)
 
     redaction_result = redact_text(sanitized_message, mode=pii_mode)
     redacted_message = redaction_result.redacted_text
@@ -1327,9 +1408,7 @@ async def _copilot_chat_inner(
     if causal_drivers:
         output["causal_drivers"] = causal_drivers
 
-    available_metrics = extract_available_metrics(
-        truth_scan.outputs_json if truth_scan else None
-    )
+    available_metrics = _guard_available_metrics(db, company_id, truth_scan)
     run_outputs_for_guard = None
     if scenario_id_for_citation:
         guarded_run = fetchVerifiedRunResult(
@@ -1455,13 +1534,7 @@ async def submit_copilot_feedback(
     """
     from server.copilot.conversation_state import conversation_store
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     conv_state = conversation_store.get(company_id, current_user.id)
     conv_state.add_message(
@@ -1696,13 +1769,7 @@ def get_company_knowledge_base(
     """Get the Company Knowledge Base for a company."""
     from server.copilot.ckb_storage import CKBStorage
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     ckb_storage = CKBStorage(db)
     ckb = ckb_storage.get_ckb(company_id)
@@ -1724,13 +1791,7 @@ def update_ckb_section(
     """Update a specific section of the Company Knowledge Base."""
     from server.copilot.ckb_storage import CKBStorage
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     ckb_storage = CKBStorage(db)
     success = ckb_storage.update_ckb_section(company_id, section, data)
@@ -1767,13 +1828,7 @@ async def export_memo(
     from datetime import datetime
     import uuid as uuid_lib
     
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     ckb_storage = CKBStorage(db)
     ckb = ckb_storage.get_ckb(company_id)

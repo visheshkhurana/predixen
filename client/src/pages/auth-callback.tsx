@@ -4,6 +4,7 @@ import { useFounderStore } from '@/store/founderStore';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/api/client';
 import { trackFunnel } from '@/lib/funnel';
+import { metaTrack } from '@/lib/metaPixel';
 import { Loader2 } from 'lucide-react';
 
 export default function AuthCallback() {
@@ -18,6 +19,8 @@ export default function AuthCallback() {
     const email = params.get('email');
     const role = params.get('role');
     const isAdmin = params.get('is_platform_admin') === 'true';
+    // Set by the server only when this callback created the account.
+    const isNewUser = params.get('new_user') === '1';
     const errorParam = params.get('error');
 
     if (errorParam) {
@@ -29,6 +32,8 @@ export default function AuthCallback() {
         google_no_email: 'No email found on your Google account',
         github_no_email: 'No email found on your GitHub account. Make sure your email is public or verified.',
         google_profile_failed: 'Could not retrieve your Google profile',
+        google_unverified_email: 'Your Google account email is not verified. Verify it with Google, then try again.',
+        google_account_mismatch: 'This email is already linked to a different Google account.',
         github_profile_failed: 'Could not retrieve your GitHub profile',
       };
       setError(messages[errorParam] || 'Sign-in failed. Please try again.');
@@ -52,7 +57,15 @@ export default function AuthCallback() {
 
     if (typeof window !== 'undefined' && (window as any).gtag) {
       (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: userId });
-      (window as any).gtag('event', 'login', { method: 'oauth' });
+      if (!isNewUser) (window as any).gtag('event', 'login', { method: 'oauth' });
+    }
+
+    if (isNewUser) {
+      // Same conversion set as the email signup in auth.tsx, so Google signups
+      // (the main path) count in GA4, Meta and PostHog.
+      metaTrack('CompleteRegistration', { method: 'google' });
+      trackFunnel('signup_completed', { method: 'google', user_id: parseInt(userId) });
+      trackFunnel('sign_up', { method: 'google', user_id: parseInt(userId) });
     }
 
     (async () => {
@@ -64,10 +77,9 @@ export default function AuthCallback() {
         }
         toast({ title: 'Welcome!' });
         if (!isAdmin && (!companies || companies.length === 0)) {
-          // First-success OAuth path: a new account has no company yet.
-          // Returning Google users already have a company and must not
-          // re-fire signup_completed. Server also emits on user-row create.
-          trackFunnel('signup_completed', { method: 'google', user_id: parseInt(userId) });
+          // No company yet: finish onboarding. The signup conversion fired
+          // above from new_user, so a returning user who never onboarded is
+          // not counted twice.
           setLocation('/onboarding');
         } else {
           setLocation('/');
