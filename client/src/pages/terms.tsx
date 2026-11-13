@@ -1,7 +1,9 @@
-import { FileText, AlertTriangle, Scale, Ban, ShieldCheck, UserX, Gavel, Mail, UserCheck, Database, Bell, CreditCard } from 'lucide-react';
+import { FileText, AlertTriangle, Scale, Ban, ShieldCheck, UserX, Gavel, Mail, UserCheck, Database, Bell, CreditCard, Building2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from 'wouter';
 import { useSEO } from '@/lib/seo';
+import { LegalEntityNotice } from '@/components/marketing/LegalEntity';
+import { LEGAL_ENTITY_NAME, PRODUCT_OF_LINE, FIRST_PAYMENT_REFUND_WINDOW_DAYS, GOVERNING_LAW, JURISDICTION_COURTS } from '@/data/legal';
 
 function Section({ icon: Icon, title, children, testId }: {
   icon: any; title: string; children: React.ReactNode; testId: string;
@@ -38,7 +40,7 @@ export default function TermsOfServicePage() {
         </div>
 
         <p className="text-sm text-muted-foreground leading-relaxed">
-          These Terms of Service ("Terms") govern your use of FounderConsole ("the Service"), operated by FounderConsole ("we", "our", "us"). By accessing or using the Service, you agree to be bound by these Terms.
+          These Terms of Service ("Terms") govern your use of FounderConsole ("the Service"), operated by {LEGAL_ENTITY_NAME} ("we", "our", "us"). {PRODUCT_OF_LINE} By accessing or using the Service, you agree to be bound by these Terms.
         </p>
 
         <Section icon={FileText} title="Service Description" testId="section-service">
@@ -56,11 +58,11 @@ export default function TermsOfServicePage() {
           <ul className="list-disc pl-5 space-y-1.5">
             <li><strong className="text-foreground">Plans:</strong> The Service offers a Free plan and paid subscription plans (currently Starter, Growth, and Scale), billed monthly or annually. Current pricing and plan features are shown on our <a href="/pricing" className="text-indigo-400 hover:underline">pricing page</a> and in-app.</li>
             <li><strong className="text-foreground">Free trial:</strong> New accounts may start a one-time 30-day free trial with full feature access. No payment method is required to start a trial. When the trial ends, your account reverts to the Free plan unless you subscribe.</li>
-            <li><strong className="text-foreground">Payment:</strong> Payments are processed securely by Stripe. We do not store your full card or payment details on our servers.</li>
+            <li><strong className="text-foreground">Payment:</strong> Payments are processed securely by Razorpay. We do not store your full card or payment details on our servers.</li>
             <li><strong className="text-foreground">Renewal:</strong> Subscriptions renew automatically at the end of each billing period (monthly or annual) until cancelled. Charges may be converted to your local currency at the prevailing exchange rate.</li>
-            <li><strong className="text-foreground">Cancellation:</strong> You may cancel at any time through the in-app billing portal. Cancellation takes effect at the end of the current billing period; you keep paid access until then.</li>
-            <li><strong className="text-foreground">Refunds:</strong> If you are unhappy with your first subscription payment, contact us within 14 days of that payment for a full refund. Renewal payments and partial billing periods are otherwise non-refundable, except where required by law.</li>
-            <li><strong className="text-foreground">Plan changes:</strong> Upgrades take effect immediately with prorated billing handled by Stripe; downgrades take effect at the next billing period.</li>
+            <li><strong className="text-foreground">Cancellation:</strong> You may cancel at any time from Billing in your account. Cancellation takes effect at the end of the current billing period; you keep paid access until then and are not charged again.</li>
+            <li><strong className="text-foreground">Refunds:</strong> If you are unhappy with your first subscription payment, contact us within {FIRST_PAYMENT_REFUND_WINDOW_DAYS} days of that payment for a full refund. Duplicate or erroneous charges are always refunded. Renewal payments and partial billing periods are otherwise non-refundable, except where required by law. Full details are in our <a href="/refund-policy" className="text-indigo-400 hover:underline">Refund &amp; Cancellation Policy</a>.</li>
+            <li><strong className="text-foreground">Plan changes:</strong> Upgrades take effect immediately; downgrades take effect at the next billing period.</li>
             <li><strong className="text-foreground">Price changes:</strong> We may change prices with at least 30 days' notice by email; changes apply from your next billing period after the notice period.</li>
             <li><strong className="text-foreground">Failed payments:</strong> If a renewal payment fails, we may retry it and may downgrade or suspend paid features until payment succeeds.</li>
             <li><strong className="text-foreground">Founding accounts:</strong> Accounts created before our paid plans launched retain complimentary access at our discretion; we will give at least 30 days' notice before changing this.</li>
@@ -149,7 +151,7 @@ export default function TermsOfServicePage() {
         </Section>
 
         <Section icon={Gavel} title="Governing Law" testId="section-governing-law">
-          <p>These Terms are governed by and construed in accordance with the laws of the State of California, United States, without regard to conflict of law principles. Any disputes arising from these Terms shall be resolved in the state or federal courts located in San Francisco County, California.</p>
+          <p>These Terms are governed by and construed in accordance with {GOVERNING_LAW}, without regard to conflict of law principles. Any disputes arising from these Terms shall be subject to the exclusive jurisdiction of {JURISDICTION_COURTS}.</p>
         </Section>
 
         <Section icon={Mail} title="Contact" testId="section-terms-contact">
@@ -161,8 +163,14 @@ export default function TermsOfServicePage() {
           </p>
         </Section>
 
+        <Section icon={Building2} title="Company" testId="section-terms-company">
+          <LegalEntityNotice className="space-y-1" showEmail={false} />
+        </Section>
+
         <div className="text-center pt-4 text-xs text-muted-foreground">
           <Link href="/privacy" className="text-indigo-400 hover:underline" data-testid="link-privacy">Privacy Policy</Link>
+          <span className="mx-2">·</span>
+          <Link href="/refund-policy" className="text-indigo-400 hover:underline" data-testid="link-refund-policy">Refund &amp; Cancellation Policy</Link>
           <span className="mx-2">·</span>
           <Link href="/" className="text-indigo-400 hover:underline" data-testid="link-home">Back to FounderConsole</Link>
         </div>

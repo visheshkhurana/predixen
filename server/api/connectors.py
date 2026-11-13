@@ -29,6 +29,7 @@ from server.models.company import Company
 from server.models.financial import FinancialRecord
 
 from server.connectors import ConnectorRegistry, ConnectorConfig, load_all_connectors
+from server.core.url_safety import UnsafeTargetError
 from server.connectors.base import ProviderCategory
 
 load_all_connectors()
@@ -171,13 +172,11 @@ async def list_catalog(
     
     company_connectors = {}
     if company_id:
-        from server.models.company import Company
-        try:
-            company = db.query(Company).filter(Company.id == company_id).first()
-            if company and company.metadata_json:
-                company_connectors = company.metadata_json.get("connectors", {})
-        except Exception:
-            pass
+        # Install status is per-company data: only members may read it.
+        from server.core.company_access import get_user_company
+        company = get_user_company(db, company_id, current_user)
+        if company.metadata_json:
+            company_connectors = company.metadata_json.get("connectors", {}) or {}
     
     catalog = []
     for p in providers:
@@ -290,6 +289,7 @@ async def get_connector_status(
             "last_sync": config.get("last_sync"),
             "records_synced": config.get("records_synced", 0),
             "error": config.get("last_error"),
+            "needs_reauth": bool(config.get("needs_reauth")),
         })
         seen_ids.add(provider_id)
     
@@ -301,6 +301,7 @@ async def get_connector_status(
                 "last_sync": config.get("last_sync"),
                 "records_synced": config.get("records_synced", 0),
                 "error": config.get("last_error"),
+                "needs_reauth": bool(config.get("needs_reauth")),
             })
     
     return {
@@ -341,13 +342,17 @@ async def connect_provider(
         settings=credentials.settings or {},
     )
     
-    connector = connector_class(config)
+    try:
+        connector = connector_class(config)
+    except UnsafeTargetError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid connection target: {e}")
     
     try:
         auth_success = await connector.authenticate()
 
         if not auth_success:
-            raise HTTPException(status_code=401, detail="Authentication failed. Check your credentials.")
+            detail = getattr(connector, "auth_error", None) or "Authentication failed. Check your credentials."
+            raise HTTPException(status_code=401, detail=detail)
 
         # Encrypt sensitive credentials before storing in database
         encrypted_creds = encrypt_credentials(credentials.credentials)
@@ -402,12 +407,37 @@ async def disconnect_provider(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
+    # Remove the financial records this connector created (sync path tags them
+    # "connector_<id>"; the background worker tags them with the bare id), so a
+    # disconnected source stops feeding burn/runway everywhere.
+    source_tags = [f"connector_{provider_id}"]
+    if (
+        ConnectorRegistry.get_connector_class(provider_id)
+        and provider_id not in {"manual", "sample", "excel", "pdf", "benchmark"}
+    ):
+        source_tags.append(provider_id)
+    removed = (
+        db.query(FinancialRecord)
+        .filter(
+            FinancialRecord.company_id == company_id,
+            FinancialRecord.source_type.in_(source_tags),
+        )
+        .delete(synchronize_session=False)
+    )
+    # Ad platforms feed the D2C ad-spend table, not FinancialRecords.
+    ad_rows_removed = 0
+    from server.services import d2c_months
+    if provider_id in d2c_months.AD_SOURCE_LABELS:
+        ad_rows_removed = d2c_months.remove_ad_source(db, company_id, provider_id)
+    db.commit()
+
     if provider_id in (company.metadata_json or {}).get("connectors", {}):
         delete_metadata_value(db, company, ("connectors", provider_id))
 
     return {
         "success": True,
         "provider_id": provider_id,
+        "records_removed": removed + ad_rows_removed,
         "message": "Provider disconnected",
     }
 
@@ -466,7 +496,10 @@ async def sync_provider(
         settings=stored_config.get("settings", {}),
     )
     
-    connector = connector_class(config)
+    try:
+        connector = connector_class(config)
+    except UnsafeTargetError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid connection target: {e}")
     
     try:
         # STEP 1: Fetch data from connector (no DB changes yet)
@@ -474,6 +507,11 @@ async def sync_provider(
 
         # STEP 2: Validate synced data BEFORE any DB commits
         if not result.success and result.errors:
+            if result.metadata.get("needs_reauth"):
+                # Expired/revoked token: remember it so the card asks to reconnect.
+                connectors[provider_id]["needs_reauth"] = True
+                connectors[provider_id]["last_error"] = result.errors[0]
+                save_metadata_value(db, company, ("connectors", provider_id), connectors[provider_id])
             error_msg = f"Connector sync validation failed: {result.errors[0]}"
             logger.warning(f"Sync validation error for {provider_id}: {error_msg}")
             raise ValueError(error_msg)
@@ -498,6 +536,7 @@ async def sync_provider(
             connectors[provider_id]["last_sync"] = datetime.utcnow().isoformat()
             connectors[provider_id]["records_synced"] = result.records_synced
             connectors[provider_id]["last_error"] = None  # Clear previous errors on success
+            connectors[provider_id].pop("needs_reauth", None)
 
             logger.info(
                 f"Sync completed for provider {provider_id}, company {company_id}: "
@@ -518,6 +557,38 @@ async def sync_provider(
                 db.add(financial_record)
                 from server.services.sample_data import on_real_financials_written
                 on_real_financials_written(db, company_id, commit=False)
+
+                # D2C stores: the month's orders/sales/COD share feed the
+                # contribution-margin inputs, without touching manual entries.
+                d2c_summary = result.metadata["financials"].get("d2c")
+                if provider_id == "shopify" and isinstance(d2c_summary, dict):
+                    from server.services import d2c_months
+                    d2c_months.upsert_month(
+                        db, company_id, financial_record.period_start,
+                        d2c_months.shopify_values(d2c_summary), source="shopify",
+                    )
+
+            # Connectors with no ledger figures (e.g. Shiprocket) hand over a
+            # D2C month directly instead of a FinancialRecord.
+            d2c_month = result.metadata.get("d2c_month")
+            if isinstance(d2c_month, dict) and d2c_month.get("period"):
+                from server.services import d2c_months
+                d2c_months.upsert_month(
+                    db, company_id, date.fromisoformat(str(d2c_month["period"])[:10]),
+                    d2c_month.get("values") or {}, source=provider_id,
+                )
+
+            # Ad platforms (e.g. Meta Ads) hand over spend per month and account;
+            # marketing_spend becomes the sum across platforms unless typed by hand.
+            ad_spend = result.metadata.get("ad_spend")
+            if isinstance(ad_spend, dict):
+                from server.services import d2c_months
+                for month in ad_spend.get("months") or []:
+                    if isinstance(month, dict) and month.get("period"):
+                        d2c_months.replace_ad_spend(
+                            db, company_id, date.fromisoformat(str(month["period"])[:10]),
+                            provider_id, month.get("accounts") or [],
+                        )
 
             db.commit()
 
@@ -924,51 +995,35 @@ async def test_with_sample_data(
     connector_class = ConnectorRegistry.get_connector_class(provider_id)
     provider_name = connector_class.PROVIDER_NAME if connector_class else provider_id
 
-    record = _build_financial_record(company_id, provider_id, provider_name, sample, today)
-    db.add(record)
-
-    save_metadata_value(
-        db,
-        company,
-        ("connectors", provider_id),
-        {
-            "connected": True,
-            "credentials": {"mode": "sample_data"},
-            "connected_at": datetime.utcnow().isoformat(),
-            "last_sync": datetime.utcnow().isoformat(),
-            "records_synced": sum(1 for v in sample.values() if v is not None and isinstance(v, (int, float))),
-            "sample_mode": True,
-        },
-    )
-
-    stored = db.query(FinancialRecord).filter(
-        FinancialRecord.company_id == company_id,
-        FinancialRecord.source_type == f"connector_{provider_id}",
-    ).order_by(FinancialRecord.created_at.desc()).first()
+    # Preview only. This used to INSERT the hardcoded sample as a real
+    # FinancialRecord in the founder's company and mark the connector
+    # connected, so fake revenue/burn flowed into every page. Build the record
+    # in memory to show what a sync would store, and persist nothing.
+    preview = _build_financial_record(company_id, provider_id, provider_name, sample, today)
 
     verification = {}
-    if stored:
-        for field_name in ["revenue", "cogs", "opex", "payroll", "cash_balance", "mrr", "arr",
-                           "gross_profit", "gross_margin", "operating_income", "operating_margin",
-                           "net_burn", "runway_months", "headcount", "customers"]:
-            db_val = getattr(stored, field_name, None)
-            sample_val = sample.get(field_name)
-            if db_val is not None or sample_val is not None:
-                verification[field_name] = {
-                    "input": sample_val,
-                    "stored": db_val,
-                    "computed": sample_val is None and db_val is not None,
-                }
+    for field_name in ["revenue", "cogs", "opex", "payroll", "cash_balance", "mrr", "arr",
+                       "gross_profit", "gross_margin", "operating_income", "operating_margin",
+                       "net_burn", "runway_months", "headcount", "customers"]:
+        db_val = getattr(preview, field_name, None)
+        sample_val = sample.get(field_name)
+        if db_val is not None or sample_val is not None:
+            verification[field_name] = {
+                "input": sample_val,
+                "stored": db_val,
+                "computed": sample_val is None and db_val is not None,
+            }
 
     return {
         "success": True,
         "provider_id": provider_id,
         "provider_name": provider_name,
         "sample_data_used": {k: v for k, v in sample.items() if k != "extraction_summary"},
-        "record_id": stored.id if stored else None,
+        "record_id": None,
+        "persisted": False,
         "extraction_summary": sample.get("extraction_summary", ""),
         "verification": verification,
-        "message": f"Sample data synced for {provider_name}. Financial record created and verified.",
+        "message": f"Sample preview for {provider_name}. Nothing was saved to your company.",
     }
 
 

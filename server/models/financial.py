@@ -147,7 +147,10 @@ class FinancialRecord(Base):
     opex = Column(Float, default=0)
     payroll = Column(Float, default=0)
     other_costs = Column(Float, default=0)
-    cash_balance = Column(Float, default=0)
+    # No default: NULL means "cash not provided" and makes runway unknown. A
+    # silent 0 read as "out of cash" (runway 0), and writers used to invent a
+    # balance (burn x 12 / $2M) to avoid it.
+    cash_balance = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     import_session_id = Column(Integer, ForeignKey("import_sessions.id"), nullable=True, index=True)

@@ -38,6 +38,20 @@ function jsonLdBlocks(html: string): object[] {
   return blocks;
 }
 
+test("SaaS burn multiple is net burn divided by net new ARR, matching the under-2x band", () => {
+  const saas = RUNWAY_INDUSTRIES.find((i) => i.slug === "saas");
+  assert.ok(saas, "saas industry profile exists");
+  // The bands on this page (under 2x, above 3x) only make sense if lower is better.
+  assert.match(saas.burnMultipleNotes, /net burn\s*\/\s*net new ARR/i);
+  assert.doesNotMatch(saas.burnMultipleNotes, /net new ARR\s*\/\s*net burn/i);
+  assert.match(saas.notes.join(" "), /under 2x/);
+  assert.match(saas.notes.join(" "), /above 3x/);
+
+  const body = ssrBody(injectSEO(SHELL, "/runway/saas"));
+  assert.match(body, /net burn\s*\/\s*net new ARR/i);
+  assert.doesNotMatch(body, /net new ARR\s*\/\s*net burn/i);
+});
+
 test("the hardcoded slug map is gone — siblings and hub links come from RUNWAY_INDUSTRIES", () => {
   assert.doesNotMatch(PRERENDER_SRC, /runwayIndustryMatch/);
   assert.doesNotMatch(PRERENDER_SRC, /const known = \["saas"/);

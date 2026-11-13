@@ -18,6 +18,27 @@ from server.api.simulations import extract_metric_value
 
 logger = logging.getLogger(__name__)
 
+
+
+def canonical_net_burn(metrics: dict, baseline: dict) -> float:
+    """NET burn = total costs incl. COGS - revenue (the dashboard's burnRate).
+
+    The truth scan's net_burn is exactly that. Without it, rebuild it from the
+    simulation baseline, whose opex/payroll/other EXCLUDE COGS: the old
+    ``(opex + payroll + other) - revenue`` dropped COGS and overstated runway.
+    """
+    from server.api.simulations import extract_metric_value
+
+    raw = metrics.get("net_burn") if isinstance(metrics, dict) else None
+    if raw is not None:
+        return extract_metric_value(raw, 0.0)
+    revenue = float(baseline.get("revenue") or 0)
+    gm = float(baseline.get("gross_margin") or 0)
+    gm_frac = gm / 100.0 if abs(gm) > 1 else gm
+    cogs = revenue * (1 - gm_frac) if revenue > 0 else 0.0
+    costs = float(baseline.get("opex") or 0) + float(baseline.get("payroll") or 0) + float(baseline.get("other_costs") or 0)
+    return costs + cogs - revenue
+
 router = APIRouter(tags=["hiring-planner"])
 
 
@@ -243,9 +264,8 @@ def simulate_hiring_plan(
 
         outputs = run_monte_carlo(sim_inputs)
 
-        total_costs = baseline_opex + baseline_payroll + baseline_other
-        net_burn = total_costs - baseline_revenue
-        current_runway = baseline_cash / net_burn if net_burn > 0 else 120
+        net_burn = canonical_net_burn(metrics, baseline)
+        current_runway = baseline_cash / net_burn if net_burn > 0 and baseline_cash > 0 else None
 
         return {
             "plan_id": plan_id,
@@ -261,7 +281,9 @@ def simulate_hiring_plan(
                 "18m": outputs["survival"]["18m"],
                 "24m": outputs["survival"]["24m"],
             },
-            "current_runway_estimate": round(current_runway, 1),
+            # None when the company is not burning (was a fake 120).
+            "current_runway_estimate": round(current_runway, 1) if current_runway is not None else None,
+            "current_net_burn": round(net_burn, 2),
             "total_monthly_cost_increase": total_monthly_cost_increase,
             "total_new_hires": sum(h.get("count", 1) for h in hires),
             "bands": outputs.get("bands", {}),

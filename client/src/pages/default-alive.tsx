@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -342,6 +343,14 @@ export default function DefaultAlivePage() {
                   )}
                 </CardContent>
               </Card>
+
+              <CalculatorEmailOptIn
+                source="default-alive"
+                sourcePage="/default-alive"
+                plan="default-alive"
+                resultByEmail={false}
+                notes={`Verdict ${alive ? "default alive" : "default dead"}. Cash ${cash}, monthly revenue ${revenue}, monthly expenses ${expenses}, growth ${growthRate}%/mo${includeExpenseGrowth ? `, expense growth ${expenseGrowth}%/mo` : ""}.`}
+              />
 
               {!alive && levers && (
                 <Card data-testid="card-da-levers">

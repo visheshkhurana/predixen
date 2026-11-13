@@ -85,10 +85,12 @@ const IP = {
 test("allows the configured countries", async () => {
   assert.equal(await status("/", { "x-forwarded-for": IP.us }), 200);
   assert.equal(await status("/", { "x-forwarded-for": IP.india }), 200);
+  // AE is a default since Razorpay billing sells in AED.
+  assert.equal(await status("/", { "x-forwarded-for": IP.uae }), 200);
 });
 
 test("blocks everything else", async () => {
-  for (const ip of [IP.china, IP.uk, IP.canada, IP.uae]) {
+  for (const ip of [IP.china, IP.uk, IP.canada]) {
     assert.equal(await status("/", { "x-forwarded-for": ip }), 403, `expected ${ip} blocked`);
   }
 });
@@ -257,10 +259,22 @@ test("the kill switch disables the gate", async () => {
 });
 
 test("GEO_ALLOWED_COUNTRIES overrides the default list", async () => {
-  process.env.GEO_ALLOWED_COUNTRIES = "US,IN,AE";
+  process.env.GEO_ALLOWED_COUNTRIES = "US,IN,GB";
   try {
-    assert.equal(await status("/", { "x-forwarded-for": IP.uae }), 200);
+    assert.equal(await status("/", { "x-forwarded-for": IP.uk }), 200);
     assert.equal(await status("/", { "x-forwarded-for": IP.china }), 403);
+  } finally {
+    delete process.env.GEO_ALLOWED_COUNTRIES;
+  }
+});
+
+test("the override replaces the default: an env list without AE blocks the UAE", async () => {
+  // Why the prod env matters: if GEO_ALLOWED_COUNTRIES is already set there
+  // (e.g. "US,IN"), the new AE default does not apply until AE is added to it.
+  process.env.GEO_ALLOWED_COUNTRIES = "US,IN";
+  try {
+    assert.equal(await status("/", { "x-forwarded-for": IP.uae }), 403);
+    assert.equal(await status("/", { "x-forwarded-for": IP.india }), 200);
   } finally {
     delete process.env.GEO_ALLOWED_COUNTRIES;
   }

@@ -644,7 +644,7 @@ User question: {query}
 Provide a concise execution briefing (3-4 sentences): what to prioritize first, biggest execution risk, and the one metric to watch most closely."""
 
         try:
-            response = self._call_llm(
+            response = await self._acall_llm(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=OPERATIONS_SYSTEM_PROMPT,
                 task_type="strategy",

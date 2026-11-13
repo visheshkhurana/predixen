@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Union, Set
-from jose import JWTError, jwt
+import jwt
 import bcrypt
 import uuid
 from fastapi import Depends, HTTPException, status, Request, Response, Cookie
@@ -220,7 +220,7 @@ def decode_token(token: str) -> Optional[dict]:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 
 class MasterUser:

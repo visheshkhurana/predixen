@@ -6,6 +6,11 @@ import json
 import logging
 from typing import Dict, Any, Optional, List
 import pdfplumber
+from server.core.openai_credentials import (
+    chat_sampling_params,
+    is_missing_key_error,
+    resolve_openai_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -283,15 +288,16 @@ def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
 
 
 def get_openai_client():
-    """Get OpenAI client with validation."""
+    """Get the OpenAI client, from whichever credential this deployment has."""
     from openai import OpenAI
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+    from server.core.openai_credentials import missing_key_error, resolve_openai_credentials
+
+    api_key, base_url = resolve_openai_credentials()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured. Please check environment settings.")
-    
-    return OpenAI(api_key=api_key, base_url=base_url)
+        raise missing_key_error()
+
+    return OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
 
 
 def pdf_to_images(file_path: str, max_pages: int = 5) -> List[str]:
@@ -376,7 +382,7 @@ CRITICAL INSTRUCTIONS - EXTRACT EXACTLY AS STATED:
   - Monthly revenue = quarterly / 3
   - ARR (run rate) = quarterly * 4 = monthly * 12
 - Extract the EXACT values from the report - do NOT scale, inflate, or multiply incorrectly
-- For monetary values: $14.2M = 14200000, $500K = 500000, $1.5B = 1500000000
+- For monetary values: $14.2M = 14200000, $500K = 500000, $1.5B = 1.5e9
 - For percentages: Extract EXACTLY as stated. If it says 22.1%, return 22.1. If it says 9.9%, return 9.9.
   - DO NOT inflate margins to unrealistic values (e.g., 91% gross margin is very rare)
 - For YoY growth multipliers: 1.24x means 24% growth (NOT 124% or 800%)
@@ -456,28 +462,33 @@ def extract_text_from_pdf(file_path: str) -> str:
         return ""
 
 
-def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
+def extract_metrics_with_openai(
+    pdf_text: str,
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Use OpenAI to extract financial metrics from PDF text."""
+    from server.lib.llm.openai_client import open_audited_openai
+
     try:
-        client = get_openai_client()
-        
-        response = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a financial analyst AI that extracts structured data from financial reports. Always respond with valid JSON only, no markdown formatting."
-                },
-                {
-                    "role": "user",
-                    "content": EXTRACTION_PROMPT + "Here is the report text:\n\n" + pdf_text[:15000]
-                }
-            ],
-            max_tokens=2000,
-            temperature=0.1,
-            timeout=60,
-        )
-        
+        _, base_url = resolve_openai_credentials()
+        with open_audited_openai(company_id=company_id, user_id=user_id) as client:
+            response = client.chat.completions.create(
+                model="gpt-5",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a financial analyst AI that extracts structured data from financial reports. Always respond with valid JSON only, no markdown formatting."
+                    },
+                    {
+                        "role": "user",
+                        "content": EXTRACTION_PROMPT + "Here is the report text:\n\n" + pdf_text[:15000]
+                    }
+                ],
+                **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
+                timeout=60,
+            )
+
         content = response.choices[0].message.content
         
         if not content:
@@ -505,14 +516,19 @@ def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to analyze PDF: {str(e)}")
 
 
-def extract_metrics_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
+def extract_metrics_with_vision(
+    image_base64_list: List[str],
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Use OpenAI Vision to extract financial metrics from PDF images."""
+    from server.lib.llm.openai_client import open_audited_openai
+
     try:
-        client = get_openai_client()
-        
+        _, base_url = resolve_openai_credentials()
         # Build content with images
         content = [{"type": "text", "text": VISION_EXTRACTION_PROMPT}]
-        
+
         for img_b64 in image_base64_list[:5]:  # Limit to 5 pages
             content.append({
                 "type": "image_url",
@@ -521,24 +537,24 @@ def extract_metrics_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
                     "detail": "high"
                 }
             })
-        
-        response = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a financial analyst AI that extracts structured data from financial report images. Always respond with valid JSON only."
-                },
-                {
-                    "role": "user",
-                    "content": content
-                }
-            ],
-            max_tokens=2000,
-            temperature=0.1,
-            timeout=90,
-        )
-        
+
+        with open_audited_openai(company_id=company_id, user_id=user_id) as client:
+            response = client.chat.completions.create(
+                model="gpt-5",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a financial analyst AI that extracts structured data from financial report images. Always respond with valid JSON only."
+                    },
+                    {
+                        "role": "user",
+                        "content": content
+                    }
+                ],
+                **chat_sampling_params(base_url, max_tokens=2000, temperature=0.1),
+                timeout=90,
+            )
+
         response_content = response.choices[0].message.content
         
         if not response_content:
@@ -684,7 +700,12 @@ def validate_and_correct_metrics(metrics: Dict[str, Any]) -> tuple[Dict[str, Any
     return metrics, warnings, suggestions
 
 
-def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) -> Dict[str, Any]:
+def process_termina_pdf(
+    file_path: str,
+    max_size_mb: float = MAX_PDF_SIZE_MB,
+    company_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Process a Termina PDF and extract financial metrics.
     
     Uses a three-stage approach:
@@ -714,9 +735,15 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
         
         # Then use OpenAI to fill in any missing fields
         try:
-            ai_metrics = extract_metrics_with_openai(pdf_text)
+            ai_metrics = extract_metrics_with_openai(
+                pdf_text, company_id=company_id, user_id=user_id
+            )
             extraction_method = "pattern+ai"
         except Exception as e:
+            # A missing credential is a deployment error, not a reason to fall
+            # back to a pattern-only result and report the upload as a success.
+            if is_missing_key_error(e):
+                raise
             logger.warning(f"AI extraction failed: {e}")
             if not pattern_metrics:
                 extraction_method = "vision"
@@ -740,7 +767,9 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
             if not image_list:
                 raise ValueError("Could not convert any PDF pages to images")
             
-            metrics = extract_metrics_with_vision(image_list)
+            metrics = extract_metrics_with_vision(
+                image_list, company_id=company_id, user_id=user_id
+            )
             extraction_method = "vision"
         except Exception as e:
             logger.error(f"Vision extraction also failed: {e}")

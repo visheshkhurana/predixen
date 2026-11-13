@@ -6,7 +6,7 @@
 set -euo pipefail
 
 N8N_HOST="${N8N_HOST:-https://your-n8n.example.com}"
-TEST_EMAIL="${TEST_EMAIL:-vysheshk@gmail.com}"  # USE YOUR OWN EMAIL for first tests — do NOT hit real prospects
+TEST_EMAIL="${TEST_EMAIL:?set TEST_EMAIL to your own address}"  # USE YOUR OWN EMAIL for first tests — do NOT hit real prospects
 
 # ============================================================
 # Test 1: Outbound cold-drip webhook
