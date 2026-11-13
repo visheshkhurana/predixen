@@ -15,7 +15,7 @@ import {
   Target,
   BarChart3
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 import { apiRequest } from '@/lib/queryClient';
 
 async function fetchWithJson<T>(method: string, url: string, data?: unknown): Promise<T> {
@@ -200,7 +200,7 @@ export function AISummaryCard({
               </Badge>
             </div>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="toggle-summary">
+              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="toggle-summary" aria-label={isExpanded ? "Collapse" : "Expand"}>
                 {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </Button>
             </CollapsibleTrigger>
@@ -223,11 +223,11 @@ export function AISummaryCard({
                 <p className="text-xs text-muted-foreground">18m Survival</p>
               </div>
               <div className="text-center p-2 bg-background/50 rounded-lg">
-                <p className="text-lg font-bold">${(narrative.key_metrics.monthly_burn / 1000).toFixed(0)}k</p>
+                <p className="text-lg font-bold">{formatCurrencyAbbrev(narrative.key_metrics.monthly_burn)}</p>
                 <p className="text-xs text-muted-foreground">Monthly Burn</p>
               </div>
               <div className="text-center p-2 bg-background/50 rounded-lg">
-                <p className="text-lg font-bold">${(narrative.key_metrics.end_cash / 1000000).toFixed(1)}M</p>
+                <p className="text-lg font-bold">{formatCurrencyAbbrev(narrative.key_metrics.end_cash)}</p>
                 <p className="text-xs text-muted-foreground">End Cash</p>
               </div>
             </div>

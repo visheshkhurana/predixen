@@ -1,6 +1,9 @@
+import { isSustainableRunway } from "@/lib/simulation/runwayFormat";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +23,13 @@ import {
 } from "recharts";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
+import { trackFunnel } from "@/lib/funnel";
+
+// 999 is the engine's "revenue covers costs" sentinel; never show "999mo".
+function runwayLabel(value: number, unit = "mo"): string {
+  if (isSustainableRunway(value)) return "Sustainable";
+  return `${value}${unit}`;
+}
 
 const STORAGE_KEY = "fc_survival_sim_count";
 
@@ -44,6 +54,24 @@ const formatCurrency = (val: number) => {
   if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`;
   return `$${val.toFixed(0)}`;
 };
+
+/** Plain decimal. The lead API accepts a number, not "$12K/mo" or "Sustainable". */
+function leadNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  const sign = value < 0 ? "-" : "";
+  const trimmed = Math.abs(value).toFixed(2).replace(/\.?0+$/, "");
+  return `${sign}${trimmed}`;
+}
+
+/** YYYY-MM-DD. The lead API rejects prose dates. */
+function leadIsoDate(months: number): string {
+  const whole = Number.isFinite(months) ? Math.max(0, Math.floor(months)) : 0;
+  const d = new Date();
+  d.setMonth(d.getMonth() + whole);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
 
 const gradeColors: Record<string, string> = {
   emerald: "from-emerald-500 to-emerald-600",
@@ -112,12 +140,15 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
 }) {
   const [inputs, setInputs] = useState<SimInputs>(defaultInputs);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const onCalculatorInput = useCalculatorUsedOnce("survival-simulator");
 
-  const set = (key: keyof SimInputs, val: number | null) =>
+  const set = (key: keyof SimInputs, val: number | null) => {
+    onCalculatorInput();
     setInputs(prev => ({ ...prev, [key]: val }));
+  };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/80 backdrop-blur" data-testid="simulator-input-form">
+    <Card className="border-zinc-800 bg-zinc-900/80 backdrop-blur" data-testid="simulator-input-form" onInput={onCalculatorInput}>
       <CardHeader className="pb-4">
         <CardTitle className="text-xl flex items-center gap-2">
           <Target className="h-5 w-5 text-primary" />
@@ -177,7 +208,7 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <Label className="text-sm font-medium">Growth Rate</Label>
+              <Label className="text-sm font-medium">Growth Rate (before churn)</Label>
               <span className="text-sm text-primary font-mono">{inputs.growth_rate}% /mo</span>
             </div>
             <Slider
@@ -219,8 +250,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
         {showAdvanced && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 animate-in fade-in duration-200">
             <div className="space-y-2">
-              <Label className="text-sm">Planned Hires (next 12 months)</Label>
-              <Input
+              <Label htmlFor="survival-simulator-planned-hires-next-12-months" className="text-sm">Planned Hires (next 12 months)</Label>
+              <Input id="survival-simulator-planned-hires-next-12-months"
                 data-testid="input-planned-hires"
                 type="number"
                 value={inputs.planned_hires}
@@ -229,8 +260,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Avg Monthly Cost per Hire</Label>
-              <Input
+              <Label htmlFor="survival-simulator-avg-monthly-cost-per-hire" className="text-sm">Avg Monthly Cost per Hire</Label>
+              <Input id="survival-simulator-avg-monthly-cost-per-hire"
                 data-testid="input-avg-hire-cost"
                 type="number"
                 value={inputs.avg_hire_cost}
@@ -239,8 +270,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Fundraising Month (1-24)</Label>
-              <Input
+              <Label htmlFor="survival-simulator-fundraising-month-1-24" className="text-sm">Fundraising Month (1-24)</Label>
+              <Input id="survival-simulator-fundraising-month-1-24"
                 data-testid="input-fundraising-month"
                 type="number"
                 value={inputs.fundraising_month ?? ""}
@@ -250,8 +281,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Fundraising Amount</Label>
-              <Input
+              <Label htmlFor="survival-simulator-fundraising-amount" className="text-sm">Fundraising Amount</Label>
+              <Input id="survival-simulator-fundraising-amount"
                 data-testid="input-fundraising-amount"
                 type="number"
                 value={inputs.fundraising_amount}
@@ -409,8 +440,8 @@ function SimulationResultsCard({ results }: { results: SimResults }) {
               Your startup has a <span className={gradeTextColors[grade.color]}>{survival["12m"]}%</span> chance of surviving 12 months
             </h3>
             <p className="text-muted-foreground">
-              Median runway: <span className="text-white font-semibold">{runway.p50} months</span>
-              {" "}(range: {runway.p10} – {runway.p90} months)
+              Median runway: <span className="text-white font-semibold">{runwayLabel(runway.p50, " months")}</span>
+              {" "}(range: {runwayLabel(runway.p10, "")} – {runwayLabel(runway.p90, " months")})
             </p>
           </div>
         </div>
@@ -425,17 +456,17 @@ function SimulationResultsCard({ results }: { results: SimResults }) {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Pessimistic</p>
-            <p className="text-lg font-bold text-red-400">{runway.p10}mo</p>
+            <p className="text-lg font-bold text-red-400">{runwayLabel(runway.p10)}</p>
             <p className="text-xs text-muted-foreground">P10 Runway</p>
           </div>
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Most Likely</p>
-            <p className="text-lg font-bold text-white">{runway.p50}mo</p>
+            <p className="text-lg font-bold text-white">{runwayLabel(runway.p50)}</p>
             <p className="text-xs text-muted-foreground">P50 Runway</p>
           </div>
           <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Optimistic</p>
-            <p className="text-lg font-bold text-emerald-400">{runway.p90}mo</p>
+            <p className="text-lg font-bold text-emerald-400">{runwayLabel(runway.p90)}</p>
             <p className="text-xs text-muted-foreground">P90 Runway</p>
           </div>
         </div>
@@ -501,6 +532,29 @@ function RecommendationsPanel({ recommendations }: { recommendations: SimResults
   );
 }
 
+function EmailResultPanel({ results }: { results: SimResults }) {
+  // Shown only after a simulation result exists. Same consent opt-in as the
+  // other public calculators. resultByEmail stays false: this page does not
+  // send the result, so the offer must not promise an inbox.
+  const p50 = results.runway.p50;
+  const monthlyBurn = results.inputs.monthly_expenses - results.inputs.monthly_revenue;
+
+  return (
+    <CalculatorEmailOptIn
+      className="border-zinc-800 bg-zinc-900/80"
+      inputClassName="bg-zinc-800 border-zinc-700"
+      source="survival-simulator"
+      sourcePage="/survival-simulator"
+      plan="survival-simulator"
+      resultByEmail={false}
+      notes={`Grade ${results.grade.letter} (${results.grade.label}). Median runway ${runwayLabel(p50, " months")} (P10 ${runwayLabel(results.runway.p10, "")} – P90 ${runwayLabel(results.runway.p90, "")}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`}
+      runwayMonths={leadNumber(p50)}
+      runwayDate={leadIsoDate(p50)}
+      monthlyBurn={leadNumber(monthlyBurn)}
+    />
+  );
+}
+
 function ShareResultPanel({ results }: { results: SimResults }) {
   const { toast } = useToast();
   const shareUrl = `${window.location.origin}/survival/${results.simulation_id}`;
@@ -511,7 +565,7 @@ function ShareResultPanel({ results }: { results: SimResults }) {
   const p50 = results.runway?.p50 ?? 0;
   const surv12 = results.survival?.["12m"] ?? 0;
 
-  const shareText = `My startup scored a ${grade} on the FounderConsole Survival Simulator — ${p50} months median runway, ${surv12}% chance of surviving 12 months. What's yours?`;
+  const shareText = `My startup scored a ${grade} on the FounderConsole Survival Simulator — ${runwayLabel(p50, " months")} median runway, ${surv12}% chance of surviving 12 months. What's yours?`;
 
   const copy = (value: string, label: string) => {
     navigator.clipboard.writeText(value);
@@ -662,7 +716,7 @@ function GrowthGate() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button
             className="bg-gradient-to-r from-primary to-violet-600"
-            onClick={() => navigate("/auth?tab=register&utm_source=survival_simulator&utm_campaign=sim_to_account")}
+            onClick={() => navigate("/signup?utm_source=survival_simulator&utm_campaign=sim_to_account")}
             data-testid="button-create-account"
           >
             Create Free Account <ArrowRight className="h-4 w-4 ml-2" />
@@ -709,9 +763,9 @@ function ExportButton({ results }: { results: SimResults }) {
 </div>
 <h2>Runway Projections</h2>
 <div class="metrics">
-  <div class="metric"><div class="metric-value" style="color:#ef4444">${runway.p10}mo</div><div class="metric-label">Pessimistic (P10)</div></div>
-  <div class="metric"><div class="metric-value">${runway.p50}mo</div><div class="metric-label">Most Likely (P50)</div></div>
-  <div class="metric"><div class="metric-value" style="color:#10b981">${runway.p90}mo</div><div class="metric-label">Optimistic (P90)</div></div>
+  <div class="metric"><div class="metric-value" style="color:#ef4444">${runwayLabel(runway.p10)}</div><div class="metric-label">Pessimistic (P10)</div></div>
+  <div class="metric"><div class="metric-value">${runwayLabel(runway.p50)}</div><div class="metric-label">Most Likely (P50)</div></div>
+  <div class="metric"><div class="metric-value" style="color:#10b981">${runwayLabel(runway.p90)}</div><div class="metric-label">Optimistic (P90)</div></div>
 </div>
 <h2>Survival Probability</h2>
 <div class="survival">
@@ -783,6 +837,7 @@ export default function SurvivalSimulatorPage() {
     },
     onSuccess: (data) => {
       setResults(data);
+      trackFunnel("survival_simulation_run", { calculator: "survival-simulator" });
       const count = incrementSimCount();
       if (count >= 2) setGated(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -837,7 +892,7 @@ export default function SurvivalSimulatorPage() {
               <Button variant="ghost" size="sm" onClick={() => navigate("/auth")} data-testid="button-header-login">
                 Log in
               </Button>
-              <Button size="sm" onClick={() => navigate("/auth?tab=register&utm_source=survival_simulator&utm_campaign=sim_to_account")} className="bg-primary" data-testid="button-header-signup">
+              <Button size="sm" onClick={() => navigate("/signup?utm_source=survival_simulator&utm_campaign=sim_to_account")} className="bg-primary" data-testid="button-header-signup">
                 Sign up free
               </Button>
             </div>
@@ -882,6 +937,8 @@ export default function SurvivalSimulatorPage() {
               </div>
 
               <SimulationResultsCard results={results} />
+
+              <EmailResultPanel results={results} />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <RunwayDistributionChart histogram={results.histogram} />

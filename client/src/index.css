@@ -1,3 +1,4 @@
+@import './styles/fonts.css';
 @import './styles/simulate-design.css';
 
 @tailwind base;

@@ -2,16 +2,43 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { api } from './client';
 import { useFounderStore } from '../store/founderStore';
 import { trackEvent } from '@/lib/posthog';
+import { trackFounderActivated } from '@/lib/funnel';
+import {
+  peekSimulationAttribution,
+  consumeSimulationAttribution,
+  TRUTH_SCAN_SIM_SOURCE,
+  OVERVIEW_SUGGESTED_ACTION_FROM,
+  type SimulationAttribution,
+} from '@/lib/truthScanSuggestedActions';
+
+function suggestedActionEventProps(attr: SimulationAttribution | null) {
+  if (!attr) return null;
+  if (attr.source === TRUTH_SCAN_SIM_SOURCE) {
+    return {
+      source: TRUTH_SCAN_SIM_SOURCE,
+      from: attr.from,
+      action_id: attr.action_id,
+      action_type: attr.action_type,
+    };
+  }
+  if (attr.source === OVERVIEW_SUGGESTED_ACTION_FROM) {
+    return {
+      source: OVERVIEW_SUGGESTED_ACTION_FROM,
+      from: attr.from,
+      action_id: attr.action_id,
+      action_type: attr.action_type,
+    };
+  }
+  return null;
+}
 
 /**
  * Every query key that depends on a company's financial data.
  *
- * These live under several different key namespaces (`useTruthScan` reads
- * ['truth', id] while `useFinancialMetrics` reads ['truth-latest', id], and
- * some callers used a nonexistent ['/api/companies', id]), so invalidating
- * only one of them left the dashboard showing pre-import confidence and
- * metric cards after a successful upload. Any mutation that changes a
- * company's financials must call this rather than picking keys by hand.
+ * useTruthScan and useFinancialMetrics share ['truth', id]. `truth-latest`
+ * stays in the list so an older cache entry from before that share is still
+ * dropped after an upload. Any mutation that changes a company's financials
+ * must call this rather than picking keys by hand.
  */
 export const COMPANY_FINANCIAL_QUERY_KEYS = [
   'companies',
@@ -90,11 +117,21 @@ export function useDeleteCompany() {
 
 export function useSeedSample() {
   const queryClient = useQueryClient();
+  const markCurrentCompanySample = useFounderStore((s) => s.markCurrentCompanySample);
+  const syncCurrentCompanyIsSample = useFounderStore((s) => s.syncCurrentCompanyIsSample);
 
   return useMutation({
     mutationFn: (companyId: number) => api.companies.seedSample(companyId),
-    onSuccess: (_, companyId) => {
+    onSuccess: (result, companyId) => {
       invalidateCompanyFinancials(queryClient, companyId);
+      const current = useFounderStore.getState().currentCompany;
+      if (current?.id === companyId) {
+        if (result.is_sample) {
+          markCurrentCompanySample();
+        } else {
+          syncCurrentCompanyIsSample(false);
+        }
+      }
     },
   });
 }
@@ -128,6 +165,15 @@ export function useRunTruthScan() {
     onSuccess: (data, companyId) => {
       invalidateCompanyFinancials(queryClient, companyId);
       setTruthScan(data);
+      const company = useFounderStore.getState().currentCompany;
+      if (company?.id === companyId && company.is_sample === false) {
+        trackFounderActivated({
+          source: 'truth_scan',
+          company_id: companyId,
+          user_id: useFounderStore.getState().user?.id ?? null,
+          is_sample: false,
+        });
+      }
     },
   });
 }
@@ -156,13 +202,35 @@ export function useRunSimulation() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ scenarioId, nSims, seed }: { scenarioId: number; nSims?: number; seed?: number }) =>
-      api.simulations.run(scenarioId, nSims, seed),
+    mutationFn: async ({ scenarioId, nSims, seed }: { scenarioId: number; nSims?: number; seed?: number }) => {
+      const suggestedProps = suggestedActionEventProps(peekSimulationAttribution());
+      if (suggestedProps) {
+        trackEvent('simulation_started', {
+          ...suggestedProps,
+          scenario_id: scenarioId,
+        });
+      }
+      return api.simulations.run(scenarioId, nSims, seed);
+    },
     onSuccess: (_, { scenarioId, nSims }) => {
       queryClient.invalidateQueries({ queryKey: ['simulations', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['timeseries', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['scenarios'] });
-      trackEvent('simulation_run', { scenario_id: scenarioId, n_sims: nSims || 1000 });
+      const suggestedProps = suggestedActionEventProps(consumeSimulationAttribution());
+      trackEvent('simulation_run', {
+        scenario_id: scenarioId,
+        n_sims: nSims || 1000,
+        ...(suggestedProps ?? {}),
+      });
+      const company = useFounderStore.getState().currentCompany;
+      if (company?.id != null && company.is_sample === false) {
+        trackFounderActivated({
+          source: 'simulation',
+          company_id: company.id,
+          user_id: useFounderStore.getState().user?.id ?? null,
+          is_sample: false,
+        });
+      }
     },
   });
 }

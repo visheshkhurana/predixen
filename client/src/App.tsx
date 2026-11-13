@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef, useCallback, lazy, Suspense, type ReactNode } from "react";
 const ReactMarkdownLazy = lazy(() => import("react-markdown").then(m => ({ default: m.default })));
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -22,7 +21,11 @@ import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
+import { withGtagPage } from "@/lib/analytics-url";
+import { isDemoEmail } from "@/lib/demo";
+import { captureFirstTouchAttribution } from "@/lib/attribution";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
+import { SessionRecordingSync } from "@/components/SessionRecordingSync";
 import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
 import {
@@ -46,6 +49,7 @@ import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
 import { formatCurrencyAbbrev } from "@/lib/utils";
 import GlobalLoadingBar from "@/components/GlobalLoadingBar";
 import { AskAIButton } from "@/components/AskAIButton";
+import { SampleDataBanner } from "@/components/sample-data/SampleDataBanner";
 
 import { CookieConsent } from "@/components/CookieConsent";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
@@ -61,8 +65,10 @@ const SharedSimulationPage = lazy(() =>
 const AuthCallback = lazy(() => import("@/pages/auth-callback"));
 const ResetPasswordPage = lazy(() => import("@/pages/reset-password"));
 const VerifyEmailPage = lazy(() => import("@/pages/verify-email"));
+const UnsubscribePage = lazy(() => import("@/pages/unsubscribe"));
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy"));
 const TermsOfServicePage = lazy(() => import("@/pages/terms"));
+const RefundPolicyPage = lazy(() => import("@/pages/refund-policy"));
 const OnboardingPage = lazy(() => import("@/pages/onboarding"));
 const OverviewPage = lazy(() => import("@/pages/overview"));
 const TruthScanPage = lazy(() => import("@/pages/truth-scan"));
@@ -102,7 +108,6 @@ const CapTablePage = lazy(() => import("@/pages/cap-table"));
 const InvestorRoomPage = lazy(() => import("@/pages/investor-room"));
 const KPIBoardPage = lazy(() => import("@/pages/kpi-board"));
 const ConnectorMarketplacePage = lazy(() => import("@/pages/connector-marketplace"));
-const AddDataSourcePage = lazy(() => import("@/pages/add-data-source"));
 const DashboardsPage = lazy(() => import("@/pages/dashboards"));
 const DashboardBuilderPage = lazy(() => import("@/pages/dashboard-builder"));
 const MetricCatalogPage = lazy(() => import("@/pages/metric-catalog"));
@@ -112,6 +117,7 @@ const MessagingPage = lazy(() => import("@/pages/messaging"));
 const JournalPage = lazy(() => import("@/pages/journal"));
 const GoalsPage = lazy(() => import("@/pages/goals"));
 const HiringPlannerPage = lazy(() => import("@/pages/hiring-planner"));
+const ProfitPage = lazy(() => import("@/pages/profit"));
 const SharedScenarioPage = lazy(() => import("@/pages/shared-scenario"));
 const QAFrontPage = lazy(() => import("@/pages/qa"));
 const PricingPage = lazy(() => import("@/pages/pricing"));
@@ -126,14 +132,29 @@ const BillingPage = lazy(() => import("@/pages/billing"));
 const LandingPage = lazy(() => import("@/pages/landing"));
 const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
+const ComparePage = lazy(() => import("@/pages/compare"));
+const ProductPage = lazy(() => import("@/pages/product"));
+const CustomersPage = lazy(() => import("@/pages/customers"));
+const UseCasesPage = lazy(() => import("@/pages/use-cases"));
+const HowItWorksPage = lazy(() => import("@/pages/how-it-works"));
+const AlternativesPage = lazy(() => import("@/pages/alternatives"));
+const SignupPage = lazy(() => import("@/pages/signup"));
+const SecurityPage = lazy(() => import("@/pages/security"));
 const ContactPage = lazy(() => import("@/pages/contact"));
 const BlogPage = lazy(() => import("@/pages/blog"));
 const RunwayByIndustryPage = lazy(() => import("@/pages/runway-by-industry"));
+const IndustryLandingPage = lazy(() => import("@/pages/industry-landing"));
 const EmbedSurvivalPage = lazy(() => import("@/pages/embed-survival"));
 const FAQPage = lazy(() => import("@/pages/faq"));
 const DemoPage = lazy(() => import("@/pages/demo"));
 const RunwayCalculatorPage = lazy(() => import("@/pages/runway-calculator"));
 const DefaultAlivePage = lazy(() => import("@/pages/default-alive"));
+const BurnMultiplePage = lazy(() => import("@/pages/burn-multiple"));
+const DilutionPage = lazy(() => import("@/pages/dilution"));
+const LtvCacPage = lazy(() => import("@/pages/ltv-cac"));
+const D2cContributionMarginPage = lazy(() => import("@/pages/d2c-contribution-margin"));
+const ToolsIndexPage = lazy(() => import("@/pages/tools-index"));
+const VsRunwayCalculatorVsSpreadsheetPage = lazy(() => import("@/pages/vs-runway-calculator-vs-spreadsheet"));
 const AiCfoPage = lazy(() => import("@/pages/ai-cfo"));
 
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
@@ -225,8 +246,7 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   useEffect(() => {
     if (user?.id && user?.email) {
       if ((window as any).gtag) {
-        (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(user.id) });
-        (window as any).gtag('set', 'user_properties', { user_email: user.email });
+        (window as any).gtag('config', 'G-NJKW0TGC4C', withGtagPage({ user_id: String(user.id) }));
       }
     }
   }, [user]);
@@ -297,6 +317,7 @@ function PublicOrAuthHome() {
 
 function Router() {
   return (
+    <SessionRecordingSync>
     <ErrorBoundary
       onError={(error) => {
         // Log to console with context
@@ -309,41 +330,76 @@ function Router() {
         <Route path="/survival/:simId" component={SurvivalSimulatorPage} />
         <Route path="/pricing" component={PricingPage} />
         <Route path="/features">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><MarketingFeaturesPage /></Suspense>}</Route>
+        <Route path="/product">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ProductPage /></Suspense>}</Route>
         <Route path="/about">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AboutPage /></Suspense>}</Route>
+        <Route path="/compare">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ComparePage /></Suspense>}</Route>
+        <Route path="/customers">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><CustomersPage /></Suspense>}</Route>
+        <Route path="/use-cases">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><UseCasesPage /></Suspense>}</Route>
+        <Route path="/how-it-works">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><HowItWorksPage /></Suspense>}</Route>
+        <Route path="/alternatives">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AlternativesPage /></Suspense>}</Route>
+        <Route path="/signup">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><SignupPage /></Suspense>}</Route>
+        <Route path="/security">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><SecurityPage /></Suspense>}</Route>
         <Route path="/contact">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ContactPage /></Suspense>}</Route>
         <Route path="/blog/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
         <Route path="/blog">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
         <Route path="/faq">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><FAQPage /></Suspense>}</Route>
         <Route path="/ai-cfo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AiCfoPage /></Suspense>}</Route>
+        <Route path="/tools">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ToolsIndexPage /></Suspense>}</Route>
         <Route path="/tools/runway-calculator">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayCalculatorPage /></Suspense>}</Route>
+        <Route path="/tools/dilution">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DilutionPage /></Suspense>}</Route>
+
+        <Route path="/tools/ltv-cac">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><LtvCacPage /></Suspense>}</Route>
+        <Route path="/tools/d2c-contribution-margin">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><D2cContributionMarginPage /></Suspense>}</Route>
+        <Route path="/vs/runway-calculator-vs-spreadsheet">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><VsRunwayCalculatorVsSpreadsheetPage /></Suspense>}</Route>
         <Route path="/default-alive">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DefaultAlivePage /></Suspense>}</Route>
+        <Route path="/tools/burn-multiple">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BurnMultiplePage /></Suspense>}</Route>
+        {/* Industry homepages, one per entry in client/src/data/industry-pages.ts. */}
+        <Route path="/for/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><IndustryLandingPage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
         <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
+        {/* HAG-449: the entry point the hero's "View Demo" uses. It opens a private
+            demo workspace (own copy of the sample company) and drops the visitor straight into /overview in
+            Demo Mode — no login form, no "Welcome back". /demo stays as the page
+            that explains what the demo is. */}
+        <Route path="/demo/enter">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoRedirectPage /></Suspense>}</Route>
         <Route path="/demo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoPage /></Suspense>}</Route>
         <Route path="/auth/callback" component={AuthCallback} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
+        <Route path="/unsubscribe" component={UnsubscribePage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/terms" component={TermsOfServicePage} />
-      {/* /login means login. The other three mean "I want an account" — they
-          used to drop the query string and land people on the login tab, so
-          anyone typing founderconsole.ai/signup or following an old link was
-          shown the wrong form. */}
+        <Route path="/refund-policy" component={RefundPolicyPage} />
+      {/* /login means login. /register and /join still land on the register
+          form so old links do not drop people on the login form. /signup is a
+          public get-started page that renders the same form from a prerendered
+          document, so every register entry now points there (HAG-449). */}
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>
-      <Route path="/signup">
-        {() => <Redirect to="/auth?tab=register" />}
-      </Route>
       <Route path="/register">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       <Route path="/join">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
+      </Route>
+      {/* cleya.ai leftover traffic (#44 defer). No matching/referral/apply
+          product exists — send visitors to a live marketing page, not 404. */}
+      <Route path="/apply">
+        {() => <Redirect to="/signup" />}
+      </Route>
+      <Route path="/matches">
+        {() => <Redirect to="/" />}
+      </Route>
+      <Route path="/referral">
+        {() => <Redirect to="/signup" />}
       </Route>
       <Route path="/onboarding">
         {() => <AuthenticatedRoute component={OnboardingPage} allowWithoutCompany />}
+      </Route>
+      <Route path="/onboard">
+        {() => <Redirect to="/onboarding" />}
       </Route>
       <Route path="/">
         {() => <PublicOrAuthHome />}
@@ -369,6 +425,10 @@ function Router() {
       <Route path="/data">
         {() => <AuthenticatedRoute component={DataInputPage} />}
       </Route>
+      {/* Legacy alias kept for old bookmarks; live ingest is /data. */}
+      <Route path="/ingest">
+        {() => <Redirect to="/data" />}
+      </Route>
       <Route path="/data/verify/:sessionId">
         {() => <AuthenticatedRoute component={DataVerificationPage} />}
       </Route>
@@ -376,6 +436,9 @@ function Router() {
         {() => <AuthenticatedRoute component={SimulateWorkspace} />}
       </Route>
       <Route path="/simulator">
+        {() => <Redirect to="/simulate" />}
+      </Route>
+      <Route path="/simulation">
         {() => <Redirect to="/simulate" />}
       </Route>
       <Route path="/simulate-v2">
@@ -396,6 +459,11 @@ function Router() {
       <Route path="/scenarios/:id">
         {() => <AuthenticatedRoute component={ScenariosPage} />}
       </Route>
+      {/* TruthScanGate previously sent founders here after finalize. No client
+          route existed, so the SPA catch-all rendered the 404 page. */}
+      <Route path="/companies/:companyId/scenarios">
+        {() => <Redirect to="/simulate" />}
+      </Route>
       <Route path="/decisions">
         {() => <AuthenticatedRoute component={DecisionsPage} />}
       </Route>
@@ -408,8 +476,18 @@ function Router() {
       <Route path="/marketplace">
         {() => <AuthenticatedRoute component={ConnectorMarketplacePage} />}
       </Route>
+      {/* The add-data-source wizard faked "Test connection" and "connected"
+          without calling the API. Integrations is the real connect flow. */}
       <Route path="/add-data-source">
-        {() => <AuthenticatedRoute component={AddDataSourcePage} />}
+        {() => <Redirect to="/integrations" />}
+      </Route>
+      {/* Marketplace "manage" and add-data-source complete navigated here.
+          No connector-detail page exists — Integrations is the live dest. */}
+      <Route path="/data-source/:id">
+        {() => <Redirect to="/integrations" />}
+      </Route>
+      <Route path="/profit">
+        {() => <AuthenticatedRoute component={ProfitPage} />}
       </Route>
       <Route path="/alerts">
         {() => <AuthenticatedRoute component={AlertsPage} />}
@@ -467,6 +545,12 @@ function Router() {
       </Route>
       <Route path="/intelligence">
         {() => <AuthenticatedRoute component={IntelligenceGraphPage} />}
+      </Route>
+      <Route path="/settings/notifications">
+        {() => <Redirect to="/settings" />}
+      </Route>
+      <Route path="/account/notifications">
+        {() => <Redirect to="/settings" />}
       </Route>
       <Route path="/settings">
         {() => <AuthenticatedRoute component={SettingsPage} allowWithoutCompany />}
@@ -550,6 +634,7 @@ function Router() {
       </Switch>
       </Suspense>
     </ErrorBoundary>
+    </SessionRecordingSync>
   );
 }
 
@@ -703,10 +788,11 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
               placeholder="Ask about your financials..."
+              aria-label="Ask the copilot a question"
               className="flex-1"
               data-testid="input-copilot-drawer"
             />
-            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} data-testid="button-copilot-send">
+            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} aria-label="Send message" data-testid="button-copilot-send">
               <Send className="h-4 w-4" />
             </Button>
           </div>
@@ -817,16 +903,16 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   };
   
   const marketingPaths = [
-    '/', '/features', '/pricing', '/about', '/blog', '/faq',
-    '/contact', '/demo', '/auth', '/onboarding', '/owner-console',
-    '/survival-simulator', '/default-alive', '/privacy', '/terms',
+    '/', '/features', '/product', '/pricing', '/about', '/compare', '/customers', '/use-cases', '/how-it-works', '/alternatives', '/blog', '/faq',
+    '/contact', '/demo', '/demo/enter', '/auth', '/onboarding', '/onboard', '/owner-console',
+    '/survival-simulator', '/default-alive', '/privacy', '/terms', '/refund-policy', '/security',
     '/reset-password', '/verify-email', '/auth/callback',
     '/login', '/signup', '/register', '/join',
-    '/ai-cfo', '/embed/survival',
+    '/ai-cfo', '/embed/survival', '/tools',
   ];
   const marketingPrefixes = [
     '/blog/', '/tools/', '/admin', '/scenarios/shared/',
-    '/survival/', '/runway/', '/embed/',
+    '/survival/', '/runway/', '/embed/', '/vs/', '/for/',
   ];
   // Use wouter's location (not window.location) so client-side navigations
   // re-evaluate the shell instead of keeping whatever was true on hard load.
@@ -861,7 +947,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative z-[1]">
           <BackendStatusBanner />
           <TrialBanner />
-          {user?.email === 'demo@founderconsole.ai' && (
+          {isDemoEmail(user?.email) && (
             <div className="no-print flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-400" data-testid="banner-demo-mode">
               <FlaskConical className="h-3.5 w-3.5 shrink-0" />
               {/*
@@ -873,8 +959,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 to /overview both times before giving up.
 
                 Signing out first is what makes the escape real: it clears the
-                demo session so /auth?tab=register renders instead of
-                redirecting.
+                demo session so /signup renders instead of redirecting.
               */}
               <span>
                 Demo Mode — You are viewing simulated sample data.{" "}
@@ -885,7 +970,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                   onClick={async () => {
                     try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
                     useFounderStore.getState().logout();
-                    navigate('/auth?tab=register');
+                    navigate('/signup');
                   }}
                 >
                   Sign up free
@@ -893,6 +978,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 to use your own.
               </span>
             </div>
+          )}
+          {currentCompany?.is_sample && !isDemoEmail(user?.email) && (
+            <SampleDataBanner />
           )}
           <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b border-white/[0.06] bg-background/60 backdrop-blur-xl sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -982,7 +1070,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               {getConfidenceBadge()}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" data-testid="button-user-avatar">
+                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" aria-label="Account menu" data-testid="button-user-avatar">
                     <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
                       {user?.email?.charAt(0)?.toUpperCase() || 'U'}
                     </div>
@@ -1121,25 +1209,20 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 function AnimatedRouteWrapper({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const prefersReducedMotion = useReducedMotion();
-
-  if (prefersReducedMotion) {
-    return <>{children}</>;
-  }
-
+  // CSS enter animation (fc-route-enter), not framer-motion. A static import
+  // of AnimatePresence here is what put the whole library into the entry
+  // bundle that signup / onboarding / first insight all wait on.
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={location}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -6 }}
-        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div key={location} className="fc-route-enter">
+      {children}
+    </div>
   );
+}
+
+// The document URL, once, before route effects can replace it. First touch
+// only: a later URL in this tab does not overwrite sessionStorage.
+if (typeof window !== "undefined") {
+  captureFirstTouchAttribution();
 }
 
 function App() {

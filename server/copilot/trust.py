@@ -8,12 +8,13 @@ This module implements the trust contract for Copilot:
 - Contradiction detection
 """
 
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any, Union
 from sqlalchemy.orm import Session
 from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 import logging
+import re
 
 
 class GroundingStatus(Enum):
@@ -456,3 +457,601 @@ def detect_output_mode(prompt: str) -> str:
         return "TOKEN"
     
     return "NARRATIVE"
+
+
+NOT_AVAILABLE_MESSAGE = (
+    "NOT_AVAILABLE: The requested figure is not in verified company data or a "
+    "completed simulation run. I will not invent runway, survival, cash, burn, "
+    "churn, or other investor-facing numbers. Run a simulation or add the missing metric."
+)
+
+# User-facing metrics that must come from truth-scan / run outputs — never defaults.
+_METRIC_ALIASES: Dict[str, Tuple[str, ...]] = {
+    "runway": ("runway", "runway_months", "runway_p50"),
+    "survival": ("survival", "survival_probability", "survival_18mo", "survival18mo"),
+    "churn": ("churn", "churn_rate", "monthly_churn"),
+    "nrr": ("nrr", "ndr", "net_revenue_retention", "net_dollar_retention"),
+    "cac": ("cac", "customer_acquisition_cost"),
+    "ltv": ("ltv", "lifetime_value"),
+    "arpu": ("arpu", "average_revenue_per_user"),
+    "customers": ("active_customers", "customers", "customer_count"),
+    "burn": ("net_burn", "monthly_burn", "burn_rate"),
+    "cash": ("cash_balance", "cash", "cash_on_hand"),
+    "revenue": ("monthly_revenue", "revenue", "mrr"),
+}
+
+_QUESTION_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\brunway\b", re.I), "runway"),
+    (re.compile(r"\bsurvival\b", re.I), "survival"),
+    (re.compile(r"\bchurn\b", re.I), "churn"),
+    (re.compile(r"\b(?:nrr|ndr|net revenue retention|net dollar retention)\b", re.I), "nrr"),
+    (re.compile(r"\bcac\b|\bcustomer acquisition\b", re.I), "cac"),
+    (re.compile(r"\bltv\b|\blifetime value\b", re.I), "ltv"),
+    (re.compile(r"\barpu\b", re.I), "arpu"),
+    (re.compile(r"\b(?:active\s+)?customers?\b|\bcustomer count\b", re.I), "customers"),
+    (re.compile(r"\b(?:cash(?:\s+balance)?|cash on hand|how much cash)\b", re.I), "cash"),
+    (re.compile(r"\b(?:net\s+)?burn(?:ing|ed|s)?(?:\s+rate)?\b", re.I), "burn"),
+    (re.compile(r"\b(?:monthly\s+)?(?:revenues?|mrr|arr)\b", re.I), "revenue"),
+]
+
+# Phrases used to spot "CAC is 500" / "150 active customers" next to an asked metric.
+_METRIC_PROSE: Dict[str, Tuple[str, ...]] = {
+    "runway": ("runway",),
+    "survival": ("survival",),
+    "churn": ("churn",),
+    "nrr": ("nrr", "ndr", "net revenue retention", "net dollar retention"),
+    "cac": ("cac", "customer acquisition cost"),
+    "ltv": ("ltv", "lifetime value"),
+    "arpu": ("arpu",),
+    "customers": ("active customers", "customer count", "customers"),
+    "burn": ("net burn", "burn rate", "monthly burn", "burn"),
+    "cash": ("cash balance", "cash on hand", "cash"),
+    "revenue": ("monthly revenue", "revenue", "mrr", "arr"),
+}
+
+_NUMBER_TOKEN = r"\d[\d,]*(?:\.\d+)?"
+_NUMBER_RE = re.compile(_NUMBER_TOKEN)
+
+# Same windows as the original guard: a number starting within 24 characters
+# after the metric phrase, or ending within 16 characters before it.
+_FIGURE_WINDOW_AFTER = 24
+_FIGURE_WINDOW_BEFORE = 16
+
+# Exemptions on top of that window, for customers / revenue / burn only.
+# Nothing else is skipped: "Revenue reached 50,000" still counts.
+_COUNT_WORDS = frozenset({"top", "step", "steps"})
+_OF_YOUR_ITEMS_RE = re.compile(
+    r"\s+of\s+your\b(?:\s+\w+){0,6}\s+items\b",
+    re.I,
+)
+
+# Inflections so "burning"/"burned" and "customer"/"customers" hit the window.
+# MRR and ARR stay in the revenue set.
+_INFLECTED_PROSE: Dict[str, Tuple[str, ...]] = {
+    "customers": (
+        r"active\s+customers?",
+        r"customer\s+count",
+        r"customers?",
+    ),
+    "burn": (
+        r"net\s+burn(?:ing|ed|s)?",
+        r"burn(?:ing|ed|s)?\s+rate",
+        r"monthly\s+burn(?:ing|ed|s)?",
+        r"burn(?:ing|ed|s)?",
+    ),
+    "revenue": (
+        r"monthly\s+revenues?",
+        r"revenues?",
+        r"mrr",
+        r"arr",
+    ),
+}
+
+_ESTIMATED_SOURCE_MARKERS = frozenset({
+    "estimated",
+    "imputed",
+    "benchmark",
+    "benchmark_imputed",
+    "placeholder",
+    "default",
+    "assumed",
+})
+
+
+_EXTRA_FIGURE_PATTERN = re.compile(
+    r"[₹€£]\s?[\d,]+"
+    r"|\b(?:rs\.?|inr|usd|eur|gbp)\s?[\d,]+"
+    r"|\b\d[\d,]*(?:\.\d+)?\s?(?:k|m|mn|bn|l|cr|lakh|lakhs|crore|crores)\b",
+    re.I,
+)
+
+
+@dataclass
+class FabricationGuardResult:
+    """Result of applying the fabrication → NOT_AVAILABLE guard."""
+    output: Dict[str, Any]
+    grounding_status: str
+    refused: bool
+    reason: Optional[str] = None
+    text: Optional[str] = None
+
+
+def _status_value(grounding_status: Union[GroundingStatus, str, None]) -> str:
+    if grounding_status is None:
+        return GroundingStatus.NOT_AVAILABLE.value
+    if isinstance(grounding_status, GroundingStatus):
+        return grounding_status.value
+    return str(grounding_status)
+
+
+def _estimated_names(raw: Dict[str, Any], metrics: Dict[str, Any]) -> set:
+    names: set = set()
+    for blob in (raw, metrics):
+        listed = blob.get("_estimated_metrics")
+        if isinstance(listed, list):
+            names.update(str(item) for item in listed if item)
+    return names
+
+
+def _payload_is_estimated(key: str, value: Any, estimated_names: set) -> bool:
+    if key in estimated_names:
+        return True
+    if not isinstance(value, dict):
+        return False
+    markers = [
+        value.get("source"),
+        value.get("confidence"),
+        value.get("status"),
+        value.get("origin"),
+    ]
+    for marker in markers:
+        if marker is None:
+            continue
+        token = str(marker).lower()
+        if token in _ESTIMATED_SOURCE_MARKERS or "estimat" in token or "imput" in token:
+            return True
+    return False
+
+
+def extract_available_metrics(raw: Any) -> Dict[str, Any]:
+    """Flatten truth-scan / context metrics, dropping estimated placeholders.
+
+    Production truth_scan writes CAC/LTV/NRR (and a 150-customer default) into
+    `metrics` and lists them on `_estimated_metrics`. Those must not count as
+    verified availability or the guard will quote the placeholder.
+    """
+    if not raw:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    metrics = raw.get("metrics")
+    if not isinstance(metrics, dict):
+        metrics = raw
+    estimated = _estimated_names(raw, metrics)
+    verified: Dict[str, Any] = {}
+    for key, value in metrics.items():
+        if key.startswith("_"):
+            continue
+        if _payload_is_estimated(key, value, estimated):
+            continue
+        verified[key] = value
+    return verified
+
+
+# Financial-record columns that may stand in for truth-scan metrics. Columns
+# with a 0 default (revenue, cash_balance) only count when non-zero, since a
+# 0 there usually means "not provided" rather than a verified zero.
+_RECORD_NULLABLE_FIELDS: Tuple[str, ...] = (
+    "mrr", "arr", "net_burn", "runway_months", "customers", "cac", "ltv",
+    "arpu", "ndr", "gross_margin", "headcount",
+)
+_RECORD_ZERO_DEFAULT_FIELDS: Dict[str, Tuple[str, ...]] = {
+    "revenue": ("revenue", "monthly_revenue"),
+    "cash_balance": ("cash_balance",),
+}
+
+
+def metrics_from_financial_record(record: Any) -> Dict[str, Any]:
+    """Verified metrics from the latest FinancialRecord (ORM object or dict)."""
+    if record is None:
+        return {}
+
+    def get(name: str) -> Any:
+        if isinstance(record, dict):
+            return record.get(name)
+        return getattr(record, name, None)
+
+    out: Dict[str, Any] = {}
+    for name in _RECORD_NULLABLE_FIELDS:
+        value = get(name)
+        if value is not None:
+            out[name] = value
+    if "ndr" in out:
+        out.setdefault("nrr", out["ndr"])
+    for column, keys in _RECORD_ZERO_DEFAULT_FIELDS.items():
+        value = get(column)
+        if isinstance(value, (int, float)) and value != 0:
+            for key in keys:
+                out[key] = value
+    return out
+
+
+def merge_available_metrics(
+    truth_scan_outputs: Any = None,
+    financial_record: Any = None,
+) -> Dict[str, Any]:
+    """Available metrics from every verified source: truth scan first, then
+    the latest financial record filling the gaps. Before this, only the truth
+    scan counted, so a company with imported records but no scan had correct
+    figures refused."""
+    merged = extract_available_metrics(truth_scan_outputs)
+    for key, value in metrics_from_financial_record(financial_record).items():
+        if not metric_is_present(merged, key):
+            merged[key] = value
+    return merged
+
+
+def metric_is_present(available_metrics: Optional[Dict[str, Any]], *keys: str) -> bool:
+    """True when a verified metric key exists and is not an explicit null (0 is present)."""
+    if not available_metrics:
+        return False
+    for key in keys:
+        if key not in available_metrics:
+            continue
+        value = available_metrics[key]
+        if value is None:
+            continue
+        if isinstance(value, dict) and "value" in value and value.get("value") is None:
+            continue
+        return True
+    return False
+
+
+def requested_metrics(user_message: str) -> List[str]:
+    """Which guarded metrics the user asked for, if any."""
+    if not user_message:
+        return []
+    found: List[str] = []
+    for pattern, metric in _QUESTION_PATTERNS:
+        if pattern.search(user_message) and metric not in found:
+            found.append(metric)
+    return found
+
+
+def missing_requested_metrics(
+    user_message: str,
+    available_metrics: Optional[Dict[str, Any]],
+    run_outputs: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    """Metrics the user asked for that are absent from verified data."""
+    missing: List[str] = []
+    combined = _combined_metrics(available_metrics, run_outputs)
+    for metric in requested_metrics(user_message):
+        if not _metric_available(metric, combined):
+            missing.append(metric)
+    return missing
+
+
+def flatten_output_text(output: Any) -> str:
+    """Concatenate user-visible strings and numeric leaves from a copilot output.
+
+    Structured fields such as financials.unit_economics.cac = 500 are included
+    as "cac 500" so the guard can see invented numbers that never appear in prose.
+    """
+    chunks: List[str] = []
+
+    def walk(obj: Any, depth: int = 0) -> None:
+        if depth > 8:
+            return
+        if isinstance(obj, bool):
+            return
+        if isinstance(obj, str):
+            chunks.append(obj)
+        elif isinstance(obj, (int, float)):
+            chunks.append(str(obj))
+        elif isinstance(obj, list):
+            for item in obj:
+                walk(item, depth + 1)
+        elif isinstance(obj, dict):
+            for key, value in obj.items():
+                if isinstance(value, bool):
+                    continue
+                if isinstance(value, (int, float)):
+                    chunks.append(f"{key} {value}")
+                else:
+                    walk(value, depth + 1)
+
+    walk(output)
+    return " ".join(chunks)
+
+
+def contains_numeric_financial_claims(text: str) -> bool:
+    """True when the text includes investor-facing numeric claims."""
+    if not text:
+        return False
+    if should_include_provenance(text):
+        return True
+    # should_include_provenance only knows "$"; founders on Tally/Zoho talk in
+    # INR (lakh/crore) and others in EUR/GBP or k/M shorthand.
+    return bool(_EXTRA_FIGURE_PATTERN.search(text))
+
+
+def _preceding_word(text: str, index: int) -> str:
+    match = re.search(r"([A-Za-z]+)\W*$", text[:index])
+    if not match:
+        return ""
+    return match.group(1).lower()
+
+
+def _number_is_window_exempt(text: str, number: re.Match) -> bool:
+    """Skip only a top/step count, or the N in "N of your ... items"."""
+    if _preceding_word(text, number.start()) in _COUNT_WORDS:
+        return True
+    return _OF_YOUR_ITEMS_RE.match(text, number.end()) is not None
+
+
+def _alias_patterns(metric: str) -> Tuple[re.Pattern, ...]:
+    if metric in _INFLECTED_PROSE:
+        return tuple(re.compile(pattern, re.I) for pattern in _INFLECTED_PROSE[metric])
+    aliases = _METRIC_PROSE.get(metric, (metric,))
+    return tuple(re.compile(re.escape(alias), re.I) for alias in aliases)
+
+
+def _number_in_metric_window(alias: re.Match, number: re.Match) -> bool:
+    if number.start() >= alias.end():
+        return number.start() - alias.end() <= _FIGURE_WINDOW_AFTER
+    if number.end() <= alias.start():
+        return alias.start() - number.end() <= _FIGURE_WINDOW_BEFORE
+    return False
+
+
+def prose_states_metric_figure(text: str, metric: str) -> bool:
+    """True when prose (or flattened structured keys) states a figure for a metric.
+
+    Customers, revenue, and burn use the same 24/16 digit window as every other
+    metric. A number in that window is ignored only when the word immediately
+    before it is top/step/steps, or it is the count in "N of your ... items".
+    """
+    if not text:
+        return False
+    exempt = metric in _INFLECTED_PROSE
+    numbers = list(_NUMBER_RE.finditer(text))
+    for pattern in _alias_patterns(metric):
+        for alias in pattern.finditer(text):
+            for number in numbers:
+                if not _number_in_metric_window(alias, number):
+                    continue
+                if exempt and _number_is_window_exempt(text, number):
+                    continue
+                return True
+    return False
+
+
+def _combined_metrics(
+    available_metrics: Optional[Dict[str, Any]],
+    run_outputs: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    combined: Dict[str, Any] = {}
+    if available_metrics:
+        combined.update(extract_available_metrics(available_metrics))
+    if run_outputs:
+        combined.update(run_outputs)
+        survival = run_outputs.get("survival_probability")
+        if isinstance(survival, dict):
+            combined["survival_18mo"] = survival.get("18mo", survival.get("18"))
+            combined["survival"] = combined.get("survival_18mo")
+        runway = run_outputs.get("runway_months") or run_outputs.get("runway")
+        if isinstance(runway, dict):
+            combined["runway_months"] = runway.get("p50")
+            combined["runway"] = runway.get("p50")
+        elif runway is not None:
+            combined["runway_months"] = runway
+            combined["runway"] = runway
+    return combined
+
+
+def _metric_available(metric: str, combined: Dict[str, Any]) -> bool:
+    if metric_is_present(combined, *_METRIC_ALIASES.get(metric, (metric,))):
+        return True
+    # Runway is derivable from cash and burn, so a stated runway is grounded
+    # when both inputs are.
+    if metric == "runway":
+        return _metric_available("cash", combined) and _metric_available("burn", combined)
+    return False
+
+
+def _possessive_patterns(metric: str) -> Tuple[re.Pattern, ...]:
+    """"your churn", "your monthly burn", "your CAC" — the model asserting
+    the company's own figure, as opposed to a benchmark or a hypothetical."""
+    if metric in _INFLECTED_PROSE:
+        bodies = _INFLECTED_PROSE[metric]
+    else:
+        bodies = tuple(re.escape(a) for a in _METRIC_PROSE.get(metric, (metric,)))
+    return tuple(
+        re.compile(r"\byour\s+(?:current\s+|monthly\s+)?(?:" + body + r")\b", re.I)
+        for body in bodies
+    )
+
+
+_STATED_VALUE_GAP_RE = re.compile(
+    r"\s*(?:(?:rate|is|was|currently|stands|sits|remains|totals?|comes|at|of|to|"
+    r"around|about|approximately|roughly|nearly|almost|just|over|under|"
+    r"~|:|=|-|\(|[$₹€£]|rs\.?|inr|usd|eur|gbp)\s*)*",
+    re.I,
+)
+
+
+def unverified_volunteered_metrics(
+    text: str,
+    available_metrics: Optional[Dict[str, Any]],
+    run_outputs: Optional[Dict[str, Any]] = None,
+    exclude: Optional[List[str]] = None,
+) -> List[str]:
+    """Metrics the answer states as the company's own figure ("your churn is
+    4%") although no verified source has them. Conservative on purpose: only
+    possessive phrasing next to a number counts, so benchmarks and what-ifs
+    ("a typical CAC of $500", "cutting burn by 20%") pass."""
+    if not text:
+        return []
+    combined = _combined_metrics(available_metrics, run_outputs)
+    numbers = list(_NUMBER_RE.finditer(text))
+    if not numbers:
+        return []
+    flagged: List[str] = []
+    skip = set(exclude or [])
+    for metric in _METRIC_ALIASES:
+        if metric in skip or _metric_available(metric, combined):
+            continue
+        hit = False
+        for pattern in _possessive_patterns(metric):
+            for alias in pattern.finditer(text):
+                for number in numbers:
+                    if number.start() < alias.end():
+                        continue
+                    if number.start() - alias.end() > _FIGURE_WINDOW_AFTER:
+                        break
+                    if _number_is_window_exempt(text, number):
+                        continue
+                    # Only a stated value ("your churn is 4%", "your CAC of
+                    # $500"); "cutting your burn by 20%" is a what-if.
+                    if not _STATED_VALUE_GAP_RE.fullmatch(text[alias.end():number.start()]):
+                        continue
+                    hit = True
+                    break
+                if hit:
+                    break
+            if hit:
+                break
+        if hit:
+            flagged.append(metric)
+    return flagged
+
+
+def output_states_figures(
+    output: Optional[Dict[str, Any]],
+    asked: Optional[List[str]] = None,
+) -> bool:
+    """Whether the answer states a figure — currency/percent/months or a bare metric number."""
+    text = flatten_output_text(output or {})
+    if contains_numeric_financial_claims(text):
+        return True
+    for metric in asked or []:
+        if prose_states_metric_figure(text, metric):
+            return True
+    return False
+
+
+def _not_available_output(reason: str) -> Dict[str, Any]:
+    return {
+        "executive_summary": [NOT_AVAILABLE_MESSAGE],
+        "company_snapshot": [],
+        "financials": None,
+        "market_and_customers": None,
+        "strategy_options": None,
+        "recommendations": None,
+        "assumptions": [],
+        "risks": [],
+        "causal_drivers": None,
+        "fabrication_refused": True,
+        "fabrication_reason": reason,
+    }
+
+
+def apply_not_available_guard(
+    output: Optional[Dict[str, Any]],
+    grounding_status: Union[GroundingStatus, str, None],
+    *,
+    user_message: str = "",
+    available_metrics: Optional[Dict[str, Any]] = None,
+    run_outputs: Optional[Dict[str, Any]] = None,
+) -> FabricationGuardResult:
+    """
+    Replace fabricated numeric answers with NOT_AVAILABLE.
+
+    Does not change prompts or model routing. Call after the copilot has produced
+    an output (or instead of sending one) so missing data cannot become a number.
+    """
+    status = _status_value(grounding_status)
+    current = dict(output or {})
+    asked = requested_metrics(user_message)
+    # Refuse only when the answer actually states a figure. "How do I reduce
+    # churn?" with no churn data should still get qualitative advice; truth_scan
+    # never emits a churn key, so a keyword-only refusal would block it forever.
+    # Bare "CAC is 500" / structured financials.cac=500 count as figures too.
+    states_numbers = output_states_figures(current, asked)
+    text = flatten_output_text(current)
+    missing = missing_requested_metrics(user_message, available_metrics, run_outputs)
+    if missing and states_numbers:
+        reason = f"missing_metrics:{','.join(missing)}"
+        return FabricationGuardResult(
+            output=_not_available_output(reason),
+            grounding_status=GroundingStatus.NOT_AVAILABLE.value,
+            refused=True,
+            reason=reason,
+            text=NOT_AVAILABLE_MESSAGE,
+        )
+
+    volunteered = unverified_volunteered_metrics(
+        text, available_metrics, run_outputs, exclude=asked
+    )
+    if volunteered:
+        reason = f"unverified_figures:{','.join(volunteered)}"
+        return FabricationGuardResult(
+            output=_not_available_output(reason),
+            grounding_status=GroundingStatus.NOT_AVAILABLE.value,
+            refused=True,
+            reason=reason,
+            text=NOT_AVAILABLE_MESSAGE,
+        )
+
+    if "survival" in asked and status != GroundingStatus.VERIFIED.value and states_numbers:
+        reason = "survival_requires_verified_run"
+        return FabricationGuardResult(
+            output=_not_available_output(reason),
+            grounding_status=GroundingStatus.NOT_AVAILABLE.value,
+            refused=True,
+            reason=reason,
+            text=NOT_AVAILABLE_MESSAGE,
+        )
+
+    if status == GroundingStatus.NOT_AVAILABLE.value and states_numbers:
+        projection_like = bool(re.search(r"\bP(?:10|50|90)\b|\bsurvival\b", text, re.I))
+        if not available_metrics or projection_like:
+            reason = "ungrounded_numeric_claims"
+            return FabricationGuardResult(
+                output=_not_available_output(reason),
+                grounding_status=GroundingStatus.NOT_AVAILABLE.value,
+                refused=True,
+                reason=reason,
+                text=NOT_AVAILABLE_MESSAGE,
+            )
+
+    return FabricationGuardResult(
+        output=current,
+        grounding_status=status,
+        refused=False,
+        text=None,
+    )
+
+
+def apply_not_available_guard_to_text(
+    response_text: str,
+    grounding_status: Union[GroundingStatus, str, None],
+    *,
+    user_message: str = "",
+    available_metrics: Optional[Dict[str, Any]] = None,
+    run_outputs: Optional[Dict[str, Any]] = None,
+) -> FabricationGuardResult:
+    """Text-response variant for quick-chat (Cmd+K) answers."""
+    wrapped = {"executive_summary": [response_text or ""]}
+    result = apply_not_available_guard(
+        wrapped,
+        grounding_status,
+        user_message=user_message,
+        available_metrics=available_metrics,
+        run_outputs=run_outputs,
+    )
+    if result.refused:
+        return result
+    result.text = response_text
+    return result

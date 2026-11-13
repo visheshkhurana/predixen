@@ -253,3 +253,111 @@ class TestKillSwitch:
 
         with patch.dict("os.environ", {"DEPLOY_LANDED_ENABLED": "false"}):
             asyncio.run(run_deploy_landed_loop())
+
+
+class TestControlFailedEmailMute:
+    def test_control_failed_muted_by_default(self):
+        import asyncio
+        from server.services import deploy_landed as mod
+        from server.services.deploy_landed import DeployReport, ProbeResult
+
+        report = DeployReport(
+            status="control-failed",
+            note="CONTROL FAILED: fake asset",
+            results=[
+                ProbeResult(
+                    name="fake-asset",
+                    path=CONTROL_ASSET_DEFAULT,
+                    status=200,
+                    ok=False,
+                    kind="control",
+                )
+            ],
+        )
+        sent: list[tuple] = []
+
+        async def fake_send_email(**kwargs):
+            sent.append(kwargs)
+
+        with patch.dict(
+            "os.environ",
+            {"CRAWLER_ALERT_EMAIL": "ops@example.com"},
+            clear=False,
+        ):
+            # Ensure opt-in is off
+            with patch.dict("os.environ", {"DEPLOY_LANDED_ALERT_ON_CONTROL_FAILED": ""}, clear=False):
+                with patch.object(mod, "send_email", create=True):
+                    with patch(
+                        "server.email.service.send_email",
+                        new=fake_send_email,
+                    ):
+                        asyncio.run(mod._send_alert(report))
+        assert sent == []
+
+    def test_control_failed_emails_when_opted_in(self):
+        import asyncio
+        from server.services import deploy_landed as mod
+        from server.services.deploy_landed import DeployReport, ProbeResult
+
+        report = DeployReport(
+            status="control-failed",
+            note="CONTROL FAILED: fake asset",
+            results=[
+                ProbeResult(
+                    name="fake-asset",
+                    path=CONTROL_ASSET_DEFAULT,
+                    status=200,
+                    ok=False,
+                    kind="control",
+                )
+            ],
+        )
+        sent: list[tuple] = []
+
+        async def fake_send_email(**kwargs):
+            sent.append(kwargs)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "CRAWLER_ALERT_EMAIL": "ops@example.com",
+                "DEPLOY_LANDED_ALERT_ON_CONTROL_FAILED": "true",
+            },
+            clear=False,
+        ):
+            with patch("server.email.service.send_email", new=fake_send_email):
+                asyncio.run(mod._send_alert(report))
+        assert len(sent) == 1
+        assert "CONTROL FAILED" in sent[0]["subject"]
+
+    def test_probe_failed_still_emails(self):
+        import asyncio
+        from server.services import deploy_landed as mod
+        from server.services.deploy_landed import DeployReport, ProbeResult
+
+        report = DeployReport(
+            status="failed",
+            results=[
+                ProbeResult(
+                    name="leads-auth",
+                    path="/api/leads",
+                    status=404,
+                    ok=False,
+                    kind="probe",
+                )
+            ],
+        )
+        sent: list = []
+
+        async def fake_send_email(**kwargs):
+            sent.append(kwargs)
+
+        with patch.dict(
+            "os.environ",
+            {"CRAWLER_ALERT_EMAIL": "ops@example.com"},
+            clear=False,
+        ):
+            with patch("server.email.service.send_email", new=fake_send_email):
+                asyncio.run(mod._send_alert(report))
+        assert len(sent) == 1
+        assert "FAILED" in sent[0]["subject"]

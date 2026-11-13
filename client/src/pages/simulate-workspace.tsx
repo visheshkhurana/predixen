@@ -1,3 +1,5 @@
+import { currencySymbol } from '@/lib/money';
+import { formatCurrencyAbbrev, formatCurrencyFull } from '@/lib/utils';
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useSEO } from "@/lib/seo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,6 +27,9 @@ import { SimTerminalDrawer } from '@/components/ui/sim-terminal-drawer';
 import { SimSkeleton } from '@/components/ui/sim-skeleton';
 import { SimBackgroundOrbs } from '@/components/ui/sim-background-orbs';
 import { SimEventCard } from '@/components/ui/sim-event-card';
+import { SimulationInputsPanel } from '@/components/simulation-inputs-panel';
+import { buildSimulationV2Payload } from '@/lib/simulation/v2Request';
+import { valuesFromSimulationResult, type InputProvenanceMap } from '@/lib/simulation/inputProvenance';
 
 interface AccuracyRecord {
   id: number;
@@ -74,7 +79,7 @@ interface BiasResponse {
 }
 import { useCurrency } from '@/hooks/useCurrency';
 import { WhatIfExplorer, StressTestPanel, ReverseStressTest, TornadoChart } from '@/components/simulation';
-import { calculateSensitivity, calculateRunway, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
+import { calculateSensitivity, calculateRunway, calculateWhatIfImpact, financialStateFromMetrics, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
 import { useScenarios } from '@/api/hooks';
 import { ActualVsSimulatedComparison, MultiMetricComparison } from '@/components/ActualVsSimulatedComparison';
 
@@ -95,20 +100,7 @@ function WorkspaceLoading() {
 }
 
 function buildFinancialState(metrics: any): FinancialState {
-  const totalExpenses = metrics.totalMonthlyExpenses ?? metrics.burnRate ?? 0;
-  return {
-    cashBalance: metrics.cashOnHand ?? 0,
-    monthlyRevenue: metrics.mrr ?? 0,
-    monthlyBurn: metrics.burnRate ?? totalExpenses,
-    growthRate: metrics.monthlyGrowthRate ?? 10,
-    churnRate: metrics.churnRatePct ?? 5,
-    grossMargin: metrics.grossMarginPct ?? 70,
-    opex: totalExpenses * 0.3,
-    payroll: totalExpenses * 0.5,
-    otherCosts: totalExpenses * 0.2,
-    cac: metrics.cac ?? 500,
-    ltv: metrics.ltv ?? 5000,
-  };
+  return financialStateFromMetrics(metrics);
 }
 
 function PredictionAccuracySection({ companyId }: { companyId: number }) {
@@ -737,12 +729,12 @@ function mapBackendEvent(e: BackendEvent): SimEvent {
   const agentType = e.agentType || e.type || 'market';
   const impactObj = e.impact || {};
   const impactParts: string[] = [];
-  if (impactObj.burn_increase) impactParts.push(`+$${Math.round(impactObj.burn_increase).toLocaleString()} burn`);
+  if (impactObj.burn_increase) impactParts.push(`+${formatCurrencyFull(Math.round(impactObj.burn_increase))} burn`);
   if (impactObj.burn_reduction_pct) impactParts.push(`${Math.round(impactObj.burn_reduction_pct * 100)}% burn cut`);
   if (impactObj.headcount_change) impactParts.push(`+${impactObj.headcount_change} headcount`);
   if (impactObj.funding_climate_change) impactParts.push(`${(impactObj.funding_climate_change * 100).toFixed(0)}% funding shift`);
   if (impactObj.market_growth_change) impactParts.push(`${(impactObj.market_growth_change * 100).toFixed(0)}% growth shift`);
-  if (impactObj.revenue_change) impactParts.push(`$${Math.round(impactObj.revenue_change).toLocaleString()} revenue`);
+  if (impactObj.revenue_change) impactParts.push(`${formatCurrencyFull(Math.round(impactObj.revenue_change))} revenue`);
   if (impactObj.team_morale) impactParts.push(`${(impactObj.team_morale * 100).toFixed(0)}% morale`);
   if (impactObj.productivity_multiplier) impactParts.push(`${Math.round(impactObj.productivity_multiplier * 100)}% productivity`);
 
@@ -1073,7 +1065,7 @@ function ConsoleTimeline({ timeline, currentMonth }: { timeline: TimelineMonth[]
               />
               <div className="absolute inset-0 flex items-center justify-between px-2 text-[10px]">
                 <span className="font-medium">M{m.month}</span>
-                <span className="font-mono opacity-70">${(m.cash / 1000).toFixed(0)}k</span>
+                <span className="font-mono opacity-70">{formatCurrencyAbbrev(m.cash)}</span>
               </div>
             </div>
           );
@@ -1365,6 +1357,8 @@ function AgentSimulationConsole() {
   const [report, setReport] = useState<V2Report | null>(null);
   const [completedRounds, setCompletedRounds] = useState(0);
   const [simulationId, setSimulationId] = useState<string | null>(null);
+  const [inputProvenance, setInputProvenance] = useState<InputProvenanceMap | null>(null);
+  const [inputValues, setInputValues] = useState<Record<string, number>>({});
   const abortRef = useRef<AbortController | null>(null);
   const eventFeedRef = useRef<HTMLDivElement>(null);
 
@@ -1424,6 +1418,8 @@ function AgentSimulationConsole() {
     setLiveState(null);
     setCompletedRounds(0);
     setSimulationId(null);
+    setInputProvenance(null);
+    setInputValues({});
     setTerminalLogs([]);
     addLog('Starting MiroFish-style multi-agent simulation...');
 
@@ -1437,19 +1433,12 @@ function AgentSimulationConsole() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         signal: controller.signal,
-        body: JSON.stringify({
-          total_rounds: numRounds,
-          monthly_revenue: baseMetrics?.mrr ?? 50000,
-          monthly_burn: baseMetrics?.burnRate ?? 80000,
-          cash_balance: baseMetrics?.cashOnHand ?? 500000,
-          customers: 50,
-          team_size: baseMetrics?.headcount || 10,
-          growth_rate: Math.min(1.0, Math.max(-0.5, (baseMetrics?.monthlyGrowthRate ?? 5) > 1 ? (baseMetrics?.monthlyGrowthRate ?? 5) / 100 : (baseMetrics?.monthlyGrowthRate ?? 0.05))),
-          churn_rate: 0.03,
-          funding_climate: fundingClimate,
-          market_growth: marketGrowth,
-          market_volatility: marketVolatility,
-        }),
+        body: JSON.stringify(buildSimulationV2Payload(baseMetrics, {
+          totalRounds: numRounds,
+          fundingClimate,
+          marketGrowth,
+          marketVolatility,
+        })),
       });
 
       if (!res.ok) {
@@ -1506,6 +1495,16 @@ function AgentSimulationConsole() {
               case 'complete': {
                 const result = msg.result;
                 setSimulationId(result.simulation_id);
+                setInputProvenance(
+                  result.input_provenance && typeof result.input_provenance === 'object' && !Array.isArray(result.input_provenance)
+                    ? result.input_provenance as InputProvenanceMap
+                    : null,
+                );
+                setInputValues(valuesFromSimulationResult(result, {
+                  fundingClimate,
+                  marketGrowth,
+                  marketVolatility,
+                }));
                 setReport(result.report as V2Report);
                 setLiveState(result.final_state as V2CompanyState);
                 if (result.agents) setAgents(result.agents);
@@ -1547,7 +1546,11 @@ function AgentSimulationConsole() {
   const initCash = baseMetrics?.cashOnHand ?? 500000;
   const initBurn = baseMetrics?.burnRate ?? 80000;
   const currentCash = liveState?.cash ?? initCash;
-  const currentBurn = liveState?.burn_rate ?? initBurn;
+  // The engine's burn_rate is GROSS spend (cash += mrr - burn_rate); the card
+  // shows NET burn like the dashboard.
+  const currentBurn = liveState
+    ? Math.max(0, (liveState.burn_rate ?? 0) - (liveState.mrr ?? 0))
+    : initBurn;
   const currentRunway = liveState?.runway_months ?? (initBurn > 0 ? initCash / initBurn : 0);
   const currentMrr = liveState?.mrr ?? baseMetrics?.mrr ?? 50000;
   const currentCustomers = liveState?.customers ?? 50;
@@ -1592,6 +1595,12 @@ function AgentSimulationConsole() {
           </div>
         </div>
 
+        {isComplete && (
+          <div className="px-4 pb-3">
+            <SimulationInputsPanel provenance={inputProvenance} values={inputValues} />
+          </div>
+        )}
+
         {agents.length > 0 && (
           <div className="px-4 pb-3 overflow-x-auto">
             <div className="flex gap-2 min-w-max">
@@ -1633,7 +1642,7 @@ function AgentSimulationConsole() {
                     <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Cash</span>
                     <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
                   </div>
-                  <SimAnimatedCounter value={currentCash} prefix="$" className="text-lg font-bold font-mono text-emerald-400" />
+                  <SimAnimatedCounter value={currentCash} prefix={currencySymbol()} className="text-lg font-bold font-mono text-emerald-400" />
                   {liveState && (
                     <div className={`flex items-center gap-1 mt-0.5 text-[10px] ${liveState.cash > initCash ? 'text-emerald-400' : 'text-red-400'}`}>
                       {liveState.cash > initCash ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -1646,14 +1655,14 @@ function AgentSimulationConsole() {
                     <span className="text-[10px] text-zinc-500 uppercase tracking-wider">MRR</span>
                     <TrendingUp className="h-3.5 w-3.5 text-blue-400" />
                   </div>
-                  <SimAnimatedCounter value={currentMrr} prefix="$" className="text-lg font-bold font-mono text-blue-400" />
+                  <SimAnimatedCounter value={currentMrr} prefix={currencySymbol()} className="text-lg font-bold font-mono text-blue-400" />
                 </div>
                 <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-burn">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Monthly Burn</span>
                     <TrendingDown className="h-3.5 w-3.5 text-red-400" />
                   </div>
-                  <SimAnimatedCounter value={currentBurn} prefix="$" className="text-lg font-bold font-mono text-red-400" />
+                  <SimAnimatedCounter value={currentBurn} prefix={currencySymbol()} className="text-lg font-bold font-mono text-red-400" />
                 </div>
                 <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-runway">
                   <div className="flex items-center justify-between mb-1">

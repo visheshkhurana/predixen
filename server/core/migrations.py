@@ -1028,7 +1028,132 @@ def run_migrations(engine: Engine) -> None:
     ensure_copilot_feedback_table(engine)
     ensure_agent_simulation_runs_table(engine)
     ensure_subscription_trial_columns(engine)
+    ensure_lifecycle_email_tables(engine)
+    ensure_lead_consent_columns(engine)
+    ensure_lead_utm_columns(engine)
     logger.info("Database migrations completed successfully")
+
+
+# #176 lead consent columns. Existing rows take consent FALSE from the
+# column default and NULL for the other three. No UPDATE and no backfill.
+# IF NOT EXISTS / IF EXISTS make a re-run a no-op when production has
+# already added the columns by hand.
+LEAD_CONSENT_UPGRADE_SQL = (
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent BOOLEAN NOT NULL DEFAULT FALSE;",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_at TIMESTAMP;",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_page VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_status VARCHAR(20);",
+)
+
+LEAD_CONSENT_DOWNGRADE_SQL = (
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent_at;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS source_page;",
+    "ALTER TABLE leads DROP COLUMN IF EXISTS consent_status;",
+)
+
+
+def _lead_consent_column(statement: str) -> str:
+    tokens = statement.replace(";", " ").split()
+    return tokens[tokens.index("EXISTS") + 1]
+
+
+def _apply_lead_consent_ddl(
+    engine: Engine,
+    statements: tuple[str, ...],
+    *,
+    adding: bool,
+    done_message: str,
+    label: str = "consent columns",
+) -> None:
+    """Run the lead-consent DDL.
+
+    Postgres runs the statements as written. SQLite rejects IF NOT EXISTS and
+    IF EXISTS on ADD/DROP COLUMN, so tests skip columns that are already in
+    the desired state and execute the same definition without that clause.
+    """
+    is_sqlite = engine.dialect.name == "sqlite"
+    with engine.connect() as conn:
+        existing: set[str] | None = None
+        if is_sqlite:
+            try:
+                rows = conn.execute(text("PRAGMA table_info(leads)")).fetchall()
+            except Exception as e:
+                logger.debug("leads table is missing, skipping %s: %s", label, e)
+                return
+            existing = {row[1] for row in rows}
+            if not existing:
+                return
+        for statement in statements:
+            name = _lead_consent_column(statement)
+            executable = statement
+            if existing is not None:
+                present = name in existing
+                if adding and present:
+                    continue
+                if not adding and not present:
+                    continue
+                executable = executable.replace(" IF NOT EXISTS", "").replace(" IF EXISTS", "")
+            try:
+                conn.execute(text(executable.strip().rstrip(";")))
+            except Exception as e:
+                # Postgres aborts the transaction on the first failed statement,
+                # so a swallowed debug log hides that the rest of this batch did
+                # not apply.
+                logger.warning("leads.%s may already exist or the table is missing: %s", name, e)
+        conn.commit()
+    logger.info(done_message)
+
+
+def ensure_lead_consent_columns(engine: Engine) -> None:
+    """Consent fields on leads. Idempotent; existing rows stay unconsented.
+
+    create_all does not add columns to a table that already exists, and
+    calculator opt-in has to survive a deploy onto the current leads table.
+    """
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_CONSENT_UPGRADE_SQL,
+        adding=True,
+        done_message="Lead consent columns migration complete",
+    )
+
+
+def downgrade_lead_consent_columns(engine: Engine) -> None:
+    """Drop the four #176 lead consent columns. Idempotent. Not run at startup."""
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_CONSENT_DOWNGRADE_SQL,
+        adding=False,
+        done_message="Lead consent columns downgrade complete",
+    )
+
+
+# First-touch campaign columns. Nullable, no default, no UPDATE: existing
+# rows stay NULL. IF NOT EXISTS makes a re-run a no-op, including when the
+# columns were added by hand. Startup calls this even when RUN_MIGRATIONS
+# is off. No IP column.
+LEAD_UTM_UPGRADE_SQL = (
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_source VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_medium VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_campaign VARCHAR(200);",
+)
+
+
+def ensure_lead_utm_columns(engine: Engine) -> None:
+    """Campaign fields on leads. Idempotent. Does not update existing rows.
+
+    create_all does not add columns to a table that already exists, and
+    production leaves RUN_MIGRATIONS off, so `_run_deferred_startup` calls
+    this directly.
+    """
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_UTM_UPGRADE_SQL,
+        adding=True,
+        done_message="Lead utm columns migration complete",
+        label="utm columns",
+    )
 
 
 def ensure_currency_tables(engine: Engine) -> None:
@@ -1768,6 +1893,104 @@ def ensure_agent_simulation_runs_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Agent simulation runs table migration complete")
+
+
+LEGACY_AGENT_SIM_SHARE_FLAG = "REVOKE_LEGACY_AGENT_SIM_SHARES"
+
+
+def revoke_legacy_agent_sim_shares(engine: Engine, force: bool = False) -> int:
+    """Revoke agent-simulation share links that were created automatically.
+
+    Before #161 every agent run got a public share_token at creation, whether
+    or not the owner shared it. Since #161 a token is only issued by
+    POST .../agent-run/{id}/share, which always writes a "shareExpiresAt" key
+    (null when the link does not expire) into results_json. So a token whose
+    results_json lacks that key was auto-created and is revoked here; links an
+    owner created deliberately are kept. Idempotent: a second run finds nothing.
+
+    Runs only when REVOKE_LEGACY_AGENT_SIM_SHARES=true (or force=True).
+    Returns the number of links revoked.
+    """
+    import json
+    import os
+
+    if not force and os.environ.get(LEGACY_AGENT_SIM_SHARE_FLAG, "").strip().lower() != "true":
+        return 0
+    revoked = 0
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT id, results_json FROM agent_simulation_runs WHERE share_token IS NOT NULL"
+        )).fetchall()
+        legacy_ids = []
+        for run_id, raw in rows:
+            try:
+                results = json.loads(raw) if raw else {}
+            except (TypeError, ValueError):
+                results = {}
+            if not isinstance(results, dict) or "shareExpiresAt" not in results:
+                legacy_ids.append(run_id)
+        for run_id in legacy_ids:
+            conn.execute(
+                text("UPDATE agent_simulation_runs SET share_token = NULL WHERE id = :id"),
+                {"id": run_id},
+            )
+        conn.commit()
+        revoked = len(legacy_ids)
+    logger.info("Revoked %d legacy auto-created agent-simulation share links", revoked)
+    return revoked
+
+
+def ensure_lifecycle_email_tables(engine: Engine) -> None:
+    """Preference row for opt-out, plus the lifecycle send/skip ledger.
+
+    notification_preferences is created by SQLAlchemy metadata on a full
+    schema build. CREATE IF NOT EXISTS covers boots that skip create_all.
+    Existing rows are left alone.
+    """
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+                company_id INTEGER,
+                email_enabled BOOLEAN DEFAULT TRUE,
+                email_address VARCHAR,
+                alert_types JSON,
+                thresholds JSON,
+                frequency VARCHAR DEFAULT 'immediate',
+                monthly_digest BOOLEAN DEFAULT TRUE,
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS lifecycle_email_log (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                kind VARCHAR(32) NOT NULL,
+                campaign VARCHAR(120),
+                status VARCHAR(32) NOT NULL,
+                reason VARCHAR(120),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_lifecycle_email_log_cap "
+            "ON lifecycle_email_log (user_id, status, created_at)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_notification_preferences_user "
+            "ON notification_preferences (user_id)"
+        ))
+        try:
+            conn.execute(text(
+                "ALTER TABLE onboarding_email_log "
+                "ADD COLUMN IF NOT EXISTS dropped_at TIMESTAMP"
+            ))
+        except Exception:
+            # The onboarding log is created by ensure_table on scheduler boot.
+            pass
+        conn.commit()
+    logger.info("Lifecycle email tables ensured")
 
 
 def ensure_subscription_trial_columns(engine: Engine) -> None:

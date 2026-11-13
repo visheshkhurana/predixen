@@ -1,3 +1,4 @@
+import { currencySymbol, formatInrCompact, getDisplayCurrency } from '@/lib/money';
 export function formatPercent(value: number | null | undefined, decimals = 1): string {
   if (value === null || value === undefined || isNaN(value)) return 'N/A';
   const fixed = Number(value).toFixed(decimals);
@@ -7,8 +8,14 @@ export function formatPercent(value: number | null | undefined, decimals = 1): s
 
 export { formatCurrencyAbbrev } from '@/lib/utils';
 
-export function formatCurrency(value: number | null | undefined, prefix = '$'): string {
+export function formatCurrency(value: number | null | undefined, prefix?: string): string {
   if (value === null || value === undefined || isNaN(value)) return 'N/A';
+  // No explicit prefix: follow the selected company's currency.
+  if (prefix === undefined) {
+    const currency = getDisplayCurrency();
+    if (currency === 'INR') return formatInrCompact(value);
+    prefix = currency === 'USD' ? '$' : currencySymbol(currency);
+  }
   const absValue = Math.abs(value);
   const sign = value < 0 ? '-' : '';
   if (absValue >= 1_000_000) {

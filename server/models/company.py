@@ -20,6 +20,13 @@ class Company(Base):
     data_sharing_enabled = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    @property
+    def is_sample(self) -> bool:
+        meta = self.metadata_json or {}
+        if not isinstance(meta, dict):
+            return False
+        return bool(meta.get("is_sample"))
+
     user = relationship("User", back_populates="companies")
     datasets = relationship("Dataset", back_populates="company")
     financial_records = relationship("FinancialRecord", back_populates="company")

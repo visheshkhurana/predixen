@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, ChevronDown, Plus, Check, Pencil, Trash2, FlaskConical, Share2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +36,45 @@ import { useFounderStore } from '@/store/founderStore';
 import { useCompanies, useUpdateCompany, useDeleteCompany } from '@/api/hooks';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { isDemoEmail } from '@/lib/demo';
+
+// @radix-ui/react-select is the largest vendor still statically reachable from
+// the entry (CompanySwitcher is imported by the always-loaded sidebar). The
+// visible switcher is a dropdown menu; Select is only the edit-company
+// dialog. Load it on open so landing visitors do not download it.
+type SelectModule = typeof import('@/components/ui/select');
+
+function EditCompanySelect({
+  mod,
+  value,
+  onValueChange,
+  placeholder,
+  testId,
+  options,
+}: {
+  mod: SelectModule;
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder: string;
+  testId: string;
+  options: { value: string; label: string }[];
+}) {
+  const { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } = mod;
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger data-testid={testId}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 interface Company {
   id: number;
@@ -47,6 +85,7 @@ interface Company {
   currency: string;
   description?: string;
   data_sharing_enabled?: boolean;
+  is_sample?: boolean;
 }
 
 const INDUSTRIES = [
@@ -92,7 +131,8 @@ const CURRENCY_LABELS: Record<string, string> = {
 
 export function CompanySwitcher() {
   const { currentCompany, setCurrentCompany, user } = useFounderStore();
-  const isDemoUser = user?.email === 'demo@founderconsole.ai';
+  const isDemoUser = isDemoEmail(user?.email);
+  const isSample = !!currentCompany?.is_sample && !isDemoUser;
   const { data: companies, isLoading } = useCompanies();
   const updateCompany = useUpdateCompany();
   const deleteCompany = useDeleteCompany();
@@ -112,18 +152,28 @@ export function CompanySwitcher() {
     currency: 'USD',
     data_sharing_enabled: false,
   });
+  const [selectMod, setSelectMod] = useState<SelectModule | null>(null);
 
   // The persisted currentCompany can be stale — left over from the demo
   // account, a different user, or a deleted company. Once the real list for
   // this session loads, drop any selection that isn't in it so the app never
   // renders another account's company.
+  const syncCurrentCompanyIsSample = useFounderStore((s) => s.syncCurrentCompanyIsSample);
+
   useEffect(() => {
     if (isLoading) return;
     const list = (companies || []) as Company[];
     if (currentCompany && !list.some((c) => c.id === currentCompany.id)) {
       setCurrentCompany(list[0] ?? null);
+      return;
     }
-  }, [isLoading, companies, currentCompany, setCurrentCompany]);
+    if (currentCompany) {
+      const fresh = list.find((c) => c.id === currentCompany.id);
+      if (fresh && !!fresh.is_sample !== !!currentCompany.is_sample) {
+        syncCurrentCompanyIsSample(!!fresh.is_sample);
+      }
+    }
+  }, [isLoading, companies, currentCompany, setCurrentCompany, syncCurrentCompanyIsSample]);
 
   if (isLoading) {
     return <Skeleton className="h-9 w-40" />;
@@ -142,8 +192,29 @@ export function CompanySwitcher() {
       currency: company.currency || 'USD',
       data_sharing_enabled: company.data_sharing_enabled || false,
     });
-    setEditDialogOpen(true);
     setOpen(false);
+    // Open immediately. The industry/stage/currency fields render Skeleton
+    // until the select chunk arrives. Waiting on import() first meant a
+    // stale-chunk 404 did nothing and rejected an unhandled promise.
+    setEditDialogOpen(true);
+    if (selectMod) return;
+    import('@/components/ui/select')
+      .then((mod) => {
+        // vite:preloadError calls preventDefault, which swallows the
+        // rejection and resolves this promise with undefined. Treat that
+        // the same as a failed chunk.
+        if (!mod?.Select) {
+          throw new Error('select chunk missing');
+        }
+        setSelectMod(mod);
+      })
+      .catch(() => {
+        toast({
+          title: 'Error',
+          description: "The editor couldn't load. Refresh the page and try again.",
+          variant: 'destructive',
+        });
+      });
   };
 
   const handleDeleteClick = (e: React.MouseEvent, company: Company) => {
@@ -204,15 +275,17 @@ export function CompanySwitcher() {
             data-testid="button-company-switcher"
             aria-label="Switch company"
           >
-            {isDemoUser ? <FlaskConical className="h-4 w-4 text-amber-400 shrink-0" /> : <Building2 className="h-4 w-4 shrink-0" />}
+            {isDemoUser || isSample ? <FlaskConical className="h-4 w-4 text-amber-400 shrink-0" /> : <Building2 className="h-4 w-4 shrink-0" />}
             <div className="flex flex-col items-start min-w-0">
               <div className="flex items-center gap-1">
                 <span className="truncate max-w-[120px]">
                   {currentCompany?.name || 'Select Company'}
                 </span>
                 {isDemoUser && <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4 shrink-0" data-testid="badge-demo-company">Demo</Badge>}
+                {isSample && <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4 shrink-0" data-testid="badge-sample-company">Sample</Badge>}
               </div>
               {isDemoUser && <span className="text-[10px] text-amber-400/70 leading-3" data-testid="text-demo-subtitle">Simulated data only</span>}
+              {isSample && <span className="text-[10px] text-amber-400/70 leading-3" data-testid="text-sample-subtitle">Simulated data only</span>}
             </div>
             <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
           </Button>
@@ -262,6 +335,9 @@ export function CompanySwitcher() {
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   {isDemoUser ? <FlaskConical className="h-4 w-4 text-amber-400/60 flex-shrink-0" /> : <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
                   <span className="truncate">{company.name}</span>
+                  {company.is_sample && !isDemoUser && (
+                    <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4 shrink-0">Sample</Badge>
+                  )}
                   {currentCompany?.id === company.id && (
                     <Check className="h-4 w-4 text-primary flex-shrink-0" />
                   )}
@@ -325,57 +401,51 @@ export function CompanySwitcher() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-industry">Industry</Label>
-              <Select
-                value={editForm.industry}
-                onValueChange={(value) => setEditForm({ ...editForm, industry: value })}
-              >
-                <SelectTrigger data-testid="select-edit-company-industry">
-                  <SelectValue placeholder="Select industry" />
-                </SelectTrigger>
-                <SelectContent>
-                  {INDUSTRIES.map((industry) => (
-                    <SelectItem key={industry} value={industry}>
-                      {industry}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {selectMod ? (
+                <EditCompanySelect
+                  mod={selectMod}
+                  value={editForm.industry}
+                  onValueChange={(value) => setEditForm({ ...editForm, industry: value })}
+                  placeholder="Select industry"
+                  testId="select-edit-company-industry"
+                  options={INDUSTRIES.map((industry) => ({ value: industry, label: industry }))}
+                />
+              ) : (
+                <Skeleton className="h-9 w-full" />
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-stage">Stage</Label>
-              <Select
-                value={editForm.stage}
-                onValueChange={(value) => setEditForm({ ...editForm, stage: value })}
-              >
-                <SelectTrigger data-testid="select-edit-company-stage">
-                  <SelectValue placeholder="Select stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  {STAGES.map((stage) => (
-                    <SelectItem key={stage} value={stage}>
-                      {stage}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {selectMod ? (
+                <EditCompanySelect
+                  mod={selectMod}
+                  value={editForm.stage}
+                  onValueChange={(value) => setEditForm({ ...editForm, stage: value })}
+                  placeholder="Select stage"
+                  testId="select-edit-company-stage"
+                  options={STAGES.map((stage) => ({ value: stage, label: stage }))}
+                />
+              ) : (
+                <Skeleton className="h-9 w-full" />
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-currency">Currency</Label>
-              <Select
-                value={editForm.currency}
-                onValueChange={(value) => setEditForm({ ...editForm, currency: value })}
-              >
-                <SelectTrigger data-testid="select-edit-company-currency">
-                  <SelectValue placeholder="Select currency" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((currency) => (
-                    <SelectItem key={currency} value={currency}>
-                      {CURRENCY_LABELS[currency] || currency}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {selectMod ? (
+                <EditCompanySelect
+                  mod={selectMod}
+                  value={editForm.currency}
+                  onValueChange={(value) => setEditForm({ ...editForm, currency: value })}
+                  placeholder="Select currency"
+                  testId="select-edit-company-currency"
+                  options={CURRENCIES.map((currency) => ({
+                    value: currency,
+                    label: CURRENCY_LABELS[currency] || currency,
+                  }))}
+                />
+              ) : (
+                <Skeleton className="h-9 w-full" />
+              )}
             </div>
             <div className="flex items-center justify-between p-3 rounded-lg border border-border">
               <div className="flex items-center gap-2">

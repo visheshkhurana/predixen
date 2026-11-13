@@ -4,13 +4,14 @@ import logging
 import requests
 from urllib.parse import urlencode
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from server.core.db import get_db
 from server.core.config import settings
-from server.core.security import create_access_token, set_auth_cookie, set_refresh_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE
+from server.core.security import create_access_token, set_auth_cookie, set_refresh_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, revoke_all_sessions
 from server.models.user import User, RefreshToken
+from server.services.posthog import sanitize_distinct_id
 
 logger = logging.getLogger(__name__)
 
@@ -46,19 +47,108 @@ def _get_base_url(request: Request) -> str:
     return "https://localhost:5000"
 
 
+# First-touch campaign (utm_*, gclid, fbclid) per in-flight Google login, kept
+# beside the CSRF state so it survives the round trip without going to Google.
+_oauth_attribution: dict[str, dict] = {}
+_OAUTH_ATTRIBUTION_MAX = 5000
+
+
+def _remember_google_attribution(state: str, query) -> None:
+    from server.services.attribution import ATTRIBUTION_KEYS, clean_attribution_value
+    cleaned = {}
+    for key in ATTRIBUTION_KEYS:
+        value = clean_attribution_value(query.get(key))
+        if value:
+            cleaned[key] = value
+    if cleaned:
+        # Abandoned logins never pop their entry; drop the oldest past the cap.
+        while len(_oauth_attribution) >= _OAUTH_ATTRIBUTION_MAX:
+            _oauth_attribution.pop(next(iter(_oauth_attribution)))
+        _oauth_attribution[state] = cleaned
+
+
+def _take_google_attribution(state: str | None) -> dict:
+    if not state:
+        return {}
+    return _oauth_attribution.pop(state, None) or {}
+
+
+def _remember_google_state(state: str, distinct_id: str | None) -> None:
+    """Keep the browser distinct_id beside the CSRF state, not in Google's URL."""
+    _oauth_states[state] = {
+        "provider": "google",
+        "distinct_id": sanitize_distinct_id(distinct_id),
+    }
+
+
+def _take_google_state(state: str | None) -> tuple[bool, str | None]:
+    """Return (valid, anonymous distinct_id).
+
+    A bare ``"google"`` value is an in-flight login from before distinct_id
+    was stored. It stays valid and aliases nothing.
+    """
+    if not state:
+        return False, None
+    stored = _oauth_states.pop(state, None)
+    if stored == "google":
+        return True, None
+    if isinstance(stored, dict) and stored.get("provider") == "google":
+        return True, sanitize_distinct_id(stored.get("distinct_id"))
+    return False, None
+
+
+class OAuthLinkError(Exception):
+    """An OAuth identity that must not be attached to the matching account."""
+
+
+def _flag_internal_or_test_person(user: User) -> None:
+    """Returning Google sign-in. New accounts are flagged from signup_completed."""
+    try:
+        from server.services.posthog import sync_internal_or_test_person
+
+        sync_internal_or_test_person(user.id, user.email)
+    except Exception:
+        logger.warning(
+            "[oauth] posthog internal-user flag failed for user_id=%s",
+            getattr(user, "id", None),
+        )
+
+
 def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: str,
-                               display_name: str = None, avatar_url: str = None) -> User:
+                               display_name: str = None, avatar_url: str = None,
+                               anonymous_distinct_id: str | None = None,
+                               attribution: dict | None = None) -> User:
     user = db.query(User).filter(User.email == email).first()
     if user:
+        if user.oauth_provider == provider and user.oauth_id and oauth_id and user.oauth_id != oauth_id:
+            # Same email, different Google account: never silently re-bind.
+            raise OAuthLinkError("oauth_account_mismatch")
         if not user.oauth_provider:
+            if user.password_hash and not user.is_email_verified:
+                # Pre-hijack defence: anyone can register a password account for
+                # an address they don't own, because signup issues a session before
+                # the email is verified. The Google sign-in is the first proof of who
+                # really owns this inbox, so the unverified password (and every
+                # session minted from it) is discarded rather than kept alongside.
+                logger.warning(
+                    "OAuth link to unverified password account user_id=%s: "
+                    "clearing password and revoking sessions", user.id,
+                )
+                user.password_hash = None
+                # Before commit, so a token minted from the planted password
+                # cannot be used once this link is durable.
+                revoke_all_sessions(db, user.id)
             user.oauth_provider = provider
             user.oauth_id = oauth_id
+        # Only reached with an email the provider has verified (see callback).
+        user.is_email_verified = True
         if display_name and not user.display_name:
             user.display_name = display_name
         if avatar_url and not user.avatar_url:
             user.avatar_url = avatar_url
         db.commit()
         db.refresh(user)
+        _flag_internal_or_test_person(user)
         return user
 
     user = User(
@@ -68,28 +158,29 @@ def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: 
         oauth_id=oauth_id,
         display_name=display_name,
         avatar_url=avatar_url,
+        is_email_verified=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
     try:
-        from server.email.service import send_slack_signup_notification
-        import asyncio
-        loop = asyncio.get_event_loop()
-        loop.create_task(send_slack_signup_notification(
-            email=user.email,
-            name=display_name,
-            signup_method="Google OAuth",
+        from server.services.activation import emit_signup_completed
+        emit_signup_completed(
             user_id=user.id,
-        ))
+            method="google",
+            email=user.email,
+            anonymous_distinct_id=anonymous_distinct_id,
+            attribution=attribution or None,
+        )
     except Exception as e:
-        logger.warning(f"Slack signup notification failed: {e}")
+        logger.warning(f"signup_completed emit failed: {e}")
 
     return user
 
 
-def _build_auth_redirect(request: Request, user: User, db: Session = None) -> RedirectResponse:
+def _build_auth_redirect(request: Request, user: User, db: Session = None,
+                         new_user: bool = False) -> RedirectResponse:
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
@@ -102,6 +193,9 @@ def _build_auth_redirect(request: Request, user: User, db: Session = None) -> Re
         "email": user.email,
         "role": user.role or "viewer",
         "is_platform_admin": "true" if is_admin else "false",
+        # The client fires the signup conversion (GA4 sign_up, Meta
+        # CompleteRegistration) only for an account created on this callback.
+        **({"new_user": "1"} if new_user else {}),
     })
     resp = RedirectResponse(url=f"{base}/auth/callback?{params}", status_code=302)
     set_auth_cookie(resp, access_token)
@@ -120,12 +214,13 @@ def _build_auth_redirect(request: Request, user: User, db: Session = None) -> Re
 
 
 @router.get("/google/start")
-def google_start(request: Request):
+def google_start(request: Request, distinct_id: str | None = None):
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(status_code=501, detail="Google OAuth is not configured")
 
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = "google"
+    _remember_google_state(state, distinct_id)
+    _remember_google_attribution(state, request.query_params)
 
     base = _get_base_url(request)
     redirect_uri = f"{base}/api/auth/google/callback"
@@ -144,8 +239,8 @@ def google_start(request: Request):
 
 
 @router.get("/google/callback")
-def google_callback(request: Request, code: str = None, state: str = None, error: str = None,
-                    db: Session = Depends(get_db)):
+def google_callback(request: Request, background_tasks: BackgroundTasks, code: str = None,
+                    state: str = None, error: str = None, db: Session = Depends(get_db)):
     if error:
         logger.warning(f"Google OAuth error: {error}")
         base = _get_base_url(request)
@@ -154,8 +249,9 @@ def google_callback(request: Request, code: str = None, state: str = None, error
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
-    stored = _oauth_states.pop(state, None)
-    if stored != "google":
+    attribution = _take_google_attribution(state)
+    ok, anonymous_distinct_id = _take_google_state(state)
+    if not ok:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     base = _get_base_url(request)
@@ -192,15 +288,38 @@ def google_callback(request: Request, code: str = None, state: str = None, error
     email = profile.get("email")
     if not email:
         return RedirectResponse(url=f"{base}/auth?error=google_no_email", status_code=302)
+    # Account linking keys on email, so the email must be one Google has verified.
+    if profile.get("verified_email") is not True:
+        return RedirectResponse(url=f"{base}/auth?error=google_unverified_email", status_code=302)
 
-    user = _get_or_create_oauth_user(
-        db,
-        email=email.lower().strip(),
-        provider="google",
-        oauth_id=profile.get("id", ""),
-        display_name=profile.get("name"),
-        avatar_url=profile.get("picture"),
-    )
-    return _build_auth_redirect(request, user, db)
+    normalized_email = email.lower().strip()
+    is_new_user = db.query(User.id).filter(User.email == normalized_email).first() is None
+    try:
+        user = _get_or_create_oauth_user(
+            db,
+            email=normalized_email,
+            provider="google",
+            oauth_id=profile.get("id", ""),
+            display_name=profile.get("name"),
+            avatar_url=profile.get("picture"),
+            anonymous_distinct_id=anonymous_distinct_id,
+            attribution=attribution,
+        )
+    except OAuthLinkError as e:
+        logger.warning(f"Google OAuth link refused: {e}")
+        return RedirectResponse(url=f"{base}/auth?error=google_account_mismatch", status_code=302)
+    if is_new_user:
+        # Same follow-ups as the email signup path. This route is sync, so the
+        # old get_event_loop().create_task() had no running loop and the Slack
+        # ping never went out; background tasks run after the redirect is sent.
+        from server.email.onboarding_sequence import enroll_new_signup
+        from server.email.service import send_slack_signup_notification
+        name = profile.get("name")
+        background_tasks.add_task(enroll_new_signup, user.id, user.email, name)
+        background_tasks.add_task(
+            send_slack_signup_notification,
+            email=user.email, name=name, signup_method="Google OAuth", user_id=user.id,
+        )
+    return _build_auth_redirect(request, user, db, new_user=is_new_user)
 
 

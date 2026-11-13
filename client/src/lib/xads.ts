@@ -11,6 +11,8 @@
 // like `tw-<pixel>-<event>`. They cannot be derived from the pixel id, which is
 // why each funnel step needs its own env var rather than a naming convention.
 
+import { hasTrackingConsent } from "./consent";
+
 const PIXEL_ID = import.meta.env.VITE_X_PIXEL_ID as string | undefined;
 
 /** Funnel step → X conversion event id. Missing entries are simply not sent. */
@@ -19,6 +21,8 @@ const EVENT_IDS: Record<string, string | undefined> = {
   signup_view: import.meta.env.VITE_X_EVENT_SIGNUP_VIEW,
   signup_start: import.meta.env.VITE_X_EVENT_SIGNUP_START,
   sign_up: import.meta.env.VITE_X_EVENT_SIGN_UP,
+  signup_completed: import.meta.env.VITE_X_EVENT_SIGNUP_COMPLETED,
+  founder_activated: import.meta.env.VITE_X_EVENT_FOUNDER_ACTIVATED,
   onboarding_complete: import.meta.env.VITE_X_EVENT_ONBOARDING_COMPLETE,
   calculator_used: import.meta.env.VITE_X_EVENT_CALCULATOR_USED,
 };
@@ -41,7 +45,7 @@ declare global {
  * pixel simply reports nothing, which looks identical to "no one converted".
  */
 export function initXAds(): void {
-  if (loaded || !PIXEL_ID || typeof window === "undefined") return;
+  if (loaded || !PIXEL_ID || typeof window === "undefined" || !hasTrackingConsent()) return;
   loaded = true;
 
   try {
@@ -73,7 +77,7 @@ export function initXAds(): void {
  * click handler.
  */
 export function trackXConversion(step: string, params: Record<string, unknown> = {}): void {
-  if (!PIXEL_ID || typeof window === "undefined") return;
+  if (!PIXEL_ID || typeof window === "undefined" || !hasTrackingConsent()) return;
   const eventId = EVENT_IDS[step];
   if (!eventId) return;
 

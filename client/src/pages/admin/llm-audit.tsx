@@ -234,7 +234,13 @@ export default function LLMAuditPage() {
                       <Clock className="h-3 w-3" />
                       {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
                     </span>
-                    <Button variant="ghost" size="sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="View audit log details"
+                      onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
+                      data-testid={`button-view-audit-${log.id}`}
+                    >
                       <Eye className="h-4 w-4" />
                     </Button>
                   </div>

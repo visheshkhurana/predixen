@@ -31,6 +31,7 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from server.core.url_safety import SAFE_CLIENT_KWARGS, assert_public_url_before_request
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +92,16 @@ class WooCommerceConnector(BaseConnector):
                 params["consumer_key"] = self._consumer_key
                 params["consumer_secret"] = self._consumer_secret
 
+            # Construction only checked the URL's shape (a name that did not
+            # resolve yet was let through). Resolve it now, before credentials
+            # are sent anywhere, and never follow a redirect off the store.
+            await assert_public_url_before_request(self._store_url)
             self._client = httpx.AsyncClient(
                 base_url=self._get_base_url(),
                 timeout=30.0,
                 params=params,
                 headers=headers,
+                **SAFE_CLIENT_KWARGS,
             )
         return self._client
 

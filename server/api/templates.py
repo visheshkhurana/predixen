@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 
+from server.core.company_access import get_user_company
 from server.core.db import get_db
-from server.models.company import Company
+from server.core.security import get_current_user
+from server.models.user import User
 from server.models.scenario import Scenario
 from server.templates import (
     get_template,
@@ -15,9 +17,18 @@ from server.templates import (
 )
 from server.templates.scenarios import get_templates_by_category, get_template_summary
 
-router = APIRouter(prefix="/templates", tags=["templates"])
+router = APIRouter(
+    prefix="/templates",
+    tags=["templates"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
+# Both paths are registered so /templates does not 307 to /templates/.
+# redirect_slashes builds that Location from the request host. Behind the
+# Express proxy the host is the internal bind and /api has already been
+# stripped, which leaked https://localhost:8001/templates/.
+@router.get("", include_in_schema=False)
 @router.get("/")
 def list_templates():
     """
@@ -56,13 +67,12 @@ def apply_template(
     template_id: str,
     name_override: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Apply a template to create a new scenario for a company.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    get_user_company(db, company_id, current_user)
     
     template = get_template(template_id)
     if not template:
@@ -101,13 +111,12 @@ def apply_multiple_templates(
     company_id: int,
     template_ids: List[str],
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Apply multiple templates to create comparison scenarios.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    get_user_company(db, company_id, current_user)
     
     created = []
     errors = []

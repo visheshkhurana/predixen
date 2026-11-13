@@ -55,7 +55,7 @@ import {
 } from 'lucide-react';
 import { EmptyState, EmptyStateCard } from '@/components/ui/empty-state';
 import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
-import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
+import { calculateSensitivity, calculateWhatIfImpact, sensitivityBarsFromResults, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -73,6 +73,13 @@ import { formatSimulationForExport, downloadSimulationPDF, type SimulationPDFDat
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { SCENARIO_TEMPLATES } from '@/config/templates';
+import {
+  parseSimulatePrefill,
+  rememberSimulationAttribution,
+  clearSimulationAttribution,
+  attributionFromPrefill,
+  OVERVIEW_SUGGESTED_ACTION_FROM,
+} from '@/lib/truthScanSuggestedActions';
 import {
   Dialog,
   DialogContent,
@@ -92,6 +99,25 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+
+// HAG-246: the engine emits the real per-path runway values, including the
+// 999 sentinel for a path whose cash flow went positive with cash on hand
+// (enhanced_monte_carlo.py:405 -> distributions.runway, first 500 paths).
+// Before this, the chart on this page drew 1,000 Math.random() values inside the
+// p10..p90 band on every render and labelled them the distribution of the runs.
+// 240 is the engine's own runway cap, so nothing real lands between 900 and 998.
+const SENTINEL_SURVIVED = 999;
+
+function getRunwayPaths(
+  simulation: any,
+): { plotted: number[]; survived: number; total: number } | null {
+  const raw = simulation?.distributions?.runway;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const values = raw.filter((v: any) => typeof v === 'number' && Number.isFinite(v));
+  if (values.length === 0) return null;
+  const plotted = values.filter((v: number) => v < SENTINEL_SURVIVED);
+  return { plotted, survived: values.length - plotted.length, total: values.length };
+}
 
 function getCashBands(simulation: any): { p10: number[]; p50: number[]; p90: number[] } {
   if (simulation.bands?.cash) return simulation.bands.cash;
@@ -177,6 +203,26 @@ export default function ScenariosPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState<{ open: boolean; existingId?: number; scenarioData?: any }>({ open: false });
   const [advancedTab, setAdvancedTab] = useState('builder');
+  const truthScanPrefill = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return parseSimulatePrefill(window.location.search);
+  }, []);
+
+  useEffect(() => {
+    if (truthScanPrefill) {
+      rememberSimulationAttribution(attributionFromPrefill(truthScanPrefill));
+    } else {
+      clearSimulationAttribution();
+    }
+  }, [truthScanPrefill]);
+  const prefillBlurb = truthScanPrefill?.from === OVERVIEW_SUGGESTED_ACTION_FROM
+    ? 'Prefilled from your Overview suggested action. Levers match the reddest metric — review and run.'
+    : 'Prefilled from Truth Scan Suggested Actions. Levers match the reddest metric — review and run.';
+  const prefillLabel = truthScanPrefill
+    ? truthScanPrefill.from === OVERVIEW_SUGGESTED_ACTION_FROM
+      ? `Prefilled from Overview: ${truthScanPrefill.name}`
+      : `Prefilled from Truth Scan: ${truthScanPrefill.name}`
+    : undefined;
 
   const multiSimMutation = useMultiScenarioSimulation();
   const [multiSimResults, setMultiSimResults] = useState<any>(null);
@@ -189,6 +235,13 @@ export default function ScenariosPage() {
   const [truthScanModal, setTruthScanModal] = useState<{ open: boolean; uploadId?: string }>({ open: false });
   const [simIterations, setSimIterations] = useState(500);
   const [simSeed, setSimSeed] = useState<number | null>(null);
+
+  // HAG-246 / HAG-245: derived from the stored run, never from the selector.
+  const runwayPaths = useMemo(() => getRunwayPaths(simulation), [simulation]);
+  const runIterations = useMemo(() => {
+    const n = (simulation as any)?.config?.iterations ?? (simulation as any)?.n_sims;
+    return typeof n === 'number' && n > 0 ? n : null;
+  }, [simulation]);
 
   const { data: comments = [], isLoading: commentsLoading } = useScenarioComments(selectedScenarioId || 0);
   const addCommentMutation = useAddComment();
@@ -698,9 +751,17 @@ export default function ScenariosPage() {
       matched = true;
     }
 
+    const churnTargetMatch = q.match(/churn\s+(?:hits|reaches|goes\s+to|rises\s+to|climbs\s+to|is|at)\s+(\d+(?:\.\d+)?)\s*%/i);
     const churnMatch = q.match(/churn\s+.*?(\d+)\s*%/i);
     const churnDecreaseMatch = q.match(/churn\s+(?:drop|decrease|fall|decline|reduce|lower)s?\s+(?:by\s+|to\s+)?(\d+)\s*%/i);
-    if (churnDecreaseMatch) {
+    if (churnTargetMatch) {
+      // A target level: change = target - the company's current churn (points).
+      const target = parseFloat(churnTargetMatch[1]);
+      const current = baseMetrics?.churnRate && baseMetrics.churnRate > 0 ? baseMetrics.churnRate : 0;
+      params.churn_change_pct = Math.round((target - current) * 10) / 10;
+      tags.push(params.churn_change_pct > 0 ? 'pessimistic' : 'optimistic');
+      matched = true;
+    } else if (churnDecreaseMatch) {
       params.churn_change_pct = -parseInt(churnDecreaseMatch[1]);
       tags.push('optimistic');
       matched = true;
@@ -708,11 +769,8 @@ export default function ScenariosPage() {
       params.churn_change_pct = parseInt(churnMatch[1]);
       tags.push('pessimistic');
       matched = true;
-    } else if (q.includes('churn')) {
-      params.churn_change_pct = 5;
-      tags.push('pessimistic');
-      matched = true;
     }
+    // A bare "churn" with no number no longer invents a +5% change.
 
     const cacMatch = q.match(/cac\s+(?:increase|rise|go(?:es)?\s+up|jump|spike)s?\s+(?:by\s+)?(\d+)\s*%/i);
     const cacDecreaseMatch = q.match(/cac\s+(?:decrease|drop|fall|decline|reduce|lower)s?\s+(?:by\s+)?(\d+)\s*%/i);
@@ -1019,15 +1077,8 @@ export default function ScenariosPage() {
         survival: (() => { const v = getSurvivalPct('18m'); return v != null ? Math.min(100, v).toFixed(0) : '?'; })(),
       };
     }
-    if (!baseMetrics) return null;
-    const runway = baseMetrics.currentRunway * 1.3;
-    return {
-      runway: formatRunway(runway),
-      revenue18m: projectedRevenue(18, 1.5),
-      cash12m: projectedCash(12, 1.5),
-      breakeven: '18+',
-      survival: Math.min(100, 65 * 1.15).toFixed(0),
-    };
+    // No simulation -> no P90 band; never derive one from a fixed multiplier.
+    return null;
   }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
   const scenarioP50 = useMemo(() => {
@@ -1045,8 +1096,9 @@ export default function ScenariosPage() {
       runway: formatRunway(Number(baseMetrics.currentRunway)),
       revenue18m: projectedRevenue(18, 1.0),
       cash12m: projectedCash(12, 1.0),
-      breakeven: '24+',
-      survival: '65',
+      breakeven: '?',
+      // No simulation has run, so there is no survival estimate to show.
+      survival: '?',
     };
   }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
@@ -1062,45 +1114,59 @@ export default function ScenariosPage() {
         survival: p10Survival,
       };
     }
-    if (!baseMetrics) return null;
-    const runway = baseMetrics.currentRunway * 0.7;
-    return {
-      runway: formatRunway(runway),
-      revenue18m: projectedRevenue(18, 0.5),
-      cash12m: projectedCash(12, 0.5),
-      breakeven: '24+',
-      survival: Math.max(0, 65 * 0.7).toFixed(0),
-    };
+    // No simulation -> no P10 band; never derive one from a fixed multiplier.
+    return null;
   }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
-  const sensitivityBars = useMemo(() => {
-    if (!baseMetrics) return [];
-    const bars = [
-      { label: 'Churn Rate', impact: 85, level: 'high' as const },
-      { label: 'Net Burn', impact: 78, level: 'high' as const },
-      { label: 'Revenue Growth', impact: 52, level: 'med' as const },
-      { label: 'CAC', impact: 30, level: 'low' as const },
-    ];
-    return bars;
-  }, [baseMetrics]);
+  // Cost lines come from the company's real expense breakdown (baseline API).
+  // COGS is excluded here because it enters via grossMargin. With no breakdown
+  // the stress/what-if tools show "not available" instead of an invented split.
+  const stressTestCostBreakdown = useMemo(() => {
+    const eb = financialBaseline?.expenseBreakdown;
+    if (!eb) return null;
+    const payroll = eb.payroll ?? null;
+    const operating = eb.operating ?? null;
+    const marketing = eb.marketing ?? null;
+    const other = eb.otherOpex ?? null;
+    if ([payroll, operating, marketing, other].every((x) => x == null || x === 0)) return null;
+    return {
+      payroll: payroll ?? 0,
+      opex: (operating ?? 0) + (marketing ?? 0),
+      otherCosts: other ?? 0,
+    };
+  }, [financialBaseline]);
 
   const stressTestFinancialState: FinancialState = useMemo(() => {
-    const totalExpenses = baseMetrics?.monthlyExpenses || 80000;
-    return baseMetrics ? {
+    return baseMetrics && stressTestCostBreakdown ? {
       monthlyRevenue: baseMetrics.monthlyRevenue, grossMargin: baseMetrics.grossMargin,
-      opex: totalExpenses * 0.3, payroll: totalExpenses * 0.6, otherCosts: totalExpenses * 0.1,
+      opex: stressTestCostBreakdown.opex, payroll: stressTestCostBreakdown.payroll, otherCosts: stressTestCostBreakdown.otherCosts,
       cashBalance: baseMetrics.cashOnHand, churnRate: baseMetrics.churnRate, growthRate: baseMetrics.growthRate,
-      cac: baseMetrics.monthlyRevenue * 0.3, ltv: baseMetrics.churnRate > 0 ? (baseMetrics.monthlyRevenue / baseMetrics.churnRate) * 100 : baseMetrics.monthlyRevenue * 24,
+      cac: sharedMetrics.cac || 0, ltv: sharedMetrics.ltv || 0,
     } : { monthlyRevenue: 0, grossMargin: 0, opex: 0, payroll: 0, otherCosts: 0, cashBalance: 0, churnRate: 0, growthRate: 0, cac: 0, ltv: 0 };
-  }, [baseMetrics]);
+  }, [baseMetrics, stressTestCostBreakdown, sharedMetrics.cac, sharedMetrics.ltv]);
+
+  const stressTestAvailable = !!(baseMetrics && stressTestCostBreakdown);
+
+  // Ranked from the real runway sensitivity of this company's inputs (+/-20%).
+  // Empty when not computable -> the list is hidden, never filled with
+  // placeholder numbers.
+  const sensitivityBars = useMemo(
+    () => (stressTestAvailable ? sensitivityBarsFromResults(calculateSensitivity(stressTestFinancialState)) : []),
+    [stressTestAvailable, stressTestFinancialState],
+  );
 
   const stressTestCurrentRunway = useMemo(() => baseMetrics?.currentRunway || 0, [baseMetrics]);
 
-  const stressTestBaselineResults = useMemo(() => ({
-    runway: stressTestCurrentRunway,
-    survival18m: simulation?.survival_18m ?? (simulation?.survival_12m ? Math.max(0, simulation.survival_12m * 0.85) : 65),
-    cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - ((baseMetrics?.monthlyExpenses || 80000) - stressTestFinancialState.monthlyRevenue) * 18),
-  }), [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
+  const stressTestBaselineResults = useMemo(() => {
+    const netBurn = baseMetrics ? baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue : 0;
+    return {
+      runway: stressTestCurrentRunway,
+      // No simulation -> the same runway-based estimate the what-if tool uses
+      // for adjusted states, so baseline and adjusted are comparable.
+      survival18m: simulation?.survival_18m ?? Math.min(100, Math.max(0, (stressTestCurrentRunway / 18) * 100)),
+      cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - netBurn * 18),
+    };
+  }, [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
 
   const handleGeneratePDF = useCallback(async () => {
     if (!simulation) return;
@@ -1206,6 +1272,7 @@ export default function ScenariosPage() {
     const pdfData: SimulationPDFData = {
       scenarioName: currentScenarioName,
       companyName: currentCompany?.name,
+      runs: runIterations ?? undefined,
       p90: scenarioP90 ? { ...scenarioP90, revenue18m: scenarioP90.revenue18m || 0, cash12m: scenarioP90.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
       p50: scenarioP50 ? { ...scenarioP50, revenue18m: scenarioP50.revenue18m || 0, cash12m: scenarioP50.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
       p10: scenarioP10 ? { ...scenarioP10, revenue18m: scenarioP10.revenue18m || 0, cash12m: scenarioP10.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
@@ -1223,7 +1290,7 @@ export default function ScenariosPage() {
     };
 
     await downloadSimulationPDF(pdfData);
-  }, [simulation, currentScenarioName, currentCompany, scenarioP90, scenarioP50, scenarioP10, baselineComparison, sensitivityBars]);
+  }, [simulation, currentScenarioName, currentCompany, scenarioP90, scenarioP50, scenarioP10, baselineComparison, sensitivityBars, runIterations]);
 
   return (
     // No page-level FadeIn here. AnimatedRouteWrapper in App.tsx already fades
@@ -1283,7 +1350,7 @@ export default function ScenariosPage() {
           <p className="text-xs text-muted-foreground/60">
             {founderMode
               ? 'Focused view showing only what matters most'
-              : 'Describe a scenario and we\'ll simulate 1,000 outcomes to show your probability distribution'}
+              : `Describe a scenario and we'll simulate ${simIterations.toLocaleString()} outcomes to show your probability distribution`}
           </p>
         </div>
 
@@ -1343,8 +1410,8 @@ export default function ScenariosPage() {
           })()}
           <div className="flex items-center gap-2 mt-2 opacity-30 hover:opacity-100 focus-within:opacity-100 transition-opacity" data-testid="simulation-settings">
             <div className="flex items-center gap-1">
-              <Label className="text-[10px] text-muted-foreground/50 whitespace-nowrap">Seed:</Label>
-              <Input
+              <Label htmlFor="scenarios-seed" className="text-[10px] text-muted-foreground/50 whitespace-nowrap">Seed:</Label>
+              <Input id="scenarios-seed"
                 type="number"
                 placeholder="Random"
                 value={simSeed ?? ''}
@@ -1424,6 +1491,47 @@ export default function ScenariosPage() {
             </button>
           ))}
         </div>
+
+        {truthScanPrefill && (
+          <Card className="mb-6 border-blue-500/30 bg-blue-500/5" data-testid="card-truth-scan-prefill">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                Ready to run: {truthScanPrefill.name}
+              </CardTitle>
+              <CardDescription>
+                {prefillBlurb}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2" data-testid="list-truth-scan-prefill-levers">
+                {Object.entries(truthScanPrefill.params)
+                  .filter(([, value]) => value !== 0 && value !== null)
+                  .map(([key, value]) => (
+                    <Badge key={key} variant="secondary" className="text-xs font-mono">
+                      {key.replace(/_/g, ' ')}: {String(value)}
+                    </Badge>
+                  ))}
+              </div>
+              <Button
+                onClick={() => handleWizardComplete({
+                  name: truthScanPrefill.name,
+                  ...truthScanPrefill.params,
+                  tags: [truthScanPrefill.goal, 'truth-scan'],
+                })}
+                disabled={isCreating || isRunning}
+                data-testid="button-run-truth-scan-prefill"
+              >
+                {(isCreating || isRunning) ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 mr-2" />
+                )}
+                Run this scenario
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {baseMetrics && (
           <div className="mb-6" data-testid="section-sensitivity-sliders">
@@ -1582,7 +1690,7 @@ export default function ScenariosPage() {
         {(isCreating || isRunning) && (
           <div className="text-center py-12">
             <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground font-medium">Simulating 1,000 scenarios... Analyzing probability distributions across revenue, burn, and runway.</p>
+            <p className="text-muted-foreground font-medium">Simulating {simIterations.toLocaleString()} scenarios... Analyzing probability distributions across revenue, burn, and runway.</p>
             <p className="text-sm text-muted-foreground mt-1">This usually takes a few seconds</p>
           </div>
         )}
@@ -1639,7 +1747,7 @@ export default function ScenariosPage() {
             <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
               <div>
                 <h2 className="text-base font-semibold tracking-tight" data-testid="text-results-title">Simulation Results</h2>
-                <p className="text-xs text-muted-foreground/60">{currentScenarioName} — 1,000 Monte Carlo runs</p>
+                <p className="text-xs text-muted-foreground/60">{currentScenarioName}{runIterations ? ` — ${runIterations.toLocaleString()} Monte Carlo runs` : ' — Monte Carlo results'}</p>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleShareScenario} data-testid="button-share-scenario">
@@ -1788,6 +1896,7 @@ export default function ScenariosPage() {
                   }}
                   title="Share via email"
                   data-testid="button-share-ai-decision"
+                  aria-label="Email"
                 >
                   <Mail className="h-4 w-4" />
                 </Button>
@@ -1959,10 +2068,6 @@ export default function ScenariosPage() {
                       filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-report`}
                       onGeneratePDF={handleGeneratePDF}
                     />
-                    <Button variant="outline" size="sm" data-testid="button-discuss-team" onClick={() => toast({ title: 'Coming soon', description: 'Team discussion feature is in development.' })}>
-                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                      Discuss with Team
-                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -2158,13 +2263,7 @@ export default function ScenariosPage() {
                   } as SensitivityRank));
 
                 return (
-                  <SensitivityRankPanel
-                    ranks={sortedRanks}
-                    onAdjustVariable={(variable) => {
-                      // This would scroll to parameter step in wizard
-                      toast({ title: 'Feature coming soon', description: `Adjust ${variable} in scenario wizard` });
-                    }}
-                  />
+                  <SensitivityRankPanel ranks={sortedRanks} />
                 );
               })()}
 
@@ -2200,10 +2299,12 @@ export default function ScenariosPage() {
                 />
               )}
 
+              {sensitivityBars.length > 0 && (
               <div className="space-y-2.5 mb-5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Key Sensitivity Levers</p>
+                <p className="text-[11px] text-muted-foreground">Runway change from a ±20% move in each input, relative to the biggest lever.</p>
                 {sensitivityBars.map((bar) => (
-                  <div key={bar.label} className="flex items-center gap-3" data-testid={`sensitivity-bar-${bar.label.toLowerCase().replace(/\s/g, '-')}`}>
+                  <div key={bar.label} className="flex items-center gap-3" title={`±20% moves runway by up to ${bar.swingMonths} months`} data-testid={`sensitivity-bar-${bar.label.toLowerCase().replace(/\s/g, '-')}`}>
                     <span className="text-xs w-28 shrink-0">{bar.label}</span>
                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                       <div
@@ -2220,18 +2321,28 @@ export default function ScenariosPage() {
                   </div>
                 ))}
               </div>
+              )}
 
+              {!stressTestAvailable && (
+                <div className="rounded-lg border border-dashed p-4 mb-6 text-sm text-muted-foreground" data-testid="stress-test-unavailable">
+                  Sensitivity, what-if and stress tests are not available: no expense breakdown (payroll / operating / marketing / other) has been provided for this company.
+                </div>
+              )}
+              {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
+                <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} />
                 <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
               </div>
+              )}
 
               <SensitivityAnalysisPanel data={sensitivityResults} isLoading={sensitivityMutation.isPending} onRunAnalysis={handleRunSensitivityAnalysis} />
 
+              {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <StressTestPanel currentState={stressTestFinancialState} currentRunway={stressTestCurrentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
                 <ReverseStressTest currentState={stressTestFinancialState} />
               </div>
+              )}
 
               <CounterMoveCards
                 counterMoves={simulation?.counter_moves || null}
@@ -2272,7 +2383,7 @@ export default function ScenariosPage() {
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-p90-survival">{scenarioP90?.survival != null ? `${scenarioP90.survival}%` : 'N/A'}</span>
+                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-p90-survival">{scenarioP90?.survival != null && scenarioP90.survival !== '?' ? `${scenarioP90.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div
@@ -2311,7 +2422,7 @@ export default function ScenariosPage() {
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-primary" data-testid="text-p50-survival">{scenarioP50?.survival != null ? `${scenarioP50.survival}%` : 'N/A'}</span>
+                          <span className="text-sm font-bold text-primary" data-testid="text-p50-survival">{scenarioP50?.survival != null && scenarioP50.survival !== '?' ? `${scenarioP50.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div
@@ -2350,7 +2461,7 @@ export default function ScenariosPage() {
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-p10-survival">{scenarioP10?.survival != null ? `${scenarioP10.survival}%` : 'N/A'}</span>
+                          <span className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-p10-survival">{scenarioP10?.survival != null && scenarioP10.survival !== '?' ? `${scenarioP10.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div
@@ -2452,6 +2563,10 @@ export default function ScenariosPage() {
                   onSaveScenario={async (params) => { await handleWizardComplete(params); }}
                   isRunning={isCreating || isRunning}
                   simulation={simulation}
+                  initialGoal={truthScanPrefill?.goal}
+                  initialStrategyId={truthScanPrefill?.strategyId}
+                  initialParams={truthScanPrefill ? { name: truthScanPrefill.name, ...truthScanPrefill.params } : undefined}
+                  prefillLabel={prefillLabel}
                 />
               </TabsContent>
 
@@ -2462,6 +2577,9 @@ export default function ScenariosPage() {
                   isRunning={isCreating || isRunning}
                   companyId={currentCompany.id}
                   baseMetrics={baseMetrics}
+                  initialParams={truthScanPrefill ? { name: truthScanPrefill.name, ...truthScanPrefill.params, tags: [truthScanPrefill.goal] } : undefined}
+                  initialStep={truthScanPrefill ? 5 : undefined}
+                  prefillLabel={prefillLabel}
                 />
               </TabsContent>
 
@@ -2505,7 +2623,7 @@ export default function ScenariosPage() {
                                 )}
                               </div>
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => setScenarioStack(prev => [...prev, s.id])} disabled={scenarioStack.includes(s.id)} data-testid={`button-add-stack-${s.id}`}>
+                                <Button variant="ghost" size="icon" onClick={() => setScenarioStack(prev => [...prev, s.id])} disabled={scenarioStack.includes(s.id)} data-testid={`button-add-stack-${s.id}`} aria-label="Layers">
                                   <Layers className="h-4 w-4" />
                                 </Button>
                                 <Button onClick={() => handleRunScenario(s.id)} disabled={isRunning && selectedScenarioId === s.id} data-testid={`button-run-scenario-${s.id}`}>
@@ -2547,7 +2665,8 @@ export default function ScenariosPage() {
                                     [newStack[idx - 1], newStack[idx]] = [newStack[idx], newStack[idx - 1]];
                                     setScenarioStack(newStack);
                                   }}
-                                  data-testid={`button-move-up-${id}`}>
+                                  data-testid={`button-move-up-${id}`}
+                                  aria-label="Move up">
                                   <ChevronUp className="h-3 w-3" />
                                 </Button>
                                 <Button variant="ghost" size="icon" disabled={idx === scenarioStack.length - 1}
@@ -2556,12 +2675,14 @@ export default function ScenariosPage() {
                                     [newStack[idx], newStack[idx + 1]] = [newStack[idx + 1], newStack[idx]];
                                     setScenarioStack(newStack);
                                   }}
-                                  data-testid={`button-move-down-${id}`}>
+                                  data-testid={`button-move-down-${id}`}
+                                  aria-label="Move down">
                                   <ChevronDown className="h-3 w-3" />
                                 </Button>
                                 <Button variant="ghost" size="icon"
                                   onClick={() => setScenarioStack(scenarioStack.filter(sid => sid !== id))}
-                                  data-testid={`button-remove-stack-${id}`}>
+                                  data-testid={`button-remove-stack-${id}`}
+                                  aria-label="Remove from stack">
                                   <X className="h-3 w-3" />
                                 </Button>
                               </div>
@@ -2713,12 +2834,29 @@ export default function ScenariosPage() {
                       onEditComment={async (commentId, content) => { await editCommentMutation.mutateAsync({ commentId, content, scenarioId: selectedScenarioId }); }}
                       onDeleteComment={async (commentId) => { await deleteCommentMutation.mutateAsync({ commentId, scenarioId: selectedScenarioId }); }}
                     />
-                    {simulation && (
-                      <DistributionView title="Runway Distribution" description="Distribution across all Monte Carlo runs"
-                        data={Array.from({ length: 1000 }, () => (simulation.runway?.p50 || 12) + (Math.random() - 0.5) * (simulation.runway?.p90 - simulation.runway?.p10 || 6))}
+                    {simulation && runwayPaths && (runwayPaths.plotted.length > 0 ? (
+                      <DistributionView
+                        title="Runway Distribution"
+                        description={
+                          `Months until cash runs out, one value per simulated path from this run (${runwayPaths.total.toLocaleString()} of ${(runIterations ?? runwayPaths.total).toLocaleString()} paths).` +
+                          (runwayPaths.survived > 0
+                            ? ` ${runwayPaths.survived.toLocaleString()} of them never ran out within the 24-month horizon and are counted here rather than plotted, because a single 999-month bar would flatten the rest of the axis.`
+                            : '')
+                        }
+                        data={runwayPaths.plotted}
                         unit="months" thresholds={{ warning: 18, critical: 12 }} higherIsBetter={true}
                       />
-                    )}
+                    ) : (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Runway Distribution</CardTitle>
+                          <CardDescription>
+                            All {runwayPaths.total.toLocaleString()} of the {(runIterations ?? runwayPaths.total).toLocaleString()} simulated paths in this run stayed cash-positive
+                            through the 24-month horizon, so there is no spread of run-out months to plot.
+                          </CardDescription>
+                        </CardHeader>
+                      </Card>
+                    ))}
                   </div>
                 ) : (
                   <Card><CardContent className="py-12 text-center">

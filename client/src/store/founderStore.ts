@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { setDisplayCurrency } from '@/lib/money';
 
 interface User {
   id: number;
@@ -18,6 +19,7 @@ interface Company {
   currency: string;
   description?: string;
   data_sharing_enabled?: boolean;
+  is_sample?: boolean;
 }
 
 interface TruthScan {
@@ -101,6 +103,8 @@ interface FounderState {
   
   setUser: (user: User | null) => void;
   setCurrentCompany: (company: Company | null) => void;
+  markCurrentCompanySample: () => void;
+  syncCurrentCompanyIsSample: (isSample: boolean) => void;
   setCompanies: (companies: Company[]) => void;
   setTruthScan: (scan: TruthScan | null) => void;
   setCurrentStep: (step: 'truth' | 'simulation' | 'decision') => void;
@@ -182,6 +186,21 @@ export const useFounderStore = create<FounderState>()(
         lastExtraction: null,
         currentStep: 'truth',
       }),
+      markCurrentCompanySample: () => {
+        const current = get().currentCompany;
+        if (!current) return;
+        set({ currentCompany: { ...current, is_sample: true } });
+      },
+      syncCurrentCompanyIsSample: (isSample) => {
+        const current = get().currentCompany;
+        if (!current || !!current.is_sample === !!isSample) return;
+        set({
+          currentCompany: { ...current, is_sample: isSample },
+          companies: get().companies.map((c) =>
+            c.id === current.id ? { ...c, is_sample: isSample } : c
+          ),
+        });
+      },
       setCompanies: (companies) => set({ companies }),
       setTruthScan: (scan) => set({ truthScan: scan }),
       setCurrentStep: (step) => set({ currentStep: step }),
@@ -251,3 +270,8 @@ export const useFounderStore = create<FounderState>()(
     }
   )
 );
+
+// Formatters that are not handed a currency use the selected company's
+// (lib/money.ts). Covers the persisted company on reload and every switch.
+setDisplayCurrency(useFounderStore.getState().currentCompany?.currency);
+useFounderStore.subscribe((state) => setDisplayCurrency(state.currentCompany?.currency));

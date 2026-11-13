@@ -147,7 +147,9 @@ def get_header_html(subtitle: str = "") -> str:
 
 
 def get_footer_html(unsubscribe_url: str = None) -> str:
-    unsub_url = unsubscribe_url or f"{APP_URL}/unsubscribe"
+    # Without a recipient there is no token; the send path stamps a real
+    # per-user link over this placeholder (see stamp_unsubscribe_footer).
+    unsub_url = unsubscribe_url or f"{PREFERENCES_URL}#unsubscribe"
     return f"""
     <tr>
         <td style="padding: 0 40px;" class="body-content">
@@ -595,7 +597,7 @@ def render_text_only_update_template(
     </p>
     <p style="margin: 32px 0 0 0; font-size: 13px; color: {COLORS['muted_light']};">— The FounderConsole Team</p>
     <p style="margin: 16px 0 0 0; font-size: 12px; color: {COLORS['muted_light']};">
-        <a href="{APP_URL}/unsubscribe" style="color: {COLORS['muted_light']}; text-decoration: underline;">Unsubscribe</a> &middot;
+        <a href="{PREFERENCES_URL}#unsubscribe" style="color: {COLORS['muted_light']}; text-decoration: underline;">Unsubscribe</a> &middot;
         <a href="{PREFERENCES_URL}" style="color: {COLORS['muted_light']}; text-decoration: underline;">Email Preferences</a>
     </p>
     {tracking_pixel}
@@ -629,7 +631,7 @@ def render_app_overview_template(
     also_html += get_check_item("Smart alerts for anomalies and runway warnings")
     also_html += get_check_item("Cap table management with dilution modeling")
     also_html += get_check_item("Board deck generation and export")
-    also_html += get_check_item("37 data integrations (QuickBooks, Stripe, Gusto, and more)")
+    also_html += get_check_item("36 data integrations (QuickBooks, Stripe, Gusto, and more)")
 
     content = f"""
     {get_header_html()}
@@ -736,6 +738,7 @@ def render_simulation_report_template(
     n_simulations: int = 500,
     horizon_months: int = 24,
     comparison: list = None,
+    unsubscribe_url: str = None,
 ) -> str:
     p10 = runway.get("p10", "—")
     p50 = runway.get("p50", "—")
@@ -822,7 +825,7 @@ def render_simulation_report_template(
             {get_cta_row(sim_url, "View Full Results", f"{APP_URL}/decisions", "Get Recommendations")}
         </td>
     </tr>
-    {get_footer_html()}"""
+    {get_footer_html(unsubscribe_url)}"""
     return get_email_wrapper(content, preheader=f"P10/P50/P90 results are in for {company_name}. See your runway outlook.")
 
 
@@ -832,6 +835,7 @@ def render_document_generated_template(
     doc_name: str,
     sections_count: int = 0,
     sections: list = None,
+    unsubscribe_url: str = None,
 ) -> str:
     doc_type_icons = {
         "board-deck": "&#128203;",
@@ -884,7 +888,7 @@ def render_document_generated_template(
             {get_callout_box(f"<strong>Next step:</strong> Review and customize the AI-generated narratives, then export as PDF or share directly with your board or investors.")}
         </td>
     </tr>
-    {get_footer_html()}"""
+    {get_footer_html(unsubscribe_url)}"""
     return get_email_wrapper(content, preheader=f"Your {doc_name} for {company_name} is ready to review")
 
 
@@ -892,6 +896,7 @@ def render_decision_report_template(
     company_name: str,
     recommendations_count: int = 0,
     top_recommendations: list = None,
+    unsubscribe_url: str = None,
 ) -> str:
     recs_html = ""
     if top_recommendations:
@@ -944,7 +949,7 @@ def render_decision_report_template(
             {get_callout_box("<strong>How scoring works:</strong> Each recommendation is evaluated across survival rate improvement (45%), runway extension (20%), efficiency gains (15%), and growth impact (20%), with risk penalties applied.")}
         </td>
     </tr>
-    {get_footer_html()}"""
+    {get_footer_html(unsubscribe_url)}"""
     return get_email_wrapper(content, preheader=f"{recommendations_count} decision recommendations ready for {company_name}")
 
 

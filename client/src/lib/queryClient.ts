@@ -1,37 +1,31 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryFunction } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import { createDedupedNotifier } from "./queryErrorToast";
 import { ApiError, safeParseJSON } from "./errors";
+import {
+  attemptTokenRefresh,
+  hardRedirectToLogin,
+  shouldHardRedirectOn401,
+} from "./authSession";
+import { backoffMsFor429, readBodyRetryAfter } from "./rateLimitBackoff";
 
-let sessionExpiredHandled = false;
-
-// Centralised handling for an expired/invalid session. A 401 on an authenticated
-// API call means the auth cookie lapsed while the user was in the app -- before,
-// this failed silently (e.g. the copilot input just cleared with no feedback).
-// Now we surface it once and send the user back to sign in.
-function handleSessionExpired(resUrl?: string) {
-  if (sessionExpiredHandled) return;
+// A 401 on a mutation (after refresh) means the auth cookie is actually gone.
+// GET 401s on /onboarding and /overview must not hard-redirect — that was the
+// silent logout (PostHog: /overview → /auth?expired=1 in ~300ms).
+function handleSessionExpired(method?: string, resUrl?: string) {
   const url = resUrl || "";
   // Bad credentials on the auth endpoints legitimately return 401 -- that is a
   // failed login, not an expired session.
   if (/\/auth\/(login|register|admin\/login|forgot-password|refresh)/.test(url)) return;
-  // Don't loop while already on the auth screen.
-  if (typeof window !== "undefined" && window.location.pathname.startsWith("/auth")) return;
-
-  sessionExpiredHandled = true;
-  try {
-    window.dispatchEvent(new CustomEvent("session-expired"));
-  } catch {}
-  // Fallback hard redirect so the user isn't stranded on a half-broken page.
-  setTimeout(() => {
-    try {
-      window.location.assign("/auth?expired=1");
-    } catch {}
-  }, 200);
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  if (!shouldHardRedirectOn401(method, pathname)) return;
+  hardRedirectToLogin();
 }
 
-async function throwIfResNotOk(res: Response) {
+async function throwIfResNotOk(res: Response, method?: string) {
   if (!res.ok) {
     if (res.status === 401) {
-      handleSessionExpired(res.url);
+      handleSessionExpired(method, res.url);
     }
     let detail: any = null;
     let message = res.statusText;
@@ -113,17 +107,36 @@ export async function apiRequest(
         }
       } catch {}
     }
+
+    if (res.status === 401) {
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed) {
+        res = await makeRequest();
+      }
+    }
   } catch (error) {
     const networkError = error instanceof Error ? error.message : String(error);
     console.error(`Network error for ${method} ${url}:`, error);
     throw new ApiError(0, `Network request failed: ${networkError}`);
   }
 
-  await throwIfResNotOk(res);
+  await throwIfResNotOk(res, method);
   return res;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
+async function fetchQuery(url: string): Promise<Response> {
+  const init: RequestInit = { credentials: "include" };
+  let res = await fetch(url, init);
+  if (res.status !== 429) return res;
+  const delay = backoffMsFor429(
+    res.headers.get("Retry-After"),
+    await readBodyRetryAfter(res),
+  );
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  return fetch(url, init);
+}
+
 export const getQueryFn = <T>(options: {
   on401: UnauthorizedBehavior;
 }): QueryFunction<T | null> =>
@@ -132,20 +145,30 @@ export const getQueryFn = <T>(options: {
     let res: Response;
 
     try {
-      res = await fetch(queryKey.join("/") as string, {
-        credentials: "include",
-      });
+      res = await fetchQuery(queryKey.join("/") as string);
     } catch (error) {
       const networkError = error instanceof Error ? error.message : String(error);
       console.error(`Network error for query ${queryKey.join("/")}:`, error);
       throw new ApiError(0, `Network request failed: ${networkError}`);
     }
 
+    if (res.status === 401) {
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed) {
+        try {
+          res = await fetchQuery(queryKey.join("/") as string);
+        } catch (error) {
+          const networkError = error instanceof Error ? error.message : String(error);
+          throw new ApiError(0, `Network request failed: ${networkError}`);
+        }
+      }
+    }
+
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
     }
 
-    await throwIfResNotOk(res);
+    await throwIfResNotOk(res, "GET");
 
     try {
       return await safeParseJSON(res, 'Failed to parse query response') as T;
@@ -157,7 +180,18 @@ export const getQueryFn = <T>(options: {
     }
   };
 
+// Failed fetches must not look like empty data. 401s are left to the session
+// flow; a query can opt out with meta: { suppressErrorToast: true }.
+const notifyQueryError = createDedupedNotifier((description) => {
+  toast({ title: "Couldn't load data", description, variant: "destructive" });
+});
+
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      notifyQueryError(error, query.meta);
+    },
+  }),
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
@@ -165,7 +199,7 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000,
       retry: (failureCount, error) => {
-        if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404)) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404 || error.status === 429)) {
           return false;
         }
         return failureCount < 1;

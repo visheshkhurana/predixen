@@ -15,7 +15,8 @@ def generate_report(simulation_result: Dict[str, Any]) -> Dict[str, Any]:
     recommendations = simulation_result.get("recommendations", [])
     timeline = simulation_result.get("timeline", [])
 
-    survival = summary.get("survivalProbability", 0)
+    # Share of months solvent in ONE simulated path -- not a probability.
+    survival = summary.get("monthsSolventPct", summary.get("survivalProbability", 0))
     if survival >= 80:
         overall_rating = "strong"
         rating_label = "Strong Position"
@@ -41,8 +42,12 @@ def generate_report(simulation_result: Dict[str, Any]) -> Dict[str, Any]:
         "overallRating": overall_rating,
         "ratingLabel": rating_label,
         "ratingColor": rating_color,
-        "survivalProbability": summary.get("survivalProbability", 0),
-        "fundingProbability": summary.get("fundingProbability", 0),
+        "monthsSolventPct": survival,
+        "survivalProbability": summary.get("survivalProbability", 0),  # deprecated alias
+        # Share of investor reads that were interested in ONE run -- not a probability.
+        "investorInterestPct": summary.get("investorInterestPct", summary.get("fundingProbability", 0)),
+        "investorEncounters": summary.get("investorEncounters"),
+        "fundingProbability": summary.get("fundingProbability", 0),  # deprecated alias
         "headline": _generate_headline(summary, overall_rating),
         "keyMetrics": {
             "finalCash": summary.get("finalCash", 0),
@@ -55,7 +60,8 @@ def generate_report(simulation_result: Dict[str, Any]) -> Dict[str, Any]:
         "agentSummary": agent_summary,
         "topRecommendations": recommendations[:3],
         "shareData": {
-            "survivalProbability": summary.get("survivalProbability", 0),
+            "monthsSolventPct": survival,
+            "survivalProbability": summary.get("survivalProbability", 0),  # deprecated alias
             "topRisk": simulation_result.get("keyRisks", [{}])[0].get("description", "None identified") if simulation_result.get("keyRisks") else "None identified",
             "topRecommendation": recommendations[0]["title"] if recommendations else "Stay the course",
         },
@@ -63,15 +69,17 @@ def generate_report(simulation_result: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _generate_headline(summary: Dict[str, Any], rating: str) -> str:
-    survival = summary.get("survivalProbability", 0)
+    # One simulated path: report the share of months with cash above zero,
+    # never a "survival probability".
+    survival = summary.get("monthsSolventPct", summary.get("survivalProbability", 0))
     if rating == "strong":
-        return f"Your startup has a {survival:.0f}% survival probability — strong fundamentals detected"
+        return f"Cash stayed positive in {survival:.0f}% of simulated months — strong fundamentals in this run"
     elif rating == "moderate":
-        return f"Survival probability is {survival:.0f}% — some risks need attention"
+        return f"Cash stayed positive in {survival:.0f}% of simulated months — some risks need attention"
     elif rating == "at_risk":
-        return f"Warning: {survival:.0f}% survival probability — action needed to improve trajectory"
+        return f"Warning: cash stayed positive in only {survival:.0f}% of simulated months — action needed"
     else:
-        return f"Critical: Only {survival:.0f}% survival probability — immediate intervention recommended"
+        return f"Critical: cash stayed positive in only {survival:.0f}% of simulated months — immediate intervention recommended"
 
 
 def _identify_turning_points(

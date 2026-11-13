@@ -208,6 +208,10 @@ def import_csv_data(
             errors.append({"row": i, "error": str(e)})
 
     db.flush()
+    if imported:
+        from server.services.sample_data import on_real_financials_written
+        on_real_financials_written(db, company_id, commit=False)
+        db.flush()
 
     # Recompute month-over-month revenue growth across the company's full
     # history (imports never set mom_growth, which left the baseline growth
@@ -244,6 +248,15 @@ def import_csv_data(
             db.commit()
             db.refresh(scan)
             truth_scan_id = scan.id
+
+            from server.services.activation import maybe_emit_founder_activated
+            maybe_emit_founder_activated(
+                db,
+                user_id=current_user.id,
+                company=company,
+                source="truth_scan",
+                exclude_truth_scan_id=scan.id,
+            )
 
             try:
                 from server.utils.websocket_broadcast import broadcast_truth_scan_update_sync

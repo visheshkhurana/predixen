@@ -123,7 +123,7 @@ refresh after identity ship.
 2. ~~Lock `/api/events` (+ ai-governance)~~ — **done live** (`#6`/`#7`).
 3. ~~SEO SSR cross-links + `/ai-cfo` sitemap~~ — **#12 live** (`9d559d17`; CoS Googlebot recheck 00:40 GST).
 4. **Analytics:** prove one visitor ≈ one identity (PostHog connector blocked).
-5. **Conversion Eng:** rage-click replays; confirm `lead_captured` exists and fires.
+5. **User Research:** rage-click write-up **done** — `agents/research/rage-click-writeup-2026-09-16.md` (4 sessions / 9 events, PostHog 522965). **Conversion Eng:** P0 watch sessions 1–2; do **not** claim `lead_captured` (0/0 90d).
 6. **Reliability:** deploy-landed monitor (#14 in review).
 7. **QA:** dispatch-only CI (#13 Gate 1 PASS; Actions minutes still Vishesh).
 8. Remaining product debt from older audits. Ads / money stay with Vishesh.

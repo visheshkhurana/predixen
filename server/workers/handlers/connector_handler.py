@@ -51,6 +51,8 @@ def handle_connector_sync(payload: Dict[str, Any]) -> Dict[str, Any]:
                     source_type=connector_type,
                 )
                 db.add(record)
+                from server.services.sample_data import on_real_financials_written
+                on_real_financials_written(db, company_id, commit=False)
                 db.commit()
 
         cache_delete(cache_key("twin_state", str(company_id)))

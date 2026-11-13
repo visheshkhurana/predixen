@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Shield, AlertTriangle, CheckCircle, ArrowRight, CircleAlert, Target, Activity } from 'lucide-react';
-import { cn, isRunwaySustainable } from '@/lib/utils';
+import { cn, isRunwaySustainable, formatCurrencyAbbrev } from '@/lib/utils';
 
 function fmtRunway(v: number): string {
   if (isRunwaySustainable(v)) return 'sustainable';
@@ -18,10 +18,7 @@ interface AIDecisionSummaryProps {
 }
 
 function fmtCurrency(val: number): string {
-  const abs = Math.abs(val);
-  if (abs >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `$${(val / 1_000).toFixed(0)}k`;
-  return `$${val.toFixed(0)}`;
+  return formatCurrencyAbbrev(val);
 }
 
 function inferAction(name: string): string {

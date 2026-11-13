@@ -1,4 +1,11 @@
+import { readFirstTouchAttribution } from '@/lib/attribution';
 import { ApiError, safeParseJSON } from '@/lib/errors';
+import {
+  attemptTokenRefresh,
+  hardRedirectToLogin,
+  shouldHardRedirectOn401,
+} from '@/lib/authSession';
+import { backoffMsFor429, readBodyRetryAfter } from '@/lib/rateLimitBackoff';
 export { ApiError };
 
 const API_BASE = '/api';
@@ -16,29 +23,11 @@ function getCSRFToken(): string | null {
   return null;
 }
 
-let _redirecting401 = false;
-let _refreshingToken: Promise<boolean> | null = null;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
-const RETRYABLE_STATUS_CODES = [502, 503, 504, 429];
-
-async function attemptTokenRefresh(): Promise<boolean> {
-  if (_refreshingToken) return _refreshingToken;
-  _refreshingToken = (async () => {
-    try {
-      const res = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      return res.ok;
-    } catch {
-      return false;
-    } finally {
-      _refreshingToken = null;
-    }
-  })();
-  return _refreshingToken;
-}
+// 429 is not in this list. A rate limit waits for Retry-After once (below),
+// instead of hammering the same bucket at 1s then 2s.
+const RETRYABLE_STATUS_CODES = [502, 503, 504];
 
 async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -81,6 +70,14 @@ async function request<T>(
             continue;
           }
         } catch {}
+      }
+
+      if (response.status === 429 && attempt < 1 && (!method || method === 'GET')) {
+        const bodyRetryAfter = await readBodyRetryAfter(response);
+        const delay = backoffMsFor429(response.headers.get('Retry-After'), bodyRetryAfter);
+        console.warn(`[API] Rate limited ${endpoint}. Waiting ${delay}ms (Retry-After) before one retry`);
+        await sleep(delay);
+        continue;
       }
 
       if (RETRYABLE_STATUS_CODES.includes(response.status) && attempt < MAX_RETRIES) {
@@ -170,19 +167,10 @@ async function request<T>(
           }
         }
       }
-      if (!window.location.pathname.startsWith('/auth') && !_redirecting401) {
-        _redirecting401 = true;
-        try {
-          const raw = localStorage.getItem('founderconsole-founder-storage');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.state) {
-              parsed.state.user = null;
-              localStorage.setItem('founderconsole-founder-storage', JSON.stringify(parsed));
-            }
-          }
-        } catch {}
-        setTimeout(() => { window.location.href = '/auth'; }, 100);
+      const method = (options.method || 'GET').toUpperCase();
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (shouldHardRedirectOn401(method, pathname)) {
+        hardRedirectToLogin();
       }
     }
 
@@ -202,15 +190,30 @@ async function request<T>(
 
 export const api = {
   auth: {
-    register: (email: string, password: string) =>
+    // `invite` is the token from /auth?invite=…; the server accepts it when
+    // it was sent to this email (workspace membership or platform role).
+    register: (email: string, password: string, distinctId?: string | null, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(invite ? { invite } : {}),
+          ...(distinctId ? { distinct_id: distinctId } : {}),
+          ...readFirstTouchAttribution(),
+        }),
       }),
-    login: (email: string, password: string) =>
+    login: (email: string, password: string, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
+      }),
+    // Opens a private demo workspace: a throwaway account with its own copy of
+    // the sample company. No credentials involved.
+    demo: () =>
+      request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean; is_demo: boolean }>('/auth/demo', {
+        method: 'POST',
+        body: JSON.stringify({}),
       }),
     adminLogin: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/admin/login', {
@@ -240,7 +243,13 @@ export const api = {
         method: 'DELETE',
       }),
     seedSample: (id: number) =>
-      request<{ already_seeded: boolean; record_count: number }>(`/companies/${id}/seed-sample`, {
+      request<{
+        already_seeded: boolean;
+        record_count: number;
+        is_sample: boolean;
+        inputs?: { monthly_revenue: number; monthly_expenses: number; cash_balance: number };
+        outputs?: { monthly_burn: number; runway_months: number | null };
+      }>(`/companies/${id}/seed-sample`, {
         method: 'POST',
       }),
   },
@@ -399,6 +408,12 @@ export const api = {
   metrics: {
     computed: (companyId: number) =>
       request<any>(`/companies/${companyId}/metrics/computed`),
+  },
+
+  dashboard: {
+    // Real per-period KPI history built from FinancialRecord rows (no mock data).
+    kpis: (companyId: number) =>
+      request<any>(`/dashboard/companies/${companyId}/kpis`),
   },
 
   truth: {
@@ -861,6 +876,8 @@ export const api = {
         sources: string[];
         last_updated: string;
         is_cached: boolean;
+        is_fallback?: boolean;
+        note?: string | null;
       }>('/benchmarks/search', {
         method: 'POST',
         body: JSON.stringify({ industry, stage }),

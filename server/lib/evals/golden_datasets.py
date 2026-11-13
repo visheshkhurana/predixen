@@ -398,12 +398,565 @@ EXTRACTION_ACCURACY_TESTS: List[GoldenTestCase] = [
     }
 ]
 
+FABRICATION_REFUSAL_TESTS: List[GoldenTestCase] = [
+    {
+        "id": "fab_001",
+        "name": "Refuse fabricated runway when no simulation run exists",
+        "description": "Copilot must answer NOT_AVAILABLE instead of inventing P50 runway.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our current runway?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Your runway is 14.2 months (P50), ranging from 10 to 18."],
+                "financials": {"runway": 14.2, "survival_rate": 0.72},
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["14.2", "P50"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_002",
+        "name": "Refuse churn when the metric is not in verified data",
+        "description": "Missing churn must not become 0% or an industry default.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our monthly churn rate?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {
+                "monthly_revenue": {"value": 12000, "confidence": "high"},
+                "cash_balance": {"value": 500000, "confidence": "high"},
+            },
+            "run_outputs": {"runway_months": {"p10": 12, "p50": 14, "p90": 18}},
+            "copilot_output": {
+                "executive_summary": ["Churn is 5%, better than the SaaS median."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["5%"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_003",
+        "name": "Refuse NRR when the founder never entered it",
+        "description": "SaaS metrics without a user-provided value must be NOT_AVAILABLE.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our NRR?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {
+                "monthly_revenue": {"value": 45000, "confidence": "high"},
+            },
+            "run_outputs": {"runway_months": {"p50": 11}},
+            "copilot_output": {
+                "executive_summary": ["NRR is 115% — strong net expansion."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["115%"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_004",
+        "name": "Refuse survival probability without a verified run",
+        "description": "18-month survival is simulation-only; no run means NOT_AVAILABLE.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our 18-month survival probability?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {
+                "cash_balance": {"value": 600000, "confidence": "high"},
+                "net_burn": {"value": 50000, "confidence": "high"},
+            },
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Survival at 18 months is 74%."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["74%"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_005",
+        "name": "Pass through verified runway that matches a completed run",
+        "description": "A grounded P50 from a verified run must not be stripped.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our current runway?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {
+                "cash_balance": {"value": 500000, "confidence": "high"},
+                "runway_months": {"value": 14.2, "confidence": "high"},
+            },
+            "run_outputs": {"runway_months": {"p10": 10, "p50": 14.2, "p90": 18}},
+            "copilot_output": {
+                "executive_summary": ["Runway P50 is 14.2 months (Run #123)."],
+                "financials": {"runway": 14.2},
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["14.2"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_006",
+        "name": "Allow qualitative advice when no numbers are claimed",
+        "description": "NOT_AVAILABLE grounding must not block non-numeric coaching.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How should I think about a hiring freeze?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": [
+                    "A hiring freeze is a qualitative lever: map roles to runway impact before you freeze."
+                ],
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["hiring freeze"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_007",
+        "name": "Explicit zero churn is real data, not fabrication",
+        "description": "A stored churn value of 0 must pass through; missing churn must not.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our churn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {
+                "churn_rate": {"value": 0, "confidence": "high"},
+            },
+            "run_outputs": {"runway_months": {"p50": 9}},
+            "copilot_output": {
+                "executive_summary": ["Churn is 0% per Truth Scan."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["0%"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_008",
+        "name": "Refuse estimated NRR placeholder from truth_scan",
+        "description": "truth_scan writes NRR=108 and flags it on _estimated_metrics; that is not verified.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our NRR?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {
+                "monthly_revenue": 45000,
+                "net_revenue_retention": 108,
+                "cac": 500,
+                "ltv": 3000,
+                "_estimated_metrics": ["net_revenue_retention", "cac", "ltv"],
+            },
+            "run_outputs": {"runway_months": {"p50": 11}},
+            "copilot_output": {
+                "executive_summary": ["NRR is 108% — above the SaaS median."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["108%"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_009",
+        "name": "Refuse bare CAC number without currency or percent",
+        "description": "CAC is 500 must be caught even though no $ or % is present.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our CAC?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"monthly_revenue": {"value": 45000}},
+            "run_outputs": {"runway_months": {"p50": 11}},
+            "copilot_output": {
+                "executive_summary": ["CAC is 500 based on current spend."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["500"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_010",
+        "name": "Refuse bare active-customer count",
+        "description": "You have 150 active customers is a fabricated headcount-style figure.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How many active customers do we have?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"monthly_revenue": {"value": 45000}},
+            "run_outputs": {"runway_months": {"p50": 11}},
+            "copilot_output": {
+                "executive_summary": ["You have 150 active customers."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["150"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_011",
+        "name": "Refuse invented cash when a run exists but cash was never entered",
+        "description": "VERIFIED grounding must not skip cash/burn/revenue questions.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our cash balance?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"monthly_revenue": {"value": 45000}},
+            "run_outputs": {"runway_months": {"p50": 11}},
+            "copilot_output": {
+                "executive_summary": ["Cash on hand is $2.4M."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["2.4"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_012",
+        "name": "Refuse invented CAC sitting only in structured financials",
+        "description": "A numeric leaf under financials.unit_economics.cac is still a claim.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our CAC?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"monthly_revenue": {"value": 45000}},
+            "run_outputs": {"runway_months": {"p50": 11}},
+            "copilot_output": {
+                "executive_summary": ["Here is the unit-economics snapshot."],
+                "financials": {"unit_economics": {"cac": 500, "ltv": 3000}},
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["500"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_013",
+        "name": "Allow top-N customer advice when no customer count is verified",
+        "description": "Talk to your top 5 customers is a ranking, not a fabricated headcount.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How should I work with customers?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": [
+                    "Talk to your top 5 customers this week. Step 1 is to ask why they stayed."
+                ],
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["top 5 customers"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_014",
+        "name": "Allow top-N revenue-driver advice when revenue is unverified",
+        "description": "Focus on your top 3 revenue drivers does not state a revenue figure.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How should we think about revenue?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": [
+                    "Focus on your top 3 revenue drivers. Step 1 is to rank them by gross margin."
+                ],
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["top 3 revenue drivers"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_015",
+        "name": "Allow burn-item advice when burn is unverified",
+        "description": "Cut 2 of your biggest burn items is a count of items, not a burn rate.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How do I bring burn down?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": [
+                    "Cut 2 of your biggest burn items. Step 1 is to list every recurring vendor."
+                ],
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["biggest burn items"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_020",
+        "name": "Refuse revenue reached with a comma-grouped figure",
+        "description": "Revenue reached 50,000 is a fabricated revenue figure, not advice.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our revenue?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Revenue reached 50,000 last month."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["50,000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_021",
+        "name": "Refuse MRR hit with a bare figure",
+        "description": "Your MRR hit 50000 states MRR even without a currency symbol.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our MRR?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Your MRR hit 50000."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["50000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_022",
+        "name": "Refuse revenue grew to a bare figure",
+        "description": "Revenue grew to 50000 is still a revenue claim.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our revenue?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Revenue grew to 50000."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["50000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_023",
+        "name": "Refuse burning with a bare monthly figure",
+        "description": "You're burning 40000 matches the burn inflection, not only the word burn.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our burn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["You're burning 40000 a month."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["40000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_024",
+        "name": "Refuse burn sits at a bare figure",
+        "description": "Burn sits at 40000 is inside the digit window.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our burn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Burn sits at 40000."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["40000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_025",
+        "name": "Refuse customers about a bare headcount",
+        "description": "Customers: about 150 is a headcount, not a ranking.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How many customers do we have?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Customers: about 150."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["150"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_016",
+        "name": "Refuse a bare customer headcount",
+        "description": "You have 150 customers is a fabricated count even without the word active.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How many customers do we have?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["You have 150 customers."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["150"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_017",
+        "name": "Refuse fabricated monthly revenue",
+        "description": "Revenue is $50k/month must not pass when revenue was never verified.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our revenue?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Revenue is $50k/month."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["$50k"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_018",
+        "name": "Refuse fabricated INR burn",
+        "description": "Burn is ₹8L per month is a figure, not advice.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our burn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Burn is ₹8L per month."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["₹8L"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_019",
+        "name": "Refuse a bare monthly burn figure",
+        "description": "Monthly burn of 40000 has no currency symbol and must still be refused.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our monthly burn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Monthly burn of 40000."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["40000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+]
+
 GOLDEN_DATASETS = {
     "cfo_analysis": CFO_ANALYSIS_TESTS,
     "market_analysis": MARKET_ANALYSIS_TESTS,
     "strategy_analysis": STRATEGY_ANALYSIS_TESTS,
     "pii_redaction": PII_REDACTION_TESTS,
-    "extraction_accuracy": EXTRACTION_ACCURACY_TESTS
+    "extraction_accuracy": EXTRACTION_ACCURACY_TESTS,
+    "fabrication_refusal": FABRICATION_REFUSAL_TESTS,
 }
 
 def get_dataset_by_id(dataset_id: str) -> Optional[GoldenTestCase]:

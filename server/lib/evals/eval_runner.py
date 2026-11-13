@@ -359,6 +359,64 @@ async def run_pii_redaction_eval(inputs: Dict[str, Any], db: Session) -> Dict[st
     }
 
 
+async def run_fabrication_refusal_eval(inputs: Dict[str, Any], db: Session) -> Dict[str, Any]:
+    """
+    Run fabrication → NOT_AVAILABLE goldens against the copilot guard.
+
+    Offline: does not call an LLM. Applies apply_not_available_guard to each
+    provided (or default golden) case.
+    """
+    from server.copilot.trust import apply_not_available_guard, flatten_output_text
+    from server.lib.evals.golden_datasets import FABRICATION_REFUSAL_TESTS
+
+    cases = inputs.get("test_cases") or FABRICATION_REFUSAL_TESTS
+    results = []
+    for case in cases:
+        payload = case.get("input", case)
+        expected = case.get("expected", {})
+        guard = apply_not_available_guard(
+            payload.get("copilot_output") or payload.get("output") or {},
+            payload.get("grounding_status"),
+            user_message=payload.get("user_message", ""),
+            available_metrics=payload.get("available_metrics"),
+            run_outputs=payload.get("run_outputs"),
+        )
+        text = flatten_output_text(guard.output)
+        must_na = expected.get("must_be_not_available", True)
+        ok = guard.refused == must_na
+        if must_na:
+            ok = ok and guard.grounding_status == "NOT_AVAILABLE"
+            ok = ok and "NOT_AVAILABLE" in text
+        for needle in expected.get("must_contain", []):
+            if needle not in text:
+                ok = False
+        for needle in expected.get("must_not_contain", []):
+            if needle in text:
+                ok = False
+        results.append({
+            "id": case.get("id"),
+            "success": ok,
+            "refused": guard.refused,
+            "reason": guard.reason,
+            "grounding_status": guard.grounding_status,
+        })
+
+    successful = sum(1 for r in results if r["success"])
+    overall = (successful / len(results)) * 100 if results else 0
+    return {
+        "outputs": {"test_results": results},
+        "scores": {
+            "fabrication_refusal": {
+                "score": overall,
+                "max_score": 100,
+                "percentage": overall,
+                "details": {"successful": successful, "total": len(results)},
+            }
+        },
+        "overall_score": round(overall, 2),
+    }
+
+
 async def run_evaluation_suite(suite_name: str, inputs: Dict[str, Any], db: Session) -> Dict[str, Any]:
     """
     Run a specific evaluation suite.
@@ -374,7 +432,8 @@ async def run_evaluation_suite(suite_name: str, inputs: Dict[str, Any], db: Sess
     suite_runners = {
         "copilot_quality": run_copilot_quality_eval,
         "extraction_accuracy": run_extraction_accuracy_eval,
-        "pii_redaction": run_pii_redaction_eval
+        "pii_redaction": run_pii_redaction_eval,
+        "fabrication_refusal": run_fabrication_refusal_eval,
     }
     
     runner = suite_runners.get(suite_name)

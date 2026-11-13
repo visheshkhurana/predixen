@@ -28,7 +28,10 @@ class GoogleSheetsConnector(BaseConnector):
     
     PROVIDER_ID = "google_sheets"
     PROVIDER_NAME = "Google Sheets"
-    CATEGORY = ProviderCategory.ACCOUNTING
+    # The base class declares PROVIDER_CATEGORY, not CATEGORY, and the registry
+    # filters on PROVIDER_CATEGORY -- so the old `CATEGORY` spelling was dead
+    # code and this provider silently inherited the base default (PAYROLL).
+    PROVIDER_CATEGORY = ProviderCategory.ACCOUNTING
     AUTH_TYPE = AuthType.OAUTH2
     
     REQUIRED_CREDENTIALS = ["access_token", "refresh_token"]
@@ -41,6 +44,51 @@ class GoogleSheetsConnector(BaseConnector):
         self.header_row = config.settings.get("header_row", 1)
         self.date_column = config.settings.get("date_column")
     
+    async def authenticate(self) -> bool:
+        """
+        Validate the OAuth token against the Sheets API.
+
+        This was the one abstract member the class never implemented, which made
+        it un-instantiable and took the whole provider catalogue down with it.
+        It probes the spreadsheet's metadata endpoint -- the cheapest call that
+        proves the token is live and the spreadsheet is reachable by this user.
+
+        Returns False rather than raising, matching the other connectors: every
+        caller treats authentication failure as a state, not an exception.
+        """
+        access_token = self.config.credentials.get("access_token")
+        if not access_token:
+            logger.warning("Google Sheets access token not provided")
+            return False
+
+        if not self.spreadsheet_id:
+            logger.warning("Google Sheets spreadsheet_id not provided")
+            return False
+
+        try:
+            import httpx
+
+            url = f"https://sheets.googleapis.com/v4/spreadsheets/{self.spreadsheet_id}"
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    url,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    timeout=10.0,
+                )
+
+            if response.status_code == 200:
+                self._authenticated = True
+                logger.info("Google Sheets authentication successful")
+                return True
+
+            logger.warning(
+                f"Google Sheets authentication failed: HTTP {response.status_code}"
+            )
+            return False
+        except Exception as e:
+            logger.error(f"Google Sheets authentication failed: {e}")
+            return False
+
     async def test_connection(self) -> bool:
         """Test the connection to Google Sheets API."""
         try:

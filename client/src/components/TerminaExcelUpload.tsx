@@ -1,3 +1,4 @@
+import { currencySymbol } from '@/lib/money';
 import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -387,6 +388,7 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
                   onClick={clearFile}
                   className="ml-2"
                   data-testid="button-clear-excel-file"
+                  aria-label="Clear file"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -656,7 +658,7 @@ function EditableMetricField({
       </label>
       <div className="relative">
         {!isPercent && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{currencySymbol()}</span>
         )}
         <Input
           type="text"

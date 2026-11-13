@@ -3,6 +3,12 @@ from datetime import datetime, timedelta
 import json
 import logging
 from server.core.company_metadata import save_metadata_value
+from server.seed.demo_companies import (
+    SEED_MARKER,
+    ensure_seed_marked,
+    is_seed_guess,
+    rows_to_purge,
+)
 from server.models.user import User
 from server.models.company import Company
 from server.models.financial import FinancialRecord
@@ -27,6 +33,7 @@ from server.models.company_state import CompanyState, compute_snapshot_id
 logger = logging.getLogger(__name__)
 
 DEMO_SEED_VERSION = 3
+DEMO_COMPANY_NAME = "TechFlow Analytics"
 
 
 def _ensure_company_state(db: Session, company):
@@ -170,13 +177,27 @@ def seed_demo_data(db: Session):
     existing = db.query(User).filter(User.email == "demo@founderconsole.ai").first()
     if existing:
         demo_user = existing
-        if demo_user.role != "owner":
-            demo_user.role = "owner"
+        # The demo account is shared; it must never hold an elevated role.
+        if demo_user.role != "viewer":
+            demo_user.role = "viewer"
             db.commit()
+        # Opt-in reset of the legacy shared demo account (DEMO_LEGACY_CLEANUP,
+        # see server/core/demo_workspace.py). It runs before the seed picks its
+        # primary row so the rebuilt company is the one found below.
+        try:
+            from server.core.demo_workspace import cleanup_legacy_demo_account
+            cleanup_legacy_demo_account(db, demo_user)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Legacy demo cleanup failed: {e}")
         all_companies = db.query(Company).filter(Company.user_id == demo_user.id).order_by(Company.id).all()
-        if len(all_companies) > 1:
-            primary = all_companies[0]
-            for dup in all_companies[1:]:
+        # HAG-651: only rows the seed itself created may be deleted or renamed.
+        # The demo password is public, so "every company under the demo user after
+        # the first" was a visitor's company as often as the seed's, and the rename
+        # below rewrote whichever row .first() returned.
+        primary_id = ensure_seed_marked(db, all_companies)
+        if primary_id is not None:
+            for dup in rows_to_purge(all_companies, primary_id):
                 try:
                     logger.info(f"Removing duplicate demo company id={dup.id} name={dup.name}")
                     db.delete(dup)
@@ -188,16 +209,75 @@ def seed_demo_data(db: Session):
                 db.commit()
             except Exception:
                 db.rollback()
-        company = db.query(Company).filter(Company.user_id == demo_user.id).first()
+        company = (
+            db.query(Company).filter(Company.id == primary_id).first()
+            if primary_id is not None
+            else None
+        )
         if company:
             demo_company = company
+            # A row the bootstrap GUESSED was the seed's is not treated as the
+            # seed's, and every line below this point mutates whichever row this
+            # is: the industry normalise, the rename, the financial re-create, the
+            # _seed_* families and the connector metadata. Refusing only the
+            # rename (rev 3) left all the rest running. Measured on this file's
+            # own fixture, that is 19 of the 60 company-scoped tables and 214 rows
+            # -- among them 24 financial_records, 60 transaction_records, 20
+            # customer_records and 15 metric_definitions -- plus a five-connector
+            # connected=True blob in metadata_json, all on a visitor's company. So
+            # the refusal is an early RETURN, not a guard around three fields:
+            #
+            #   * everything after this line is skipped for a guessed row, so a
+            #     future writer added anywhere below is safe by default -- it
+            #     cannot reach a guessed row by being added. A guarded block fails
+            #     open: a write added outside the guard silently writes to a
+            #     visitor's company.
+            #   * it is one exit, beside the two `return demo_user` calls that
+            #     already sit in this branch, rather than re-indenting forty lines
+            #     and making the diff unable to show the rest did not change.
+            #
+            # Prevention, not detection: no alarm after a write undoes a visitor's
+            # company rewritten to the demo's.
+            #
+            # THE COST, accepted knowingly: if a genuine seed row loses its marker
+            # (a whole-blob writer elsewhere can drop the keys), the demo stops
+            # healing its name, industry, stage and data until someone re-marks the
+            # row, and it says so LOUDLY ON EVERY RUN while it refuses -- the
+            # warning below is not spent on the run that made the guess. A stranded
+            # demo row is a worse demo; a visitor's company rewritten as the
+            # demo's is lost work for someone who did not ask for it.
+            #
+            # The count is the row count on THIS run, which is the account as the
+            # operator sees it, not the count at guess time: the guess happened on
+            # an earlier run and the only key carried forward is seed_guessed. Both
+            # numbers are named so the log line answers "which row, and how big is
+            # this account".
+            if is_seed_guess(demo_company.metadata_json):
+                logger.warning(
+                    "Demo seed: REFUSING to seed company id=%s, the row an earlier "
+                    "bootstrap GUESSED was the seed's -- it was the lowest id under "
+                    "the demo account when nothing carried metadata_json[%r]. The "
+                    "demo account holds %d row(s) on this run. Nothing was written "
+                    "to it: the financial re-create, the _seed_* families and the "
+                    "connector metadata were all skipped, and its name, industry, "
+                    "stage and data are still the visitor's own. If this really is "
+                    "the seed's own row it has lost its marker, and the demo will "
+                    "not heal until the row is re-marked; this warning repeats on "
+                    "every run until then.",
+                    demo_company.id,
+                    SEED_MARKER,
+                    len(all_companies),
+                )
+                return demo_user
             # Normalize industry to a valid dropdown id ("saas"); older seeds used
             # "general_saas", which isn't an option so the Industry field showed blank.
             if demo_company.industry in (None, "", "general_saas"):
                 demo_company.industry = "saas"
                 db.commit()
-            if demo_company.name != "TechFlow Analytics":
-                demo_company.name = "TechFlow Analytics"
+            # Safe again: this row carries the seed marker (guessed rows returned
+            # above), so the rename only ever heals the seed's own company.
+            if demo_company.name != DEMO_COMPANY_NAME:
+                demo_company.name = DEMO_COMPANY_NAME
                 demo_company.industry = "saas"
                 demo_company.stage = "series_a"
                 db.commit()
@@ -241,12 +321,13 @@ def seed_demo_data(db: Session):
             db.add(demo_company)
             db.commit()
             db.refresh(demo_company)
+            save_metadata_value(db, demo_company, SEED_MARKER, True)
             _ensure_company_state(db, demo_company)
     else:
         demo_user = User(
             email="demo@founderconsole.ai",
             password_hash=get_password_hash("demo123"),
-            role="owner"
+            role="viewer"
         )
         db.add(demo_user)
         db.commit()
@@ -263,13 +344,55 @@ def seed_demo_data(db: Session):
         db.add(demo_company)
         db.commit()
         db.refresh(demo_company)
+        save_metadata_value(db, demo_company, SEED_MARKER, True)
         _ensure_company_state(db, demo_company)
+
+    _seed_company_body(db, demo_company, demo_user)
+    seed_team_members(db)
+    _seed_twin_intelligence_data(db, demo_company)
+
+    logger.info("Demo data seeding completed successfully")
+    return demo_user
+
+
+def seed_demo_company(db: Session, user) -> Company:
+    """A fresh, complete copy of the sample company owned by `user`.
+
+    Used for per-visitor demo workspaces: every call builds new rows, so two
+    visitors never share a company. Touches nothing outside the new company
+    (no peer companies, no other account's data).
+    """
+    company = Company(
+        user_id=user.id,
+        name=DEMO_COMPANY_NAME,
+        website="https://techflow.ai",
+        industry="saas",
+        stage="seed",
+        currency="USD",
+    )
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    _ensure_company_state(db, company)
+    _ensure_connector_metadata(db, company)
+    _seed_company_body(db, company, user)
+    try:
+        from server.seed.seed_twin_intelligence import seed_twin_for_company
+        seed_twin_for_company(db, company.id)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Twin seed for demo company {company.id} skipped: {e}")
+    return company
+
+
+def _seed_company_body(db: Session, demo_company, demo_user):
     
     base_date = datetime.now() - timedelta(days=365)
     revenue = 15000
     expenses = 45000
     cash = 800000
-    
+
     for i in range(12):
         month_date = base_date + timedelta(days=30 * i)
         growth_rate = 1.08 + (0.03 * (i / 12))
@@ -533,12 +656,6 @@ def seed_demo_data(db: Session):
     db.commit()
 
     _seed_extended_demo_data(db, demo_company, demo_user)
-    
-    seed_team_members(db)
-    _seed_twin_intelligence_data(db, demo_company)
-
-    logger.info("Demo data seeding completed successfully")
-    return demo_user
 
 
 def _seed_shareholders(db: Session, demo_company):

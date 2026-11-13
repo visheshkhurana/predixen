@@ -1,3 +1,4 @@
+import { currencySymbol } from '@/lib/money';
 import { useState, useMemo, useEffect } from 'react';
 import { FadeIn, StaggerContainer, StaggerItem } from '@/components/motion/animated-container';
 import { FloatingOrbsBackground } from '@/components/motion/floating-orbs-background';
@@ -21,6 +22,8 @@ import { TruthScanBiggestRisks } from '@/components/TruthScanBiggestRisks';
 import { TruthScanTier2KeyMetrics } from '@/components/TruthScanTier2KeyMetrics';
 import { TruthScanTier3AdvancedMetrics } from '@/components/TruthScanTier3AdvancedMetrics';
 import { TruthScanSuggestedActions } from '@/components/TruthScanSuggestedActions';
+import { generateSuggestedActions } from '@/lib/truthScanSuggestedActions';
+import { FEATURE_FLAGS } from '@/config/features';
 import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Pencil, Building2, X, Check, Globe, Loader2, ExternalLink } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -31,9 +34,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatTruthScanForExport } from '@/lib/exportUtils';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
-import { generateMockTrendData } from '@/components/Sparkline';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { api } from '@/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/posthog';
 
@@ -121,17 +124,6 @@ interface Risk {
   priority: 1 | 2 | 3;
 }
 
-interface SuggestedAction {
-  id: string;
-  title: string;
-  description: string;
-  metricIssue: string;
-  actionType: 'retention' | 'runway' | 'burn' | 'margin' | 'growth' | 'acquisition';
-  scenarioName?: string;
-  scenarioParams?: Record<string, any>;
-  priority: 'high' | 'medium' | 'low';
-}
-
 function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
   const risks: Risk[] = [];
 
@@ -159,7 +151,7 @@ function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
       id: 'high-burn-multiple',
       icon: 'critical',
       title: 'Inefficient Growth Spending',
-      description: `Burn multiple of ${burnMultiple.toFixed(1)}x indicates you're spending $${burnMultiple.toFixed(1)} per $1 of new revenue.`,
+      description: `Burn multiple of ${burnMultiple.toFixed(1)}x indicates you're spending ${currencySymbol()}${burnMultiple.toFixed(1)} per ${currencySymbol()}1 of new revenue.`,
       priority: 1,
     });
   }
@@ -205,119 +197,6 @@ function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
   return risks.slice(0, 3);
 }
 
-function generateSuggestedActions(metrics: any, flags: any[]): SuggestedAction[] {
-  const actions: SuggestedAction[] = [];
-
-  const runwayP50 = getMetricValue(metrics.runway_p50);
-  const burnMultiple = getMetricValue(metrics.burn_multiple);
-  const grossMargin = getMetricValue(metrics.gross_margin);
-  const churnRateRaw2 = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue) || getMetricValue(metrics.churn_rate);
-  const churnRate = churnRateRaw2 !== null ? (churnRateRaw2 > 1 ? churnRateRaw2 / 100 : churnRateRaw2) : null;
-  const arr = getMetricValue(metrics.arr);
-  const runwaySustainable = metrics.runway_sustainable === true;
-
-  // P0: Low runway - suggest fundraising scenario
-  if (runwayP50 && runwayP50 < 12 && !runwaySustainable) {
-    actions.push({
-      id: 'action-runway',
-      title: 'Model Fundraising Round',
-      description: `With ${runwayP50.toFixed(1)} months of runway, model different fundraising amounts and scenarios.`,
-      metricIssue: `Runway is ${runwayP50.toFixed(1)} months`,
-      actionType: 'runway',
-      scenarioName: 'fundraising',
-      scenarioParams: {
-        scenarioType: 'fundraising',
-        currentRunway: runwayP50,
-      },
-      priority: 'high',
-    });
-  }
-
-  // High burn multiple - suggest cost optimization
-  if (burnMultiple && burnMultiple > 2.5) {
-    actions.push({
-      id: 'action-burn',
-      title: 'Run Cost Optimization Scenario',
-      description: `Test reducing operating expenses by 10-20% to improve efficiency and extend runway.`,
-      metricIssue: `Burn multiple is ${burnMultiple.toFixed(1)}x (target: <1.5x)`,
-      actionType: 'burn',
-      scenarioName: 'cost-optimization',
-      scenarioParams: {
-        scenarioType: 'cost-reduction',
-        target: 0.85, // 15% reduction
-      },
-      priority: 'high',
-    });
-  }
-
-  // Low gross margin - suggest pricing scenario
-  if (grossMargin && grossMargin < 65) {
-    actions.push({
-      id: 'action-margin',
-      title: 'Test Pricing Optimization',
-      description: `Model impact of 10-15% price increase or cost reduction on gross margin and profitability.`,
-      metricIssue: `Gross margin is ${grossMargin.toFixed(0)}% (target: 70%+)`,
-      actionType: 'margin',
-      scenarioName: 'pricing-optimization',
-      scenarioParams: {
-        scenarioType: 'pricing',
-        priceIncrease: 0.12, // 12% increase
-      },
-      priority: 'high',
-    });
-  }
-
-  // High churn - suggest retention scenario
-  if (churnRate && churnRate > 0.08) {
-    actions.push({
-      id: 'action-churn',
-      title: 'Run Retention Improvement Scenario',
-      description: `Model the impact of reducing churn by 20-30% through better onboarding and customer success.`,
-      metricIssue: `Monthly churn is ${(churnRate * 100).toFixed(1)}% (benchmark: 3-5%)`,
-      actionType: 'retention',
-      scenarioName: 'retention',
-      scenarioParams: {
-        scenarioType: 'retention',
-        churnReduction: 0.25, // 25% reduction
-      },
-      priority: 'high',
-    });
-  }
-
-  // Strong economics - suggest growth investment
-  const ltvCacRatio = getMetricValue(metrics.ltv_cac_ratio);
-  if (ltvCacRatio && ltvCacRatio >= 3) {
-    actions.push({
-      id: 'action-growth',
-      title: 'Model Growth Investment Scenario',
-      description: `Your unit economics support more aggressive growth. Test 25-50% increase in marketing spend.`,
-      metricIssue: `LTV:CAC ratio is ${ltvCacRatio.toFixed(1)}x (strong efficiency)`,
-      actionType: 'growth',
-      scenarioName: 'growth-acceleration',
-      scenarioParams: {
-        scenarioType: 'growth',
-        marketingIncrease: 0.35, // 35% increase
-      },
-      priority: 'medium',
-    });
-  }
-
-  // Sustainable / profitable - no immediate action needed
-  if (runwaySustainable && !actions.some((a) => a.priority === 'high')) {
-    actions.push({
-      id: 'action-strategy',
-      title: 'Model Strategic Scenario',
-      description: `Explore different growth strategies to accelerate expansion while maintaining profitability.`,
-      metricIssue: 'Company is cash-flow positive',
-      actionType: 'growth',
-      scenarioName: 'strategic-choice',
-      priority: 'medium',
-    });
-  }
-
-  return actions.slice(0, 4);
-}
-
 function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
   const recommendations: Recommendation[] = [];
 
@@ -344,7 +223,7 @@ function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
     recommendations.push({
       type: 'warning',
       title: 'Burn Multiple is Elevated',
-      description: `Your burn multiple of ${burnMultiple.toFixed(1)}x means you're spending $${burnMultiple.toFixed(1)} for every $1 of new ARR. Top-tier startups maintain this below 2x.`,
+      description: `Your burn multiple of ${burnMultiple.toFixed(1)}x means you're spending ${currencySymbol()}${burnMultiple.toFixed(1)} for every ${currencySymbol()}1 of new ARR. Top-tier startups maintain this below 2x.`,
       action: 'Review customer acquisition costs and focus on higher-efficiency growth channels. Consider increasing pricing or reducing sales team overhead.'
     });
   }
@@ -813,31 +692,45 @@ export default function TruthScanPage() {
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
 
+  // Sparklines come from real per-period FinancialRecord history (dashboard KPIs
+  // endpoint). A metric with fewer than 2 real points gets no sparkline.
+  const { data: kpiHistory } = useQuery({
+    queryKey: ['/api/dashboard/companies', currentCompany?.id, 'kpis'],
+    queryFn: () => api.dashboard.kpis(currentCompany!.id),
+    enabled: !!currentCompany?.id,
+    retry: false,
+  });
   const trendData = useMemo(() => {
-    if (!truthScan?.metrics) return {} as Record<string, number[]>;
-    const m = truthScan.metrics;
-    // Extract numeric values from potential object structures
-    const getValue = (v: any): number => {
-      if (v === null || v === undefined) return 0;
-      if (typeof v === 'number') return v;
-      if (typeof v === 'object' && 'value' in v) return getValue(v.value);
-      return 0;
+    const series = (key: string): number[] | undefined => {
+      const history = kpiHistory?.[key]?.history;
+      if (!Array.isArray(history)) return undefined;
+      const values = history
+        .map((p: any) => (typeof p?.value === 'number' ? p.value : null))
+        .filter((v: number | null): v is number => v !== null);
+      return values.length > 1 ? values : undefined;
     };
+    // The growth card is month-over-month, so derive MoM growth from the real
+    // revenue points rather than reusing the YoY series.
+    const revenue = series('mrr');
+    const momGrowth = revenue
+      ?.slice(1)
+      .map((v, i) => (revenue[i] > 0 ? ((v - revenue[i]) / revenue[i]) * 100 : null))
+      .filter((v): v is number => v !== null);
     return {
-      monthly_revenue: generateMockTrendData(getValue(m.monthly_revenue) || 100000, 6, 0.08),
-      net_burn: generateMockTrendData(Math.abs(getValue(m.net_burn) || 50000), 6, 0.12),
-      cash_balance: generateMockTrendData(getValue(m.cash_balance) || 500000, 6, 0.05),
-      gross_margin: generateMockTrendData((() => {
-            const gm = getValue(m.gross_margin);
-            // P0 FIX #5: Normalize GM - if > 1, it is already a percentage; if <= 1, multiply by 100
-            if (gm == null) return 65;
-            return gm > 1 ? gm : gm * 100;
-          })(), 6, 0.03),
-      revenue_growth: generateMockTrendData((getValue(m.revenue_growth_mom) || 0.1) * 100, 6, 0.15),
-      burn_multiple: generateMockTrendData(getValue(m.burn_multiple) || 2, 6, 0.1),
-      operating_margin: generateMockTrendData((getValue(m.operating_margin) || -0.2) * 100 + 50, 6, 0.08),
-    };
-  }, [truthScan?.metrics]);
+      monthly_revenue: revenue,
+      net_burn: series('netBurn'),
+      cash_balance: series('cashOnHand'),
+      gross_margin: series('grossMargin'),
+      revenue_growth: momGrowth && momGrowth.length > 1 ? momGrowth : undefined,
+      burn_multiple: series('burnMultiple'),
+      operating_margin: undefined,
+    } as Record<string, number[] | undefined>;
+  }, [kpiHistory]);
+
+  const suggestedActions = useMemo(
+    () => generateSuggestedActions(metrics, flags),
+    [metrics, flags],
+  );
   
   if (!currentCompany) {
     return (
@@ -998,7 +891,7 @@ export default function TruthScanPage() {
                   </Tooltip>
                 </div>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-expand-quality">
+                  <Button variant="ghost" size="icon" data-testid="button-expand-quality" aria-label={qualityExpanded ? "Collapse" : "Expand"}>
                     {qualityExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>
@@ -1076,7 +969,7 @@ export default function TruthScanPage() {
                   </Tooltip>
                 </div>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-expand-confidence">
+                  <Button variant="ghost" size="icon" data-testid="button-expand-confidence" aria-label={confidenceExpanded ? "Collapse" : "Expand"}>
                     {confidenceExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>
@@ -1163,12 +1056,14 @@ export default function TruthScanPage() {
       {/* Biggest Risks Section */}
       <TruthScanBiggestRisks risks={useMemo(() => generateBiggestRisks(metrics, flags), [metrics, flags])} isLoading={isLoading} />
 
-      {/* Suggested Actions Section */}
-      <TruthScanSuggestedActions
-        actions={useMemo(() => generateSuggestedActions(metrics, flags), [metrics, flags])}
-        companyId={currentCompany?.id}
-        isLoading={runTruthScanMutation.isPending}
-      />
+      {/* Suggested Actions Section — hide via FEATURE_FLAGS.TRUTH_SCAN_SUGGESTED_ACTIONS */}
+      {FEATURE_FLAGS.TRUTH_SCAN_SUGGESTED_ACTIONS && (
+        <TruthScanSuggestedActions
+          actions={suggestedActions}
+          companyId={currentCompany?.id}
+          isLoading={runTruthScanMutation.isPending}
+        />
+      )}
 
       {/* Business Summary Section */}
       <Card className="overflow-visible">

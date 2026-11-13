@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useSEO } from "@/lib/seo";
+import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
 import { trackFunnel } from "@/lib/funnel";
 import { trackEvent } from "@/lib/posthog";
 import {
@@ -101,22 +103,7 @@ export default function DefaultAlivePage() {
   const [includeExpenseGrowth, setIncludeExpenseGrowth] = useState(false);
   const [expenseGrowth, setExpenseGrowth] = useState(3);
 
-  // See the matching comment in runway-calculator.tsx: a page view here says
-  // nothing about whether the visitor actually asked the question. This is the
-  // first real signal of intent on the page.
-  const usageTracked = useRef(false);
-  useEffect(() => {
-    if (usageTracked.current) return;
-    const touched =
-      cash !== DA_DEFAULTS.cash ||
-      revenue !== DA_DEFAULTS.revenue ||
-      expenses !== DA_DEFAULTS.expenses ||
-      growthRate !== DA_DEFAULTS.growthRate ||
-      includeExpenseGrowth;
-    if (!touched) return;
-    usageTracked.current = true;
-    trackFunnel("calculator_used", { calculator: "default-alive" });
-  }, [cash, revenue, expenses, growthRate, includeExpenseGrowth]);
+  const onCalculatorInput = useCalculatorUsedOnce("default-alive");
 
   const effectiveExpenseGrowth = includeExpenseGrowth ? expenseGrowth : 0;
 
@@ -217,7 +204,7 @@ export default function DefaultAlivePage() {
                     Your Numbers
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-5">
+                <CardContent className="space-y-5" onInput={onCalculatorInput}>
                   <div>
                     <Label htmlFor="da-cash" className="text-sm font-medium">Cash in the Bank</Label>
                     <div className="relative mt-1.5">
@@ -264,6 +251,7 @@ export default function DefaultAlivePage() {
                         id="da-expense-growth-toggle"
                         checked={includeExpenseGrowth}
                         onCheckedChange={(v) => {
+                          onCalculatorInput();
                           setIncludeExpenseGrowth(v);
                           trackEvent("default_alive_expense_growth_toggled", { enabled: v });
                         }}
@@ -343,6 +331,14 @@ export default function DefaultAlivePage() {
                 </CardContent>
               </Card>
 
+              <CalculatorEmailOptIn
+                source="default-alive"
+                sourcePage="/default-alive"
+                plan="default-alive"
+                resultByEmail={false}
+                notes={`Verdict ${alive ? "default alive" : "default dead"}. Cash ${cash}, monthly revenue ${revenue}, monthly expenses ${expenses}, growth ${growthRate}%/mo${includeExpenseGrowth ? `, expense growth ${expenseGrowth}%/mo` : ""}.`}
+              />
+
               {!alive && levers && (
                 <Card data-testid="card-da-levers">
                   <CardHeader>
@@ -407,7 +403,7 @@ export default function DefaultAlivePage() {
                   <div className="mt-4 flex flex-wrap gap-3">
                     <Button asChild data-testid="button-da-cta">
                       <Link
-                        href="/auth?tab=register"
+                        href="/signup"
                         onClick={() => trackFunnel("cta_click", { location: "default-alive" })}
                       >
                         Run it on your real numbers

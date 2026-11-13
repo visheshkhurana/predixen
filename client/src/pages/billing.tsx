@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSubscription, usePlans, useStartTrial, useSubscribe, useBillingPortal, type PlanData } from '@/hooks/use-subscription';
+import {
+  useSubscription, usePlans, useStartTrial, useSubscribe, useBillingPortal,
+  useRazorpayVerify, useCancelSubscription, type PlanData, type SubscribeResponse,
+} from '@/hooks/use-subscription';
+import { formatPlanPrice, openRazorpayCheckout } from '@/lib/razorpay';
 import { useToast } from '@/hooks/use-toast';
+import { trackEvent } from '@/lib/posthog';
 import { Check, Sparkles, Zap, Crown, ArrowRight, Clock, CreditCard, AlertCircle, ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -33,6 +38,10 @@ function PlanCard({
   isTrial,
   onSelect,
   popular,
+  currency,
+  interval,
+  annualLabel,
+  paymentsEnabled,
 }: {
   plan: PlanData;
   currentPlan: string;
@@ -40,6 +49,10 @@ function PlanCard({
   isTrial: boolean;
   onSelect: (planId: string) => void;
   popular?: boolean;
+  currency: string;
+  interval: 'monthly' | 'annual';
+  annualLabel: string;
+  paymentsEnabled: boolean;
 }) {
   const isCurrent = isActive && currentPlan === plan.id;
   const isUpgrade = planRank(plan.id) > planRank(isActive ? currentPlan : 'free');
@@ -75,15 +88,22 @@ function PlanCard({
       <div className="mb-5">
         {plan.price_monthly === 0 ? (
           <div className="text-2xl font-bold text-white/80">Free</div>
+        ) : interval === 'annual' && plan.price_annual > 0 ? (
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-white/90">{formatPlanPrice(plan.price_annual, currency)}</span>
+            <span className="text-xs text-white/40">/yr</span>
+          </div>
         ) : (
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold text-white/90">${plan.price_monthly}</span>
+            <span className="text-2xl font-bold text-white/90">{formatPlanPrice(plan.price_monthly, currency)}</span>
             <span className="text-xs text-white/40">/mo</span>
           </div>
         )}
         {plan.price_annual > 0 && (
           <p className="text-[11px] text-white/30 mt-0.5">
-            ${plan.price_annual}/yr (save ${plan.price_monthly * 12 - plan.price_annual})
+            {interval === 'annual'
+              ? `${annualLabel} vs ${formatPlanPrice(plan.price_monthly, currency)}/mo`
+              : `${formatPlanPrice(plan.price_annual, currency)}/yr (${annualLabel})`}
           </p>
         )}
       </div>
@@ -109,6 +129,10 @@ function PlanCard({
         <div className="py-2.5 text-center text-white/30 text-sm">
           Free forever
         </div>
+      ) : !paymentsEnabled ? (
+        <div className="py-2.5 text-center text-emerald-400/70 text-sm" data-testid={`plan-beta-${plan.id}`}>
+          Free during beta
+        </div>
       ) : (
         <button
           onClick={() => onSelect(plan.id)}
@@ -133,12 +157,19 @@ export default function BillingPage() {
   const startTrial = useStartTrial();
   const subscribe = useSubscribe();
   const portal = useBillingPortal();
+  const verifyRazorpay = useRazorpayVerify();
+  const cancelSub = useCancelSubscription();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [interval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
 
   const plans = plansData?.plans || [];
   const isLoading = subLoading || plansLoading;
+  const paymentsEnabled = !!plansData?.payments_enabled;
+  const provider = plansData?.provider || 'stripe';
+  const currency = plansData?.currency || 'USD';
+  const annualLabel = plansData?.annual_label || '2 months free';
 
   // Handle return from Stripe checkout (?checkout=success|cancelled)
   useEffect(() => {
@@ -151,7 +182,7 @@ export default function BillingPage() {
       // server-side via the Stripe webhook; this is the client-side ad signal.
       try {
         (window as any).gtag?.('event', 'purchase_subscription', { method: 'stripe_checkout' });
-        (window as any).posthog?.capture('purchase_subscription', { method: 'stripe_checkout' });
+        trackEvent('purchase_subscription', { method: 'stripe_checkout' });
         import('@/lib/metaPixel').then(m => m.metaTrack('Subscribe', { method: 'stripe_checkout' })).catch(() => {});
       } catch {}
       toast({
@@ -172,12 +203,20 @@ export default function BillingPage() {
   const handleSelectPlan = (planId: string) => {
     setSelectedPlan(planId);
     subscribe.mutate(
-      { planId },
+      { planId, interval },
       {
         onSuccess: (data) => {
-          if (data.checkout_url) {
+          if (data.provider === 'razorpay' && data.subscription_id && data.key_id) {
+            startRazorpayCheckout(data);
+          } else if (data.checkout_url) {
             window.location.href = data.checkout_url;
+          } else if (data.portal_url) {
+            // Already subscribed: downgrade/cancel or payment fix happens in the portal.
+            window.location.href = data.portal_url;
           } else if (data.message) {
+            if (data.changed) {
+              queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+            }
             toast({ title: data.message });
           }
         },
@@ -186,6 +225,57 @@ export default function BillingPage() {
         },
       },
     );
+  };
+
+  const startRazorpayCheckout = (data: SubscribeResponse) => {
+    openRazorpayCheckout({
+      key: data.key_id!,
+      subscription_id: data.subscription_id!,
+      name: 'FounderConsole',
+      description: `${data.plan_name || 'Subscription'} (${data.interval === 'annual' ? 'annual' : 'monthly'})`,
+      prefill: data.prefill,
+      theme: { color: '#10b981' },
+      // Only the signed handler response is sent; the server verifies the
+      // signature and re-fetches the subscription before granting access.
+      handler: (resp) => {
+        verifyRazorpay.mutate(resp, {
+          onSuccess: (result) => {
+            try {
+              (window as any).gtag?.('event', 'purchase_subscription', { method: 'razorpay_checkout' });
+              trackEvent('purchase_subscription', { method: 'razorpay_checkout' });
+              import('@/lib/metaPixel').then(m => m.metaTrack('Subscribe', { method: 'razorpay_checkout' })).catch(() => {});
+            } catch {}
+            toast({
+              title: 'Payment successful',
+              description: result.status === 'active'
+                ? 'Your subscription is active.'
+                : 'Payment received. Your plan will update in a few seconds.',
+            });
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+            }, 2500);
+          },
+          onError: (err: Error) => {
+            toast({ title: 'Could not verify payment', description: err.message, variant: 'destructive' });
+          },
+        });
+      },
+      modal: {
+        ondismiss: () => toast({ title: 'Checkout cancelled', description: 'No charge was made.' }),
+      },
+    }).catch((err: Error) => {
+      toast({ title: 'Could not start checkout', description: err.message, variant: 'destructive' });
+    });
+  };
+
+  const handleCancel = () => {
+    if (!window.confirm('Cancel your subscription? You keep access until the end of the current billing period.')) return;
+    cancelSub.mutate(undefined, {
+      onSuccess: (data) => toast({ title: data.message || 'Subscription cancelled' }),
+      onError: (err: Error) => {
+        toast({ title: 'Could not cancel', description: err.message, variant: 'destructive' });
+      },
+    });
   };
 
   const handleOpenPortal = () => {
@@ -309,6 +399,45 @@ export default function BillingPage() {
         </div>
       )}
 
+      {!paymentsEnabled && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl
+          bg-emerald-500/[0.06] border border-emerald-500/20"
+          data-testid="beta-free-banner"
+        >
+          <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-emerald-400">Free during beta</p>
+            <p className="text-xs text-white/40">
+              FounderConsole is free while we're in beta. Prices below show what plans will cost once billing opens.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {paymentsEnabled && plans.some(p => p.price_annual > 0) && (
+        <div className="flex items-center gap-2" data-testid="interval-toggle">
+          <div className="inline-flex rounded-lg border border-white/[0.08] bg-white/[0.02] p-0.5">
+            {(['monthly', 'annual'] as const).map(opt => (
+              <button
+                key={opt}
+                onClick={() => setBillingInterval(opt)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all
+                  ${interval === opt ? 'bg-white/[0.1] text-white' : 'text-white/50 hover:text-white/80'}`}
+                data-testid={`interval-${opt}`}
+              >
+                {opt === 'monthly' ? 'Monthly' : 'Annual'}
+              </button>
+            ))}
+          </div>
+          <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/25
+            text-emerald-400 text-[10px] font-medium uppercase tracking-wider"
+            data-testid="annual-badge"
+          >
+            {annualLabel}
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {plans.map(plan => (
           <PlanCard
@@ -318,7 +447,11 @@ export default function BillingPage() {
             isActive={sub?.is_active || false}
             isTrial={sub?.is_trial || false}
             onSelect={handleSelectPlan}
-            popular={plan.id === 'growth'}
+            popular={plan.id === (plans.some(p => p.id === 'growth') ? 'growth' : 'starter')}
+            currency={currency}
+            interval={interval}
+            annualLabel={annualLabel}
+            paymentsEnabled={paymentsEnabled}
           />
         ))}
       </div>
@@ -329,7 +462,19 @@ export default function BillingPage() {
             <CreditCard className="h-4 w-4 text-white/40" />
             <h3 className="text-sm font-medium text-white/70">Payment</h3>
           </div>
-          {sub?.has_payment_method && (
+          {sub?.has_payment_method && provider === 'razorpay' && (
+            <button
+              onClick={handleCancel}
+              disabled={cancelSub.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06]
+                border border-white/[0.08] text-white/70 text-xs font-medium
+                hover:bg-white/[0.1] hover:text-white transition-all disabled:opacity-50"
+              data-testid="button-cancel-subscription"
+            >
+              {cancelSub.isPending ? 'Cancelling…' : 'Cancel subscription'}
+            </button>
+          )}
+          {sub?.has_payment_method && provider !== 'razorpay' && (
             <button
               onClick={handleOpenPortal}
               disabled={portal.isPending}
@@ -344,9 +489,15 @@ export default function BillingPage() {
           )}
         </div>
         <p className="text-xs text-white/40">
-          {sub?.has_payment_method
-            ? 'Manage your payment method, invoices, plan changes, and cancellation in the secure Stripe billing portal.'
-            : 'Payments are processed securely by Stripe — pay by card, PayPal, Apple Pay, or Google Pay. Subscribe to a plan above to get started.'}
+          {!paymentsEnabled
+            ? 'No payment needed during the beta. Every account is free for now.'
+            : provider === 'razorpay'
+              ? (sub?.has_payment_method
+                ? 'Your subscription is billed by Razorpay. Cancelling keeps access until the end of the current billing period.'
+                : 'Payments are processed securely by Razorpay — pay by UPI, card, netbanking, or wallet. Subscribe to a plan above to get started.')
+              : (sub?.has_payment_method
+                ? 'Manage your payment method, invoices, plan changes, and cancellation in the secure Stripe billing portal.'
+                : 'Payments are processed securely by Stripe — pay by card, PayPal, Apple Pay, or Google Pay. Subscribe to a plan above to get started.')}
         </p>
       </div>
 
@@ -369,7 +520,7 @@ export default function BillingPage() {
             <div>
               <p className="text-white/30 mb-1">Price</p>
               <p className="text-white/70 font-medium">
-                {sub.plan_price > 0 ? `$${sub.plan_price}/mo` : 'Free'}
+                {sub.plan_price > 0 ? `${formatPlanPrice(sub.plan_price, sub.currency || 'USD')}/mo` : 'Free'}
               </p>
             </div>
             {sub.trial_end && (

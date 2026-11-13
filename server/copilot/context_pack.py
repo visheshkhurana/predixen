@@ -8,27 +8,17 @@ from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
 from server.models.financial import FinancialRecord, FinancialMetricPoint
+from server.core.burn import burn_summary
 
 
 def _serialize_financial_record(rec: FinancialRecord) -> Dict[str, Any]:
-    # Compute net burn / runway from the full expense breakdown INCLUDING COGS —
-    # the same "Computed" figure the dashboard shows — rather than trusting the
-    # stored net_burn/runway_months scalars, which can be stale and COGS-omitted
-    # (e.g. 39.2mo instead of 21.3mo). Keeps the copilot consistent with the UI.
-    _rev = float(rec.revenue or 0)
-    _total_costs = (
-        float(rec.opex or 0) + float(rec.payroll or 0)
-        + float(rec.cogs or 0) + float(rec.other_costs or 0)
-        + float(rec.marketing_expense or 0)
-    )
-    _computed_net_burn = _total_costs - _rev
-    if _computed_net_burn > 0:
-        _net_burn = _computed_net_burn
-        _runway = float(rec.cash_balance or 0) / _computed_net_burn
-    else:
-        # Profitable, or no breakdown available — fall back to stored values.
-        _net_burn = float(rec.net_burn) if rec.net_burn is not None else _computed_net_burn
-        _runway = float(rec.runway_months) if rec.runway_months is not None else None
+    # Burn/runway via the shared rule (server/core/burn.py): full breakdown
+    # incl. COGS + marketing, SIGNED (negative = profitable). The old fallback
+    # quoted stale stored scalars for profitable companies, so the copilot said
+    # "net burn of USD 6,000 ... runway 57.5 months" for a company making money.
+    _burn = burn_summary(rec)
+    _net_burn = _burn["net_burn"]
+    _runway = _burn["runway_months"]
     return {
         "period": rec.period_end.isoformat() if rec.period_end else None,
         "revenue": float(rec.revenue or 0),
@@ -36,12 +26,14 @@ def _serialize_financial_record(rec: FinancialRecord) -> Dict[str, Any]:
         "opex": float(rec.opex or 0),
         "payroll": float(rec.payroll or 0),
         "other_costs": float(rec.other_costs or 0),
-        "cash_balance": float(rec.cash_balance or 0),
+        "cash_balance": float(rec.cash_balance) if rec.cash_balance is not None else None,
         "mrr": float(rec.mrr) if rec.mrr is not None else None,
         "arr": float(rec.arr) if rec.arr is not None else None,
         "gross_margin": float(rec.gross_margin) if rec.gross_margin is not None else None,
         "net_burn": _net_burn,
+        "is_profitable": _burn["is_profitable"],
         "runway_months": _runway,
+        "runway_status": _burn["runway_status"],
         "headcount": int(rec.headcount) if rec.headcount else None,
         "customers": int(rec.customers) if rec.customers else None,
         "ltv": float(rec.ltv) if rec.ltv is not None else None,
@@ -120,21 +112,18 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
         }
     
     if financial_records:
+        context["burn_status"] = burn_summary(financial_records[0])
         context["financial_history"] = [
             _serialize_financial_record(rec) for rec in financial_records
         ]
         latest_financial = financial_records[0]
         if not truth_scan:
-            cash = float(latest_financial.cash_balance or 0)
             revenue = float(latest_financial.revenue or 0)
-            total_costs = (
-                float(latest_financial.opex or 0) + 
-                float(latest_financial.payroll or 0) + 
-                float(latest_financial.cogs or 0) + 
-                float(latest_financial.other_costs or 0)
-            )
-            net_burn = total_costs - revenue
-            runway = cash / max(net_burn, 1) if net_burn > 0 else None
+            burn = burn_summary(latest_financial)
+            cash = burn["cash_balance"]
+            total_costs = burn["gross_burn"]
+            net_burn = burn["net_burn"]
+            runway = burn["runway_months"]
             gross_margin = (revenue - float(latest_financial.cogs or 0)) / max(revenue, 1) if revenue > 0 else None
             
             context["financial_baseline"] = {
@@ -144,7 +133,9 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
                     "cash_balance": cash,
                     "total_expenses": total_costs,
                     "net_burn": net_burn,
+                    "is_profitable": burn["is_profitable"],
                     "runway_months": runway,
+                    "runway_status": burn["runway_status"],
                     "gross_margin": gross_margin,
                     "payroll": float(latest_financial.payroll or 0),
                     "opex": float(latest_financial.opex or 0),
@@ -209,6 +200,7 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
 
 def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[str, Any]]:
     try:
+        from server.decision.cross_company_claims import format_research_insight
         from server.services.pattern_aggregator import get_relevant_patterns
         from server.models.company import Company
 
@@ -243,13 +235,23 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
             companies = p.get("contributing_companies", 0)
             ptype = p.get("pattern_type", "")
             if sample >= 2:
-                source_label = f"{sample} decisions across {companies} companies" if ptype == "decision_outcome" else f"{sample} research studies"
+                if ptype == "research":
+                    insight = format_research_insight(p.get("source"), rate, sample)
+                    kind = "research"
+                else:
+                    source_label = f"{sample} decisions across {companies} companies"
+                    insight = (
+                        f"{rate:.0f}% of similar companies ({source_label}) saw positive outcomes "
+                        f"from {dtype.replace('_', ' ')} decisions."
+                    )
+                    kind = "peer_cohort"
                 insights.append({
                     "type": "decision_pattern",
                     "decision_type": dtype,
-                    "insight": f"{rate:.0f}% of similar companies ({source_label}) saw positive outcomes from {dtype.replace('_', ' ')} decisions.",
+                    "insight": insight,
                     "success_rate": rate,
                     "sample_size": sample,
+                    "cross_company_source": kind,
                 })
 
         for p in benchmark_patterns[:3]:
@@ -257,11 +259,11 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
             median = p.get("median_impact", 0)
             p25 = p.get("p25_impact", 0)
             p75 = p.get("p75_impact", 0)
-            if median > 0:
+            if isinstance(median, str) and median:
                 insights.append({
                     "type": "benchmark",
                     "metric": metric,
-                    "insight": f"Peer {metric.replace('_', ' ')} benchmark: P25=${p25:,.0f}, Median=${median:,.0f}, P75=${p75:,.0f}",
+                    "insight": f"Peer {metric.replace('_', ' ')} benchmark: P25={p25}, Median={median}, P75={p75}",
                     "p25": p25,
                     "median": median,
                     "p75": p75,
@@ -270,12 +272,31 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
         if not insights:
             return None
 
+        has_research = any(item.get("cross_company_source") == "research" for item in insights)
+        has_peers = any(
+            item.get("cross_company_source") == "peer_cohort" or item.get("type") == "benchmark"
+            for item in insights
+        )
+        if has_research and has_peers:
+            disclaimer = (
+                "Peer outcomes are anonymized aggregates from opted-in companies. Individual company data is never exposed. "
+                "Industry research figures cite published studies and are not FounderConsole peer outcomes."
+            )
+        elif has_research:
+            disclaimer = (
+                "Industry research figures cite published studies. They are not outcomes from companies on FounderConsole."
+            )
+        else:
+            disclaimer = (
+                "Based on anonymized, aggregated data from opted-in companies. Individual company data is never exposed."
+            )
+
         return {
             "source": "aggregated_cross_company_data",
             "industry": industry,
             "stage": stage,
             "insights": insights,
-            "disclaimer": "Based on anonymized, aggregated data from opted-in companies. Individual company data is never exposed.",
+            "disclaimer": disclaimer,
         }
     except Exception as e:
         import logging

@@ -16,6 +16,46 @@ export interface SubscriptionData {
   trial_duration_days: number;
   grandfathered?: boolean;
   payments_enabled?: boolean;
+  provider?: BillingProvider;
+  currency?: string;
+  razorpay_subscription_id?: string;
+}
+
+export type BillingProvider = 'stripe' | 'razorpay';
+
+export interface PlansResponse {
+  plans: PlanData[];
+  payments_enabled?: boolean;
+  provider?: BillingProvider;
+  currency?: string;
+  currency_symbol?: string;
+  annual_label?: string;
+  annual_multiplier?: number;
+}
+
+/** Stripe returns a hosted checkout URL; Razorpay returns params for checkout.js. */
+export interface SubscribeResponse {
+  checkout_url?: string;
+  /** Stripe: already subscribed, so downgrade/cancel or payment fix happens in the portal. */
+  portal_url?: string;
+  message?: string;
+  /** Stripe: an existing subscription was switched in place (prorated). */
+  changed?: boolean;
+  provider?: BillingProvider;
+  subscription_id?: string;
+  key_id?: string;
+  plan?: string;
+  plan_name?: string;
+  interval?: 'monthly' | 'annual';
+  currency?: string;
+  amount?: number;
+  prefill?: { email?: string; name?: string };
+}
+
+export interface RazorpayHandlerResponse {
+  razorpay_payment_id: string;
+  razorpay_subscription_id: string;
+  razorpay_signature: string;
 }
 
 export interface PlanData {
@@ -41,7 +81,7 @@ export function useSubscription() {
 }
 
 export function usePlans() {
-  return useQuery<{ plans: PlanData[] }>({
+  return useQuery<PlansResponse>({
     queryKey: ['/api/billing/plans'],
     staleTime: 300_000,
   });
@@ -69,7 +109,7 @@ export function useStartTrial() {
 
 export function useSubscribe() {
   return useMutation({
-    mutationFn: async ({ planId, interval = 'monthly' }: { planId: string; interval?: 'monthly' | 'annual' }) => {
+    mutationFn: async ({ planId, interval = 'monthly' }: { planId: string; interval?: 'monthly' | 'annual' }): Promise<SubscribeResponse> => {
       const res = await fetch(`/api/billing/subscribe/${planId}`, {
         method: 'POST',
         credentials: 'include',
@@ -80,7 +120,45 @@ export function useSubscribe() {
         const err = await res.json().catch(() => ({ detail: 'Could not start checkout' }));
         throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not start checkout');
       }
-      return res.json() as Promise<{ checkout_url?: string; message?: string }>;
+      return res.json() as Promise<SubscribeResponse>;
+    },
+  });
+}
+
+async function postJson<T>(url: string, body: unknown, fallback: string): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: fallback }));
+    throw new Error(typeof err.detail === 'string' ? err.detail : fallback);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Sends the Razorpay Checkout handler response for server-side signature verification. */
+export function useRazorpayVerify() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (resp: RazorpayHandlerResponse) =>
+      postJson<{ verified: boolean; status: string }>('/api/billing/razorpay/verify', resp, 'Payment verification failed'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+    },
+  });
+}
+
+/** Razorpay: cancels at the end of the current billing cycle. */
+export function useCancelSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      postJson<{ message?: string; current_period_end?: string | null }>('/api/billing/cancel', undefined, 'Could not cancel subscription'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
     },
   });
 }

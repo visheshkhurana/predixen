@@ -16,7 +16,7 @@ import { ScenarioTagManager } from '@/components/ScenarioTagManager';
 import { ScenarioTemplateGallery, TEMPLATE_CARDS, type TemplateCard } from '@/components/ScenarioTemplateGallery';
 import { GuidedScenarioSlider } from '@/components/GuidedScenarioSlider';
 import { SCENARIO_SLIDER_TOOLTIPS } from '@/lib/metricDefinitions';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 import {
   ChevronLeft,
   ChevronRight,
@@ -81,6 +81,9 @@ interface ScenarioWizardProps {
     currentRunway: number;
     growthRate: number;
   };
+  initialParams?: Partial<ScenarioParams>;
+  initialStep?: number;
+  prefillLabel?: string;
 }
 
 const STEPS = [
@@ -168,14 +171,10 @@ function generateNarrativeFeedback(params: ScenarioParams, runwayImpact: ReturnT
   }
   
   if (params.fundraise_amount > 0 && params.fundraise_month) {
-    const amount = params.fundraise_amount >= 1000000 
-      ? `$${(params.fundraise_amount / 1000000).toFixed(1)}M` 
-      : `$${(params.fundraise_amount / 1000).toFixed(0)}K`;
+    const amount = formatCurrencyAbbrev(params.fundraise_amount);
     changes.push(`raising ${amount} in month ${params.fundraise_month}`);
   } else if (params.fundraise_amount > 0) {
-    const amount = params.fundraise_amount >= 1000000 
-      ? `$${(params.fundraise_amount / 1000000).toFixed(1)}M` 
-      : `$${(params.fundraise_amount / 1000).toFixed(0)}K`;
+    const amount = formatCurrencyAbbrev(params.fundraise_amount);
     changes.push(`planning a ${amount} fundraise (month not yet set)`);
   }
   
@@ -319,34 +318,38 @@ export function ScenarioWizard({
   isRunning,
   companyId,
   baseMetrics,
+  initialParams,
+  initialStep,
+  prefillLabel,
 }: ScenarioWizardProps) {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(initialStep ?? 1);
   const [selectedTemplate, setSelectedTemplate] = useState<ScenarioTemplate | TemplateCard | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [activeSlider, setActiveSlider] = useState<{ name: string; previousValue: number } | null>(null);
   const [params, setParams] = useState<ScenarioParams>({
-    name: 'Custom Scenario',
-    pricing_change_pct: 0,
-    growth_uplift_pct: 0,
-    burn_reduction_pct: 0,
-    gross_margin_delta_pct: 0,
-    churn_change_pct: 0,
-    cac_change_pct: 0,
-    fundraise_month: null,
-    fundraise_amount: 0,
-    tags: [],
+    name: initialParams?.name || 'Custom Scenario',
+    pricing_change_pct: initialParams?.pricing_change_pct ?? 0,
+    growth_uplift_pct: initialParams?.growth_uplift_pct ?? 0,
+    burn_reduction_pct: initialParams?.burn_reduction_pct ?? 0,
+    gross_margin_delta_pct: initialParams?.gross_margin_delta_pct ?? 0,
+    churn_change_pct: initialParams?.churn_change_pct ?? 0,
+    cac_change_pct: initialParams?.cac_change_pct ?? 0,
+    fundraise_month: initialParams?.fundraise_month ?? null,
+    fundraise_amount: initialParams?.fundraise_amount ?? 0,
+    tags: initialParams?.tags ?? [],
   });
   const [customEvents, setCustomEvents] = useState<ScenarioEvent[]>([]);
 
   useEffect(() => {
+    if (initialParams) return;
     if (typeof window !== 'undefined') {
       const dismissed = localStorage.getItem(TUTORIAL_STORAGE_KEY);
       if (!dismissed) {
         setShowTutorial(true);
       }
     }
-  }, []);
+  }, [initialParams]);
 
   const handleCloseTutorial = () => {
     setShowTutorial(false);
@@ -430,9 +433,7 @@ export function ScenarioWizard({
   };
 
   const formatCurrency = (value: number) => {
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-    return `$${value}`;
+    return formatCurrencyAbbrev(value);
   };
 
   return (
@@ -475,6 +476,20 @@ export function ScenarioWizard({
                   Skip tutorial forever
                 </Button>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {prefillLabel && (
+        <Card className="mb-4 border-blue-500/30 bg-blue-500/5" data-testid="banner-truth-scan-prefill">
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2">
+              <Lightbulb className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="text-sm">
+                <span className="font-medium">{prefillLabel}</span>
+                <span className="text-muted-foreground ml-1.5">— levers are filled in. Review and run.</span>
+              </span>
             </div>
           </CardContent>
         </Card>

@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -168,13 +169,13 @@ function ContentPreview({ data }: { data: ShareModalData }) {
           {contentData.end_cash != null && (
             <div>
               <p className="text-[10px] text-muted-foreground">End Cash</p>
-              <p className="text-xs font-mono font-medium">{contentData.end_cash_formatted || `$${(contentData.end_cash / 1000).toFixed(0)}k`}</p>
+              <p className="text-xs font-mono font-medium">{contentData.end_cash_formatted || formatCurrencyAbbrev(contentData.end_cash)}</p>
             </div>
           )}
           {contentData.monthly_burn != null && (
             <div>
               <p className="text-[10px] text-muted-foreground">Monthly Burn</p>
-              <p className="text-xs font-mono font-medium">{contentData.monthly_burn_formatted || `$${(contentData.monthly_burn / 1000).toFixed(0)}k`}</p>
+              <p className="text-xs font-mono font-medium">{contentData.monthly_burn_formatted || formatCurrencyAbbrev(contentData.monthly_burn)}</p>
             </div>
           )}
         </div>
@@ -324,7 +325,7 @@ export function ShareModal({ open, onOpenChange, data, companyId, companyName }:
                   data-testid={`input-share-email-${i}`}
                 />
                 {recipients.length > 1 && (
-                  <Button size="icon" variant="ghost" onClick={() => removeRecipient(i)} data-testid={`button-remove-recipient-${i}`}>
+                  <Button size="icon" variant="ghost" onClick={() => removeRecipient(i)} data-testid={`button-remove-recipient-${i}`} aria-label="Remove recipient">
                     <X className="h-4 w-4" />
                   </Button>
                 )}

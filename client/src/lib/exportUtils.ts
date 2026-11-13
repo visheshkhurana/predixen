@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev, formatCurrencyFull } from '@/lib/utils';
 export function printSimulationResults(): void {
   window.print();
 }
@@ -82,7 +83,7 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
         if (key.includes('margin') || key.includes('growth') || key.includes('rate')) {
           formattedValue = `${(value * 100).toFixed(1)}%`;
         } else if (key.includes('revenue') || key.includes('burn') || key.includes('cash')) {
-          formattedValue = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+          formattedValue = formatCurrencyFull(value);
         } else {
           formattedValue = value.toLocaleString();
         }
@@ -250,6 +251,9 @@ export function formatSimulationForExport(simulation: any) {
 export interface SimulationPDFData {
   scenarioName: string;
   companyName?: string;
+  /** HAG-245: the run count that produced this document. Omitted when unknown,
+   *  so the header states nothing rather than a number that may be wrong. */
+  runs?: number;
   p90: { runway: string; revenue18m: number; cash12m: number; breakeven: string; survival: string };
   p50: { runway: string; revenue18m: number; cash12m: number; breakeven: string; survival: string };
   p10: { runway: string; revenue18m: number; cash12m: number; breakeven: string; survival: string };
@@ -274,9 +278,8 @@ const PDF_COLORS = {
 };
 
 function fmtCurrency(v: number): string {
-  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
-  return `$${v.toFixed(0)}`;
+  // jsPDF's built-in fonts have no rupee glyph, so spell it out in the PDF.
+  return formatCurrencyAbbrev(v).replace('₹', 'Rs ');
 }
 
 export async function downloadSimulationPDF(data: SimulationPDFData) {
@@ -318,7 +321,18 @@ export async function downloadSimulationPDF(data: SimulationPDFData) {
   doc.setFontSize(8);
   doc.setTextColor(180, 190, 210);
   const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  doc.text(`${data.companyName || 'FounderConsole'}  |  ${dateStr}  |  1,000 Monte Carlo Runs`, margin, 34);
+  // HAG-245: this document leaves the building. It used to print "1,000 Monte
+  // Carlo Runs" no matter which run produced it, on a surface where the count is
+  // selectable from 100 to 5,000. It now prints the run's own count, and drops
+  // the segment entirely when the caller did not supply one.
+  const runLabel = typeof data.runs === 'number' && data.runs > 0
+    ? `${data.runs.toLocaleString()} Monte Carlo Runs`
+    : null;
+  doc.text(
+    [data.companyName || 'FounderConsole', dateStr, runLabel].filter(Boolean).join('  |  '),
+    margin,
+    34,
+  );
 
   const tagW = 28;
   doc.setFillColor(...PDF_COLORS.primary);

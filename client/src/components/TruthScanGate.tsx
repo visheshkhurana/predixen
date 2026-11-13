@@ -131,7 +131,7 @@ export function TruthScanGate({ uploadId, companyId, onComplete, isDialog = fals
       if (onComplete) {
         onComplete();
       } else {
-        setLocation(`/companies/${companyId}/scenarios`);
+        setLocation('/simulate');
       }
     },
     onError: () => {

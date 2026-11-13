@@ -1,3 +1,4 @@
+import { currencySymbol } from '@/lib/money';
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 type BuilderStep = 'goal' | 'strategy' | 'customize' | 'results';
 
@@ -42,6 +43,11 @@ interface StrategicScenarioBuilderProps {
   onSaveScenario: (params: SimulationParams) => Promise<void>;
   isRunning?: boolean;
   simulation?: SimulationResult | null;
+  initialGoal?: SimulationGoal;
+  initialStrategyId?: string;
+  initialParams?: Partial<SimulationParams>;
+  initialStep?: BuilderStep;
+  prefillLabel?: string;
 }
 
 interface SimulationParams {
@@ -98,12 +104,22 @@ export function StrategicScenarioBuilder({
   onSaveScenario,
   isRunning = false,
   simulation,
+  initialGoal,
+  initialStrategyId,
+  initialParams,
+  initialStep,
+  prefillLabel,
 }: StrategicScenarioBuilderProps) {
-  const [step, setStep] = useState<BuilderStep>('goal');
-  const [selectedGoal, setSelectedGoal] = useState<SimulationGoal | undefined>();
-  const [selectedStrategy, setSelectedStrategy] = useState<StrategyTemplate | undefined>();
+  const bootstrapped = getStrategyById(initialStrategyId || '');
+  const [step, setStep] = useState<BuilderStep>(
+    initialStep || (bootstrapped ? 'customize' : 'goal'),
+  );
+  const [selectedGoal, setSelectedGoal] = useState<SimulationGoal | undefined>(
+    initialGoal || bootstrapped?.goal,
+  );
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyTemplate | undefined>(bootstrapped);
   const [pendingStrategyId, setPendingStrategyId] = useState<string | null>(null);
-  const [customParams, setCustomParams] = useState<Partial<SimulationParams>>({});
+  const [customParams, setCustomParams] = useState<Partial<SimulationParams>>(initialParams || {});
   const [isSaving, setIsSaving] = useState(false);
   
   const strategies = useMemo(() => {
@@ -178,14 +194,14 @@ export function StrategicScenarioBuilder({
     const rawGMDelta = currentParams.gross_margin_delta_pct || 0;
     const clampedGMDelta = Math.max(-baseGM, Math.min(100 - baseGM, rawGMDelta));
     const params: SimulationParams = {
-      name: selectedStrategy?.name || 'Custom Scenario',
+      name: customParams.name || selectedStrategy?.name || 'Custom Scenario',
       pricing_change_pct: currentParams.pricing_change_pct || 0,
       growth_uplift_pct: currentParams.growth_uplift_pct || 0,
       burn_reduction_pct: currentParams.burn_reduction_pct || 0,
       gross_margin_delta_pct: clampedGMDelta,
       churn_change_pct: currentParams.churn_change_pct || 0,
-      cac_change_pct: 0,
-      fundraise_month: currentParams.fundraise_amount ? 3 : null,
+      cac_change_pct: currentParams.cac_change_pct || 0,
+      fundraise_month: currentParams.fundraise_month ?? (currentParams.fundraise_amount ? 3 : null),
       fundraise_amount: currentParams.fundraise_amount || 0,
       tags: selectedGoal ? [selectedGoal] : [],
       start_month: currentParams.start_month || 1,
@@ -203,14 +219,14 @@ export function StrategicScenarioBuilder({
       const rawGMDeltaSave = currentParams.gross_margin_delta_pct || 0;
       const clampedGMDeltaSave = Math.max(-baseGMSave, Math.min(100 - baseGMSave, rawGMDeltaSave));
       const params: SimulationParams = {
-        name: selectedStrategy?.name || 'Custom Scenario',
+        name: customParams.name || selectedStrategy?.name || 'Custom Scenario',
         pricing_change_pct: currentParams.pricing_change_pct || 0,
         growth_uplift_pct: currentParams.growth_uplift_pct || 0,
         burn_reduction_pct: currentParams.burn_reduction_pct || 0,
         gross_margin_delta_pct: clampedGMDeltaSave,
         churn_change_pct: currentParams.churn_change_pct || 0,
-        cac_change_pct: 0,
-        fundraise_month: currentParams.fundraise_amount ? 3 : null,
+        cac_change_pct: currentParams.cac_change_pct || 0,
+        fundraise_month: currentParams.fundraise_month ?? (currentParams.fundraise_amount ? 3 : null),
         fundraise_amount: currentParams.fundraise_amount || 0,
         tags: selectedGoal ? [selectedGoal] : [],
         start_month: currentParams.start_month || 1,
@@ -248,6 +264,18 @@ export function StrategicScenarioBuilder({
   
   return (
     <div className="space-y-6 pb-20">
+      {prefillLabel && (
+        <div
+          className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm flex items-center gap-2"
+          data-testid="banner-truth-scan-prefill"
+        >
+          <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span>
+            <span className="font-medium">{prefillLabel}</span>
+            <span className="text-muted-foreground"> — levers are filled in. Review and run.</span>
+          </span>
+        </div>
+      )}
       {step !== 'goal' && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Button
@@ -277,12 +305,12 @@ export function StrategicScenarioBuilder({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <div className="text-xs text-muted-foreground">Cash on Hand</div>
-                <div className="text-lg font-semibold">${(baseMetrics.cashOnHand / 1000).toFixed(0)}K</div>
+                <div className="text-lg font-semibold">{formatCurrencyAbbrev(baseMetrics.cashOnHand)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Monthly Burn</div>
                 <div className="text-lg font-semibold text-red-500">
-                  ${((baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue) / 1000).toFixed(0)}K
+                  {formatCurrencyAbbrev(baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue)}
                 </div>
               </div>
               <div>
@@ -402,7 +430,7 @@ export function StrategicScenarioBuilder({
                   min={0}
                   max={10000000}
                   step={50000}
-                  unit="$"
+                  unit={currencySymbol()}
                 />
               </div>
 
@@ -547,7 +575,7 @@ export function StrategicScenarioBuilder({
                 <div className="p-4 rounded-lg bg-muted/50">
                   <div className="text-xs text-muted-foreground">End Cash (P50)</div>
                   <div className="text-lg font-semibold">
-                    ${((simulation.summary?.end_cash || 0) / 1000).toFixed(0)}K
+                    {formatCurrencyAbbrev(simulation.summary?.end_cash || 0)}
                   </div>
                 </div>
               </div>
@@ -561,15 +589,15 @@ export function StrategicScenarioBuilder({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                   <div className="p-2 rounded bg-muted/30">
                     <div className="text-muted-foreground">Base Cash</div>
-                    <div className="font-medium">${(baseMetrics.cashOnHand / 1000).toFixed(0)}K</div>
+                    <div className="font-medium">{formatCurrencyAbbrev(baseMetrics.cashOnHand)}</div>
                   </div>
                   <div className="p-2 rounded bg-muted/30">
                     <div className="text-muted-foreground">Monthly Revenue</div>
-                    <div className="font-medium">${(baseMetrics.monthlyRevenue / 1000).toFixed(0)}K</div>
+                    <div className="font-medium">{formatCurrencyAbbrev(baseMetrics.monthlyRevenue)}</div>
                   </div>
                   <div className="p-2 rounded bg-muted/30">
                     <div className="text-muted-foreground">Monthly Expenses</div>
-                    <div className="font-medium">${(baseMetrics.monthlyExpenses / 1000).toFixed(0)}K</div>
+                    <div className="font-medium">{formatCurrencyAbbrev(baseMetrics.monthlyExpenses)}</div>
                   </div>
                   <div className="p-2 rounded bg-muted/30">
                     <div className="text-muted-foreground">Base Growth Rate</div>
