@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List
 import asyncio
 import httpx
 import os
+import hashlib
 import json
 import logging
 import re
@@ -59,8 +60,17 @@ class BenchmarkSearchResponse(BaseModel):
 
 
 def _normalize_key_part(value: str) -> str:
-    value = re.sub(r"[^a-z0-9]+", "_", (value or "").lower()).strip("_")
-    return value[:_KEY_MAX_LEN]
+    """Collision-safe key part for a user-typed industry or stage.
+
+    A slug alone is lossy twice: every all-non-ASCII input reduced to "" (so
+    two different industries shared the key "|seed"), and names longer than
+    _KEY_MAX_LEN collided on their first 64 characters. The slug stays, for a
+    readable key, but a hash of the full normalized value always follows it.
+    """
+    normalized = " ".join((value or "").split()).casefold()
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    slug = re.sub(r"[^a-z0-9]+", "_", normalized).strip("_")[:_KEY_MAX_LEN]
+    return f"{slug}:{digest}" if slug else digest
 
 
 def get_cache_key(industry: str, stage: str) -> str:

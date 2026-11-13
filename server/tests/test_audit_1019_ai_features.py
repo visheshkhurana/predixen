@@ -22,6 +22,9 @@ from server.core.db import Base
 from server.models.company import Company
 from server.models.company_decision import CompanyDecision
 from server.models.financial import FinancialRecord
+from server.models.scenario import Scenario
+from server.models.truth_scan import TruthScan
+from server.models.workspace import WorkspaceMember
 
 
 @pytest.fixture
@@ -33,7 +36,14 @@ def db():
     )
     Base.metadata.create_all(
         engine,
-        tables=[Company.__table__, FinancialRecord.__table__, CompanyDecision.__table__],
+        tables=[
+            Company.__table__,
+            FinancialRecord.__table__,
+            CompanyDecision.__table__,
+            Scenario.__table__,
+            TruthScan.__table__,
+            WorkspaceMember.__table__,
+        ],
     )
     session = sessionmaker(bind=engine)()
     yield session
@@ -102,12 +112,37 @@ def test_prompt_marks_unknowns_and_forbids_invention():
     }
     prompt = dg._build_section_prompt("investor-memo", "Traction & Metrics", context)
     assert "MRR: $20,000" in prompt
-    assert "CAC:" not in prompt  # estimated placeholder is not presented as data
-    assert "Not available" in prompt and "CAC" in prompt.split("Not available")[1]
+    # estimated placeholder is not presented as data (main's per-line wording)
+    assert "\nCAC: not available" in prompt
     assert "$0" not in prompt
     assert "2026-09-01" in prompt and "revenue $20,000" in prompt
     assert "Never invent" in prompt
     assert "Use specific numbers" not in prompt
+
+
+def test_sample_records_never_reach_the_document_prompt(db):
+    """Seeded demo numbers are not the founder's history and must not be
+    presented as monthly records in a board or investor document."""
+    company = _company(db, name="Sample SaaS Co.", metadata_json={"is_sample": True})
+    _record(db, company.id, revenue=111.0, period=date(2026, 1, 1))
+    db.query(FinancialRecord).filter(FinancialRecord.revenue == 111.0).update(
+        {FinancialRecord.source_type: "sample"}, synchronize_session=False
+    )
+    _record(db, company.id, revenue=222.0, period=date(2026, 2, 1))
+    db.add(FinancialRecord(company_id=company.id, period_start=date(2026, 3, 1),
+                           period_end=date(2026, 3, 1), revenue=333.0))  # NULL = entered by hand
+    db.commit()
+
+    context = dg._gather_company_context(db, company)
+    revenues = [r["revenue"] for r in context["financial_records"]]
+    assert revenues == [333.0, 222.0]  # sample row dropped, newest first
+    assert context["is_sample"] is True
+
+    prompt = dg._build_section_prompt("board-memo", "Financial Highlights", context)
+    assert "$111" not in prompt
+    assert "$222" in prompt and "$333" in prompt
+    assert "Sample data notice" in prompt
+    assert "not reported by the founder" in prompt
 
 
 def _run_generate(llm_side_effect):
@@ -233,6 +268,18 @@ def test_cache_is_bounded():
     assert len(bs.get_cache_key("x" * 5000, "seed")) < 200
 
 
+def test_cache_key_separates_inputs_a_slug_collapses():
+    # Two all-non-ASCII industries used to slug to "" and share the key "|seed".
+    assert bs.get_cache_key("Eコマース", "seed") != bs.get_cache_key("フィンテック", "seed")
+    # Two long names used to collide on their first _KEY_MAX_LEN characters.
+    assert bs.get_cache_key("a" * 200 + "x", "seed") != bs.get_cache_key("a" * 200 + "y", "seed")
+    # Case and whitespace still normalize to one entry.
+    assert bs.get_cache_key("  FinTech  ", "Seed") == bs.get_cache_key("fintech", "seed")
+    # Still bounded.
+    assert len(bs.get_cache_key("x" * 5000, "seed")) < 200
+    assert len(bs.get_cache_key("Eコマース", "シリーズA")) < 200
+
+
 def test_clear_cache_requires_platform_admin():
     from server.api.admin import require_platform_admin
     dep = inspect.signature(bs.clear_benchmark_cache).parameters["current_user"].default
@@ -286,7 +333,9 @@ def test_link_code_flow_links_company_beyond_first_100(db):
         _company(db, name=f"Other {i}")
     target = _company(db, name="Target")
     user = SimpleNamespace(id=9)
-    with patch.object(sb, "get_user_company", return_value=target):
+    # This test is about the company lookup, not authorization: stub the role gate.
+    with patch.object(sb, "get_user_company", return_value=target), \
+         patch.object(sb, "get_user_company_role", return_value="owner"):
         issued = sb.create_slack_link_code(target.id, db=db, current_user=user)
     code = issued["code"]
 
@@ -353,6 +402,117 @@ def test_fc_link_slash_command_end_to_end(db, monkeypatch):
     assert "Linked" in send("/fc-link", code).json()["text"]
     assert "Linked Co" in str(send("/fc-runway").json())
 
+
+def _member(db, company, user_id=2, role="viewer"):
+    member = WorkspaceMember(
+        company_id=company.id, user_id=user_id, role=role, status="active", invited_by=1,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return member
+
+
+def test_viewer_cannot_issue_inspect_or_revoke_a_slack_link(db):
+    c = _company(db, name="Shared Co")
+    _member(db, c, user_id=2, role="viewer")
+    viewer = SimpleNamespace(id=2)
+
+    for call in (
+        lambda: sb.create_slack_link_code(c.id, db=db, current_user=viewer),
+        lambda: sb.get_slack_link_status(c.id, db=db, current_user=viewer),
+        lambda: sb.unlink_slack(c.id, db=db, current_user=viewer),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            call()
+        assert exc.value.status_code == 403
+
+    db.refresh(c)
+    assert sb.LINK_CODE_META_KEY not in (c.metadata_json or {})
+
+
+def test_admin_can_issue_and_revoke_a_slack_link(db):
+    c = _company(db, name="Admin Co")
+    _member(db, c, user_id=3, role="admin")
+    admin = SimpleNamespace(id=3)
+
+    code = sb.create_slack_link_code(c.id, db=db, current_user=admin)["code"]
+    assert len(code) == 10
+    assert sb.get_slack_link_status(c.id, db=db, current_user=admin)["linked"] is False
+    assert sb.unlink_slack(c.id, db=db, current_user=admin) == {"linked": False}
+
+    db.refresh(c)
+    assert sb.LINK_CODE_META_KEY not in (c.metadata_json or {})
+
+
+def test_removing_the_linking_member_revokes_the_slack_link(db):
+    from server.api import workspace as ws
+
+    c = _company(db, name="Removal Co")
+    leaver = _member(db, c, user_id=2, role="admin")
+    code = sb.create_slack_link_code(c.id, db=db, current_user=SimpleNamespace(id=2))["code"]
+    assert sb._link_with_code(db, code, "T-REMOVE", "C1", "U1") is not None
+    db.refresh(c)
+    assert (c.metadata_json or {})[sb.SLACK_META_KEY]["linked_by_user_id"] == 2
+
+    result = ws.remove_member(leaver.id, db=db, current_user=SimpleNamespace(id=1))
+
+    assert result == {"status": "removed"}
+    db.refresh(c)
+    assert sb.SLACK_META_KEY not in (c.metadata_json or {})
+    assert sb._get_company_from_slack(db, "T-REMOVE", "") is None
+
+
+def test_removing_another_member_leaves_the_link_alone(db):
+    from server.api import workspace as ws
+
+    c = _company(db, name="Keep Co")
+    bystander = _member(db, c, user_id=2, role="viewer")
+    code = sb.create_slack_link_code(c.id, db=db, current_user=SimpleNamespace(id=1))["code"]
+    assert sb._link_with_code(db, code, "T-KEEP", "C1", "U1") is not None
+
+    ws.remove_member(bystander.id, db=db, current_user=SimpleNamespace(id=1))
+
+    db.refresh(c)
+    assert (c.metadata_json or {})[sb.SLACK_META_KEY]["team_id"] == "T-KEEP"
+
+def test_slack_command_rejects_a_forged_signature(db, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from server.core.db import get_db
+
+    monkeypatch.setenv("SLACK_SIGNING_SECRET", "test-secret")
+    app = FastAPI()
+    app.include_router(sb.router)
+    app.dependency_overrides[get_db] = lambda: db
+    client = TestClient(app)
+
+    body = urllib.parse.urlencode({
+        "command": "/fc-runway", "text": "", "team_id": "TX", "channel_id": "CX", "user_id": "UX",
+    })
+    ts = str(int(time.time()))
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Slack-Request-Timestamp": ts,
+    }
+    forged = "v0=" + hmac.new(
+        b"not-the-secret", f"v0:{ts}:{body}".encode(), hashlib.sha256
+    ).hexdigest()
+
+    assert client.post(
+        "/slack/commands", content=body, headers={**headers, "X-Slack-Signature": forged}
+    ).status_code == 401
+    assert client.post("/slack/commands", content=body, headers=headers).status_code == 401
+
+    stale = str(int(time.time()) - 600)
+    stale_sig = "v0=" + hmac.new(
+        b"test-secret", f"v0:{stale}:{body}".encode(), hashlib.sha256
+    ).hexdigest()
+    assert client.post("/slack/commands", content=body, headers={
+        **headers,
+        "X-Slack-Request-Timestamp": stale,
+        "X-Slack-Signature": stale_sig,
+    }).status_code == 401
 
 def test_simulate_reads_engine_shape():
     from server.utils.survival import survival_pct
@@ -469,6 +629,11 @@ def test_rate_limit_wired_on_llm_routes(monkeypatch):
     from server.api import ai_graphics
     dep = inspect.signature(ai_graphics.generate_image).parameters["current_user"].default
     assert dep.dependency is rl.llm_rate_limit
+
+    # The document generator is the most expensive route: five section calls per
+    # request, so it must be metered like the single-call ones.
+    doc_dep = inspect.signature(dg.generate_document).parameters["current_user"].default
+    assert doc_dep.dependency is rl.llm_rate_limit
 
     monkeypatch.setenv("RATE_LIMIT_LLM_PER_USER", "1")
     rl.check_llm_rate_limit(5)
