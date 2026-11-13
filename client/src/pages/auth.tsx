@@ -13,6 +13,7 @@ import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
+import { readNextFromSearch } from "@/lib/loginNext";
 import { getBrowserDistinctId } from '@/lib/posthog';
 import { readFirstTouchAttribution } from '@/lib/attribution';
 import {
@@ -91,6 +92,32 @@ export default function AuthPage({
       window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
     }
   }, [toast]);
+
+  // Invite emails link to /auth?invite=<token>. The token rides along with
+  // login/register; an already-signed-in visitor accepts it directly.
+  const [inviteToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('invite'),
+  );
+  // Only a session that existed when the page opened; a login on this page
+  // already carried the token.
+  const [signedInAtLoad] = useState(() => useFounderStore.getState().user);
+  useEffect(() => {
+    if (!inviteToken || !signedInAtLoad) return;
+    fetch('/api/workspace/invites/accept', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    })
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}));
+        toast(res.ok
+          ? { title: 'Invite accepted' }
+          : { title: 'Could not accept invite', description: typeof body.detail === 'string' ? body.detail : undefined, variant: 'destructive' });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ email: '', password: '' });
@@ -218,7 +245,8 @@ export default function AuthPage({
     }
     setCompanyLoadError(false);
     toast({ title: 'Welcome back!' });
-    setLocation(dest);
+    // Back to the page the session expired on (validated same-origin path).
+    setLocation(dest === '/' ? (readNextFromSearch(window.location.search) ?? '/') : dest);
   };
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -233,7 +261,7 @@ export default function AuthPage({
     setIsLoading(true);
     setCompanyLoadError(false);
     try {
-      const result = await api.auth.login(loginForm.email, loginForm.password);
+      const result = await api.auth.login(loginForm.email, loginForm.password, inviteToken);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id);
       await continueAfterLogin(!!result.is_platform_admin);
@@ -275,7 +303,7 @@ export default function AuthPage({
     setIsLoading(true);
     try {
       const distinctId = await getBrowserDistinctId();
-      const result = await api.auth.register(registerForm.email, registerForm.password, distinctId);
+      const result = await api.auth.register(registerForm.email, registerForm.password, distinctId, inviteToken);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id);
       trackSignup(result.user_id, result.email);
@@ -299,7 +327,7 @@ export default function AuthPage({
   const handleDemoLogin = async () => {
     setIsDemoLoading(true);
     try {
-      const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
+      const result = await api.auth.demo();
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id);
       

@@ -303,7 +303,7 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
 }
 
 function DecisionTimeline({ companyId }: { companyId: number }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ decisions?: any[] }>({
     queryKey: ["/api/companies", companyId, "twin", "decisions"],
     enabled: !!companyId,
   });
@@ -362,7 +362,7 @@ function DecisionTimeline({ companyId }: { companyId: number }) {
 }
 
 function EventLog({ companyId }: { companyId: number }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ events?: any[] }>({
     queryKey: ["/api/companies", companyId, "twin", "events"],
     enabled: !!companyId,
   });

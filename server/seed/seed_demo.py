@@ -33,6 +33,7 @@ from server.models.company_state import CompanyState, compute_snapshot_id
 logger = logging.getLogger(__name__)
 
 DEMO_SEED_VERSION = 3
+DEMO_COMPANY_NAME = "TechFlow Analytics"
 
 
 def _ensure_company_state(db: Session, company):
@@ -180,6 +181,15 @@ def seed_demo_data(db: Session):
         if demo_user.role != "viewer":
             demo_user.role = "viewer"
             db.commit()
+        # Opt-in reset of the legacy shared demo account (DEMO_LEGACY_CLEANUP,
+        # see server/core/demo_workspace.py). It runs before the seed picks its
+        # primary row so the rebuilt company is the one found below.
+        try:
+            from server.core.demo_workspace import cleanup_legacy_demo_account
+            cleanup_legacy_demo_account(db, demo_user)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Legacy demo cleanup failed: {e}")
         all_companies = db.query(Company).filter(Company.user_id == demo_user.id).order_by(Company.id).all()
         # HAG-651: only rows the seed itself created may be deleted or renamed.
         # The demo password is public, so "every company under the demo user after
@@ -264,8 +274,10 @@ def seed_demo_data(db: Session):
             if demo_company.industry in (None, "", "general_saas"):
                 demo_company.industry = "saas"
                 db.commit()
-            if demo_company.name != "TechFlow Analytics":
-                demo_company.name = "TechFlow Analytics"
+            # Safe again: this row carries the seed marker (guessed rows returned
+            # above), so the rename only ever heals the seed's own company.
+            if demo_company.name != DEMO_COMPANY_NAME:
+                demo_company.name = DEMO_COMPANY_NAME
                 demo_company.industry = "saas"
                 demo_company.stage = "series_a"
                 db.commit()
@@ -334,12 +346,53 @@ def seed_demo_data(db: Session):
         db.refresh(demo_company)
         save_metadata_value(db, demo_company, SEED_MARKER, True)
         _ensure_company_state(db, demo_company)
+
+    _seed_company_body(db, demo_company, demo_user)
+    seed_team_members(db)
+    _seed_twin_intelligence_data(db, demo_company)
+
+    logger.info("Demo data seeding completed successfully")
+    return demo_user
+
+
+def seed_demo_company(db: Session, user) -> Company:
+    """A fresh, complete copy of the sample company owned by `user`.
+
+    Used for per-visitor demo workspaces: every call builds new rows, so two
+    visitors never share a company. Touches nothing outside the new company
+    (no peer companies, no other account's data).
+    """
+    company = Company(
+        user_id=user.id,
+        name=DEMO_COMPANY_NAME,
+        website="https://techflow.ai",
+        industry="saas",
+        stage="seed",
+        currency="USD",
+    )
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    _ensure_company_state(db, company)
+    _ensure_connector_metadata(db, company)
+    _seed_company_body(db, company, user)
+    try:
+        from server.seed.seed_twin_intelligence import seed_twin_for_company
+        seed_twin_for_company(db, company.id)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Twin seed for demo company {company.id} skipped: {e}")
+    return company
+
+
+def _seed_company_body(db: Session, demo_company, demo_user):
     
     base_date = datetime.now() - timedelta(days=365)
     revenue = 15000
     expenses = 45000
     cash = 800000
-    
+
     for i in range(12):
         month_date = base_date + timedelta(days=30 * i)
         growth_rate = 1.08 + (0.03 * (i / 12))
@@ -603,12 +656,6 @@ def seed_demo_data(db: Session):
     db.commit()
 
     _seed_extended_demo_data(db, demo_company, demo_user)
-    
-    seed_team_members(db)
-    _seed_twin_intelligence_data(db, demo_company)
-
-    logger.info("Demo data seeding completed successfully")
-    return demo_user
 
 
 def _seed_shareholders(db: Session, demo_company):
