@@ -244,12 +244,18 @@ async def get_catalog_connector(
 
 @router.get("/categories")
 async def list_categories(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """
     List connector categories with counts.
     """
-    catalog = await list_catalog(None, False, False, current_user)
+    # list_catalog is also a route handler, so call it with every argument:
+    # its Depends() defaults are not resolved on a direct call.
+    catalog = await list_catalog(
+        category=None, native_only=False, implemented_only=False,
+        company_id=None, current_user=current_user, db=db,
+    )
     category_counts: Dict[str, int] = {}
     for c in catalog:
         cat = c.get("category", "other")
