@@ -14,7 +14,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+from server.services.attribution import attribution_properties
+from server.services.posthog import alias as posthog_alias
 from server.services.posthog import capture as posthog_capture
+from server.services.posthog import lead_distinct_id, sanitize_distinct_id, user_distinct_id
 
 logger = logging.getLogger(__name__)
 
@@ -33,21 +36,67 @@ def company_is_sample(company: Any) -> bool:
     return isinstance(meta, dict) and bool(meta.get("is_sample"))
 
 
-def emit_signup_completed(*, user_id: int, method: str) -> bool:
-    """Server first-success signup. Never raises."""
+def emit_signup_completed(
+    *,
+    user_id: int,
+    method: str,
+    email: Optional[str] = None,
+    anonymous_distinct_id: Optional[str] = None,
+    attribution: Optional[dict] = None,
+) -> bool:
+    """Server first-success signup. Never raises.
+
+    distinct_id matches browser identifyUser: str(user_id).
+    The anonymous browser id (when the client sent one) and the lead-hash
+    fallback are aliased onto that id so earlier lead_captured events join
+    the account. Campaign parameters are copied onto the event when the
+    signup payload included them. They are not an IP address.
+    """
     try:
         if not user_id or not method:
             return False
-        return bool(
+        distinct_id = user_distinct_id(user_id)
+        properties: dict[str, Any] = {"method": method, "user_id": user_id}
+        properties.update(attribution_properties(attribution))
+        sent = bool(
             posthog_capture(
                 "signup_completed",
-                f"user:{user_id}",
-                {"method": method, "user_id": user_id},
+                distinct_id,
+                properties,
             )
         )
+        _alias_signup_identities(
+            distinct_id=distinct_id,
+            email=email,
+            anonymous_distinct_id=anonymous_distinct_id,
+        )
+        return sent
     except Exception:
         logger.exception("[activation] could not emit signup_completed")
         return False
+
+
+def _alias_signup_identities(
+    *,
+    distinct_id: str,
+    email: Optional[str],
+    anonymous_distinct_id: Optional[str],
+) -> None:
+    previous: list[str] = []
+    anon = sanitize_distinct_id(anonymous_distinct_id)
+    if anon:
+        previous.append(anon)
+    if email:
+        previous.append(lead_distinct_id(email))
+    seen: set[str] = set()
+    for previous_id in previous:
+        if not previous_id or previous_id == distinct_id or previous_id in seen:
+            continue
+        seen.add(previous_id)
+        try:
+            posthog_alias(previous_id=previous_id, distinct_id=distinct_id)
+        except Exception:
+            logger.exception("[activation] could not alias signup identity")
 
 
 def real_company_ids(companies: list[Any]) -> list[int]:
@@ -142,7 +191,7 @@ def maybe_emit_founder_activated(
             return False
         posthog_capture(
             "founder_activated",
-            f"user:{user_id}",
+            user_distinct_id(user_id),
             {
                 "source": source,
                 "company_id": getattr(company, "id", None),

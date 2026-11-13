@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { TOOL_PAGE_META } from "@/data/tool-page-meta";
 import { trackFunnel } from "@/lib/funnel";
+import { useCalculatorUsed } from "@/hooks/use-calculator-used";
 import {
   ArrowRight,
   Calculator,
@@ -138,11 +141,10 @@ export default function LtvCacPage() {
   );
 
   const grade = result.grade;
+  useCalculatorUsed("ltv-cac", JSON.stringify(text) !== JSON.stringify(DEFAULT_TEXT), result.ltv !== null, text);
 
   useSEO({
-    title: "Free LTV:CAC Calculator — With the CAC Payback Trap Built In | FounderConsole",
-    description:
-      "Free LTV:CAC calculator. Enter revenue per customer, gross margin, monthly churn, fully loaded sales and marketing, and new customers to see LTV, CAC, the ratio and payback months — graded separately, because a good ratio with a bad payback is a cash-flow trap.",
+    ...TOOL_PAGE_META["/tools/ltv-cac"],
     path: "/tools/ltv-cac",
     jsonLd: [
       {
@@ -364,6 +366,15 @@ export default function LtvCacPage() {
                 </CardContent>
               </Card>
 
+              <CalculatorEmailOptIn
+                source="ltv-cac"
+                sourcePage="/tools/ltv-cac"
+                plan="ltv-cac"
+                resultByEmail={false}
+                visible={result.outcome !== "invalid" && result.ltv !== null}
+                notes={`LTV ${result.ltv === null ? "n/a" : formatCurrency(result.ltv)}, CAC ${result.cac === null ? "n/a" : formatCurrency(result.cac)}, ratio ${result.ratio === null ? "n/a" : `${result.ratio.toFixed(2)}x`}.`}
+              />
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
@@ -420,7 +431,7 @@ export default function LtvCacPage() {
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
               <Link
-                href="/auth?tab=register"
+                href="/signup"
                 onClick={() => trackFunnel("cta_click", { location: "ltv-cac" })}
               >
                 Connect Your Real Data

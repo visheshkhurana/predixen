@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,12 @@ import {
 import { FCLogo } from "@/components/FCLogo";
 import { MarketingBackground } from "@/components/marketing/MarketingBackground";
 import { metaPageView } from "@/lib/metaPixel";
+import { onConsentChange } from "@/lib/consent";
+import { initXAds } from "@/lib/xads";
+import { CookieConsent } from "@/components/CookieConsent";
 import { trackFunnel } from "@/lib/funnel";
 import { aiCitation } from "@/data/ai-citation";
+import { PRODUCT_OF_LINE, registeredAddress } from "@/data/legal";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const navLinks = [
@@ -31,9 +35,13 @@ const footerProduct = [
   { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "/faq" },
   { label: "Demo", href: "/demo" },
-  // HAG-236: /signup has no form and no SSO, so the footer's "Get started" was a
-  // dead end. Point it at the real registration form, like every other signup CTA.
-  { label: "Get started", href: "/auth?tab=register" },
+  // HAG-236 pointed this at the real registration form; HAG-449 points it at
+  // /signup, which renders that same form (register tab) from a prerendered page
+  // that reaches first paint in 2.8 s against 8.4 s for the /auth shell.
+  { label: "Get started", href: "/signup" },
+  // HAG-449: the hub page exists but nothing linked to it, so a visitor could
+  // reach one calculator and never discover the other six free tools.
+  { label: "Free Tools", href: "/tools" },
   { label: "Runway Calculator", href: "/tools/runway-calculator" },
   { label: "Survival Simulator", href: "/survival-simulator" },
   // HAG-236: signup.tsx was the only inbound link to /default-alive in the repo.
@@ -56,6 +64,7 @@ const footerCompany = [
 const footerLegal = [
   { label: "Privacy", href: "/privacy" },
   { label: "Terms", href: "/terms" },
+  { label: "Refund & Cancellation", href: "/refund-policy" },
   { label: "Security", href: "/security" },
 ];
 
@@ -104,11 +113,15 @@ function Header() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
+          {/* HAG-449 follow-up: /demo has no video, so "Watch Demo" was a promise
+              the page could not keep and the click cost a second hop through a
+              page that explained itself. The route below opens the sample
+              workspace directly. */}
           <Button variant="outline" size="sm" asChild data-testid="button-watch-demo">
-            <Link href="/demo">Watch Demo</Link>
+            <Link href="/demo/enter">Live Demo</Link>
           </Button>
           <Button size="sm" asChild data-testid="button-get-started">
-            <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "navbar" })}>Get Started Free</Link>
+            <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "navbar" })}>Get Started Free</Link>
           </Button>
         </div>
 
@@ -145,10 +158,10 @@ function Header() {
               </nav>
               <div className="mt-8 flex flex-col gap-2">
                 <Button variant="outline" asChild data-testid="button-mobile-watch-demo">
-                  <Link href="/demo" onClick={() => setOpen(false)}>Watch Demo</Link>
+                  <Link href="/demo/enter" onClick={() => setOpen(false)}>Live Demo</Link>
                 </Button>
                 <Button asChild data-testid="button-mobile-get-started">
-                  <Link href="/auth?tab=register" onClick={() => { setOpen(false); trackFunnel("cta_click", { location: "mobile-menu" }); }}>Get Started Free</Link>
+                  <Link href="/signup" onClick={() => { setOpen(false); trackFunnel("cta_click", { location: "mobile-menu" }); }}>Get Started Free</Link>
                 </Button>
               </div>
             </SheetContent>
@@ -249,9 +262,15 @@ export function Footer() {
             </p>
           </div>
           <div className="mt-4 flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between">
-            <p className="text-xs text-muted-foreground" data-testid="text-copyright">
-              &copy; {new Date().getFullYear()} FounderConsole. All rights reserved.
-            </p>
+            <div className="text-xs text-muted-foreground">
+              <p data-testid="text-copyright">
+                &copy; {new Date().getFullYear()} FounderConsole. All rights reserved.
+              </p>
+              <p data-testid="text-legal-entity">{PRODUCT_OF_LINE}</p>
+              {registeredAddress() && (
+                <p data-testid="text-legal-address">Registered office: {registeredAddress()}</p>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground italic" data-testid="text-tagline">
               Built for founders, by founders.
             </p>
@@ -266,44 +285,22 @@ function MobileStickyCTA() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[9998] border-t bg-background/95 backdrop-blur-md p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden" data-testid="mobile-sticky-cta">
       <Button className="w-full" size="lg" asChild>
-        <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "mobile-sticky" })}>Get Started Free</Link>
+        <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "mobile-sticky" })}>Get Started Free</Link>
       </Button>
     </div>
   );
 }
 
-function useMetaPixel() {
-  const pixelLoaded = useRef(false);
-  const [location] = useLocation();
-
-  useEffect(() => {
-    if (pixelLoaded.current) {
-      if ((window as any).fbq) {
-        (window as any).fbq('track', 'PageView');
-      }
-      return;
-    }
-    pixelLoaded.current = true;
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
-    (window as any).fbq = function () {
-      (window as any).fbq.callMethod
-        ? (window as any).fbq.callMethod.apply((window as any).fbq, arguments)
-        : (window as any).fbq.queue.push(arguments);
-    };
-    (window as any).fbq.push = (window as any).fbq;
-    (window as any).fbq.loaded = true;
-    (window as any).fbq.version = '2.0';
-    (window as any).fbq.queue = [];
-    document.head.appendChild(script);
-    (window as any).fbq('init', '872167299140812');
-    (window as any).fbq('track', 'PageView');
-  }, [location]);
-}
-
 export function MarketingLayout({ children }: { children: React.ReactNode }) {
-  useMetaPixel();
+  // A second, hard-coded pixel (872167299140812) used to load here on every
+  // marketing page, before consent and alongside lib/metaPixel's env-configured
+  // one, which Meta flagged as conflicting pixels. Header's metaPageView() is
+  // the only loader now; this fires the first PageView once tracking is accepted.
+  useEffect(() => onConsentChange((choice) => {
+    if (choice !== "accepted") return;
+    metaPageView();
+    initXAds();
+  }), []);
   const [location] = useLocation();
   const prefersReducedMotion = useReducedMotion();
 
@@ -329,6 +326,7 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
       )}
       <Footer />
       <MobileStickyCTA />
+      <CookieConsent />
     </div>
   );
 }

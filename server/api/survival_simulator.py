@@ -31,42 +31,66 @@ class SurvivalSimRequest(BaseModel):
     fundraising_amount: float = Field(default=0, ge=0, description="Expected fundraise amount")
 
 
+SUSTAINABLE_RUNWAY = 999  # sentinel: revenue covers costs; never render as "999mo"
+
+
+def survival_cost_lines(monthly_revenue: float, monthly_expenses: float) -> dict:
+    """Engine cost lines whose month-one cash flow is revenue - total expenses.
+
+    ``monthly_expenses`` is TOTAL monthly cost (COGS included). The old code
+    estimated COGS as 30% of expenses, lowered the gross margin by it, and then
+    ALSO charged 100% of expenses as opex/payroll/other -- COGS counted twice.
+    The form has no COGS split, so the margin is pinned at the engine's top
+    bound (95%, with no margin noise) and the cost lines are reduced by the
+    remaining 5% of revenue so total cost equals the entered expenses exactly.
+    The split across opex/payroll/other only changes noise weights.
+    """
+    gm = 95.0
+    fixed = max(0.0, monthly_expenses - monthly_revenue * (1 - gm / 100.0))
+    return {
+        "gross_margin": gm,
+        "opex": fixed * 0.4,
+        "payroll": fixed * 0.5,
+        "other_costs": fixed * 0.1,
+    }
+
+
+def split_hires_by_quarter(planned_hires: int, avg_hire_cost: float) -> list:
+    """Spread N hires over four quarters (months 2, 5, 8, 11), N in total.
+
+    The old max(1, N // 4) gave 1-2 planned hires three hires.
+    """
+    plan = []
+    if planned_hires <= 0:
+        return plan
+    base, rem = divmod(int(planned_hires), 4)
+    for q in range(4):
+        count = base + (1 if q < rem else 0)
+        if count > 0:
+            plan.append({"start_month": q * 3 + 2, "count": count, "monthly_cost": count * avg_hire_cost})
+    return plan
+
+
 @router.post("/run")
 def run_survival_simulation(req: SurvivalSimRequest):
     from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
     from server.lib.lazy_imports import np
 
-    gross_margin_pct = 70.0
-    if req.monthly_revenue > 0:
-        cogs_estimate = req.monthly_expenses * 0.3
-        gross_profit = req.monthly_revenue - cogs_estimate
-        gross_margin_pct = max(10, min(95, (gross_profit / req.monthly_revenue) * 100))
-
-    opex_share = req.monthly_expenses * 0.4
-    payroll_share = req.monthly_expenses * 0.5
-    other_share = req.monthly_expenses * 0.1
-
-    hiring_plan = []
-    if req.planned_hires > 0:
-        hires_per_quarter = max(1, req.planned_hires // 4)
-        for q in range(4):
-            start = q * 3 + 2
-            count = hires_per_quarter if q < 3 else req.planned_hires - hires_per_quarter * 3
-            if count > 0 and start <= 24:
-                hiring_plan.append({
-                    "start_month": start,
-                    "monthly_cost": count * req.avg_hire_cost
-                })
+    costs = survival_cost_lines(req.monthly_revenue, req.monthly_expenses)
+    hiring_plan = split_hires_by_quarter(req.planned_hires, req.avg_hire_cost)
 
     inputs = SimulationInputs(
         baseline_revenue=req.monthly_revenue,
-        baseline_growth_rate=req.growth_rate,
-        gross_margin=gross_margin_pct,
-        opex=opex_share,
-        payroll=payroll_share,
-        other_costs=other_share,
+        # The engine has no churn term, so revenue churn is applied as a
+        # monthly decay on top of new-revenue growth: growth is "before churn".
+        baseline_growth_rate=req.growth_rate - req.monthly_churn,
+        gross_margin=costs["gross_margin"],
+        margin_sigma=0.0,
+        opex=costs["opex"],
+        payroll=costs["payroll"],
+        other_costs=costs["other_costs"],
         cash_balance=req.cash_on_hand,
-        hiring_plan=hiring_plan if hiring_plan else None,
+        hiring_plan=hiring_plan or None,
         fundraise_month=req.fundraising_month,
         fundraise_amount=req.fundraising_amount,
         horizon_months=24,
@@ -79,7 +103,7 @@ def run_survival_simulation(req: SurvivalSimRequest):
     result = run_monte_carlo(inputs, seed=None, distribution_limit=None)
 
     net_burn = req.monthly_expenses - req.monthly_revenue
-    simple_runway = round(req.cash_on_hand / net_burn, 1) if net_burn > 0 else 999
+    simple_runway = round(req.cash_on_hand / net_burn, 1) if net_burn > 0 else SUSTAINABLE_RUNWAY
 
     runway_dist = result["runway"]["distribution"]
     burn_values = result["bands"]["burn"]["p50"]
@@ -133,6 +157,11 @@ def run_survival_simulation(req: SurvivalSimRequest):
         ],
         "recommendations": recommendations,
         "n_simulations": result["n_simulations"],
+        "assumptions": {
+            "total_monthly_cost": req.monthly_expenses,
+            "churn_applied_as": "monthly revenue decay (growth_rate - monthly_churn)",
+            "hiring_plan": hiring_plan,
+        },
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -186,7 +215,7 @@ def _generate_recommendations(req: SurvivalSimRequest, result: dict, simple_runw
     p50 = result["runway"]["p50"]
     survival_12 = result["survival"]["12m"]
 
-    if p50 < 12:
+    if p50 < 12 and p50 < SUSTAINABLE_RUNWAY:
         recs.append({
             "priority": "critical",
             "title": "Extend Your Runway",

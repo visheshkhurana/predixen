@@ -7,11 +7,18 @@
 //
 // Env:
 //   GEO_RESTRICTION_ENABLED=false  kill switch — disables the gate entirely
-//   GEO_ALLOWED_COUNTRIES=US,IN,GB extra/override allowlist (ISO-3166 alpha-2)
+//   GEO_ALLOWED_COUNTRIES=US,IN,AE,GB  override allowlist (ISO-3166 alpha-2).
+//                                  When set it REPLACES the default list, so a
+//                                  deployment that sets it must include AE
+//                                  itself to keep UAE visitors in.
+//
+// Default allowlist: US, IN, AE. AE was added with Razorpay billing, which
+// sells in AED (shared/pricing.json), and the UAE expansion.
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
+import { GENERIC_BOT_UA } from "./botUserAgent";
 
-const DEFAULT_ALLOWED = ["US", "IN"];
+const DEFAULT_ALLOWED = ["US", "IN", "AE"];
 
 function allowedCountries(): Set<string> {
   const raw = process.env.GEO_ALLOWED_COUNTRIES;
@@ -28,9 +35,52 @@ function allowedCountries(): Set<string> {
 //   /embed/        - the survival widget is meant to run on third-party sites
 //                    anywhere. Gating it silently breaks other people's pages.
 //   health/probe   - Railway's checks come from internal addresses.
-//   robots/sitemap - must stay reachable for crawlers regardless of resolution.
 const EXEMPT_PREFIXES = ["/api/", "/embed/", "/healthz", "/health", "/assets/"];
-const EXEMPT_EXACT = new Set(["/robots.txt", "/sitemap.xml", "/favicon.ico", "/og-image.png"]);
+
+// Every file at the ROOT of `client/public/`. The rule is the one that was
+// already written here — "must stay reachable for crawlers regardless of
+// resolution" — applied to the whole class instead of to the two members
+// somebody remembered, and `server/tests/geoRestrict.test.ts` now checks this
+// set against the disk rather than against a second hand-written list.
+//
+// That matters because it had drifted, silently, in both directions:
+// `/llms.txt` (a 5,182-byte AI-site manifest whose entire audience is AI
+// agents) and `/favicon.png` (the icon `client/index.html` actually declares,
+// line 33) were both 403 to a browser from a blocked country, while
+// `/favicon.ico` was exempt and no such file exists anywhere in the repo.
+//
+//   /robots.txt    - the crawl policy itself, and the file that invites GPTBot,
+//                    ClaudeBot, PerplexityBot and Google-Extended by name.
+//   /sitemap.xml   - named in robots.txt; fetched by every search engine.
+//   /llms.txt      - the AI-readable site manifest. Its whole audience is AI
+//                    agents, which do not fetch from a US or IN address.
+//   /og-image.png  - unfurled by social and chat crawlers (Slack, X, Facebook,
+//                    iMessage) from their own infrastructure, not the visitor's.
+//   /favicon.ico   - the conventional path some clients request anyway. Nothing
+//                    serves it, so the exemption costs nothing; kept because a
+//                    request for it should not depend on the caller's country.
+//   /favicon.png   - the icon the page declares. A blocked-country browser was
+//                    getting a 403 for the icon on a page it could not load
+//                    either, so this one is belt-and-braces rather than urgent —
+//                    but a root file in this directory is served at a clean URL
+//                    to any third party, which is the whole justification here.
+//   /ea34006c….txt - the IndexNow host-verification key. Its ONLY consumer is
+//                    IndexNow's own fetcher, which by contract does not come
+//                    from a US or IN address, so a 403 there means the host is
+//                    never verified and the symptom is "indexing never
+//                    happened", days later, with nothing to read.
+const EXEMPT_EXACT = new Set([
+  "/robots.txt",
+  "/sitemap.xml",
+  "/llms.txt",
+  "/og-image.png",
+  "/favicon.ico",
+  "/favicon.png",
+  // The IndexNow host-verification key served by #119. The file lands in
+  // `client/public` when that PR merges; before then this path simply 404s,
+  // which an exemption does not change. Listed now so the two are not coupled.
+  "/ea34006cee9334673c922845eb159905.txt",
+]);
 
 // Search, ad and AI crawlers — never geo-blocked.
 //
@@ -71,15 +121,17 @@ const CRAWLER_UA =
     "i",
   );
 
-/**
- * Generic non-browser heuristic, applied after the explicit list above.
- *
- * A backstop for the crawler we have not thought of yet. Given the gate fails
- * open everywhere else, letting an unrecognised bot through is consistent and
- * costs nothing; blocking one is what breaks things quietly.
- */
-const GENERIC_BOT_UA =
-  /(bot\b|\bbot|crawler|spider|crawl|fetcher|scraper|monitor|preview|validator|feedparser|headlesschrome|python-requests|curl\/|wget\/|axios\/|go-http-client|okhttp|java\/|libwww|undici|node-fetch|^node$)/i;
+// Generic non-browser heuristic, applied after the explicit list above.
+//
+// A backstop for the crawler we have not thought of yet. Given the gate fails
+// open everywhere else, letting an unrecognised bot through is consistent and
+// costs nothing; blocking one is what breaks things quietly.
+//
+// The list is shared with `aiAgentLog.ts` — see `botUserAgent.ts`. It is the
+// wider of the two lists that existed, and it is deliberately the one that
+// survived: narrowing it would make THIS gate stricter, and a stricter gate
+// turns away real people. Do not trim it to tidy up a log metric.
+// Used at the `GENERIC_BOT_UA.test(ua)` call below.
 
 /**
  * Private, loopback, link-local and carrier-grade-NAT ranges.

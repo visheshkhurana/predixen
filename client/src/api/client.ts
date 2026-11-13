@@ -1,3 +1,4 @@
+import { readFirstTouchAttribution } from '@/lib/attribution';
 import { ApiError, safeParseJSON } from '@/lib/errors';
 import {
   attemptTokenRefresh,
@@ -178,10 +179,15 @@ async function request<T>(
 
 export const api = {
   auth: {
-    register: (email: string, password: string) =>
+    register: (email: string, password: string, distinctId?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(distinctId ? { distinct_id: distinctId } : {}),
+          ...readFirstTouchAttribution(),
+        }),
       }),
     login: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {
@@ -381,6 +387,12 @@ export const api = {
   metrics: {
     computed: (companyId: number) =>
       request<any>(`/companies/${companyId}/metrics/computed`),
+  },
+
+  dashboard: {
+    // Real per-period KPI history built from FinancialRecord rows (no mock data).
+    kpis: (companyId: number) =>
+      request<any>(`/dashboard/companies/${companyId}/kpis`),
   },
 
   truth: {

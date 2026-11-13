@@ -91,15 +91,18 @@ def test_the_prerendered_body_links_the_free_tools_it_compares():
         "/compare",
         "/features",
         "/pricing",
-        "/auth",
+        "/signup",
     ):
         assert f'href="{href}"' in body, f"server-rendered body is missing {href}"
 
 
 def test_the_page_ends_in_a_reason_to_sign_up():
     # Same rule the free tools carry: the page has to earn the next step.
+    # HAG-449 moved the CTA off /auth?tab=register (the un-prerendered shell)
+    # and onto /signup, which renders the same register form from a prerendered
+    # document. The rule is unchanged: the page still ends in a signup CTA.
     src = read(PAGE_FILE)
-    assert '/auth?tab=register' in src, "no signup CTA"
+    assert '/signup' in src, "no signup CTA"
     assert 'data-testid="button-vs-auth"' in src, "CTA is not instrumentable"
 
 

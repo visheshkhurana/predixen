@@ -172,6 +172,7 @@ export function useRunTruthScan() {
         trackFounderActivated({
           source: 'truth_scan',
           company_id: companyId,
+          user_id: useFounderStore.getState().user?.id ?? null,
           is_sample: false,
         });
       }
@@ -228,6 +229,7 @@ export function useRunSimulation() {
         trackFounderActivated({
           source: 'simulation',
           company_id: company.id,
+          user_id: useFounderStore.getState().user?.id ?? null,
           is_sample: false,
         });
       }

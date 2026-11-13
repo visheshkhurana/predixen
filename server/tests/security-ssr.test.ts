@@ -26,14 +26,14 @@ function jsonLdBlocks(html: string): object[] {
 }
 
 // HAG-236 moved this page's "get started free" anchor from /signup to
-// /auth?tab=register, because /signup cannot create an account. The href under
-// test moved with it. /signup is still a registered route, pinned as a page by
-// signup-ssr.test.ts and residual-dead-routes.test.ts.
+// /auth?tab=register; HAG-449 moved it back, because /signup now renders the
+// register form itself from a prerendered document. /signup is pinned as a page
+// by signup-ssr.test.ts and residual-dead-routes.test.ts.
 const REQUIRED_HREFS = [
   "/product",
   "/privacy",
   "/terms",
-  "/auth?tab=register",
+  "/signup",
   "/contact",
 ];
 

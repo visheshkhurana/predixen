@@ -11,6 +11,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import { flushPostHogQueue, type QueuedPostHogCall } from "../../client/src/lib/posthog-queue";
+import { distinctIdFromPersistence } from "../../client/src/lib/posthog";
+import {
+  founderActivatedFlagKey,
+  rememberFounderActivated,
+  shouldEmitFounderActivated,
+  type FlagStore,
+} from "../../client/src/lib/activation-flag";
 
 const posthogLib = readFileSync("client/src/lib/posthog.ts", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
@@ -154,10 +161,26 @@ test("signup_completed fires through trackFunnel and the server first-success pa
   assert.match(funnel, /signup_completed/);
   assert.match(auth, /trackFunnel\(\s*['"]signup_completed['"]/);
   assert.match(callback, /trackFunnel\(\s*['"]signup_completed['"]/);
-  assert.match(authApi, /emit_signup_completed\(user_id=user\.id, method="email"\)/);
-  assert.match(oauth, /emit_signup_completed\(user_id=user\.id, method="google"\)/);
+  assert.match(authApi, /emit_signup_completed\(\s*user_id=user\.id,\s*method="email"/);
+  assert.match(authApi, /anonymous_distinct_id=req\.distinct_id/);
+  assert.match(oauth, /emit_signup_completed\(\s*user_id=user\.id,\s*method="google"/);
+  assert.match(oauth, /anonymous_distinct_id=anonymous_distinct_id/);
   assert.match(activation, /posthog_capture\(\s*"signup_completed"/);
+  // Browser identifyUser uses String(userId). A user:{id} prefix is a second person.
+  assert.match(activation, /user_distinct_id\(user_id\)/);
+  assert.doesNotMatch(activation, /f"user:\{user_id\}"/);
+  assert.match(posthogLib, /distinctId:\s*String\(userId\)/);
   assert.doesNotMatch(authApi, /emit_signup_completed.*login/i);
+});
+
+test("server events alias the pre-signup id onto the browser user id", () => {
+  const activation = readFileSync("server/services/activation.py", "utf8");
+  const posthog = readFileSync("server/services/posthog.py", "utf8");
+  assert.match(activation, /posthog_alias\(/);
+  assert.match(posthog, /\$create_alias/);
+  assert.match(posthog, /"alias":\s*canonical/);
+  // The event distinct_id is the id being merged; alias is the canonical user id.
+  assert.match(posthog, /"distinct_id":\s*previous/);
 });
 
 test("founder_activated is gated on is_sample and wired on first real success", () => {
@@ -191,9 +214,48 @@ test("successful lead creates emit lead_captured on the server", () => {
   const posthog = readFileSync("server/services/posthog.py", "utf8");
   assert.match(leads, /background\.add_task\(_emit_lead_captured,/);
   assert.match(leads, /posthog_capture\(\s*"lead_captured"/);
+  assert.match(leads, /"browser"/);
+  assert.match(leads, /"anonymous"/);
+  assert.match(leads, /optin:/);
+  // The address and a hash of it must not be the PostHog distinct_id.
+  assert.doesNotMatch(leads, /"email_hash"/);
+  assert.doesNotMatch(leads, /return _lead_distinct_id\(/);
   assert.match(posthog, /\/capture\//);
+  assert.match(posthog, /refusing/);
   assert.doesNotMatch(posthog, /\.identify\(/);
   assert.doesNotMatch(leads, /posthog.*identify/i);
+});
+
+test("lead forms and signup pass the browser distinct_id when they have one", () => {
+  const runway = readFileSync("client/src/pages/runway-calculator.tsx", "utf8");
+  const survival = readFileSync("client/src/pages/survival-simulator.tsx", "utf8");
+  const optIn = readFileSync("client/src/components/marketing/CalculatorEmailOptIn.tsx", "utf8");
+  const auth = readFileSync("client/src/pages/auth.tsx", "utf8");
+  const api = readFileSync("client/src/api/client.ts", "utf8");
+  // Both calculators post through the shared opt-in, which attaches the id.
+  for (const page of [runway, survival]) {
+    assert.match(page, /CalculatorEmailOptIn/);
+  }
+  assert.match(optIn, /getBrowserDistinctId\(/);
+  assert.match(optIn, /distinct_id:\s*distinctId/);
+  assert.match(auth, /getBrowserDistinctId\(/);
+  assert.match(auth, /api\.auth\.register\([^)]*distinctId/);
+  assert.match(auth, /params\.set\(\s*['"]distinct_id['"]/);
+  assert.match(auth, /\/api\/auth\/\$\{provider\}\/start/);
+  assert.match(api, /distinct_id:\s*distinctId/);
+});
+
+test("persistence distinct_id is read only when it is a real id", () => {
+  assert.equal(
+    distinctIdFromPersistence(JSON.stringify({ distinct_id: "anon-browser" })),
+    "anon-browser",
+  );
+  assert.equal(distinctIdFromPersistence(JSON.stringify({ distinct_id: "  anon-browser  " })), "anon-browser");
+  assert.equal(distinctIdFromPersistence(JSON.stringify({ distinct_id: "founder@example.com" })), null);
+  assert.equal(distinctIdFromPersistence(JSON.stringify({ distinct_id: "" })), null);
+  assert.equal(distinctIdFromPersistence(JSON.stringify({ distinct_id: "x".repeat(201) })), null);
+  assert.equal(distinctIdFromPersistence("not-json"), null);
+  assert.equal(distinctIdFromPersistence(null), null);
 });
 
 test("the survival simulator sends the same lead fields the email is keyed off", () => {
@@ -202,16 +264,20 @@ test("the survival simulator sends the same lead fields the email is keyed off",
   // runway_date are present. Source must be survival-simulator so these leads
   // stay distinguishable from calculator ones.
   const page = readFileSync("client/src/pages/survival-simulator.tsx", "utf8");
+  const optIn = readFileSync("client/src/components/marketing/CalculatorEmailOptIn.tsx", "utf8");
   const api = readFileSync("server/api/leads.py", "utf8");
-  assert.match(page, /source:\s*"survival-simulator"/);
-  assert.match(page, /plan:\s*"survival-simulator"/);
-  assert.match(page, /trackFunnel\(\s*"lead_captured"/);
+  assert.match(page, /source="survival-simulator"/);
+  assert.match(page, /plan="survival-simulator"/);
+  assert.match(page, /runwayMonths=/);
+  assert.match(page, /runwayDate=/);
+  assert.match(page, /monthlyBurn=/);
+  assert.match(optIn, /trackFunnel\(\s*"lead_captured"/);
   for (const field of ["runway_months", "runway_date", "monthly_burn"]) {
-    assert.match(page, new RegExp(`${field}:`), `survival-sim must send ${field}`);
+    assert.match(optIn, new RegExp(`${field}:`), `opt-in must send ${field}`);
     assert.match(api, new RegExp(field), `server must accept ${field}`);
   }
-  assert.match(page, /data-testid="input-lead-email"/);
-  assert.match(page, /data-testid="button-email-result"/);
+  assert.match(optIn, /data-testid="input-lead-email"/);
+  assert.match(optIn, /data-testid="button-email-result"/);
   const resultsIdx = page.indexOf("{results && (");
   const emailIdx = page.indexOf("<EmailResultPanel results={results} />");
   assert.ok(resultsIdx !== -1 && emailIdx > resultsIdx, "email capture must render inside the results block");
@@ -222,9 +288,13 @@ test("the calculator sends the fields the runway email is keyed off", () => {
   // runway_date are present. The UI promises "check your inbox" the moment the
   // POST succeeds, so if the client stops sending these the page starts lying.
   const page = readFileSync("client/src/pages/runway-calculator.tsx", "utf8");
+  const optIn = readFileSync("client/src/components/marketing/CalculatorEmailOptIn.tsx", "utf8");
   const api = readFileSync("server/api/leads.py", "utf8");
+  assert.match(page, /runwayMonths=/);
+  assert.match(page, /runwayDate=/);
+  assert.match(page, /monthlyBurn=/);
   for (const field of ["runway_months", "runway_date", "monthly_burn"]) {
-    assert.match(page, new RegExp(`${field}:`), `client must send ${field}`);
+    assert.match(optIn, new RegExp(`${field}:`), `opt-in must send ${field}`);
     assert.match(api, new RegExp(field), `server must accept ${field}`);
   }
   assert.match(api, /if data\.runway_months and data\.runway_date:/);
@@ -237,4 +307,93 @@ test("the calculator's number fields can actually be cleared", () => {
   const page = readFileSync("client/src/pages/runway-calculator.tsx", "utf8");
   assert.doesNotMatch(page, /onChange=\{\(e\) => set\w+\(Number\(e\.target\.value\)\)\}/);
   assert.match(page, /function toNumber\(text: string\): number/);
+});
+
+// --- founder_activated: the browser flag must be keyed by user id ----------
+//
+// Moved here from server/tests/founder-activated-flag-per-user.test.ts so these
+// guards run in CI: pr-checks.yml is an explicit per-file list with no glob, so
+// a standalone file is green on the author's machine and dead everywhere else.
+// The bug: the flag was one browser-wide `fc_founder_activated`. On a shared
+// browser the first account to activate set it and every later account emitted
+// nothing. That is a MISSING event, and it is invisible to the control built to
+// catch split identities - a dropped event shrinks count() and
+// uniqExact(user_id) together, so the ratio still reads 1.0.
+
+function memoryStore(): FlagStore & { keys(): string[] } {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k) => (map.has(k) ? map.get(k)! : null),
+    setItem: (k, v) => void map.set(k, v),
+    keys: () => [...map.keys()],
+  };
+}
+
+test("the flag key carries the user id", () => {
+  assert.equal(founderActivatedFlagKey(42), "fc_founder_activated:42");
+  assert.equal(founderActivatedFlagKey("42"), "fc_founder_activated:42");
+  assert.notEqual(founderActivatedFlagKey(42), founderActivatedFlagKey(43));
+});
+
+test("a second account on the same browser still emits (the defect)", () => {
+  const store = memoryStore();
+  // Account 42 activates: emits once, and never again on reload.
+  assert.equal(shouldEmitFounderActivated(store, 42), true);
+  rememberFounderActivated(store, 42);
+  assert.equal(shouldEmitFounderActivated(store, 42), false);
+  // Account 43 signs in on the same browser: the browser-wide flag used to
+  // silence this emit. It must not.
+  assert.equal(shouldEmitFounderActivated(store, 43), true);
+});
+
+test("each user's flag is its own key, not a rewrite of one", () => {
+  const store = memoryStore();
+  rememberFounderActivated(store, 42);
+  rememberFounderActivated(store, 43);
+  assert.deepEqual(store.keys().sort(), [
+    "fc_founder_activated:42",
+    "fc_founder_activated:43",
+  ]);
+});
+
+test("a blocked or absent store emits rather than losing the activation", () => {
+  assert.equal(shouldEmitFounderActivated(null, 42), true);
+  assert.equal(shouldEmitFounderActivated(undefined, 42), true);
+  assert.doesNotThrow(() => rememberFounderActivated(null, 42));
+  // A store that throws on read (private mode) is treated as absent.
+  const throwing: FlagStore = {
+    getItem: () => {
+      throw new Error("blocked");
+    },
+    setItem: () => {
+      throw new Error("blocked");
+    },
+  };
+  assert.equal(shouldEmitFounderActivated(throwing, 42), true);
+  assert.doesNotThrow(() => rememberFounderActivated(throwing, 42));
+});
+
+test("funnel.ts keys the guard by user id and keeps no browser-wide constant", () => {
+  assert.doesNotMatch(
+    funnel,
+    /const FOUNDER_ACTIVATED_KEY/,
+    "the browser-wide constant is back — that is the defect",
+  );
+  assert.match(funnel, /shouldEmitFounderActivated\(store, params\.user_id\)/);
+  assert.match(funnel, /rememberFounderActivated\(store, params\.user_id\)/);
+  assert.match(funnel, /user_id\?: number \| string \| null/);
+});
+
+test("both activation call sites pass the current user id", () => {
+  const hooks = readFileSync("client/src/api/hooks.ts", "utf8");
+  const calls = hooks.match(/trackFounderActivated\(\{/g) ?? [];
+  assert.equal(calls.length, 2, "expected exactly two activation call sites");
+  const withUserId = hooks.match(
+    /trackFounderActivated\(\{[\s\S]{0,220}?user_id: useFounderStore\.getState\(\)\.user\?\.id/g,
+  ) ?? [];
+  assert.equal(
+    withUserId.length,
+    2,
+    "a call site emits without a user id, so its flag cannot be scoped",
+  );
 });

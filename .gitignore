@@ -58,3 +58,5 @@ roleplay-data/
 /*.pdf
 /_to_delete/
 /email_preview_*.html
+# Ops-only newsletter recipient lists (see server/email/recipients.py)
+server/email/recipients.local.txt

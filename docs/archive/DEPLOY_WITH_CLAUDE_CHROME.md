@@ -37,7 +37,7 @@ Go to the "Secrets" tab (lock icon in the left sidebar). Add each of these secre
    (Or any 32+ character random string)
 
 2. Secret key: `ADMIN_MASTER_EMAIL`
-   Value: `vysheshk@gmail.com`
+   Value: (your admin login email)
 
 3. Secret key: `ADMIN_MASTER_PASSWORD`
    Value: (I'll type this myself - just create the secret field)

@@ -1,7 +1,17 @@
 import json
 import os
 from typing import Dict, Any, List
+from server.decision.cross_company_claims import (
+    RESEARCH,
+    insight_text,
+    peer_rationale_suffix,
+    rate_fields,
+)
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
+
+# run_monte_carlo emits 999 for cash-flow-positive paths; finite paths cap at 120.
+SUSTAINABLE_RUNWAY = 900
+RUNWAY_CAP_MONTHS = 120
 
 def load_action_library() -> List[Dict]:
     lib_path = os.path.join(os.path.dirname(__file__), "action_library.json")
@@ -133,7 +143,22 @@ def score_action(
     baseline_runway = baseline_outputs.get("runway", {}).get("p50", 0)
     
     delta_survival = simulation_outputs.get("survival", {}).get("18m", 0) - baseline_survival_18m
-    delta_runway = runway_p50 - baseline_runway
+    # Runway p50 of 999 is the "sustainable" sentinel, not a month count.
+    # Subtracting it produced nonsense deltas, and when both sides were
+    # sustainable the cash-based fallback below turned a profitable company's
+    # burn cut into "-12 months" (its clamp). Compare sentinels explicitly.
+    baseline_sustainable = baseline_runway >= SUSTAINABLE_RUNWAY
+    action_sustainable = runway_p50 >= SUSTAINABLE_RUNWAY
+    if baseline_sustainable or action_sustainable:
+        if baseline_sustainable and action_sustainable:
+            delta_runway = 0.0
+        else:
+            # One side finite: measure against the simulator's 120-month cap.
+            capped_base = min(baseline_runway, RUNWAY_CAP_MONTHS)
+            capped_action = min(runway_p50, RUNWAY_CAP_MONTHS)
+            delta_runway = capped_action - capped_base
+    else:
+        delta_runway = runway_p50 - baseline_runway
     
     if abs(delta_survival) < 0.5 and baseline_survival_18m >= 95:
         baseline_cash = baseline_outputs.get("summary", {}).get("final_cash_p50", 1)
@@ -142,7 +167,10 @@ def score_action(
             cash_pct_change = ((sim_cash - baseline_cash) / max(abs(baseline_cash), 1)) * 100
             delta_survival = round(cash_pct_change * 0.15, 2)
     
-    if abs(delta_runway) < 0.5:
+    # The cash-to-months fallback only applies to two finite, uncapped runways;
+    # at the cap (or sustainable) there is no runway change to report.
+    both_capped = baseline_runway >= RUNWAY_CAP_MONTHS and runway_p50 >= RUNWAY_CAP_MONTHS
+    if abs(delta_runway) < 0.5 and not (baseline_sustainable or action_sustainable or both_capped):
         baseline_cash_end = baseline_outputs.get("summary", {}).get("final_cash_p50", 0)
         sim_cash_end = simulation_outputs.get("summary", {}).get("final_cash_p50", 0)
         cash_diff = sim_cash_end - baseline_cash_end
@@ -238,14 +266,20 @@ def generate_recommendations(
         bucket = action.get("bucket", "")
         if bucket in cross_company_data:
             cc = cross_company_data[bucket]
+            kind = cc.get("cross_company_source") or "peer_cohort"
+            text = insight_text(cc)
+            if kind == RESEARCH:
+                rationale_extra = " " + text
+            else:
+                rationale_extra = peer_rationale_suffix(cc["success_rate"])
+            rec["cross_company_source"] = kind
             rec["cross_company_insight"] = {
                 "success_rate": cc["success_rate"],
                 "sample_size": cc["sample_size"],
-                "text": f"{cc['success_rate']:.0f}% of similar companies saw positive outcomes from this type of action (based on {cc['sample_size']} decisions).",
+                "cross_company_source": kind,
+                "text": text,
             }
-            rec["rationale"] = (
-                action["description"] + f" {cc['success_rate']:.0f}% of similar companies that took this action saw positive outcomes."
-            )
+            rec["rationale"] = action["description"] + rationale_extra
 
         recommendations.append(rec)
     
@@ -282,14 +316,9 @@ def _get_cross_company_success_rates(truth_metrics: Dict) -> Dict[str, Any]:
                         "retention": "efficiency",
                     }
                     bucket = bucket_mapping.get(dtype, dtype)
-                    result[bucket] = {
-                        "success_rate": p["success_rate"],
-                        "sample_size": p["sample_size"],
-                    }
-                    result[dtype] = {
-                        "success_rate": p["success_rate"],
-                        "sample_size": p["sample_size"],
-                    }
+                    fields = rate_fields(p)
+                    result[bucket] = fields
+                    result[dtype] = fields
             return result
         finally:
             db.close()
