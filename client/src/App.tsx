@@ -625,6 +625,9 @@ function Router() {
       <Route path="/admin/lead-gen/settings">
         {() => <AdminRoute component={LeadGenAdmin} />}
       </Route>
+      <Route path="/admin/lead-gen/live">
+        {() => <AdminRoute component={LeadGenAdmin} />}
+      </Route>
       <Route path="/qa">
         {() => <AdminRoute component={QAFrontPage} />}
       </Route>
