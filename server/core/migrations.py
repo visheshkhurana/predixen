@@ -1,6 +1,6 @@
 """Database migration helpers for adding new columns to existing tables."""
 import logging
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
@@ -33,14 +33,38 @@ def ensure_financial_record_columns(engine: Engine) -> None:
         ('marketing_expense', 'FLOAT'),
         ('source_type', 'VARCHAR(20)'),
         ('extraction_summary', 'TEXT'),
+        # Sync provenance (see server/services/input_provenance.py). Nullable,
+        # no default, no index: on Postgres 11+ each add is metadata-only and
+        # existing rows read NULL. Same types as FinancialRecord.
+        ('source', 'VARCHAR(64)'),
+        ('synced_at', 'VARCHAR(40)'),
+        ('synced_fields', 'JSON'),
     ]
-    
+
     with engine.connect() as conn:
+        try:
+            existing = {
+                column["name"]
+                for column in inspect(conn).get_columns("financial_records")
+            }
+        except Exception as e:
+            logger.debug(f"Could not read financial_records columns: {e}")
+            existing = set()
+        # Postgres accepts ADD COLUMN IF NOT EXISTS. SQLite rejects that
+        # clause, so the catalog check above is what makes the SQLite path
+        # idempotent. A column already in `existing` is skipped. Each add runs
+        # in a savepoint so one failure does not abort the rest on Postgres.
+        if_not_exists = conn.dialect.name != "sqlite"
         for col_name, col_type in new_columns:
+            if col_name in existing:
+                continue
+            clause = "IF NOT EXISTS " if if_not_exists else ""
             try:
-                conn.execute(text(
-                    f'ALTER TABLE financial_records ADD COLUMN IF NOT EXISTS {col_name} {col_type}'
-                ))
+                with conn.begin_nested():
+                    conn.execute(text(
+                        f"ALTER TABLE financial_records ADD COLUMN {clause}{col_name} {col_type}"
+                    ))
+                existing.add(col_name)
             except Exception as e:
                 logger.debug(f"Column {col_name} may already exist or error: {e}")
         conn.commit()

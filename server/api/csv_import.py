@@ -11,6 +11,7 @@ from server.core.security import get_current_user
 from server.models.user import User
 from server.models.company import Company
 from server.models.financial import FinancialRecord
+from server.services.input_provenance import stamp_sync_provenance
 
 router = APIRouter(tags=["csv-import"])
 
@@ -51,6 +52,51 @@ def detect_columns(headers: List[str]) -> Dict[str, str]:
 class ColumnMappingRequest(BaseModel):
     mappings: Dict[str, str]
     rows: List[Dict[str, Any]]
+
+
+def provided_csv_input_fields(
+    *,
+    revenue,
+    expenses,
+    cogs,
+    other_costs,
+    cash,
+    payroll,
+    mrr,
+    arr,
+    customers,
+    headcount,
+    burn,
+    gross_margin,
+    cac,
+) -> List[str]:
+    """Columns copied off the CSV row. Computed burn, margin, and runway are not included."""
+    supplied = {
+        "revenue": revenue,
+        "opex": expenses,
+        "cogs": cogs,
+        "other_costs": other_costs,
+        "cash_balance": cash,
+        "payroll": payroll,
+        "mrr": mrr,
+        "arr": arr,
+        "customers": customers,
+        "headcount": headcount,
+        "cac": cac,
+    }
+    fields = [name for name, value in supplied.items() if value is not None]
+    if burn is not None:
+        fields.append("net_burn")
+    if gross_margin is not None:
+        fields.append("gross_margin")
+    return fields
+
+
+def with_csv_import_provenance(field_values: Dict[str, Any], provided_fields: List[str]) -> Dict[str, Any]:
+    """Attach source csv_import and the UTC sync time for fields the row supplied."""
+    stamped = dict(field_values)
+    stamped.update(stamp_sync_provenance("csv_import", provided_fields))
+    return stamped
 
 
 @router.post("/companies/{company_id}/financials/csv-detect")
@@ -154,7 +200,7 @@ def import_csv_data(
             customers = get_int("customers")
             headcount = get_int("headcount")
             burn = get_float("burn")
-            gm = get_float("gross_margin")
+            raw_gm = get_float("gross_margin")
             cac = get_float("cac")
 
             cost_components = [c for c in (cogs, expenses, payroll, other_costs) if c is not None]
@@ -165,25 +211,44 @@ def import_csv_data(
             runway = None
             if cash is not None and net_burn is not None and net_burn > 0:
                 runway = cash / net_burn
+            gm = raw_gm
             if gm is None and revenue and cogs is not None:
                 gm = round((revenue - cogs) / revenue * 100, 2)
 
-            field_values = dict(
+            provided = provided_csv_input_fields(
                 revenue=revenue,
+                expenses=expenses,
                 cogs=cogs,
-                opex=expenses,
                 other_costs=other_costs,
-                cash_balance=cash,
+                cash=cash,
                 payroll=payroll,
                 mrr=mrr_val,
                 arr=arr_val,
                 customers=customers,
                 headcount=headcount,
-                net_burn=net_burn,
-                runway_months=runway,
-                gross_margin=gm,
+                burn=burn,
+                gross_margin=raw_gm,
                 cac=cac,
-                source_type="csv_import",
+            )
+            field_values = with_csv_import_provenance(
+                dict(
+                    revenue=revenue,
+                    cogs=cogs,
+                    opex=expenses,
+                    other_costs=other_costs,
+                    cash_balance=cash,
+                    payroll=payroll,
+                    mrr=mrr_val,
+                    arr=arr_val,
+                    customers=customers,
+                    headcount=headcount,
+                    net_burn=net_burn,
+                    runway_months=runway,
+                    gross_margin=gm,
+                    cac=cac,
+                    source_type="csv_import",
+                ),
+                provided,
             )
             # Idempotent by period: re-importing a file updates the existing
             # csv_import row for that period instead of duplicating it

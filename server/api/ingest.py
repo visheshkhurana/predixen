@@ -982,6 +982,11 @@ async def save_financial_baseline(
                 setattr(existing_record, k, v)
         if existing_record.source_type == "sample":
             existing_record.source_type = "manual"
+        # A manual save replaces every input value on the row, so the connector
+        # provenance underneath them no longer describes anything the row
+        # holds. Left standing it reports a hand-typed number as synced.
+        from server.services.input_provenance import clear_provenance
+        clear_provenance(existing_record)
         record = existing_record
     else:
         record = FinancialRecord(
