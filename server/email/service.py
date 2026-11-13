@@ -233,7 +233,8 @@ async def send_email(
     from_email: Optional[str] = None,
     recipient_id: Optional[str] = None,
     campaign: Optional[str] = None,
-    utm_params: Optional[dict] = None
+    utm_params: Optional[dict] = None,
+    headers: Optional[dict] = None,
 ) -> dict:
     """
     Send an email using Resend (async wrapper).
@@ -253,7 +254,7 @@ async def send_email(
     """
     return await asyncio.to_thread(
         _send_email_sync, to, subject, html_content, from_email,
-        recipient_id, campaign, utm_params
+        recipient_id, campaign, utm_params, headers
     )
 
 
@@ -587,8 +588,19 @@ async def send_platform_update_email(
     )
     
     subject = "FounderConsole - New Features & Updates"
-    
-    return await send_email(to_email, subject, html_content)
+
+    from server.core.db import SessionLocal
+    from server.email.lifecycle_guard import prepare_bulk_send
+
+    db = SessionLocal()
+    try:
+        prepared = prepare_bulk_send(db, to_email, html_content)
+    finally:
+        db.close()
+    if prepared is None:
+        return {"success": False, "skipped": True, "error": "Recipient opted out of email"}
+
+    return await send_email(to_email, subject, prepared.html, headers=prepared.headers or None)
 
 
 async def send_slack_signup_notification(

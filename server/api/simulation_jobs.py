@@ -8,6 +8,7 @@ import logging
 
 from server.core.db import get_db, SessionLocal
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models.user import User
 from server.models.scenario import Scenario
 from server.models.company import Company
@@ -29,6 +30,47 @@ from server.simulate.baseline import MissingBaseline, enhanced_inputs_from_scena
 # actually arrives as "/simulations" — a guaranteed 404 for every caller.
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 logger = logging.getLogger(__name__)
+
+
+def _get_owned_scenario(db: Session, scenario_id: int, user: User) -> Scenario:
+    """Load a scenario only if the caller may access its company.
+
+    Every route here is keyed by a scenario or job id that a client can
+    enumerate, so the ownership check has to happen on each request.
+    Unknown and foreign scenarios both 404, so ids do not leak.
+    """
+    scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    try:
+        get_user_company(db, scenario.company_id, user)
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    return scenario
+
+
+def _accessible_company_ids(db: Session, user: User):
+    """Company ids the caller can see, or None for the platform owner (no filter).
+
+    A company role of "admin" is not platform access. #161 removed that
+    meaning: only the platform-admin flag (master session or the verified
+    ADMIN_MASTER_EMAIL account) may list every tenant's jobs.
+    """
+    if getattr(user, "is_platform_admin", False) is True:
+        return None
+    ids = {c.id for c in db.query(Company.id).filter(Company.user_id == user.id).all()}
+    try:
+        from server.models.workspace import WorkspaceMember
+        ids |= {
+            m.company_id
+            for m in db.query(WorkspaceMember.company_id).filter(
+                WorkspaceMember.user_id == user.id,
+                WorkspaceMember.status == "active",
+            ).all()
+        }
+    except Exception:
+        pass
+    return ids
 
 
 class SimulationConfigRequest(BaseModel):
@@ -180,9 +222,7 @@ async def run_simulation(
     current_user: User = Depends(get_current_user),
     skip_truth_check: bool = False,
 ):
-    scenario = db.query(Scenario).filter(Scenario.id == request.scenario_id).first()
-    if not scenario:
-        raise HTTPException(status_code=404, detail="Scenario not found")
+    scenario = _get_owned_scenario(db, request.scenario_id, current_user)
     
     if not skip_truth_check:
         company = db.query(Company).filter(Company.id == scenario.company_id).first()
@@ -259,6 +299,10 @@ async def get_simulation_job(
     job = db.query(SimulationJob).filter(SimulationJob.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    try:
+        _get_owned_scenario(db, job.scenario_id, current_user)
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Job not found")
     
     return {
         "id": job.id,
@@ -285,6 +329,11 @@ async def list_simulation_jobs(
 ):
     query = db.query(SimulationJob)
     
+    company_ids = _accessible_company_ids(db, current_user)
+    if company_ids is not None:
+        query = query.join(Scenario, Scenario.id == SimulationJob.scenario_id).filter(
+            Scenario.company_id.in_(company_ids)
+        )
     if scenario_id:
         query = query.filter(SimulationJob.scenario_id == scenario_id)
     if status:
@@ -309,9 +358,7 @@ async def run_sensitivity_analysis_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    scenario = db.query(Scenario).filter(Scenario.id == request.scenario_id).first()
-    if not scenario:
-        raise HTTPException(status_code=404, detail="Scenario not found")
+    scenario = _get_owned_scenario(db, request.scenario_id, current_user)
     
     inputs_json = scenario.inputs_json or {}
     events_json = inputs_json.get("events", [])
@@ -358,9 +405,7 @@ async def create_scenario_version(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    scenario = db.query(Scenario).filter(Scenario.id == request.scenario_id).first()
-    if not scenario:
-        raise HTTPException(status_code=404, detail="Scenario not found")
+    scenario = _get_owned_scenario(db, request.scenario_id, current_user)
     
     latest_version = db.query(ScenarioVersion).filter(
         ScenarioVersion.scenario_id == request.scenario_id
@@ -406,6 +451,7 @@ async def list_scenario_versions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _get_owned_scenario(db, scenario_id, current_user)
     versions = db.query(ScenarioVersion).filter(
         ScenarioVersion.scenario_id == scenario_id
     ).order_by(ScenarioVersion.version.desc()).all()
@@ -429,6 +475,7 @@ async def get_scenario_version(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _get_owned_scenario(db, scenario_id, current_user)
     v = db.query(ScenarioVersion).filter(
         ScenarioVersion.scenario_id == scenario_id,
         ScenarioVersion.version == version
@@ -458,6 +505,7 @@ async def diff_scenario_versions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    _get_owned_scenario(db, scenario_id, current_user)
     version_a = db.query(ScenarioVersion).filter(
         ScenarioVersion.scenario_id == scenario_id,
         ScenarioVersion.version == request.version_a
@@ -496,6 +544,7 @@ async def restore_scenario_version(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    scenario = _get_owned_scenario(db, scenario_id, current_user)
     target_version = db.query(ScenarioVersion).filter(
         ScenarioVersion.scenario_id == scenario_id,
         ScenarioVersion.version == version
@@ -503,10 +552,6 @@ async def restore_scenario_version(
     
     if not target_version:
         raise HTTPException(status_code=404, detail="Version not found")
-    
-    scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
-    if not scenario:
-        raise HTTPException(status_code=404, detail="Scenario not found")
     
     latest_version = db.query(ScenarioVersion).filter(
         ScenarioVersion.scenario_id == scenario_id

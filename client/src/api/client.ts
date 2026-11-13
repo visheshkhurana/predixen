@@ -1,3 +1,4 @@
+import { readFirstTouchAttribution } from '@/lib/attribution';
 import { ApiError, safeParseJSON } from '@/lib/errors';
 import {
   attemptTokenRefresh,
@@ -180,10 +181,16 @@ export const api = {
   auth: {
     // `invite` is the token from /auth?invite=…; the server accepts it when
     // it was sent to this email (workspace membership or platform role).
-    register: (email: string, password: string, invite?: string | null) =>
+    register: (email: string, password: string, distinctId?: string | null, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(invite ? { invite } : {}),
+          ...(distinctId ? { distinct_id: distinctId } : {}),
+          ...readFirstTouchAttribution(),
+        }),
       }),
     login: (email: string, password: string, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {
@@ -390,6 +397,12 @@ export const api = {
   metrics: {
     computed: (companyId: number) =>
       request<any>(`/companies/${companyId}/metrics/computed`),
+  },
+
+  dashboard: {
+    // Real per-period KPI history built from FinancialRecord rows (no mock data).
+    kpis: (companyId: number) =>
+      request<any>(`/dashboard/companies/${companyId}/kpis`),
   },
 
   truth: {

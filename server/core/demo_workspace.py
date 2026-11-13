@@ -374,6 +374,10 @@ def cleanup_legacy_demo_account(db: Session, legacy_user=None) -> bool:
     if not rebuilt:
         company = seed_demo_company(db, legacy_user)
         save_metadata_value(db, company, LEGACY_CLEANUP_MARKER, True)
+        # The boot seed only heals rows carrying its marker (HAG-651); without
+        # it the rebuilt company would be treated as a guessed row and skipped.
+        from server.seed.demo_companies import SEED_MARKER
+        save_metadata_value(db, company, SEED_MARKER, True)
         db.commit()
         changed = True
         logger.info("legacy demo cleanup: rebuilt %s as company id=%s", DEMO_COMPANY_NAME, company.id)
