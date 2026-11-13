@@ -30,6 +30,24 @@ function getOpenAIClient(): OpenAI | null {
   return cachedOpenAIClient;
 }
 
+// gpt-5* and o-series are reasoning models: they reject `max_tokens` and any
+// temperature other than the default. The cap counts reasoning tokens too, so
+// it has to leave room for the visible answer.
+const CHAT_MODEL = "gpt-5";
+
+export function isReasoningModel(model: string): boolean {
+  return /^(gpt-5|o\d)/i.test(model);
+}
+
+export function completionTokenParams(
+  model: string,
+  maxTokens: number,
+): { max_completion_tokens: number } | { max_tokens: number } {
+  return isReasoningModel(model)
+    ? { max_completion_tokens: maxTokens }
+    : { max_tokens: maxTokens };
+}
+
 interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
@@ -127,10 +145,10 @@ Be concise but insightful. Use specific numbers from the context when answering 
       res.setHeader("Connection", "keep-alive");
 
       const stream = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: CHAT_MODEL,
         messages: fullMessages,
         stream: true,
-        max_tokens: 1024,
+        ...completionTokenParams(CHAT_MODEL, 4096),
       });
 
       for await (const chunk of stream) {
@@ -173,12 +191,12 @@ Be concise but insightful. Use specific numbers from the context when answering 
 ${context ? `Context: Cash $${context.cashOnHand?.toLocaleString()}, Revenue $${context.monthlyRevenue?.toLocaleString()}/mo, Expenses $${context.monthlyExpenses?.toLocaleString()}/mo, Growth ${context.growthRate}%` : ""}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: CHAT_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: question },
         ],
-        max_tokens: 256,
+        ...completionTokenParams(CHAT_MODEL, 2048),
       });
 
       res.json({

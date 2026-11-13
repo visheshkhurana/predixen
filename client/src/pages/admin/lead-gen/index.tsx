@@ -38,7 +38,7 @@ export default function LeadGenAdminLayout() {
           <Link href="/admin/lead-gen/campaigns"><Button variant="ghost">Campaigns</Button></Link>
           <Link href="/admin/lead-gen/templates"><Button variant="ghost">Templates</Button></Link>
           <Link href="/admin/lead-gen/settings">
-            <Button variant="ghost" size="icon"><SettingsIcon className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" aria-label="Settings"><SettingsIcon className="h-4 w-4" /></Button>
           </Link>
         </nav>
       </div>

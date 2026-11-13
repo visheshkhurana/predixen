@@ -171,7 +171,7 @@ export default function AddDataSourceWizard() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6" data-testid="add-data-source-wizard">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/marketplace")} data-testid="button-back">
+        <Button variant="ghost" size="icon" onClick={() => setLocation("/marketplace")} data-testid="button-back" aria-label="Go back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -293,9 +293,11 @@ export default function AddDataSourceWizard() {
                   <FileText className="h-12 w-12 mx-auto text-muted-foreground" />
                   <p className="font-medium">Upload your file</p>
                   <p className="text-sm text-muted-foreground">
-                    Drag and drop or click to select a file
+                    File uploads are handled on the Data page
                   </p>
-                  <Button variant="outline">Select File</Button>
+                  <Button variant="outline" onClick={() => setLocation("/data")} data-testid="button-go-upload">
+                    Upload on the Data page
+                  </Button>
                 </div>
               )}
             </div>
