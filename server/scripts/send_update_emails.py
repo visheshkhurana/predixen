@@ -577,12 +577,9 @@ async def main():
     """Main entry point for sending update emails with domain rotation."""
     emails = get_all_user_emails()
     if not emails:
-        emails = [
-            "nikita.luther@gmail.com",
-            "nikitafl2024@gmail.com",
-            "nikita@founderconsole.ai",
-            "vysheshk@gmail.com"
-        ]
+        # Fallback list lives outside the repo (RECIPIENTS / RECIPIENTS_FILE).
+        from server.email.recipients import load_recipient_emails
+        emails = load_recipient_emails()
     
     return await send_update_to_specified_users(
         emails=emails,

@@ -74,10 +74,18 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
 
         # For state-changing requests, validate CSRF token
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            if self._is_cross_site_cookie_request(request):
+                logger.warning(
+                    f"Cross-site cookie request refused for {request.method} {request.url.path}"
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "CSRF token validation failed"},
+                )
             # Check if request is authenticated (has Authorization header)
             if not self._is_authenticated(request):
-                # Unauthenticated state-changing requests are not protected by CSRF
-                # (they fail auth anyway), but we still set the token for future use
+                # No Authorization header: the cookie session is covered by the
+                # cross-site check above; still set the token for future use
                 try:
                     response = await call_next(request)
                 except BaseException as exc:
@@ -119,6 +127,18 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             elif path.startswith(exempt):
                 return True
         return False
+
+    def _is_cross_site_cookie_request(self, request: Request) -> bool:
+        """A session-cookie request the browser marks as coming from another site.
+
+        Browsers never add an Authorization header on their own, so only the
+        cookie-carried session needs this check.
+        """
+        if "authorization" in request.headers:
+            return False
+        if not request.cookies.get("auth_token"):
+            return False
+        return (request.headers.get("sec-fetch-site") or "").strip().lower() == "cross-site"
 
     def _is_authenticated(self, request: Request) -> bool:
         """Check if the request has an Authorization header (is authenticated)."""

@@ -1,3 +1,4 @@
+import { readFirstTouchAttribution } from '@/lib/attribution';
 import { ApiError, safeParseJSON } from '@/lib/errors';
 import {
   attemptTokenRefresh,
@@ -196,6 +197,7 @@ export const api = {
           email,
           password,
           ...(distinctId ? { distinct_id: distinctId } : {}),
+          ...readFirstTouchAttribution(),
         }),
       }),
     login: (email: string, password: string) =>

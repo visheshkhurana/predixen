@@ -10,6 +10,12 @@ INDUSTRY_ALIASES = {
     "logistics": "services",
     "real_estate": "fintech",
     "food": "d2c",
+    # Onboarding values matching the /for/agency and /for/startup pages.
+    # Agencies benchmark against professional services; "early-stage /
+    # pre-revenue" says nothing about the business model, so it uses the
+    # generic SaaS fallback (the same as "other").
+    "agency": "services",
+    "startup": "saas",
     "other": "saas",
     "unknown": "saas",
 }

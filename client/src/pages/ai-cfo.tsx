@@ -9,6 +9,8 @@ import { Magnetic } from "@/components/marketing/redesign/Tilt3D";
 import { TwinDashboardDemo } from "@/components/marketing/redesign/TwinDashboardDemo";
 import { CopilotDemo } from "@/components/marketing/redesign/CopilotDemo";
 import { trackFunnel } from "@/lib/funnel";
+import { usePlans } from "@/hooks/use-subscription";
+import { STARTER_PRICES } from "@/data/public-pricing";
 
 /**
  * Message-matched landing page for the "AI CFO" search ad group.
@@ -20,23 +22,40 @@ const capabilities = [
   { icon: Gauge, title: "Runway & burn, live", description: "Connects Stripe, QuickBooks and your bank. Your true runway, always current — no spreadsheet updates." },
   { icon: Brain, title: "Answers like a CFO", description: "Ask in plain English: \"Can we afford two engineers?\" Get board-ready answers backed by 10,000 simulations." },
   { icon: Sparkles, title: "Decisions, stress-tested", description: "Hiring, pricing, fundraise timing — simulated across thousands of futures before you commit." },
-  { icon: ShieldCheck, title: "A fraction of the cost", description: "Fractional CFOs run $3–10k/month. FounderConsole is free during early access; paid tiers come later." },
 ];
 
-const bullets = [
-  "Free during early access — no credit card required",
+// Same billing gate as the landing page and /pricing: payments_enabled +
+// provider "razorpay" from /api/billing/plans. While payments are off every
+// feature is free during early access; once they are on, the copy names the
+// Starter price from shared/pricing.json.
+function costCard(paidEnabled: boolean) {
+  return {
+    icon: ShieldCheck,
+    title: "A fraction of the cost",
+    description: paidEnabled
+      ? `Fractional CFOs run $3–10k/month. FounderConsole starts free; Starter is ${STARTER_PRICES.INR.monthlyLabel}/month in India or ${STARTER_PRICES.USD.monthlyLabel}/month elsewhere.`
+      : "Fractional CFOs run $3–10k/month. FounderConsole is free during early access; paid tiers come later.",
+  };
+}
+
+const bulletsAfterFirst = [
   "Set up in under 5 minutes",
-  "34 data connectors incl. Stripe, QuickBooks, Mercury",
+  "36 data connectors incl. Stripe, QuickBooks, Mercury",
   "Monte Carlo P10/P50/P90 runway bands",
 ];
 
 export default function AiCfoPage() {
   const reduced = useReducedMotion();
+  const { data: plansData } = usePlans();
+  const paidEnabled = !!plansData?.payments_enabled && plansData?.provider === "razorpay";
+  const freeLine = paidEnabled ? "Free plan — no credit card required" : "Free during early access — no credit card required";
+  const bullets = [freeLine, ...bulletsAfterFirst];
+  const capabilityCards = [...capabilities, costCard(paidEnabled)];
 
   useSEO({
     title: "AI CFO for Startups — FounderConsole",
     description:
-      "FounderConsole is the AI CFO for startup founders: live runway and burn tracking, Monte Carlo forecasting, and plain-English financial answers. Free during early access, no credit card.",
+      "FounderConsole is the AI CFO for startup founders: live runway and burn tracking, Monte Carlo forecasting, and plain-English financial answers. Start free, no credit card.",
     path: "/ai-cfo",
     jsonLd: [
       {
@@ -48,7 +67,7 @@ export default function AiCfoPage() {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Full access, free during early access — no credit card required. No plan is charged yet; paid tiers come later.",
+          description: "Free plan available, no credit card required.",
         },
       },
     ],
@@ -111,7 +130,7 @@ export default function AiCfoPage() {
               <Link href="/demo/enter">Live Demo</Link>
             </Button>
           </motion.div>
-          <p className="mt-4 text-xs text-muted-foreground">Free during early access · No credit card required</p>
+          <p className="mt-4 text-xs text-muted-foreground">{paidEnabled ? "Free plan" : "Free during early access"} · No credit card required</p>
         </div>
       </section>
 
@@ -126,7 +145,7 @@ export default function AiCfoPage() {
           Everything a CFO does. Minus the retainer.
         </h2>
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
-          {capabilities.map((c, i) => (
+          {capabilityCards.map((c, i) => (
             <motion.div
               key={c.title}
               className="rounded-2xl border bg-card/60 p-6"

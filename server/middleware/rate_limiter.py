@@ -267,7 +267,7 @@ def user_sub_from_request(request) -> str:
     if not token or len(token) > 8192:
         return ""
     try:
-        from jose import jwt
+        import jwt  # PyJWT, as server/core/security.py uses
         from server.core.config import settings
 
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -415,9 +415,10 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     UPLOAD_MARKERS = ("/csv-import", "/upload")
     HEALTH_PATHS = {"/health", "/"}
     # Express strips the /api prefix before FastAPI sees the request.
-    # request_path() folds /api/leads onto /leads. The number is a class
-    # constant. Lead capture does not read an environment variable.
-    LEAD_PATHS = {"/leads"}
+    # request_path() folds /api/leads onto /leads (and /api/contact onto
+    # /contact). The number is a class constant. Lead capture does not read an
+    # environment variable.
+    LEAD_PATHS = {"/leads", "/contact"}
     LEAD_RATE_LIMIT = 8
 
     WINDOW_SECONDS = 60

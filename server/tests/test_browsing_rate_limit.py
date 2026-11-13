@@ -21,7 +21,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
-from jose import jwt
+import jwt  # PyJWT, as server/core/security.py uses
 from starlette.requests import Request
 
 from server.core.config import settings
