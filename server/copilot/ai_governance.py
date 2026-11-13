@@ -150,6 +150,29 @@ def check_budget(company_id: int, agent_name: str, estimated_cost: float = 0.0) 
         return result
 
 
+def record_budget_usage_if_configured(company_id: int, agent_name: str, cost: float) -> None:
+    """Add `cost` to an EXISTING budget row; never creates one.
+
+    `update_budget_usage` upserts with a default $100 budget, which would turn
+    an unconfigured company into a capped one. The LLM choke point uses this
+    instead so budgets stay opt-in.
+    """
+    if not company_id or not cost or cost <= 0:
+        return
+    try:
+        with SessionLocal() as db:
+            db.execute(
+                text("""
+                    UPDATE ai_agent_budgets SET usage = usage + :cost
+                    WHERE company_id = :cid AND agent_name = :name
+                """),
+                {"cid": company_id, "name": agent_name, "cost": cost},
+            )
+            db.commit()
+    except Exception as e:
+        logger.error(f"Failed to record budget usage: {e}")
+
+
 def update_budget_usage(company_id: int, agent_name: str, cost: float) -> None:
     try:
         with SessionLocal() as db:

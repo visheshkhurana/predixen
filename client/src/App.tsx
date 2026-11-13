@@ -21,6 +21,7 @@ import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
+import { captureFirstTouchAttribution } from "@/lib/attribution";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
 import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
@@ -64,6 +65,7 @@ const VerifyEmailPage = lazy(() => import("@/pages/verify-email"));
 const UnsubscribePage = lazy(() => import("@/pages/unsubscribe"));
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy"));
 const TermsOfServicePage = lazy(() => import("@/pages/terms"));
+const RefundPolicyPage = lazy(() => import("@/pages/refund-policy"));
 const OnboardingPage = lazy(() => import("@/pages/onboarding"));
 const OverviewPage = lazy(() => import("@/pages/overview"));
 const TruthScanPage = lazy(() => import("@/pages/truth-scan"));
@@ -103,7 +105,6 @@ const CapTablePage = lazy(() => import("@/pages/cap-table"));
 const InvestorRoomPage = lazy(() => import("@/pages/investor-room"));
 const KPIBoardPage = lazy(() => import("@/pages/kpi-board"));
 const ConnectorMarketplacePage = lazy(() => import("@/pages/connector-marketplace"));
-const AddDataSourcePage = lazy(() => import("@/pages/add-data-source"));
 const DashboardsPage = lazy(() => import("@/pages/dashboards"));
 const DashboardBuilderPage = lazy(() => import("@/pages/dashboard-builder"));
 const MetricCatalogPage = lazy(() => import("@/pages/metric-catalog"));
@@ -113,6 +114,7 @@ const MessagingPage = lazy(() => import("@/pages/messaging"));
 const JournalPage = lazy(() => import("@/pages/journal"));
 const GoalsPage = lazy(() => import("@/pages/goals"));
 const HiringPlannerPage = lazy(() => import("@/pages/hiring-planner"));
+const ProfitPage = lazy(() => import("@/pages/profit"));
 const SharedScenarioPage = lazy(() => import("@/pages/shared-scenario"));
 const QAFrontPage = lazy(() => import("@/pages/qa"));
 const PricingPage = lazy(() => import("@/pages/pricing"));
@@ -138,11 +140,18 @@ const SecurityPage = lazy(() => import("@/pages/security"));
 const ContactPage = lazy(() => import("@/pages/contact"));
 const BlogPage = lazy(() => import("@/pages/blog"));
 const RunwayByIndustryPage = lazy(() => import("@/pages/runway-by-industry"));
+const IndustryLandingPage = lazy(() => import("@/pages/industry-landing"));
 const EmbedSurvivalPage = lazy(() => import("@/pages/embed-survival"));
 const FAQPage = lazy(() => import("@/pages/faq"));
 const DemoPage = lazy(() => import("@/pages/demo"));
 const RunwayCalculatorPage = lazy(() => import("@/pages/runway-calculator"));
 const DefaultAlivePage = lazy(() => import("@/pages/default-alive"));
+const BurnMultiplePage = lazy(() => import("@/pages/burn-multiple"));
+const DilutionPage = lazy(() => import("@/pages/dilution"));
+const LtvCacPage = lazy(() => import("@/pages/ltv-cac"));
+const D2cContributionMarginPage = lazy(() => import("@/pages/d2c-contribution-margin"));
+const ToolsIndexPage = lazy(() => import("@/pages/tools-index"));
+const VsRunwayCalculatorVsSpreadsheetPage = lazy(() => import("@/pages/vs-runway-calculator-vs-spreadsheet"));
 const AiCfoPage = lazy(() => import("@/pages/ai-cfo"));
 
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
@@ -235,7 +244,6 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
     if (user?.id && user?.email) {
       if ((window as any).gtag) {
         (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(user.id) });
-        (window as any).gtag('set', 'user_properties', { user_email: user.email });
       }
     }
   }, [user]);
@@ -332,10 +340,24 @@ function Router() {
         <Route path="/blog">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
         <Route path="/faq">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><FAQPage /></Suspense>}</Route>
         <Route path="/ai-cfo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AiCfoPage /></Suspense>}</Route>
+        <Route path="/tools">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ToolsIndexPage /></Suspense>}</Route>
         <Route path="/tools/runway-calculator">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayCalculatorPage /></Suspense>}</Route>
+        <Route path="/tools/dilution">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DilutionPage /></Suspense>}</Route>
+
+        <Route path="/tools/ltv-cac">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><LtvCacPage /></Suspense>}</Route>
+        <Route path="/tools/d2c-contribution-margin">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}><D2cContributionMarginPage /></Suspense>}</Route>
+        <Route path="/vs/runway-calculator-vs-spreadsheet">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><VsRunwayCalculatorVsSpreadsheetPage /></Suspense>}</Route>
         <Route path="/default-alive">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DefaultAlivePage /></Suspense>}</Route>
+        <Route path="/tools/burn-multiple">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BurnMultiplePage /></Suspense>}</Route>
+        {/* Industry homepages, one per entry in client/src/data/industry-pages.ts. */}
+        <Route path="/for/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><IndustryLandingPage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
         <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
+        {/* HAG-449: the entry point the hero's "View Demo" uses. It logs into the
+            shared sample account and drops the visitor straight into /overview in
+            Demo Mode — no login form, no "Welcome back". /demo stays as the page
+            that explains what the demo is. */}
+        <Route path="/demo/enter">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoRedirectPage /></Suspense>}</Route>
         <Route path="/demo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoPage /></Suspense>}</Route>
         <Route path="/auth/callback" component={AuthCallback} />
         <Route path="/auth" component={AuthPage} />
@@ -344,17 +366,19 @@ function Router() {
         <Route path="/unsubscribe" component={UnsubscribePage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/terms" component={TermsOfServicePage} />
+        <Route path="/refund-policy" component={RefundPolicyPage} />
       {/* /login means login. /register and /join still land on the register
-          tab so old links do not drop people on the login form. /signup is a
-          public get-started page; its primary CTA goes to /auth?tab=register. */}
+          form so old links do not drop people on the login form. /signup is a
+          public get-started page that renders the same form from a prerendered
+          document, so every register entry now points there (HAG-449). */}
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>
       <Route path="/register">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       <Route path="/join">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       {/* cleya.ai leftover traffic (#44 defer). No matching/referral/apply
           product exists — send visitors to a live marketing page, not 404. */}
@@ -448,13 +472,18 @@ function Router() {
       <Route path="/marketplace">
         {() => <AuthenticatedRoute component={ConnectorMarketplacePage} />}
       </Route>
+      {/* The add-data-source wizard faked "Test connection" and "connected"
+          without calling the API. Integrations is the real connect flow. */}
       <Route path="/add-data-source">
-        {() => <AuthenticatedRoute component={AddDataSourcePage} />}
+        {() => <Redirect to="/integrations" />}
       </Route>
       {/* Marketplace "manage" and add-data-source complete navigated here.
           No connector-detail page exists — Integrations is the live dest. */}
       <Route path="/data-source/:id">
         {() => <Redirect to="/integrations" />}
+      </Route>
+      <Route path="/profit">
+        {() => <AuthenticatedRoute component={ProfitPage} />}
       </Route>
       <Route path="/alerts">
         {() => <AuthenticatedRoute component={AlertsPage} />}
@@ -869,15 +898,15 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   
   const marketingPaths = [
     '/', '/features', '/product', '/pricing', '/about', '/compare', '/customers', '/use-cases', '/how-it-works', '/alternatives', '/blog', '/faq',
-    '/contact', '/demo', '/auth', '/onboarding', '/onboard', '/owner-console',
-    '/survival-simulator', '/default-alive', '/privacy', '/terms', '/security',
+    '/contact', '/demo', '/demo/enter', '/auth', '/onboarding', '/onboard', '/owner-console',
+    '/survival-simulator', '/default-alive', '/privacy', '/terms', '/refund-policy', '/security',
     '/reset-password', '/verify-email', '/auth/callback',
     '/login', '/signup', '/register', '/join',
-    '/ai-cfo', '/embed/survival',
+    '/ai-cfo', '/embed/survival', '/tools',
   ];
   const marketingPrefixes = [
     '/blog/', '/tools/', '/admin', '/scenarios/shared/',
-    '/survival/', '/runway/', '/embed/',
+    '/survival/', '/runway/', '/embed/', '/vs/', '/for/',
   ];
   // Use wouter's location (not window.location) so client-side navigations
   // re-evaluate the shell instead of keeping whatever was true on hard load.
@@ -924,8 +953,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 to /overview both times before giving up.
 
                 Signing out first is what makes the escape real: it clears the
-                demo session so /auth?tab=register renders instead of
-                redirecting.
+                demo session so /signup renders instead of redirecting.
               */}
               <span>
                 Demo Mode — You are viewing simulated sample data.{" "}
@@ -936,7 +964,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                   onClick={async () => {
                     try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
                     useFounderStore.getState().logout();
-                    navigate('/auth?tab=register');
+                    navigate('/signup');
                   }}
                 >
                   Sign up free
@@ -1183,6 +1211,12 @@ function AnimatedRouteWrapper({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+// The document URL, once, before route effects can replace it. First touch
+// only: a later URL in this tab does not overwrite sessionStorage.
+if (typeof window !== "undefined") {
+  captureFirstTouchAttribution();
 }
 
 function App() {

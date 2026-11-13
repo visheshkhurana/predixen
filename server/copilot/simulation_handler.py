@@ -21,6 +21,22 @@ from server.copilot.trust import fetchVerifiedRunResult, GroundingStatus
 logger = logging.getLogger(__name__)
 
 
+def missing_simulation_inputs(resolved: Dict[str, float]) -> List[str]:
+    """What a runway simulation cannot be run without.
+
+    Cash on hand, and some cost or revenue base to burn it with. Growth, churn
+    and margin legitimately default to 0 (no growth, no churn data, no margin
+    data) -- none of those invents a flattering number.
+    """
+    missing = []
+    if (resolved.get("cash") or 0) <= 0:
+        missing.append("cash balance")
+    costs = sum(max(0.0, resolved.get(k) or 0.0) for k in ("opex", "payroll", "other_costs"))
+    if costs <= 0 and (resolved.get("revenue") or 0) <= 0:
+        missing.append("monthly expenses or net burn")
+    return missing
+
+
 class SimulationHandler:
     """Handles simulation execution and scenario management."""
     
@@ -92,27 +108,43 @@ class SimulationHandler:
         if not has_any_simulation_params(params) and parsed.original_message:
             params = self._llm_extract_parameters(parsed.original_message, params)
         
-        def _extract(val, default):
-            if isinstance(val, dict):
-                return val.get("value", default)
-            return val if val is not None else default
+        # The company's real baseline, resolved exactly as the scenario
+        # simulator does (truth scan -> latest FinancialRecord). This used to
+        # substitute cash $500K, revenue $50K, growth 5%, net burn $60K and GM
+        # 70% for anything missing -- simulating a company that does not exist
+        # -- and split net_burn 30/50/20 into costs that the engine then
+        # charged revenue*(1-GM) on top of, so simulated burn != real burn.
+        from server.api.simulations import resolve_baseline_financials
+        from server.models.financial import FinancialRecord
 
-        baseline_revenue = _extract(metrics.get("mrr"), 0) or _extract(metrics.get("monthly_revenue"), 0) or _extract(metrics.get("revenue"), 50000)
-        baseline_growth = _extract(metrics.get("revenue_growth_mom"), 5)
-        cash_balance = _extract(metrics.get("cash_balance"), 500000)
-        gross_margin = _extract(metrics.get("gross_margin"), 70)
-        churn_rate = _extract(metrics.get("churn_rate"), 0) or _extract(metrics.get("gross_churn_rate"), 5)
+        latest_record = self.db.query(FinancialRecord).filter(
+            FinancialRecord.company_id == self.company_id
+        ).order_by(FinancialRecord.period_end.desc()).first()
+        resolved = resolve_baseline_financials(metrics, latest_record)
 
-        opex = _extract(metrics.get("opex"), 0)
-        payroll = _extract(metrics.get("payroll"), 0)
-        other_costs = _extract(metrics.get("other_costs"), 0)
+        missing = missing_simulation_inputs(resolved)
+        if missing:
+            return {
+                'success': False,
+                'action': 'insufficient_data',
+                'error': 'Not enough financial data to simulate',
+                'missing': missing,
+                'summary': (
+                    "I don't have enough of your real numbers to run this simulation "
+                    f"(missing: {', '.join(missing)}). Add them in Data Input or upload "
+                    "your financials, and I'll run it on your actual figures."
+                ),
+                'intent': parsed.intent.value
+            }
 
-        if opex == 0 and payroll == 0 and other_costs == 0:
-            net_burn = _extract(metrics.get("net_burn"), 60000)
-            if net_burn > 0:
-                opex = net_burn * 0.3
-                payroll = net_burn * 0.5
-                other_costs = net_burn * 0.2
+        baseline_revenue = resolved["revenue"]
+        baseline_growth = resolved["growth"]
+        cash_balance = resolved["cash"]
+        gross_margin = resolved["gross_margin"]
+        churn_rate = resolved["churn"]
+        opex = max(0.0, resolved["opex"])
+        payroll = max(0.0, resolved["payroll"])
+        other_costs = max(0.0, resolved["other_costs"])
 
         burn_reduction_pct = params.burn_reduction_pct or 0
         

@@ -1,3 +1,4 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import {
   AreaChart,
   Area,
@@ -31,7 +32,7 @@ export function BandsChart({
   yAxisLabel = 'Value',
   formatValue = (v) => {
     if (v == null || isNaN(v) || !isFinite(v)) return 'N/A';
-    return `$${(v / 1000).toFixed(0)}k`;
+    return formatCurrencyAbbrev(v);
   },
   testId = 'bands-chart',
   description = 'Shows P10, P50 (median), and P90 projections from Monte Carlo simulation. P10 is the pessimistic case, P90 is optimistic.',

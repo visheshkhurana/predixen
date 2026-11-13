@@ -14,9 +14,12 @@ from sqlalchemy.orm import Session
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.api.admin import require_platform_admin
 from server.models.user import User
 from server.lib.llm import get_llm_router, TaskType, MODELS, TASK_TO_MODEL, TASK_DESCRIPTIONS
 
+# chat / quick-chat / smart-chat / web-search have no client caller and each
+# spends a paid model call: platform owner only. Metadata routes stay open.
 router = APIRouter(prefix="/llm", tags=["llm"])
 
 
@@ -75,7 +78,7 @@ async def list_task_types():
 async def chat(
     request: ChatRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_platform_admin)
 ):
     """
     Send a chat message with intelligent model routing.
@@ -131,7 +134,7 @@ async def quick_chat(
     task_type: str = "simple_task",
     system: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_platform_admin)
 ):
     """Quick single-turn chat with automatic model selection."""
     try:
@@ -184,7 +187,7 @@ class SmartChatResponse(BaseModel):
 async def smart_chat(
     request: SmartChatRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_platform_admin)
 ):
     """
     Intelligent chat with automatic intent classification and model routing.
@@ -244,7 +247,7 @@ class WebSearchResponse(BaseModel):
 async def web_search(
     request: WebSearchRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_platform_admin)
 ):
     """
     Perform a web search using Perplexity for real-time information.

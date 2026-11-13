@@ -96,9 +96,6 @@ class NanoBananaImageGenerator:
         try:
             from server.models.llm_audit_log import LLMAuditLog
 
-            def _compute_hash(text: str) -> str:
-                return hashlib.sha256(text.encode()).hexdigest()[:16]
-
             def _truncate(text: str, max_len: int = 1000) -> str:
                 return text[:max_len] if len(text) > max_len else text
 
@@ -112,12 +109,14 @@ class NanoBananaImageGenerator:
             except Exception:
                 pass
 
+            # Hash and preview the redacted prompt only. The raw prompt is kept as a length.
             audit_log = LLMAuditLog(
                 company_id=self.company_id,
                 user_id=self.user_id,
                 endpoint=endpoint,
                 model=model,
-                prompt_hash=_compute_hash(prompt),
+                pii_mode="standard",
+                prompt_hash=hashlib.sha256(redacted_prompt.encode("utf-8")).hexdigest(),
                 input_chars_original=len(prompt),
                 input_chars_redacted=len(redacted_prompt),
                 pii_findings_json={"count": pii_count, "status": status, "error": error_message},

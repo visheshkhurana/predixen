@@ -100,6 +100,25 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+// HAG-246: the engine emits the real per-path runway values, including the
+// 999 sentinel for a path whose cash flow went positive with cash on hand
+// (enhanced_monte_carlo.py:405 -> distributions.runway, first 500 paths).
+// Before this, the chart on this page drew 1,000 Math.random() values inside the
+// p10..p90 band on every render and labelled them the distribution of the runs.
+// 240 is the engine's own runway cap, so nothing real lands between 900 and 998.
+const SENTINEL_SURVIVED = 999;
+
+function getRunwayPaths(
+  simulation: any,
+): { plotted: number[]; survived: number; total: number } | null {
+  const raw = simulation?.distributions?.runway;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const values = raw.filter((v: any) => typeof v === 'number' && Number.isFinite(v));
+  if (values.length === 0) return null;
+  const plotted = values.filter((v: number) => v < SENTINEL_SURVIVED);
+  return { plotted, survived: values.length - plotted.length, total: values.length };
+}
+
 function getCashBands(simulation: any): { p10: number[]; p50: number[]; p90: number[] } {
   if (simulation.bands?.cash) return simulation.bands.cash;
   if (simulation.cash_bands) return simulation.cash_bands;
@@ -216,6 +235,13 @@ export default function ScenariosPage() {
   const [truthScanModal, setTruthScanModal] = useState<{ open: boolean; uploadId?: string }>({ open: false });
   const [simIterations, setSimIterations] = useState(500);
   const [simSeed, setSimSeed] = useState<number | null>(null);
+
+  // HAG-246 / HAG-245: derived from the stored run, never from the selector.
+  const runwayPaths = useMemo(() => getRunwayPaths(simulation), [simulation]);
+  const runIterations = useMemo(() => {
+    const n = (simulation as any)?.config?.iterations ?? (simulation as any)?.n_sims;
+    return typeof n === 'number' && n > 0 ? n : null;
+  }, [simulation]);
 
   const { data: comments = [], isLoading: commentsLoading } = useScenarioComments(selectedScenarioId || 0);
   const addCommentMutation = useAddComment();
@@ -1111,23 +1137,47 @@ export default function ScenariosPage() {
     return bars;
   }, [baseMetrics]);
 
+  // Cost lines come from the company's real expense breakdown (baseline API).
+  // COGS is excluded here because it enters via grossMargin. With no breakdown
+  // the stress/what-if tools show "not available" instead of an invented split.
+  const stressTestCostBreakdown = useMemo(() => {
+    const eb = financialBaseline?.expenseBreakdown;
+    if (!eb) return null;
+    const payroll = eb.payroll ?? null;
+    const operating = eb.operating ?? null;
+    const marketing = eb.marketing ?? null;
+    const other = eb.otherOpex ?? null;
+    if ([payroll, operating, marketing, other].every((x) => x == null || x === 0)) return null;
+    return {
+      payroll: payroll ?? 0,
+      opex: (operating ?? 0) + (marketing ?? 0),
+      otherCosts: other ?? 0,
+    };
+  }, [financialBaseline]);
+
   const stressTestFinancialState: FinancialState = useMemo(() => {
-    const totalExpenses = baseMetrics?.monthlyExpenses || 80000;
-    return baseMetrics ? {
+    return baseMetrics && stressTestCostBreakdown ? {
       monthlyRevenue: baseMetrics.monthlyRevenue, grossMargin: baseMetrics.grossMargin,
-      opex: totalExpenses * 0.3, payroll: totalExpenses * 0.6, otherCosts: totalExpenses * 0.1,
+      opex: stressTestCostBreakdown.opex, payroll: stressTestCostBreakdown.payroll, otherCosts: stressTestCostBreakdown.otherCosts,
       cashBalance: baseMetrics.cashOnHand, churnRate: baseMetrics.churnRate, growthRate: baseMetrics.growthRate,
-      cac: baseMetrics.monthlyRevenue * 0.3, ltv: baseMetrics.churnRate > 0 ? (baseMetrics.monthlyRevenue / baseMetrics.churnRate) * 100 : baseMetrics.monthlyRevenue * 24,
+      cac: sharedMetrics.cac || 0, ltv: sharedMetrics.ltv || 0,
     } : { monthlyRevenue: 0, grossMargin: 0, opex: 0, payroll: 0, otherCosts: 0, cashBalance: 0, churnRate: 0, growthRate: 0, cac: 0, ltv: 0 };
-  }, [baseMetrics]);
+  }, [baseMetrics, stressTestCostBreakdown, sharedMetrics.cac, sharedMetrics.ltv]);
+
+  const stressTestAvailable = !!(baseMetrics && stressTestCostBreakdown);
 
   const stressTestCurrentRunway = useMemo(() => baseMetrics?.currentRunway || 0, [baseMetrics]);
 
-  const stressTestBaselineResults = useMemo(() => ({
-    runway: stressTestCurrentRunway,
-    survival18m: simulation?.survival_18m ?? (simulation?.survival_12m ? Math.max(0, simulation.survival_12m * 0.85) : 65),
-    cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - ((baseMetrics?.monthlyExpenses || 80000) - stressTestFinancialState.monthlyRevenue) * 18),
-  }), [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
+  const stressTestBaselineResults = useMemo(() => {
+    const netBurn = baseMetrics ? baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue : 0;
+    return {
+      runway: stressTestCurrentRunway,
+      // No simulation -> the same runway-based estimate the what-if tool uses
+      // for adjusted states, so baseline and adjusted are comparable.
+      survival18m: simulation?.survival_18m ?? Math.min(100, Math.max(0, (stressTestCurrentRunway / 18) * 100)),
+      cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - netBurn * 18),
+    };
+  }, [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
 
   const handleGeneratePDF = useCallback(async () => {
     if (!simulation) return;
@@ -1233,6 +1283,7 @@ export default function ScenariosPage() {
     const pdfData: SimulationPDFData = {
       scenarioName: currentScenarioName,
       companyName: currentCompany?.name,
+      runs: runIterations ?? undefined,
       p90: scenarioP90 ? { ...scenarioP90, revenue18m: scenarioP90.revenue18m || 0, cash12m: scenarioP90.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
       p50: scenarioP50 ? { ...scenarioP50, revenue18m: scenarioP50.revenue18m || 0, cash12m: scenarioP50.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
       p10: scenarioP10 ? { ...scenarioP10, revenue18m: scenarioP10.revenue18m || 0, cash12m: scenarioP10.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
@@ -1250,7 +1301,7 @@ export default function ScenariosPage() {
     };
 
     await downloadSimulationPDF(pdfData);
-  }, [simulation, currentScenarioName, currentCompany, scenarioP90, scenarioP50, scenarioP10, baselineComparison, sensitivityBars]);
+  }, [simulation, currentScenarioName, currentCompany, scenarioP90, scenarioP50, scenarioP10, baselineComparison, sensitivityBars, runIterations]);
 
   return (
     // No page-level FadeIn here. AnimatedRouteWrapper in App.tsx already fades
@@ -1310,7 +1361,7 @@ export default function ScenariosPage() {
           <p className="text-xs text-muted-foreground/60">
             {founderMode
               ? 'Focused view showing only what matters most'
-              : 'Describe a scenario and we\'ll simulate 1,000 outcomes to show your probability distribution'}
+              : `Describe a scenario and we'll simulate ${simIterations.toLocaleString()} outcomes to show your probability distribution`}
           </p>
         </div>
 
@@ -1650,7 +1701,7 @@ export default function ScenariosPage() {
         {(isCreating || isRunning) && (
           <div className="text-center py-12">
             <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground font-medium">Simulating 1,000 scenarios... Analyzing probability distributions across revenue, burn, and runway.</p>
+            <p className="text-muted-foreground font-medium">Simulating {simIterations.toLocaleString()} scenarios... Analyzing probability distributions across revenue, burn, and runway.</p>
             <p className="text-sm text-muted-foreground mt-1">This usually takes a few seconds</p>
           </div>
         )}
@@ -1707,7 +1758,7 @@ export default function ScenariosPage() {
             <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
               <div>
                 <h2 className="text-base font-semibold tracking-tight" data-testid="text-results-title">Simulation Results</h2>
-                <p className="text-xs text-muted-foreground/60">{currentScenarioName} — 1,000 Monte Carlo runs</p>
+                <p className="text-xs text-muted-foreground/60">{currentScenarioName}{runIterations ? ` — ${runIterations.toLocaleString()} Monte Carlo runs` : ' — Monte Carlo results'}</p>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleShareScenario} data-testid="button-share-scenario">
@@ -2289,17 +2340,26 @@ export default function ScenariosPage() {
                 ))}
               </div>
 
+              {!stressTestAvailable && (
+                <div className="rounded-lg border border-dashed p-4 mb-6 text-sm text-muted-foreground" data-testid="stress-test-unavailable">
+                  Sensitivity, what-if and stress tests are not available: no expense breakdown (payroll / operating / marketing / other) has been provided for this company.
+                </div>
+              )}
+              {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
                 <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
               </div>
+              )}
 
               <SensitivityAnalysisPanel data={sensitivityResults} isLoading={sensitivityMutation.isPending} onRunAnalysis={handleRunSensitivityAnalysis} />
 
+              {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <StressTestPanel currentState={stressTestFinancialState} currentRunway={stressTestCurrentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
                 <ReverseStressTest currentState={stressTestFinancialState} />
               </div>
+              )}
 
               <CounterMoveCards
                 counterMoves={simulation?.counter_moves || null}
@@ -2788,12 +2848,29 @@ export default function ScenariosPage() {
                       onEditComment={async (commentId, content) => { await editCommentMutation.mutateAsync({ commentId, content, scenarioId: selectedScenarioId }); }}
                       onDeleteComment={async (commentId) => { await deleteCommentMutation.mutateAsync({ commentId, scenarioId: selectedScenarioId }); }}
                     />
-                    {simulation && (
-                      <DistributionView title="Runway Distribution" description="Distribution across all Monte Carlo runs"
-                        data={Array.from({ length: 1000 }, () => (simulation.runway?.p50 || 12) + (Math.random() - 0.5) * (simulation.runway?.p90 - simulation.runway?.p10 || 6))}
+                    {simulation && runwayPaths && (runwayPaths.plotted.length > 0 ? (
+                      <DistributionView
+                        title="Runway Distribution"
+                        description={
+                          `Months until cash runs out, one value per simulated path from this run (${runwayPaths.total.toLocaleString()} of ${(runIterations ?? runwayPaths.total).toLocaleString()} paths).` +
+                          (runwayPaths.survived > 0
+                            ? ` ${runwayPaths.survived.toLocaleString()} of them never ran out within the 24-month horizon and are counted here rather than plotted, because a single 999-month bar would flatten the rest of the axis.`
+                            : '')
+                        }
+                        data={runwayPaths.plotted}
                         unit="months" thresholds={{ warning: 18, critical: 12 }} higherIsBetter={true}
                       />
-                    )}
+                    ) : (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Runway Distribution</CardTitle>
+                          <CardDescription>
+                            All {runwayPaths.total.toLocaleString()} of the {(runIterations ?? runwayPaths.total).toLocaleString()} simulated paths in this run stayed cash-positive
+                            through the 24-month horizon, so there is no spread of run-out months to plot.
+                          </CardDescription>
+                        </CardHeader>
+                      </Card>
+                    ))}
                   </div>
                 ) : (
                   <Card><CardContent className="py-12 text-center">

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import inspect
 import re
 from datetime import datetime, timedelta
 from urllib.parse import unquote
@@ -640,3 +641,120 @@ def test_activity_template_footer_uses_the_signed_link():
         unsubscribe_url=url,
     )
     assert url in html
+
+
+# --- the ASCII hardening on the token's user part --------------------------
+#
+# verify_unsubscribe_token guards the user part with
+# `user_part.isascii() and user_part.isdigit()` at lifecycle_guard.py:188.
+# Measured, the characters that guard is about do not behave alike:
+#
+#   int("２") == 2 and int("٢") == 2   - fullwidth and Arabic-Indic
+#       "2". A non-ASCII SPELLING OF A REAL ID. With a signature computed over
+#       that id, the rest of the function accepts it as that user.
+#   int("²") and int("①") raise ValueError  - superscript two and
+#       circled one. isdigit() is true, int() fails.
+#
+# There are 798 such characters, and every one is rejected today - but NOT
+# because of the isascii() conjunct. Line 184 decodes with .decode("ascii")
+# INSIDE the try whose except returns None, so any non-ASCII byte raises
+# UnicodeDecodeError and returns None before line 188 is reached. The conjunct
+# is inert there, which is measured rather than argued: reverting line 188 to
+# `not user_part.isdigit()` changes no outcome in this file's tests.
+#
+# So there are two different things worth pinning and they need two different
+# kinds of test. The behavioural ones below pin that a non-ASCII digit never
+# reaches int() - and they FAIL if the ascii decode is ever moved out of the
+# try, which is the change that would make line 188 matter. The source-text test
+# at the end pins the conjunct itself, because no behavioural test can.
+
+_NON_ASCII_DIGITS = [c for c in map(chr, range(0x110000)) if c.isdigit() and not c.isascii()]
+
+
+def _raw_token(user_part: str, sig: str) -> str:
+    """base64url of "<user_part>.<sig>", which is the wire form of a token."""
+    return base64.urlsafe_b64encode(f"{user_part}.{sig}".encode("utf-8")).decode("ascii")
+
+
+def _sig_of(token: str) -> str:
+    return base64.urlsafe_b64decode(token + ("=" * (-len(token) % 4))).decode("ascii").split(".", 1)[1]
+
+
+def test_every_non_ascii_digit_user_part_is_rejected():
+    """All 798 of them, not a chosen few - and none of them raises."""
+    # Proves the sweep is not vacuous. Deliberately a floor rather than the
+    # exact 798, which is a fact about this Python's Unicode tables.
+    assert len(_NON_ASCII_DIGITS) > 100, "the sweep collected nothing - it would pass for free"
+
+    for c in _NON_ASCII_DIGITS:
+        assert verify_unsubscribe_token(_raw_token(c, "0" * 64)) is None, (
+            f"{c!r} (U+{ord(c):04X}) was not rejected"
+        )
+
+
+def test_fullwidth_digit_cannot_impersonate_the_id_it_spells():
+    """The sharp case: a non-ASCII spelling of a real id, with a REAL signature.
+
+    `int("２") == 2`, so the signature for user 2 is a valid signature for
+    this user part. Only the ASCII path stops it - everything downstream would
+    accept it.
+    """
+    valid = sign_unsubscribe_token(2)
+    sig = _sig_of(valid)
+
+    # The payload really does spell id 2, and the signature really is the one
+    # for id 2. Both halves of a working forgery are present.
+    assert int("２") == 2
+    assert sig == _sig_of(sign_unsubscribe_token(2))
+
+    impostor = _raw_token("２", sig)
+    assert impostor != valid, "the impostor must not be the valid token"
+    assert verify_unsubscribe_token(valid) == 2, "the valid token must still verify"
+    assert verify_unsubscribe_token(impostor) is None
+
+
+def test_unsubscribe_route_answers_400_for_a_non_ascii_digit_token(db):
+    """The route, not just the function: 400, and never a 500."""
+    ada = _user(db, "ada@example.com")
+    db.commit()
+    sig = _sig_of(sign_unsubscribe_token(ada.id))
+
+    app = FastAPI()
+    app.include_router(unsubscribe_router)
+    Session = sessionmaker(bind=db.get_bind())
+
+    def override():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override
+    client = TestClient(app)
+
+    for c in ("２", "²", "٢"):
+        token = _raw_token(c, sig)
+        response = client.get("/email/unsubscribe", params={"token": token})
+        assert response.status_code == 400, f"{c!r} gave {response.status_code}, not 400"
+        db.expire_all()
+        assert db.query(NotificationPreference).filter_by(user_id=ada.id).first() is None, (
+            f"{c!r} opted the user out"
+        )
+
+
+def test_lifecycle_guard_keeps_the_ascii_conjunct():
+    """A SOURCE-TEXT pin, and deliberately so.
+
+    No behavioural test can pin this conjunct: it is unreachable-but-true at
+    :188 because :184 already refused every non-ASCII byte. A behavioural
+    assertion would keep passing if the conjunct were deleted, which is exactly
+    the silent revert this is here to prevent. So it asserts the source.
+    """
+    source = inspect.getsource(verify_unsubscribe_token)
+    assert "user_part.isascii() and user_part.isdigit()" in source, (
+        "the ASCII conjunct on the unsubscribe token's user part is gone from "
+        "verify_unsubscribe_token; it is inert today only because the ascii "
+        "decode in that function is inside a try, so removing it is safe only "
+        "while that stays true"
+    )

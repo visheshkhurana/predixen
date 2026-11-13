@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFounderStore } from '@/store/founderStore';
 import { apiRequest } from '@/lib/queryClient';
+import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/api/workspace';
 import { Settings, Lock, Mail, Bell, LogOut, Loader2, User, Shield, Check } from 'lucide-react';
 import { FadeIn } from '@/components/ui/motion-primitives';
 
@@ -23,10 +23,41 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  const [emailSimulations, setEmailSimulations] = useState(true);
-  const [emailDocuments, setEmailDocuments] = useState(true);
-  const [emailDecisions, setEmailDecisions] = useState(true);
-  const [emailAlerts, setEmailAlerts] = useState(true);
+  // email_enabled is the opt-out every non-account email checks, and the
+  // unsubscribe link sets. The digest reads its own monthly_digest flag
+  // (server/api/digest.py), which the unsubscribe clears as well, so this
+  // screen has to be able to write that flag back: a user with no company has
+  // no dashboard switch to do it on.
+  const { data: notificationPrefs, isLoading: prefsLoading } = useNotificationPreferences();
+  const updateNotificationPrefs = useUpdateNotificationPreferences();
+  const productEmailsOn = notificationPrefs?.email_enabled ?? true;
+  const monthlyDigestOn = notificationPrefs?.monthly_digest ?? true;
+
+  const handleProductEmailsChange = async (checked: boolean) => {
+    if (!notificationPrefs) return;
+    try {
+      await updateNotificationPrefs.mutateAsync({
+        ...notificationPrefs,
+        email_enabled: checked,
+        // Re-enabling restores the digest the unsubscribe turned off; turning
+        // product emails off leaves the digest switch where the user put it.
+        monthly_digest: checked ? true : notificationPrefs.monthly_digest,
+      });
+      toast({ title: checked ? 'Product emails on' : 'Product emails off' });
+    } catch {
+      toast({ title: 'Could not save your email preference', variant: 'destructive' });
+    }
+  };
+
+  const handleMonthlyDigestChange = async (checked: boolean) => {
+    if (!notificationPrefs) return;
+    try {
+      await updateNotificationPrefs.mutateAsync({ ...notificationPrefs, monthly_digest: checked });
+      toast({ title: checked ? 'Monthly digest on' : 'Monthly digest off' });
+    } catch {
+      toast({ title: 'Could not save your digest preference', variant: 'destructive' });
+    }
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,34 +190,33 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium">Simulation Reports</p>
-              <p className="text-xs text-muted-foreground">Get emailed when Monte Carlo simulations complete</p>
+              <p className="text-sm font-medium">Product emails</p>
+              <p className="text-xs text-muted-foreground">
+                Onboarding tips, activity summaries and product updates. Password,
+                verification and receipt emails are always sent.
+              </p>
             </div>
-            <Switch checked={emailSimulations} onCheckedChange={setEmailSimulations} data-testid="switch-email-simulations" />
+            <Switch
+              checked={productEmailsOn}
+              disabled={prefsLoading || !notificationPrefs || updateNotificationPrefs.isPending}
+              onCheckedChange={handleProductEmailsChange}
+              data-testid="switch-email-product"
+            />
           </div>
-          <Separator />
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium">Document Generation</p>
-              <p className="text-xs text-muted-foreground">Receive generated board decks and investor memos</p>
+              <p className="text-sm font-medium">Monthly digest</p>
+              <p className="text-xs text-muted-foreground">
+                A monthly summary of your company's numbers. You can also change this
+                from a company dashboard.
+              </p>
             </div>
-            <Switch checked={emailDocuments} onCheckedChange={setEmailDocuments} data-testid="switch-email-documents" />
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium">Decision Recommendations</p>
-              <p className="text-xs text-muted-foreground">Get notified about new strategic recommendations</p>
-            </div>
-            <Switch checked={emailDecisions} onCheckedChange={setEmailDecisions} data-testid="switch-email-decisions" />
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium">Alert Notifications</p>
-              <p className="text-xs text-muted-foreground">Email alerts when critical thresholds are breached</p>
-            </div>
-            <Switch checked={emailAlerts} onCheckedChange={setEmailAlerts} data-testid="switch-email-alerts" />
+            <Switch
+              checked={monthlyDigestOn}
+              disabled={prefsLoading || !notificationPrefs || updateNotificationPrefs.isPending}
+              onCheckedChange={handleMonthlyDigestChange}
+              data-testid="switch-monthly-digest"
+            />
           </div>
         </CardContent>
       </Card>

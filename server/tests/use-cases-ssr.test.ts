@@ -32,7 +32,7 @@ const REQUIRED_HREFS = [
   "/default-alive",
   "/runway/saas",
   "/pricing",
-  "/auth",
+  "/signup",
 ];
 
 test("/use-cases SSR body is non-empty and links product destinations", () => {

@@ -53,7 +53,7 @@ def build_agent_decision_prompt(
 
 COMPANY STATE:
 - MRR: ${company_state.mrr:,.0f} | ARR: ${company_state.arr:,.0f}
-- Burn Rate: ${company_state.burn_rate:,.0f}/mo | Cash: ${company_state.cash:,.0f}
+- Gross spend: ${company_state.burn_rate:,.0f}/mo | Net burn: ${max(0, company_state.burn_rate - company_state.mrr):,.0f}/mo | Cash: ${company_state.cash:,.0f}
 - Runway: {company_state.runway_months:.1f} months
 - Customers: {company_state.customers} | Churn: {company_state.churn_rate:.1%}
 - Team Size: {company_state.team_size} | Morale: {company_state.team_morale:.0%}

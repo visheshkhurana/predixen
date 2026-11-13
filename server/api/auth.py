@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import timedelta, datetime
 from server.core.db import get_db
-from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user, set_auth_cookie, clear_auth_cookie, set_refresh_cookie, REFRESH_COOKIE_NAME
+from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user, set_auth_cookie, clear_auth_cookie, set_refresh_cookie, REFRESH_COOKIE_NAME, AUTH_COOKIE_NAME, revoke_all_sessions, revoke_token_string
 from server.core.config import settings
 from server.models.user import User, PasswordResetToken, EmailVerificationToken, RefreshToken
 from server.models.login_history import LoginHistory
@@ -106,12 +106,47 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     name: str = ""
+    # Anonymous browser distinct_id, so signup can alias the pre-account person.
+    distinct_id: str | None = None
+    # First-touch campaign from the landing URL. Not stored on the user row.
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+    utm_term: str | None = None
+    fbclid: str | None = None
+    gclid: str | None = None
 
     @field_validator("name")
     @classmethod
     def sanitize_name(cls, v):
         sanitized = re.sub(r'<[^>]*>', '', v).strip()
         return sanitized
+
+    @field_validator("distinct_id", mode="before")
+    @classmethod
+    def clean_distinct_id(cls, value):
+        from server.services.posthog import sanitize_distinct_id
+
+        if not isinstance(value, str):
+            return None
+        return sanitize_distinct_id(value)
+
+    @field_validator(
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term",
+        "fbclid",
+        "gclid",
+        mode="before",
+    )
+    @classmethod
+    def clean_campaign_fields(cls, value):
+        from server.services.attribution import clean_attribution_value
+
+        return clean_attribution_value(value)
 
     @field_validator("password")
     @classmethod
@@ -213,7 +248,21 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
 
     try:
         from server.services.activation import emit_signup_completed
-        emit_signup_completed(user_id=user.id, method="email")
+        emit_signup_completed(
+            user_id=user.id,
+            method="email",
+            email=user.email,
+            anonymous_distinct_id=req.distinct_id,
+            attribution={
+                "utm_source": req.utm_source,
+                "utm_medium": req.utm_medium,
+                "utm_campaign": req.utm_campaign,
+                "utm_content": req.utm_content,
+                "utm_term": req.utm_term,
+                "fbclid": req.fbclid,
+                "gclid": req.gclid,
+            },
+        )
     except Exception as e:
         auth_logger.warning(f"signup_completed emit failed: {e}")
     
@@ -317,7 +366,11 @@ def admin_login(req: LoginRequest, request: Request, response: Response, db: Ses
         )
     
     admin_email_check = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
-    is_platform_admin = bool(admin_email_check and user.email.lower().strip() == admin_email_check)
+    is_platform_admin = bool(
+        admin_email_check
+        and user.email.lower().strip() == admin_email_check
+        and user.is_email_verified
+    )
     
     if not is_platform_admin:
         log_login_attempt(db, req.email, user.id, success=False,
@@ -473,6 +526,8 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     
     user.password_hash = get_password_hash(req.new_password)
     token_record.used = True
+    # Whoever had the old password may still hold a session; end them all.
+    revoke_all_sessions(db, user.id)
     db.commit()
     
     return {"message": "Password has been reset successfully. You can now log in with your new password."}
@@ -552,6 +607,13 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
         record = db.query(RefreshToken).filter(RefreshToken.token == rt, RefreshToken.revoked == False).first()
         if record:
             record.revoked = True
-            db.commit()
+    # Clearing the cookie is not enough: a copied access token would keep
+    # working until it expires, so record this one as revoked.
+    access = request.cookies.get(AUTH_COOKIE_NAME)
+    auth_header = request.headers.get("authorization") or ""
+    if auth_header.lower().startswith("bearer "):
+        access = auth_header[7:].strip() or access
+    revoke_token_string(access, db)
+    db.commit()
     clear_auth_cookie(response)
     return {"message": "Logged out successfully."}

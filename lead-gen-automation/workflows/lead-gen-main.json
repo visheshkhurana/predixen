@@ -396,7 +396,7 @@
     },
     {
       "parameters": {
-        "sendTo": "=ankit@rapplemedia.in",
+        "sendTo": "=sender@your-domain.com",
         "subject": "=Let's Automate {{ $('Webhook').item.json.body.company }}",
         "emailType": "text",
         "message": "={{ $json.output }}\n\nSent from my iPhone.",
@@ -669,7 +669,7 @@
         "messages": {
           "messageValues": [
             {
-              "message": "=You are an expert in email confirmation. \n\nyour task is to figure out if the sender is not us. \n\nif the sender is not us, then you will output true, and if it is us then output false. \n\nfor context, we are sending an eail and after 24 hours, checking to see if they have asnwered us back. If not then we are sending another personalized email after our check.\n\nThere will be one email that is ankit@rapplmedia.in If thats the only one that means they didn't answer, but if theres two and its not that one then it means they answered us. \n\nIF YOU SEE ANOTHER EMAIL OTHER THAN ankit@rapplmedia.in OUTPUT true BUT IF THERES ONLY ankit@rapplmedia.in THEN OUTPUT false\n\n"
+              "message": "=You are an expert in email confirmation. \n\nyour task is to figure out if the sender is not us. \n\nif the sender is not us, then you will output true, and if it is us then output false. \n\nfor context, we are sending an eail and after 24 hours, checking to see if they have asnwered us back. If not then we are sending another personalized email after our check.\n\nThere will be one email that is sender@your-domain.com If thats the only one that means they didn't answer, but if theres two and its not that one then it means they answered us. \n\nIF YOU SEE ANOTHER EMAIL OTHER THAN sender@your-domain.com OUTPUT true BUT IF THERES ONLY sender@your-domain.com THEN OUTPUT false\n\n"
             }
           ]
         }
@@ -841,7 +841,7 @@
         "messages": {
           "messageValues": [
             {
-              "message": "=You are an expert in email confirmation. \n\nyour task is to figure out if the sender is not us. \n\nif the sender is not us, then you will output true, and if it is us then output false. \n\nfor context, we are sending an eail and after 24 hours, checking to see if they have asnwered us back. If not then we are sending another personalized email after our check.\n\nThere will be one email that is ankit@rapplmedia.in. If thats the only one that means they didn't answer, but if theres two and its not that one then it means they answered us. \n\nIF YOU SEE ANOTHER EMAIL OTHER THAN ankit@rapplmedia.in OUTPUT true BUT IF THERES ONLY ankit@rapplmedia.in THEN OUTPUT false\n\n"
+              "message": "=You are an expert in email confirmation. \n\nyour task is to figure out if the sender is not us. \n\nif the sender is not us, then you will output true, and if it is us then output false. \n\nfor context, we are sending an eail and after 24 hours, checking to see if they have asnwered us back. If not then we are sending another personalized email after our check.\n\nThere will be one email that is sender@your-domain.com. If thats the only one that means they didn't answer, but if theres two and its not that one then it means they answered us. \n\nIF YOU SEE ANOTHER EMAIL OTHER THAN sender@your-domain.com OUTPUT true BUT IF THERES ONLY sender@your-domain.com THEN OUTPUT false\n\n"
             }
           ]
         }
@@ -1040,7 +1040,7 @@
         "messages": {
           "messageValues": [
             {
-              "message": "=You are an expert in email confirmation. \n\nyour task is to figure out if the sender is not us. \n\nif the sender is not us, then you will output true, and if it is us then output false. \n\nfor context, we are sending an email and after 24 hours, checking to see if they have asnwered us back. If not then we are sending another personalized email after our check.\n\nThere will be one email that is ankit@rapplmedia.in. If thats the only one that means they didn't answer, but if theres two and its not that one then it means they answered us. \n\nIF YOU SEE TWO EMAILS IN THE EMAIL SECTION THAT MEANS ITS TRUE, OTHER WISE IT MEANS FALSE IF THERES ONLY ankit@rapplmedia.in\n\n"
+              "message": "=You are an expert in email confirmation. \n\nyour task is to figure out if the sender is not us. \n\nif the sender is not us, then you will output true, and if it is us then output false. \n\nfor context, we are sending an email and after 24 hours, checking to see if they have asnwered us back. If not then we are sending another personalized email after our check.\n\nThere will be one email that is sender@your-domain.com. If thats the only one that means they didn't answer, but if theres two and its not that one then it means they answered us. \n\nIF YOU SEE TWO EMAILS IN THE EMAIL SECTION THAT MEANS ITS TRUE, OTHER WISE IT MEANS FALSE IF THERES ONLY sender@your-domain.com\n\n"
             }
           ]
         }
@@ -1661,7 +1661,7 @@
         "messages": {
           "messageValues": [
             {
-              "message": "=You are an expert lead data extractor. Your job is to extract the correct domain or company from an email address and compare it to the company name, if provided.\n\nRules:\n- If the email is from a free email provider (e.g., gmail.com, outlook.com, yahoo.com), output the company name that was provided in the form.\n- If the email is from a custom domain (e.g., ankit@rapplmedia.in), output the domain from the email address (e.g., https://rapplemedia.in).\n- Do NOT output the person's name.\n- Only output either the domain or company name \u2014 not both.\n- MAKE SURE YOU include \"www.\" or \"https://\""
+              "message": "=You are an expert lead data extractor. Your job is to extract the correct domain or company from an email address and compare it to the company name, if provided.\n\nRules:\n- If the email is from a free email provider (e.g., gmail.com, outlook.com, yahoo.com), output the company name that was provided in the form.\n- If the email is from a custom domain (e.g., sender@your-domain.com), output the domain from the email address (e.g., https://rapplemedia.in).\n- Do NOT output the person's name.\n- Only output either the domain or company name \u2014 not both.\n- MAKE SURE YOU include \"www.\" or \"https://\""
             }
           ]
         }
@@ -1857,7 +1857,7 @@
       "parameters": {
         "calendar": {
           "__rl": true,
-          "value": "ankit@rapplemedia.in",
+          "value": "sender@your-domain.com",
           "mode": "id"
         },
         "end": "={{ $now.plus(30, 'min') }}",
@@ -1917,7 +1917,7 @@
         "resource": "calendar",
         "calendar": {
           "__rl": true,
-          "value": "=ankit@rapplemedia.in",
+          "value": "=sender@your-domain.com",
           "mode": "id"
         },
         "timeMax": "={{ $now.plus(3, 'day') }}",
@@ -2828,7 +2828,7 @@
           "cachedResultName": "Deals",
           "cachedResultUrl": "https://airtable.com/appvTQ2vXDmYmWGtG/tblw0F2uXKf2w5GnL"
         },
-        "filterByFormula": "={email} = \"ankit@rapplemedia.in\"",
+        "filterByFormula": "={email} = \"sender@your-domain.com\"",
         "options": {}
       },
       "type": "n8n-nodes-base.airtable",
@@ -2851,7 +2851,7 @@
         "operation": "getAll",
         "calendar": {
           "__rl": true,
-          "value": "=ankit@rapplemedia.in",
+          "value": "=sender@your-domain.com",
           "mode": "id",
           "__regex": "(^[a-zA-Z0-9.!#$%&\u2019*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*)"
         },
@@ -2889,7 +2889,7 @@
           "labelIds": [
             "Label_6404049094877547716"
           ],
-          "q": "NOT from:ankit@rapplemedia.in"
+          "q": "NOT from:sender@your-domain.com"
         }
       },
       "type": "n8n-nodes-base.gmailTrigger",

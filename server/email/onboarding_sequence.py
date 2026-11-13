@@ -59,16 +59,18 @@ def _wrap(title: str, body_html: str, cta_label: str, cta_url: str, unsubscribe_
 def _step_welcome(name: Optional[str], unsubscribe_url: str) -> tuple[str, str]:
     greeting = f"Welcome aboard, {name}." if name else "Welcome aboard."
     body = f"""<p>{greeting}</p>
-<p>FounderConsole gives you investor-grade financial diligence in minutes, not weeks.
-Here's the fastest path to value:</p>
-<ol>
-  <li><strong>Run Truth Scan</strong> on your numbers (5 min) &mdash; we find every red flag.</li>
-  <li><strong>Simulate runway</strong> across 1,000 Monte Carlo paths.</li>
-  <li><strong>Get a ranked decision list</strong> from your AI Copilot.</li>
-</ol>
-<p>Tomorrow we'll show you the single highest-leverage move most founders miss in week one.</p>"""
-    return ("Welcome to FounderConsole &mdash; here's your first move",
-            _wrap("Welcome to FounderConsole", body, "Open your dashboard", f"{APP_URL}/dashboard", unsubscribe_url))
+<p>You joined FounderConsole to answer one question: how long your cash lasts, and what changes it.
+That answer takes about five minutes.</p>
+<p><strong>The one thing worth doing today:</strong> open Data Input and enter your real burn and
+balance. It computes straight back: your net burn rate (monthly expenses minus revenue) and your months
+of runway (cash on hand divided by net burn). Five minutes, and you have the number the rest of this
+week is about.</p>
+<p>Everything else here builds on that runway number: the Scenario Simulator, Decision
+Intelligence, Due Diligence Automation and the Investor Room for your next round.</p>
+<p>Tomorrow I'll show you the single highest-leverage move most founders miss in week one.</p>"""
+    return ("Your first five minutes on FounderConsole",
+            _wrap("Start with your real runway number", body, "Open Data Input",
+                  f"{APP_URL}/data", unsubscribe_url))
 
 
 def _step_truth_scan(unsubscribe_url: str) -> tuple[str, str]:
@@ -80,16 +82,21 @@ def _step_truth_scan(unsubscribe_url: str) -> tuple[str, str]:
 
 
 def _step_simulator(unsubscribe_url: str) -> tuple[str, str]:
-    body = """<p>You've seen your numbers. Now stress them.</p>
-<p>The Simulation Engine runs 1,000 Monte Carlo paths across your burn, growth, and gross margin to answer the only question that matters: <strong>how many months until you run out of cash &mdash; and what changes that?</strong></p>
-<p>Try one of these scenarios in two clicks:</p>
+    body = """<p>You've seen your runway number. The useful question is what changes it.</p>
+<p>The Scenario Simulator works through your burn, growth and gross margin round by round, and shows
+you how many months until you run out of cash &mdash; and which lever moves it the most.</p>
+<p>Try the three scenarios founders actually face:</p>
 <ul>
   <li>What if growth slows 30%?</li>
-  <li>What if you cut 20% of headcount?</li>
+  <li>What if you cut your burn rate 20%?</li>
   <li>What if you raise $1M today?</li>
-</ul>"""
-    return ("Stress-test your runway in 60 seconds",
-            _wrap("Simulate the scenarios that scare you", body, "Open Simulation Console", f"{APP_URL}/simulate", unsubscribe_url))
+</ul>
+<p>Run one and read the outcome: how many months of runway you have left, the cash timeline behind
+it, and in the What-If Explorer the variable that moves your runway the most. A couple of minutes, and
+you can re-run it every time an input changes.</p>"""
+    return ("What moves your runway the most?",
+            _wrap("Stress-test the scenarios that scare you", body, "Simulate your scenarios",
+                  f"{APP_URL}/simulate", unsubscribe_url))
 
 
 def _step_copilot(unsubscribe_url: str) -> tuple[str, str]:
@@ -119,17 +126,22 @@ def _step_fundraising(unsubscribe_url: str) -> tuple[str, str]:
 
 
 def _step_feedback(unsubscribe_url: str) -> tuple[str, str]:
-    body = """<p>You've been on FounderConsole for a week. We'd love 90 seconds of your honest reaction.</p>
-<p>Specifically:</p>
+    body = f"""<p>You've had FounderConsole for a week. Two things &mdash; the first takes a minute.</p>
+<p><strong>If you haven't put your real numbers in yet</strong>, that is the step that makes the rest
+of it work. Open <a href="{APP_URL}/data" style="color:#10b981;">Data Input</a> and enter your burn and
+balance; it computes your net burn rate and your months of runway, and everything after it reads off
+those numbers.</p>
+<p><strong>Then tell me the truth.</strong> Three questions:</p>
 <ul>
   <li>What got you to your first "aha" moment?</li>
   <li>What confused you?</li>
   <li>What would you pay for that we don't have yet?</li>
 </ul>
-<p>Reply to this email &mdash; it goes straight to me. Every reply is read.</p>
+<p>Reply to this email &mdash; it goes straight to me, and every reply is read.</p>
 <p>&mdash; The FounderConsole team</p>"""
     return ("How was your first week?",
-            _wrap("Tell us what to build next", body, "Reply to this email", "mailto:hello@founderconsole.ai", unsubscribe_url))
+            _wrap("What would make this worth paying for?", body, "Reply to this email",
+                  "mailto:hello@founderconsole.ai", unsubscribe_url))
 
 
 @dataclass
