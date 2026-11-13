@@ -88,6 +88,9 @@ jobs:
       - name: analytics-single-identity tests
         run: npx tsx server/tests/analytics-single-identity.test.ts
 
+      - name: posthog calls do not send email
+        run: npx tsx server/tests/posthog-no-email-properties.test.ts
+
       - name: session recording consent tests
         run: npx tsx --test server/tests/session-recording-consent.test.ts
 
