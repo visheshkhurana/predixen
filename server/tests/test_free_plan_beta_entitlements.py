@@ -1,15 +1,17 @@
 """Free plan beta entitlements (P0). Spec: PR #196.
 
 Fresh free signups were 403 feature_locked on Truth Scan, simulation and
-Copilot because PLAN_DETAILS[FREE] omitted those features. This only adds
-those three features. The published monthly numbers are unchanged and still
-not counted.
+Copilot because PLAN_DETAILS[FREE] omitted those features. The same entry
+already advertised 3 simulations / month and 10 Copilot messages / month,
+and nothing enforced the numbers.
 
 This test signs up a free account, enters its own financials, and checks:
 
-- Truth Scan run is 200 (not 403), and founder_activated fires with is_sample=false
-- a scenario simulation and the simulate v2 flow are 200 (not 403)
-- a Copilot message is 200 (not 403)
+- Truth Scan run is 200, and founder_activated fires with is_sample=false
+- the 1st simulation is 200; the 4th simulation in the same calendar month
+  is plan_limit_reached (not 403 feature_locked, not an outage)
+- the simulate v2 flow is 200 while the account is still under that cap
+- Copilot messages 1-10 are 200 and the 11th is the same limit refusal
 - a feature Free did not gain (data connectors) is still 403 feature_locked
 - Starter/Growth/Scale features, prices, limits and the Scale trial are the
   values from main
@@ -171,12 +173,25 @@ def test_paid_plans_and_free_numeric_limits_match_main():
     assert TRIAL_PLAN == PlanTier.SCALE
 
 
-def _error_code(response) -> str:
+def _limit_detail(response) -> dict:
     body = response.json()
     detail = body.get("detail", body)
-    if isinstance(detail, dict):
-        return detail.get("error", "")
-    return ""
+    assert isinstance(detail, dict), body
+    return detail
+
+
+def _assert_limit(response, limit_key: str):
+    assert response.status_code == 402, response.text
+    detail = _limit_detail(response)
+    assert detail["error"] == "plan_limit_reached"
+    assert detail["error"] != "feature_locked"
+    assert detail["limit"] == limit_key
+    message = detail["message"].lower()
+    assert "temporarily unavailable" not in message
+    assert "session" not in message
+    assert "expired" not in message
+    assert "month to reset at 00:00 utc on the 1st." in message
+    assert response.status_code != 403
 
 
 @pytest.fixture
@@ -239,6 +254,8 @@ def free_client(monkeypatch):
     monkeypatch.setenv("PAYWALL_ENABLED", "true")
     monkeypatch.delenv("PAYWALL_GRANDFATHER_BEFORE", raising=False)
     monkeypatch.setattr("server.core.subscription.SessionLocal", Session)
+    monkeypatch.setattr("server.core.plan_usage._payments_enabled", lambda: True)
+    monkeypatch.setattr("server.api.simulation_v2.SessionLocal", Session)
 
     captured: list[tuple] = []
 
@@ -313,7 +330,7 @@ def free_client(monkeypatch):
 
     monkeypatch.setattr("server.api.copilot._copilot_chat_inner", _copilot_ok)
 
-    from server.api import auth, companies, copilot, simulation_v2, simulations, truth_scan
+    from server.api import auth, companies, copilot, events, simulation_v2, simulations, truth_scan
     from server.core.db import get_db
     from server.core.subscription import PaywallMiddleware
 
@@ -325,6 +342,7 @@ def free_client(monkeypatch):
     app.include_router(simulations.router)
     app.include_router(simulation_v2.router)
     app.include_router(copilot.router)
+    app.include_router(events.router)
 
     @app.post("/connectors/probe")
     def connectors_probe():
@@ -347,7 +365,7 @@ def free_client(monkeypatch):
         os.remove(path)
 
 
-def test_fresh_free_account_gets_200_on_truth_scan_simulation_and_copilot(free_client):
+def test_fresh_free_account_can_scan_simulate_and_chat_within_limits(free_client):
     client, Session, captured = free_client
     from server.core.security import AUTH_COOKIE_NAME
     from server.models.financial import FinancialRecord
@@ -374,7 +392,7 @@ def test_fresh_free_account_gets_200_on_truth_scan_simulation_and_copilot(free_c
     # Paywall is on: a feature Free did not gain is still locked.
     locked = client.post("/connectors/probe", headers=headers)
     assert locked.status_code == 403, locked.text
-    assert _error_code(locked) == "feature_locked"
+    assert _limit_detail(locked)["error"] == "feature_locked"
 
     company = client.post(
         "/companies",
@@ -424,17 +442,96 @@ def test_fresh_free_account_gets_200_on_truth_scan_simulation_and_copilot(free_c
 
     first = simulate()
     assert first.status_code == 200, first.text
-    assert _error_code(first) != "feature_locked"
+    assert "feature_locked" not in first.text
 
-    # v2 is the /simulate page. The body is an SSE stream, not a JSON error.
+    # v2 is the /simulate page. It shares the 3/month cap and must not 403.
     v2 = client.post("/simulation/v2/run", json={"total_rounds": 6}, headers=headers)
     assert v2.status_code == 200, v2.text
     assert "feature_locked" not in v2.text
 
-    chat = client.post(
+    second = simulate()
+    assert second.status_code == 200, second.text
+
+    fourth = simulate()
+    _assert_limit(fourth, "max_simulations_per_month")
+    assert _limit_detail(fourth)["max"] == 3
+    assert _limit_detail(fourth)["used"] == 3
+
+    for n in range(1, 11):
+        chat = client.post(
+            f"/companies/{company_id}/chat",
+            json={"message": f"What is my runway? ({n})"},
+            headers=headers,
+        )
+        assert chat.status_code == 200, chat.text
+        assert "feature_locked" not in chat.text
+
+    eleventh = client.post(
         f"/companies/{company_id}/chat",
-        json={"message": "What is my runway?"},
+        json={"message": "What is my runway? (11)"},
         headers=headers,
     )
-    assert chat.status_code == 200, chat.text
-    assert _error_code(chat) != "feature_locked"
+    _assert_limit(eleventh, "max_copilot_messages_per_month")
+    assert _limit_detail(eleventh)["max"] == 10
+    assert _limit_detail(eleventh)["used"] == 10
+
+
+def test_post_events_cannot_write_plan_quota_names(free_client):
+    client, Session, _captured = free_client
+    from server.core.security import AUTH_COOKIE_NAME
+    from server.models.analytics_event import AnalyticsEvent
+
+    signup = client.post(
+        "/auth/register",
+        json={
+            "email": "quota-events@example.com",
+            "password": "free-plan-1",
+            "name": "Quota Events",
+        },
+    )
+    assert signup.status_code == 200, signup.text
+    token = signup.json()["access_token"]
+    user_id = signup.json()["user_id"]
+    client.cookies.set(AUTH_COOKIE_NAME, token)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    reserved = client.post(
+        "/events",
+        json={"event_name": "plan_quota_simulation", "meta": {"forged": True}},
+        headers=headers,
+    )
+    assert reserved.status_code == 400, reserved.text
+    assert "reserved" in reserved.text.lower()
+
+    also = client.post(
+        "/events",
+        json={"event_name": "plan_quota_copilot"},
+        headers=headers,
+    )
+    assert also.status_code == 400, also.text
+
+    allowed = client.post(
+        "/events",
+        json={"event_name": "page_viewed", "meta": {"path": "/pricing"}},
+        headers=headers,
+    )
+    assert allowed.status_code == 200, allowed.text
+
+    db = Session()
+    names = [
+        row[0]
+        for row in db.query(AnalyticsEvent.event_name).filter(AnalyticsEvent.user_id == user_id).all()
+    ]
+    db.close()
+    assert names == ["page_viewed"]
+
+
+def test_quotas_not_enforced_while_payments_are_off(monkeypatch):
+    """With no billing provider configured the site promises every feature free
+    during the beta, and there is no way to upgrade, so nothing is counted."""
+    from server.core import plan_usage
+
+    monkeypatch.setattr(plan_usage, "_payments_enabled", lambda: False)
+    # A bare object() would raise if the function touched the database.
+    for kind in (plan_usage.PLAN_QUOTA_SIMULATION, plan_usage.PLAN_QUOTA_COPILOT):
+        assert plan_usage.reserve_monthly_quota(object(), 12345, kind) is None
