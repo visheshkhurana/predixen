@@ -572,7 +572,10 @@ def test_emit_restricts_host_to_the_public_site():
         assert host not in " ".join(str(value) for value in sent.values())
 
 
-def test_lead_captured_properties_never_include_utm_keys():
+def test_lead_captured_utm_keys_come_only_from_first_touch_attribution():
+    # Main (#186) puts first-touch campaign params on lead_captured. They may
+    # appear only as flat top-level ATTRIBUTION_KEYS, never via source_page,
+    # notes, the stored lead row or a nested object.
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -622,19 +625,18 @@ def test_lead_captured_properties_never_include_utm_keys():
     assert capture.call_args.args[0] == "lead_captured"
     properties = capture.call_args.args[2]
 
-    def _assert_no_utm(value: object) -> None:
-        if isinstance(value, dict):
-            for key, item in value.items():
-                assert not str(key).lower().startswith("utm_")
-                _assert_no_utm(item)
-        elif isinstance(value, list):
-            for item in value:
-                _assert_no_utm(item)
+    from server.services.attribution import ATTRIBUTION_KEYS
 
-    _assert_no_utm(properties)
-    blob = " ".join(str(value) for value in properties.values())
+    for key, item in properties.items():
+        assert not isinstance(item, (dict, list)), key
+        if str(key).lower().startswith("utm_"):
+            assert key in ATTRIBUTION_KEYS, key
+            assert item == utm[key], (key, item)
+    others = " ".join(
+        str(value) for key, value in properties.items() if key not in ATTRIBUTION_KEYS
+    )
     for value in (*utm.values(), "utm_source", "utm_campaign", "utm_medium"):
-        assert value not in blob
+        assert value not in others
     assert existing.utm_source == "newsletter"
     assert existing.utm_campaign == "spring-2026"
     assert properties["host"] == "founderconsole.ai"

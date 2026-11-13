@@ -1,5 +1,6 @@
 // One-time script to send founder feedback email via Resend integration
 import { Resend } from 'resend';
+import { loadRecipientEmails } from './ops-recipients';
 
 async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -41,12 +42,7 @@ async function sendEmail() {
 
   const resend = new Resend(apiKey);
 
-  const recipients = [
-    'nikita@founderconsole.ai',
-    'nikita.luther@gmail.com',
-    'nikitafl2024@gmail.com',
-    'vysheshk@gmail.com'
-  ];
+  const recipients = loadRecipientEmails();
 
   const senderEmail = 'FounderConsole <nfl10@founderconsole.ai>';
   const subject = 'Founder Feedback Session - Key Insights & Product Direction for FounderConsole';

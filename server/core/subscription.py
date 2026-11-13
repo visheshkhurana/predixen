@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from server.core.db import get_db, SessionLocal
-from server.core.security import get_current_user
+from server.core.security import get_current_user, is_master_user
 from server.core.plans import (
     PlanTier, Feature, PLAN_DETAILS, TRIAL_DURATION_DAYS, TRIAL_PLAN,
     has_feature, get_plan_limit, minimum_plan_for_feature, FEATURE_LABELS,
@@ -252,7 +252,7 @@ def check_feature_access(feature: str):
         current_user=Depends(get_current_user),
         db: Session = Depends(get_db),
     ):
-        if hasattr(current_user, 'is_master') and current_user.is_master:
+        if is_master_user(current_user):
             return True
 
         sub = get_user_subscription(db, current_user.id)

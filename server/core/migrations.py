@@ -1030,6 +1030,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_subscription_trial_columns(engine)
     ensure_lifecycle_email_tables(engine)
     ensure_lead_consent_columns(engine)
+    ensure_lead_utm_columns(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1063,6 +1064,7 @@ def _apply_lead_consent_ddl(
     *,
     adding: bool,
     done_message: str,
+    label: str = "consent columns",
 ) -> None:
     """Run the lead-consent DDL.
 
@@ -1077,7 +1079,7 @@ def _apply_lead_consent_ddl(
             try:
                 rows = conn.execute(text("PRAGMA table_info(leads)")).fetchall()
             except Exception as e:
-                logger.debug("leads table is missing, skipping consent columns: %s", e)
+                logger.debug("leads table is missing, skipping %s: %s", label, e)
                 return
             existing = {row[1] for row in rows}
             if not existing:
@@ -1124,6 +1126,33 @@ def downgrade_lead_consent_columns(engine: Engine) -> None:
         LEAD_CONSENT_DOWNGRADE_SQL,
         adding=False,
         done_message="Lead consent columns downgrade complete",
+    )
+
+
+# First-touch campaign columns. Nullable, no default, no UPDATE: existing
+# rows stay NULL. IF NOT EXISTS makes a re-run a no-op, including when the
+# columns were added by hand. Startup calls this even when RUN_MIGRATIONS
+# is off. No IP column.
+LEAD_UTM_UPGRADE_SQL = (
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_source VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_medium VARCHAR(200);",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS utm_campaign VARCHAR(200);",
+)
+
+
+def ensure_lead_utm_columns(engine: Engine) -> None:
+    """Campaign fields on leads. Idempotent. Does not update existing rows.
+
+    create_all does not add columns to a table that already exists, and
+    production leaves RUN_MIGRATIONS off, so `_run_deferred_startup` calls
+    this directly.
+    """
+    _apply_lead_consent_ddl(
+        engine,
+        LEAD_UTM_UPGRADE_SQL,
+        adding=True,
+        done_message="Lead utm columns migration complete",
+        label="utm columns",
     )
 
 
