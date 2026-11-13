@@ -80,6 +80,28 @@ STALE_COUNT_PHRASES = (
     "37 production connector",
     'value: 37, suffix: "+"',
     'value="37+"',
+    # 34 until Shiprocket became the 35th connector.
+    "34 data connector",
+    "34 Data Connector",
+    "34 connectors",
+    "34 read-only",
+    "34 integrations",
+    "34 real OAuth",
+    "34 production connector",
+    'value="34+"',
+    "34 data integrations",
+    # 35 until Meta Ads became the 36th connector.
+    "35 data connector",
+    "35 Data Connector",
+    "35 connectors",
+    "35 read-only",
+    "35 integrations",
+    "35 data integrations",
+    "35 real OAuth",
+    "35 production connector",
+    'value: 35, suffix: "+"',
+    'value="35+"',
+    "35+ connect",
 )
 
 
@@ -94,16 +116,16 @@ def _registered_module_names() -> list[str]:
     raise AssertionError("_CONNECTOR_MODULES not found")
 
 
-def test_registry_has_34_connectors():
+def test_registry_has_36_connectors():
     names = _registered_module_names()
-    assert len(names) == 34, names
-    assert len(set(names)) == 34
+    assert len(names) == 36, names
+    assert len(set(names)) == 36
     connectors_pkg.load_all_connectors()
     registered = ConnectorRegistry.get_available_providers()
-    assert len(registered) == 34, sorted(registered)
+    assert len(registered) == 36, sorted(registered)
 
 
-def test_llms_txt_prices_the_free_beta_and_counts_34_connectors():
+def test_llms_txt_prices_the_free_beta_and_counts_36_connectors():
     text = LLMS.read_text()
     lowered = " ".join(text.lower().split())
     assert "every feature is free during the public beta" in lowered
@@ -114,7 +136,7 @@ def test_llms_txt_prices_the_free_beta_and_counts_34_connectors():
     assert "$29" not in text
     assert "$49" not in text
     assert "$99" not in text
-    assert "34 read-only data connectors" in text
+    assert "36 read-only data connectors" in text
     assert "37" not in text
 
 
@@ -137,9 +159,23 @@ def test_marketing_pages_do_not_sell_a_30_day_trial():
 
 
 def test_landing_frames_the_published_plans_as_planned():
+    """Landing shows the real Starter price, framed as planned while billing is off.
+
+    This used to pin "prices below are planned for later" over a Starter $29 /
+    Growth $49 / Scale $99 grid. Those were a draft plan; the owner's final
+    pricing (2026-11-12) is one paid plan, Starter, at the prices in
+    shared/pricing.json. So the retired figures must be gone, the price must be
+    imported rather than retyped, and with payments off the copy must still say
+    the price is planned for later and every feature is free during the beta.
+    """
     text = (ROOT / "client/src/pages/landing.tsx").read_text()
     assert "Starter ($29)" not in text
-    assert "prices below are planned for later" in text
+    for old in ("$29", "$49", "$99"):
+        assert old not in text, f"landing still shows the retired planned price {old}"
+    assert "@/data/public-pricing" in text
+    assert 'plansData?.payments_enabled && plansData?.provider === "razorpay"' in text
+    assert "planned for later" in text
+    assert "free during the public beta" in text
 
 
 def test_current_marketing_copy_does_not_claim_37_connectors():

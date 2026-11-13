@@ -29,10 +29,15 @@ export const TOOL_PAGE_META = {
     description:
       "Calculate LTV, CAC, the LTV:CAC ratio and CAC payback months for SaaS. Graded separately against a named benchmark, because a good ratio with a bad payback is a cash-flow trap. Free, no account required.",
   },
-  "/tools": {
-    title: "Free Startup Finance Tools — Runway, Burn, Dilution, LTV:CAC | FounderConsole",
+  "/tools/d2c-contribution-margin": {
+    title: "D2C Contribution Margin Calculator (CM1, CM2, CM3) in ₹ | FounderConsole",
     description:
-      "Four free startup finance calculators and two more free tools. Runway, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
+      "Free CM1, CM2 and CM3 calculator for Indian D2C brands. Enter AOV, orders, RTO %, COD share, COGS, shipping and ad spend to get contribution margin per order in ₹, MER and break-even MER. No account required.",
+  },
+  "/tools": {
+    title: "Free Startup & D2C Finance Calculators — Runway, CM1/CM2/CM3, Burn, LTV:CAC | FounderConsole",
+    description:
+      "Five free finance calculators for founders and D2C brands, plus two more free tools. Runway, D2C contribution margin, burn multiple, dilution and LTV:CAC — no account, no card, no demo call.",
   },
 } as const satisfies Record<string, ToolPageMeta>;
 

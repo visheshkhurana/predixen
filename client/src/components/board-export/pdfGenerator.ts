@@ -1,3 +1,5 @@
+import { formatCurrencyAbbrev } from '@/lib/utils';
+
 export interface MetricItem {
   label: string;
   value: string;
@@ -101,9 +103,7 @@ export function downloadAsHTML(slides: SlideData[], companyName: string) {
 }
 
 function fmtCurrency(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n.toFixed(0)}`;
+  return formatCurrencyAbbrev(n);
 }
 
 function buildSvgLineChart(
@@ -438,7 +438,7 @@ function buildPrintableHTML(slides: SlideData[], companyName: string): string {
     }
 
     if (slide.content && !slide.narrativeHtml && slide.type !== 'chart' && slide.type !== 'simulation' && slide.type !== 'comparison') {
-      body += `<div style="margin-top:8px;line-height:1.8;color:${COLORS.medium};font-size:14px;white-space:pre-wrap;">${slide.content}</div>`;
+      body += `<div style="margin-top:8px;line-height:1.8;color:${COLORS.medium};font-size:14px;white-space:pre-wrap;">${escHtml(slide.content)}</div>`;
     }
 
     if (slide.imageBase64) {
