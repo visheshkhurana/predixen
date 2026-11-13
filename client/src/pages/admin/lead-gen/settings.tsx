@@ -125,7 +125,7 @@ export default function SettingsPage() {
                 value={form.n8n_api_key}
                 onChange={e => setForm(f => ({ ...f, n8n_api_key: e.target.value }))}
               />
-              <Button type="button" size="icon" variant="outline" onClick={() => setShowKey(s => !s)}>
+              <Button type="button" size="icon" variant="outline" onClick={() => setShowKey(s => !s)} aria-label={showKey ? "Hide key" : "Show key"}>
                 {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
             </div>

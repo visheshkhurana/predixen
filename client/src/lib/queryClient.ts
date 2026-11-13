@@ -1,4 +1,6 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryFunction } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import { createDedupedNotifier } from "./queryErrorToast";
 import { ApiError, safeParseJSON } from "./errors";
 import {
   attemptTokenRefresh,
@@ -169,7 +171,18 @@ export const getQueryFn = <T>(options: {
     }
   };
 
+// Failed fetches must not look like empty data. 401s are left to the session
+// flow; a query can opt out with meta: { suppressErrorToast: true }.
+const notifyQueryError = createDedupedNotifier((description) => {
+  toast({ title: "Couldn't load data", description, variant: "destructive" });
+});
+
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      notifyQueryError(error, query.meta);
+    },
+  }),
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),

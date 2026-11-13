@@ -8,19 +8,6 @@ from server.core.pagination import paginate, create_paginated_response, Paginate
 from server.models.user import User
 from server.models.company import Company
 from server.lib.web_search import search_company_info
-from server.models.conversation import Conversation, ConversationMessage, ConversationRecommendation
-from server.models.scenario import Scenario
-from server.models.financial import FinancialRecord, FinancialMetricPoint, ImportSession
-from server.models.chat import ChatMessage
-from server.models.truth_scan import TruthScan
-from server.models.dataset import Dataset
-from server.models.customer import CustomerRecord
-from server.models.transaction import TransactionRecord
-from server.models.assumption_set import AssumptionSetModel, SimulationCache
-from server.models.company_decision import CompanyDecision, CompanyScenario
-from server.models.company_source import CompanySource, CompanyDriverModel, CompanyWorkstream, CompanyAlert
-from server.models.fundraising import CompanyCapTable, FundraisingRound, InvestorPipeline
-from server.models.scenario_version import MacroEnvironment, SensitivityRun, Recommendation
 from server.models.company_state import CompanyState, compute_snapshot_id
 import json
 import logging
@@ -275,51 +262,12 @@ def delete_company(
         )
     
     try:
-        # Use explicit nested transaction to ensure atomic cascade delete
-        db.begin_nested()
-
-        # Conversation related
-        conversations = db.query(Conversation).filter(Conversation.company_id == company_id).all()
-        for conv in conversations:
-            db.query(ConversationRecommendation).filter(ConversationRecommendation.conversation_id == conv.id).delete(synchronize_session='fetch')
-            db.query(ConversationMessage).filter(ConversationMessage.conversation_id == conv.id).delete(synchronize_session='fetch')
-        db.query(Conversation).filter(Conversation.company_id == company_id).delete(synchronize_session='fetch')
-
-        # Scenario versions and related
-        db.query(MacroEnvironment).filter(MacroEnvironment.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(SensitivityRun).filter(SensitivityRun.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(Recommendation).filter(Recommendation.company_id == company_id).delete(synchronize_session='fetch')
-
-        # Simulation cache (child of assumption_set)
-        assumption_sets = db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).all()
-        for a in assumption_sets:
-            db.query(SimulationCache).filter(SimulationCache.assumption_set_id == a.id).delete(synchronize_session='fetch')
-        db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).delete(synchronize_session='fetch')
-
-        # Company state
-        db.query(CompanyState).filter(CompanyState.company_id == company_id).delete(synchronize_session='fetch')
-
-        # Other related tables
-        db.query(Scenario).filter(Scenario.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(FinancialRecord).filter(FinancialRecord.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(FinancialMetricPoint).filter(FinancialMetricPoint.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(ImportSession).filter(ImportSession.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(ChatMessage).filter(ChatMessage.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(TruthScan).filter(TruthScan.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(Dataset).filter(Dataset.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(CustomerRecord).filter(CustomerRecord.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(TransactionRecord).filter(TransactionRecord.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(CompanyScenario).filter(CompanyScenario.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(CompanyDecision).filter(CompanyDecision.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(CompanySource).filter(CompanySource.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(CompanyDriverModel).filter(CompanyDriverModel.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(CompanyWorkstream).filter(CompanyWorkstream.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(CompanyAlert).filter(CompanyAlert.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(FundraisingRound).filter(FundraisingRound.company_id == company_id).delete(synchronize_session='fetch')
-        db.query(InvestorPipeline).filter(InvestorPipeline.company_id == company_id).delete(synchronize_session='fetch')
-
-        db.delete(company)
+        # Every table with a foreign key to companies (directly or through
+        # another company-owned table) is cleared from FK metadata, so the
+        # cascade cannot drift from the models again.
+        from server.core.company_purge import purge_company
+        db.expunge(company)
+        purge_company(db, company_id)
         db.commit()
     except Exception as e:
         db.rollback()

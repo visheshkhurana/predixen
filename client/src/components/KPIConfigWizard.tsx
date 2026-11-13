@@ -164,6 +164,7 @@ export function KPIConfigWizard({ configs, onConfigChange, className }: KPIConfi
                   onClick={() => moveKPI(kpi.id, 'up')}
                   disabled={index === 0}
                   data-testid={`button-move-up-${kpi.id}`}
+                  aria-label="Move up"
                 >
                   <ChevronUp className="h-3 w-3" />
                 </Button>
@@ -174,6 +175,7 @@ export function KPIConfigWizard({ configs, onConfigChange, className }: KPIConfi
                   onClick={() => moveKPI(kpi.id, 'down')}
                   disabled={index === localConfigs.length - 1}
                   data-testid={`button-move-down-${kpi.id}`}
+                  aria-label="Move down"
                 >
                   <ChevronDown className="h-3 w-3" />
                 </Button>
