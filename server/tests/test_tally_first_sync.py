@@ -105,7 +105,7 @@ def _connected_connector():
         ConnectorConfig(
             provider_id="tally",
             company_id=1,
-            credentials={"tally_url": "http://localhost:9000", "company_name": "Acme"},
+            credentials={"tally_url": "http://tally.example.com:9000", "company_name": "Acme"},
         )
     )
     connector._authenticated = True

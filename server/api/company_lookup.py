@@ -2,6 +2,12 @@
 Company lookup API using Perplexity AI to fetch business details from website.
 """
 import os
+import re
+import threading
+import time
+from collections import defaultdict, deque
+from urllib.parse import urlsplit
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -14,6 +20,73 @@ router = APIRouter(prefix="/lookup", tags=["lookup"])
 
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY")
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
+
+# Each lookup spends a paid Perplexity call, so it is capped per user on top of
+# the per-IP API limit. In-process (one Railway replica); a restart resets it.
+LOOKUP_RATE_LIMIT = int(os.environ.get("COMPANY_LOOKUP_RATE_LIMIT", "10"))
+LOOKUP_RATE_WINDOW_SECONDS = 3600
+
+# A registrable hostname: dot-separated labels and an alphabetic (or punycode) TLD.
+_DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)(?:(?!-)[a-z0-9-]{1,63}(?<!-)\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$"
+)
+
+
+class _SlidingWindowLimiter:
+    """Per-key sliding window, in process."""
+
+    def __init__(self):
+        self._hits = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def allow(self, key, limit: int, window: float) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            hits = self._hits[key]
+            while hits and now - hits[0] >= window:
+                hits.popleft()
+            if len(hits) >= limit:
+                return False
+            hits.append(now)
+            if len(self._hits) > 10000:
+                for stale in [k for k, q in self._hits.items() if not q or now - q[-1] >= window]:
+                    self._hits.pop(stale, None)
+            return True
+
+    def reset(self):
+        with self._lock:
+            self._hits.clear()
+
+
+_lookup_limiter = _SlidingWindowLimiter()
+
+
+def normalize_website(raw: str) -> str:
+    """Return an http(s) URL on a real domain, or raise HTTPException(400).
+
+    The value is interpolated into an LLM prompt, so anything that is not a
+    website (free text, credentials, a bare word like "localhost") is refused.
+    """
+    website = (raw or "").strip()
+    if not website:
+        raise HTTPException(status_code=400, detail="Website URL is required")
+    if any(ch.isspace() for ch in website) or any(ord(ch) < 0x20 for ch in website):
+        raise HTTPException(status_code=400, detail="Website URL is not valid")
+    if not website.lower().startswith(("http://", "https://")):
+        website = f"https://{website}"
+    try:
+        parts = urlsplit(website)
+        host = (parts.hostname or "").lower().rstrip(".")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Website URL is not valid")
+    if (
+        parts.scheme.lower() not in ("http", "https")
+        or parts.username
+        or parts.password
+        or not _DOMAIN_RE.match(host)
+    ):
+        raise HTTPException(status_code=400, detail="Website URL is not valid")
+    return website
 
 
 class WebsiteLookupRequest(BaseModel):
@@ -47,19 +120,20 @@ async def lookup_company_from_website(
     """
     Use Perplexity AI to fetch company details from a website URL.
     """
+    website = normalize_website(request.website)
+
+    if not _lookup_limiter.allow(
+        getattr(current_user, "id", None), LOOKUP_RATE_LIMIT, LOOKUP_RATE_WINDOW_SECONDS
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many company lookups. Please try again later.",
+            headers={"Retry-After": str(LOOKUP_RATE_WINDOW_SECONDS)},
+        )
+
     if not PERPLEXITY_API_KEY:
         raise HTTPException(status_code=500, detail="Perplexity API key not configured")
-    
-    website = request.website.strip()
-    if not website:
-        raise HTTPException(status_code=400, detail="Website URL is required")
-    if any(ch.isspace() for ch in website):
-        raise HTTPException(status_code=400, detail="Website URL is not valid")
 
-    # Ensure URL has protocol
-    if not website.startswith(('http://', 'https://')):
-        website = f"https://{website}"
-    
     prompt = f"""Analyze the company website at {website} and provide the following information in a structured format:
 
 1. Company Name: The official company name

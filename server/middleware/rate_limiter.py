@@ -6,6 +6,7 @@ Stale entries are cleaned up by a background task every 5 minutes.
 """
 
 import os
+import re
 import asyncio
 import ipaddress
 import threading
@@ -233,6 +234,26 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     UPLOAD_PATHS = {"/csv-import", "/api/upload"}
     HEALTH_PATHS = {"/health", "/"}
     SIMULATION_PATHS = {"/api/simulations"}
+    # Express strips /api before proxying, so FastAPI sees "/scenarios/7/simulate",
+    # never "/api/scenarios/...". These patterns run on the path with any leading
+    # /api removed (see _strip_api), and only for POST: the GET siblings (job
+    # polling, version lists, chat history) stay in the general bucket.
+    SIMULATION_POST_PATTERNS = (
+        re.compile(r"^/simulations/(run|sensitivity)$"),
+        re.compile(r"^/scenarios/[^/]+/simulate$"),
+        re.compile(r"^/companies/[^/]+/simulate(-[a-z-]+)?$"),
+        re.compile(r"^/companies/[^/]+/sensitivity-analysis$"),
+    )
+    # Each request spends a paid model call.
+    LLM_POST_PATTERNS = (
+        re.compile(r"^/companies/[^/]+/(chat|quick-chat)$"),
+        re.compile(r"^/companies/[^/]+/doc-generator/generate$"),
+        re.compile(r"^/companies/[^/]+/competitors/[^/]+/scan$"),
+        re.compile(r"^/lookup/company-from-website$"),
+        re.compile(r"^/simulation-copilot/(prompt|narrative)/[^/]+$"),
+        re.compile(r"^/explain-simulation$"),
+        re.compile(r"^/llm/(chat|quick-chat|smart-chat|web-search)$"),
+    )
     # Express strips the /api prefix before FastAPI sees the request. Both
     # forms are listed so a direct hit and a proxied hit share this cap.
     # The number is a class constant. Lead capture does not read an environment variable.
@@ -249,6 +270,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         rate_limit_upload: int = 10,
         rate_limit_admin_login: int = 3,
         rate_limit_simulation: int = 10,
+        rate_limit_llm: int = 20,
     ):
         super().__init__(app)
 
@@ -257,11 +279,12 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         self.rate_limit_api = int(os.getenv("RATE_LIMIT_API", str(rate_limit_api)))
         self.rate_limit_upload = int(os.getenv("RATE_LIMIT_UPLOAD", str(rate_limit_upload)))
         self.rate_limit_simulation = int(os.getenv("RATE_LIMIT_SIMULATION", str(rate_limit_simulation)))
+        self.rate_limit_llm = int(os.getenv("RATE_LIMIT_LLM", str(rate_limit_llm)))
 
         logger.info(
             f"Rate limiter initialized - Auth: {self.rate_limit_auth}/min, "
             f"API: {self.rate_limit_api}/min, Upload: {self.rate_limit_upload}/min, "
-            f"Simulation: {self.rate_limit_simulation}/min"
+            f"Simulation: {self.rate_limit_simulation}/min, LLM: {self.rate_limit_llm}/min"
         )
 
     def _start_cleanup_task(self):
@@ -294,6 +317,15 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             headers={"Retry-After": str(retry_after)},
         )
 
+    @staticmethod
+    def _strip_api(path: str) -> str:
+        """Drop a leading /api and a trailing slash so direct and proxied hits match."""
+        if path == "/api" or path.startswith("/api/"):
+            path = path[4:] or "/"
+        if len(path) > 1:
+            path = path.rstrip("/") or "/"
+        return path
+
     def _get_category(self, request: Request) -> Tuple[str, int]:
         path = request.url.path
 
@@ -314,6 +346,13 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             return ("simulation", self.rate_limit_simulation)
         if "/simulate" in path and path.startswith("/api/scenarios"):
             return ("simulation", self.rate_limit_simulation)
+
+        if request.method == "POST":
+            bare = self._strip_api(path)
+            if any(p.match(bare) for p in self.LLM_POST_PATTERNS):
+                return ("llm", self.rate_limit_llm)
+            if any(p.match(bare) for p in self.SIMULATION_POST_PATTERNS):
+                return ("simulation", self.rate_limit_simulation)
 
         if any(upload_path in path for upload_path in self.UPLOAD_PATHS):
             return ("upload", self.rate_limit_upload)

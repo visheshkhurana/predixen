@@ -1,13 +1,14 @@
 """Outbound target checks for URLs and hosts that come from user input.
 
 Connector credentials can name a server (base_url, instance_url, store_url,
-endpoint_url, host) or a tenant label that is spliced into a vendor hostname
+endpoint_url, tally_url, host) or a tenant label that is spliced into a vendor hostname
 (shop_domain, site, company_domain, account_id). Both are validated before a
 connector is built.
 """
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import re
 import socket
@@ -20,11 +21,15 @@ class UnsafeTargetError(ValueError):
 
 
 # Fields whose value is a full URL.
-URL_FIELDS = ("base_url", "instance_url", "store_url", "endpoint_url", "api_url", "url")
+URL_FIELDS = ("base_url", "instance_url", "store_url", "endpoint_url", "api_url", "url", "tally_url")
 # Fields whose value is a bare hostname.
 HOST_FIELDS = ("host",)
 # Fields spliced into a vendor hostname as a label.
 LABEL_FIELDS = ("shop_domain", "site", "company_domain", "account_id")
+
+# httpx clients built on a user-supplied base URL. A public host must not be
+# able to bounce the request to an internal one with a redirect.
+SAFE_CLIENT_KWARGS = {"follow_redirects": False}
 
 _LABEL_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,252})$")
 
@@ -103,6 +108,15 @@ def assert_public_url(url: Optional[str], *, resolver=_resolve, allow_unresolved
     except ValueError:
         raise UnsafeTargetError("URL is not valid")
     assert_public_host(parts.hostname, resolver=resolver, allow_unresolved=allow_unresolved)
+
+
+async def assert_public_url_before_request(url: Optional[str], *, resolver=_resolve) -> None:
+    """Full check right before a connector's first request to a user-supplied URL.
+
+    Construction runs with ``allow_unresolved=True``. Here the name must resolve,
+    and every address it resolves to must be public. DNS runs off the event loop.
+    """
+    await asyncio.to_thread(assert_public_url, url, resolver=resolver, allow_unresolved=False)
 
 
 def assert_safe_label(value: Optional[str]) -> None:
