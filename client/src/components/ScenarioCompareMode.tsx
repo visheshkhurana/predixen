@@ -297,7 +297,7 @@ export function ScenarioCompareMode({ scenarios, selectedIds, onClose, onSelectS
             </span>
             <Badge variant="outline" className="text-[10px]">{columns.length} scenarios</Badge>
           </div>
-          <Button size="icon" variant="ghost" onClick={onClose} data-testid="button-compare-close">
+          <Button size="icon" variant="ghost" onClick={onClose} data-testid="button-compare-close" aria-label="Close">
             <X className="h-4 w-4" />
           </Button>
         </div>

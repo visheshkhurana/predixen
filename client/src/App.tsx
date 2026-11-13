@@ -22,6 +22,7 @@ import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
 import { withGtagPage } from "@/lib/analytics-url";
+import { isDemoEmail } from "@/lib/demo";
 import { captureFirstTouchAttribution } from "@/lib/attribution";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
 import { initXAds } from "@/lib/xads";
@@ -354,8 +355,8 @@ function Router() {
         <Route path="/for/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><IndustryLandingPage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
         <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
-        {/* HAG-449: the entry point the hero's "View Demo" uses. It logs into the
-            shared sample account and drops the visitor straight into /overview in
+        {/* HAG-449: the entry point the hero's "View Demo" uses. It opens a private
+            demo workspace (own copy of the sample company) and drops the visitor straight into /overview in
             Demo Mode — no login form, no "Welcome back". /demo stays as the page
             that explains what the demo is. */}
         <Route path="/demo/enter">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoRedirectPage /></Suspense>}</Route>
@@ -422,7 +423,7 @@ function Router() {
       <Route path="/data">
         {() => <AuthenticatedRoute component={DataInputPage} />}
       </Route>
-      {/* Unmounted pages/dashboard.tsx still links here; live ingest is /data. */}
+      {/* Legacy alias kept for old bookmarks; live ingest is /data. */}
       <Route path="/ingest">
         {() => <Redirect to="/data" />}
       </Route>
@@ -784,10 +785,11 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
               placeholder="Ask about your financials..."
+              aria-label="Ask the copilot a question"
               className="flex-1"
               data-testid="input-copilot-drawer"
             />
-            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} data-testid="button-copilot-send">
+            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} aria-label="Send message" data-testid="button-copilot-send">
               <Send className="h-4 w-4" />
             </Button>
           </div>
@@ -942,7 +944,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative z-[1]">
           <BackendStatusBanner />
           <TrialBanner />
-          {user?.email === 'demo@founderconsole.ai' && (
+          {isDemoEmail(user?.email) && (
             <div className="no-print flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-400" data-testid="banner-demo-mode">
               <FlaskConical className="h-3.5 w-3.5 shrink-0" />
               {/*
@@ -974,7 +976,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </span>
             </div>
           )}
-          {currentCompany?.is_sample && user?.email !== 'demo@founderconsole.ai' && (
+          {currentCompany?.is_sample && !isDemoEmail(user?.email) && (
             <SampleDataBanner />
           )}
           <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b border-white/[0.06] bg-background/60 backdrop-blur-xl sticky top-0 z-50">
@@ -1065,7 +1067,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               {getConfidenceBadge()}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" data-testid="button-user-avatar">
+                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" aria-label="Account menu" data-testid="button-user-avatar">
                     <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
                       {user?.email?.charAt(0)?.toUpperCase() || 'U'}
                     </div>

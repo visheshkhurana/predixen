@@ -2,21 +2,32 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
+import asyncio
 import httpx
 import os
+import hashlib
 import json
 import logging
+import re
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.api.admin import require_platform_admin
 from server.models.user import User
 
 router = APIRouter(tags=["benchmark_search"])
 logger = logging.getLogger(__name__)
 
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
-BENCHMARK_CACHE: Dict[str, Dict[str, Any]] = {}
+# Bounded LRU: keys are normalized user input, so an unbounded dict grows
+# with every distinct industry string anyone types.
+BENCHMARK_CACHE: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 CACHE_TTL_HOURS = 24
+CACHE_MAX_ENTRIES = 128
+_KEY_MAX_LEN = 64
+
+GENERIC_DEFAULTS_SOURCE = "Generic SaaS defaults (not industry-specific)"
 
 
 class BenchmarkSearchRequest(BaseModel):
@@ -42,10 +53,46 @@ class BenchmarkSearchResponse(BaseModel):
     sources: List[str]
     last_updated: str
     is_cached: bool = False
+    # True when live research failed and these are generic SaaS defaults,
+    # not benchmarks for the requested industry/stage.
+    is_fallback: bool = False
+    note: Optional[str] = None
+
+
+def _normalize_key_part(value: str) -> str:
+    """Collision-safe key part for a user-typed industry or stage.
+
+    A slug alone is lossy twice: every all-non-ASCII input reduced to "" (so
+    two different industries shared the key "|seed"), and names longer than
+    _KEY_MAX_LEN collided on their first 64 characters. The slug stays, for a
+    readable key, but a hash of the full normalized value always follows it.
+    """
+    normalized = " ".join((value or "").split()).casefold()
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    slug = re.sub(r"[^a-z0-9]+", "_", normalized).strip("_")[:_KEY_MAX_LEN]
+    return f"{slug}:{digest}" if slug else digest
 
 
 def get_cache_key(industry: str, stage: str) -> str:
-    return f"{industry.lower().strip()}_{stage.lower().strip()}"
+    return f"{_normalize_key_part(industry)}|{_normalize_key_part(stage)}"
+
+
+def cache_get(key: str) -> Optional[Dict[str, Any]]:
+    entry = BENCHMARK_CACHE.get(key)
+    if entry is None:
+        return None
+    if not is_cache_valid(entry):
+        BENCHMARK_CACHE.pop(key, None)
+        return None
+    BENCHMARK_CACHE.move_to_end(key)
+    return entry
+
+
+def cache_put(key: str, entry: Dict[str, Any]) -> None:
+    BENCHMARK_CACHE[key] = entry
+    BENCHMARK_CACHE.move_to_end(key)
+    while len(BENCHMARK_CACHE) > CACHE_MAX_ENTRIES:
+        BENCHMARK_CACHE.popitem(last=False)
 
 
 def is_cache_valid(cache_entry: Dict[str, Any]) -> bool:
@@ -119,14 +166,14 @@ Format each metric with p25, p50, p75 values. Indicate whether higher or lower i
         return response.json()
 
 
-async def parse_benchmarks_with_ai(perplexity_response: Dict[str, Any], industry: str, stage: str) -> BenchmarkSearchResponse:
+async def parse_benchmarks_with_ai(
+    perplexity_response: Dict[str, Any],
+    industry: str,
+    stage: str,
+    user_id: Optional[int] = None,
+) -> BenchmarkSearchResponse:
     content = perplexity_response.get("choices", [{}])[0].get("message", {}).get("content", "")
     citations = perplexity_response.get("citations", [])
-    
-    openai_api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    
-    if not openai_api_key:
-        return parse_benchmarks_fallback(content, citations, industry, stage)
     
     parse_prompt = f"""Parse the following benchmark data into a structured JSON format.
 Extract the percentile values (p25, p50, p75) for each metric.
@@ -144,8 +191,7 @@ Return a JSON object with this exact structure:
             "p75": <number>,
             "direction": "higher_is_better" or "lower_is_better",
             "confidence": "high" or "medium" or "low"
-        }},
-        // ... more metrics
+        }}
     ]
 }}
 
@@ -159,81 +205,97 @@ Expected metrics (use these exact names):
 - net_revenue_retention (NRR %)
 - cac_payback_months (CAC payback in months)
 
-If a metric is not found in the data, use reasonable industry defaults.
+Only include a metric when the raw data above states its values. Do not
+invent, estimate or fill in defaults for metrics that are missing.
 Only return valid JSON, no other text."""
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {openai_api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "gpt-5-mini",
-                "messages": [
-                    {"role": "system", "content": "You are a data parser. Return only valid JSON."},
-                    {"role": "user", "content": parse_prompt}
-                ],
-                "temperature": 0,
-                "response_format": {"type": "json_object"}
-            }
+    try:
+        from server.lib.llm.llm_router import LLMRouter, TaskType
+
+        llm = LLMRouter(user_id=user_id)
+        result = await asyncio.to_thread(
+            llm.chat,
+            messages=[
+                {"role": "system", "content": "You are a data parser. Return only valid JSON."},
+                {"role": "user", "content": parse_prompt},
+            ],
+            task_type=TaskType.DATA_PROCESSING,
+            temperature=0,
+            max_tokens=2048,
         )
-        
-        if response.status_code != 200:
-            logger.warning(f"OpenAI parsing failed, using fallback: {response.status_code}")
-            return parse_benchmarks_fallback(content, citations, industry, stage)
-        
-        result = response.json()
-        parsed_content = result.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-        
-        try:
-            parsed_data = json.loads(parsed_content)
-            benchmarks = [
-                BenchmarkData(
-                    metric_name=b["metric_name"],
+        parsed_data = _extract_json_object(result.get("content") or "")
+        benchmarks = []
+        for b in parsed_data.get("benchmarks", []) or []:
+            try:
+                benchmarks.append(BenchmarkData(
+                    metric_name=str(b["metric_name"]),
                     p25=float(b["p25"]),
                     p50=float(b["p50"]),
                     p75=float(b["p75"]),
                     direction=b.get("direction", "higher_is_better"),
                     source=citations[0] if citations else None,
-                    confidence=b.get("confidence", "medium")
-                )
-                for b in parsed_data.get("benchmarks", [])
-            ]
-            
-            return BenchmarkSearchResponse(
-                industry=industry,
-                stage=stage,
-                benchmarks=benchmarks,
-                sources=citations[:5],
-                last_updated=datetime.now().isoformat(),
-                is_cached=False
-            )
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.warning(f"JSON parsing failed: {e}")
-            return parse_benchmarks_fallback(content, citations, industry, stage)
+                    confidence=b.get("confidence", "medium"),
+                ))
+            except (KeyError, TypeError, ValueError):
+                continue
+    except Exception as e:
+        logger.warning(f"Benchmark parsing failed, using generic defaults: {e}")
+        return parse_benchmarks_fallback(content, citations, industry, stage)
+
+    if not benchmarks:
+        return parse_benchmarks_fallback(content, citations, industry, stage)
+
+    return BenchmarkSearchResponse(
+        industry=industry,
+        stage=stage,
+        benchmarks=benchmarks,
+        sources=citations[:5],
+        last_updated=datetime.now().isoformat(),
+        is_cached=False,
+    )
+
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    text = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end <= start:
+            raise
+        data = json.loads(text[start:end + 1])
+    if not isinstance(data, dict):
+        raise ValueError("expected a JSON object")
+    return data
 
 
 def parse_benchmarks_fallback(content: str, citations: List[str], industry: str, stage: str) -> BenchmarkSearchResponse:
     default_benchmarks = [
-        BenchmarkData(metric_name="revenue_growth_mom", p25=5, p50=10, p75=20, direction="higher_is_better", confidence="low"),
-        BenchmarkData(metric_name="gross_margin", p25=60, p50=70, p75=80, direction="higher_is_better", confidence="low"),
-        BenchmarkData(metric_name="burn_multiple", p25=4, p50=2.5, p75=1.5, direction="lower_is_better", confidence="low"),
-        BenchmarkData(metric_name="runway_months", p25=12, p50=18, p75=24, direction="higher_is_better", confidence="low"),
-        BenchmarkData(metric_name="ltv_cac_ratio", p25=2, p50=3, p75=5, direction="higher_is_better", confidence="low"),
-        BenchmarkData(metric_name="churn_rate", p25=8, p50=5, p75=3, direction="lower_is_better", confidence="low"),
-        BenchmarkData(metric_name="net_revenue_retention", p25=90, p50=100, p75=120, direction="higher_is_better", confidence="low"),
-        BenchmarkData(metric_name="cac_payback_months", p25=18, p50=12, p75=8, direction="lower_is_better", confidence="low"),
+        BenchmarkData(metric_name="revenue_growth_mom", p25=5, p50=10, p75=20, direction="higher_is_better", source=GENERIC_DEFAULTS_SOURCE, confidence="low"),
+        BenchmarkData(metric_name="gross_margin", p25=60, p50=70, p75=80, direction="higher_is_better", source=GENERIC_DEFAULTS_SOURCE, confidence="low"),
+        BenchmarkData(metric_name="burn_multiple", p25=4, p50=2.5, p75=1.5, direction="lower_is_better", source=GENERIC_DEFAULTS_SOURCE, confidence="low"),
+        BenchmarkData(metric_name="runway_months", p25=12, p50=18, p75=24, direction="higher_is_better", source=GENERIC_DEFAULTS_SOURCE, confidence="low"),
+        BenchmarkData(metric_name="ltv_cac_ratio", p25=2, p50=3, p75=5, direction="higher_is_better", source=GENERIC_DEFAULTS_SOURCE, confidence="low"),
+        BenchmarkData(metric_name="churn_rate", p25=8, p50=5, p75=3, direction="lower_is_better", source=GENERIC_DEFAULTS_SOURCE, confidence="low"),
+        BenchmarkData(metric_name="net_revenue_retention", p25=90, p50=100, p75=120, direction="higher_is_better", source=GENERIC_DEFAULTS_SOURCE, confidence="low"),
+        BenchmarkData(metric_name="cac_payback_months", p25=18, p50=12, p75=8, direction="lower_is_better", source=GENERIC_DEFAULTS_SOURCE, confidence="low"),
     ]
     
     return BenchmarkSearchResponse(
         industry=industry,
         stage=stage,
         benchmarks=default_benchmarks,
-        sources=citations[:5] if citations else ["Default SaaS benchmarks"],
+        sources=[GENERIC_DEFAULTS_SOURCE],
         last_updated=datetime.now().isoformat(),
-        is_cached=False
+        is_cached=False,
+        is_fallback=True,
+        note=(
+            f"Live benchmarks for {industry} ({stage}) are unavailable right now. "
+            "These are generic SaaS defaults, not figures for this industry."
+        ),
     )
 
 
@@ -244,9 +306,9 @@ async def search_industry_benchmarks(
     current_user: User = Depends(get_current_user)
 ):
     cache_key = get_cache_key(request.industry, request.stage)
-    
-    if cache_key in BENCHMARK_CACHE and is_cache_valid(BENCHMARK_CACHE[cache_key]):
-        cached = BENCHMARK_CACHE[cache_key]
+
+    cached = cache_get(cache_key)
+    if cached is not None:
         return BenchmarkSearchResponse(
             industry=cached["industry"],
             stage=cached["stage"],
@@ -255,27 +317,32 @@ async def search_industry_benchmarks(
             last_updated=cached["last_updated"],
             is_cached=True
         )
-    
+
+    # Cache hits are free; only a miss spends Perplexity + LLM calls.
+    from server.core.llm_rate_limit import check_llm_rate_limit
+    check_llm_rate_limit(current_user.id)
+
     try:
         perplexity_response = await search_benchmarks_with_perplexity(request.industry, request.stage)
-        result = await parse_benchmarks_with_ai(perplexity_response, request.industry, request.stage)
-        
-        BENCHMARK_CACHE[cache_key] = {
+        result = await parse_benchmarks_with_ai(
+            perplexity_response, request.industry, request.stage, user_id=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Benchmark search failed: {e}")
+        return parse_benchmarks_fallback("", [], request.industry, request.stage)
+
+    # Generic defaults are never cached as if they were this industry's data.
+    if not result.is_fallback:
+        cache_put(cache_key, {
             "industry": result.industry,
             "stage": result.stage,
             "benchmarks": [b.model_dump() for b in result.benchmarks],
             "sources": result.sources,
             "last_updated": result.last_updated,
             "timestamp": datetime.now().isoformat()
-        }
-        
-        return result
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Benchmark search failed: {e}")
-        return parse_benchmarks_fallback("", [], request.industry, request.stage)
+        })
+
+    return result
 
 
 @router.get("/benchmarks/industries")
@@ -305,7 +372,7 @@ async def get_supported_industries(
 
 @router.delete("/benchmarks/cache")
 async def clear_benchmark_cache(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_platform_admin)
 ):
     BENCHMARK_CACHE.clear()
     return {"message": "Benchmark cache cleared", "cleared_at": datetime.now().isoformat()}
