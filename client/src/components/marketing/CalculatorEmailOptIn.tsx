@@ -22,10 +22,8 @@ export const CALCULATOR_OPT_IN_LABEL =
 export const CALCULATOR_TIPS_ONLY_LABEL =
   "We'll keep you posted with monthly founder finance tips";
 
-type TrackValue = string | number | boolean | null | undefined;
-
 export type CalculatorEmailOptInProps = {
-  /** Short lead source, also the lead_captured location. */
+  /** Short lead source. Reported as lead_form_submitted location. */
   source: string;
   /** Public path the result was shown on. Stored as source_page. */
   sourcePage: string;
@@ -34,8 +32,6 @@ export type CalculatorEmailOptInProps = {
   runwayMonths?: string;
   runwayDate?: string;
   monthlyBurn?: string;
-  /** Extra lead_captured properties. host is always added after these. */
-  trackExtra?: Record<string, TrackValue>;
   /** False until the calculator is showing a result. */
   visible?: boolean;
   /**
@@ -78,7 +74,6 @@ function CalculatorEmailOptInForm({
   runwayMonths,
   runwayDate,
   monthlyBurn,
-  trackExtra,
   visible = true,
   resultByEmail = false,
   className,
@@ -95,6 +90,7 @@ function CalculatorEmailOptInForm({
     e.preventDefault();
     if (sendState === "sending" || !email.trim() || !consented) return;
     setSendState("sending");
+    let saved = false;
     try {
       const distinctId = await getBrowserDistinctId();
       const res = await fetch("/api/leads", {
@@ -116,16 +112,20 @@ function CalculatorEmailOptInForm({
         }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      setSendState("done");
-      trackFunnel("lead_captured", {
-        location: source,
-        ...trackExtra,
-        host: window.location.host,
-      });
+      saved = true;
     } catch {
       // The result is still on screen. Ask them to try again, nothing else.
       setSendState("error");
     }
+    if (!saved) return;
+    setSendState("done");
+    // After the save, not inside its try: a telemetry throw must not flip a
+    // saved lead back to the error state. The conversion event stays on the
+    // server. This form event is location and host only.
+    trackFunnel("lead_form_submitted", {
+      location: source,
+      host: window.location.host,
+    });
   }
 
   if (!visible) return null;

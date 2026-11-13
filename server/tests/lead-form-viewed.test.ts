@@ -1,6 +1,7 @@
-// Growth E4: lead form view → capture. lead_captured already fires on submit
-// through trackFunnel (PostHog + GA4 + X). The view must be PostHog-only, once
-// per mount, and only after the form is actually on screen.
+// Growth E4: lead form view → submit. lead_form_submitted fires on a successful
+// save through trackFunnel (PostHog + GA4 + X). lead_captured is server-only.
+// The view must be PostHog-only, once per mount, and only after the form is
+// actually on screen.
 //
 // Run: npx tsx server/tests/lead-form-viewed.test.ts
 import test from "node:test";
@@ -70,8 +71,10 @@ test("both lead forms wire lead_form_viewed with the lead_captured location", ()
   assert.match(runway, /CalculatorEmailOptIn/);
   assert.match(survival, /CalculatorEmailOptIn/);
 
-  // Capture stays on trackFunnel. The view must not join that path.
-  assert.match(optIn, /trackFunnel\(\s*"lead_captured"/);
+  // The form event stays on trackFunnel. The view must not join that path.
+  // lead_captured is not a client event.
+  assert.match(optIn, /trackFunnel\(\s*"lead_form_submitted"/);
+  assert.doesNotMatch(optIn, /lead_captured/);
   assert.doesNotMatch(optIn, /trackFunnel\(\s*"lead_form_viewed"/);
   assert.doesNotMatch(runway, /trackFunnel\(\s*"lead_form_viewed"/);
   assert.doesNotMatch(survival, /trackFunnel\(\s*"lead_form_viewed"/);

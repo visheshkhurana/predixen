@@ -89,7 +89,9 @@ def test_opt_in_copy_is_unchecked_and_names_privacy_and_unsubscribe():
     assert "consent_at:" in src
     assert "source_page: sourcePage" in src
     assert "host: window.location.host" in src
-    assert 'trackFunnel(\n        "lead_captured"' in src or 'trackFunnel("lead_captured"' in src
+    assert 'trackFunnel("lead_form_submitted"' in src
+    assert "lead_captured" not in src
+    assert "trackExtra" not in src
 
 
 def test_each_public_calculator_offers_the_opt_in_after_a_result():
