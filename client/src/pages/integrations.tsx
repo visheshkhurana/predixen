@@ -34,7 +34,8 @@ import {
   Truck,
   Megaphone,
 } from "lucide-react";
-import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot, SiStripe } from "react-icons/si";
+import { SiQuickbooks, SiXero, SiHubspot, SiStripe } from "react-icons/si";
+import { FaSalesforce } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
 import { apiRequest } from "@/lib/queryClient";
 import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
@@ -79,7 +80,7 @@ type ConnectorCategory = "all" | "recommended" | "revenue" | "accounting" | "hr"
 const providerIcons: Record<string, React.ReactNode> = {
   quickbooks: <SiQuickbooks className="h-6 w-6" />,
   xero: <SiXero className="h-6 w-6" />,
-  salesforce: <SiSalesforce className="h-6 w-6" />,
+  salesforce: <FaSalesforce className="h-6 w-6" />,
   hubspot: <SiHubspot className="h-6 w-6" />,
   stripe: <SiStripe className="h-6 w-6" />,
   plaid: <Link2 className="h-6 w-6" />,
