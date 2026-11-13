@@ -214,6 +214,12 @@ jobs:
       - name: signup CTAs open the register tab
         run: npx tsx server/tests/signup-cta-register-tab.test.ts
 
+      - name: security headers policy (CSP sockets, HSTS)
+        run: npx tsx --test server/tests/security-headers.test.ts
+
+      - name: final error handler after static/SPA serving
+        run: npx tsx --test server/tests/http-hygiene.test.ts
+
       - name: client money/finance lib tests
         run: npx tsx --test client/src/lib/__tests__/money.test.ts client/src/lib/__tests__/finance.test.ts
 

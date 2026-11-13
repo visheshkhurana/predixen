@@ -617,6 +617,13 @@ def health():
         pass
 
     overall_status = "healthy" if db_healthy and _startup_state["ready"] else "degraded"
+    # Public endpoint. The raw startup exception can carry file paths, module
+    # names or connection strings, so it goes to the log; the body only says
+    # whether there was one. scripts/launch_gate.sh still reads
+    # "startup_error":null on a clean start.
+    startup_error = _startup_state["error"]
+    if startup_error:
+        logger.warning("Health check: startup error recorded: %s", startup_error)
     return {
         "status": overall_status,
         "version": APP_VERSION,
@@ -627,7 +634,7 @@ def health():
         "routers_loaded": _startup_state["routers_loaded"],
         "database": "connected" if db_healthy else "unavailable",
         "redis": "connected" if redis_healthy else "unavailable",
-        "startup_error": _startup_state["error"],
+        "startup_error": "startup failed; see server logs" if startup_error else None,
     }
 
 print(f"[main.py] Module load complete (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)

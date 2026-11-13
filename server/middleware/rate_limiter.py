@@ -308,7 +308,12 @@ def _is_llm(path: str, method: str) -> bool:
         "/memo/export",
         "/web-search",
         "/copilot",
+        "/doc-generator/generate",
+        "/lookup/company-from-website",
+        "/explain-simulation",
     )
+    if "/competitors/" in path and path.endswith("/scan"):
+        return True
     return any(marker in path for marker in markers)
 
 
@@ -318,6 +323,8 @@ def _is_simulation_run(path: str, method: str) -> bool:
     if "/truth/run" in path or path.startswith("/truth-scan"):
         return True
     if "/simulation/v2/run" in path:
+        return True
+    if path in ("/simulations/run", "/simulations/sensitivity"):
         return True
     if "/sensitivity-analysis" in path or "/counter-moves" in path:
         return True

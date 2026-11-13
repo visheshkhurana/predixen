@@ -1401,7 +1401,7 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "organization_id", label: "Organization ID", placeholder: "Enter Zoho Organization ID" },
   ],
   tally: [
-    { field: "tally_url", label: "Tally Server URL", placeholder: "http://localhost:9000" },
+    { field: "tally_url", label: "Tally Server URL", placeholder: "https://tally.yourcompany.com:9000" },
     { field: "company_name", label: "Company Name", placeholder: "Enter your Tally Company name" },
   ],
   plaid: [

@@ -19,6 +19,8 @@ import { aiAgentLog } from "./middleware/aiAgentLog";
 import { requestId } from "./middleware/requestId";
 import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
 import { razorpayBillingEnabled } from "./billing-gate";
+import { securityHeaders } from "./middleware/securityHeaders";
+import { finalErrorHandler } from "./middleware/httpHygiene";
 // The Notion integration is the platform workspace, not a tenant's.
 import { requirePlatformAdmin as requireNotionAdmin } from "./middleware/requireAuth";
 
@@ -68,42 +70,9 @@ app.use(legacyRedirects());
 // billing provider (same rule as server/core/razorpay_billing.razorpay_enabled),
 // so with payments off the policy is byte-for-byte what it was.
 const RAZORPAY_CSP_ENABLED = razorpayBillingEnabled();
-const rzp = (sources: string) => (RAZORPAY_CSP_ENABLED ? ` ${sources}` : "");
 
-app.use((req, res, next) => {
-  const isEmbed = req.path.startsWith("/embed/");
-  if (!isEmbed) {
-    res.setHeader("X-Frame-Options", "DENY");
-  }
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-XSS-Protection", "0");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  res.setHeader("Content-Security-Policy", [
-    "default-src 'self'",
-    // us-assets.i.posthog.com serves array.js/recorder.js — the snippet in
-    // client/index.html rewrites api_host to it, so omitting it blocks
-    // PostHog analytics and session replay entirely.
-    // static.ads-twitter.com serves uwt.js (the X Ads pixel). Omitting it means
-    // the browser blocks the tag and X reports zero conversions — visually
-    // identical to "the ads didn't work", which is the worst kind of bug.
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net https://static.ads-twitter.com https://analytics.twitter.com" + rzp("https://checkout.razorpay.com"),
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    // X fires its conversion beacons as image/pixel requests to t.co and
-    // analytics.twitter.com as well as via fetch.
-    "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com https://t.co https://analytics.twitter.com https://static.ads-twitter.com" + rzp("https://cdn.razorpay.com"),
-    // GA4 sends /g/collect beacons to analytics.google.com, stats.g.doubleclick.net
-    // and www.google.com — not just www.google-analytics.com. Google also routes
-    // some traffic through regional endpoints (region1.google-analytics.com /
-    // region1.analytics.google.com). Omitting any of them silently drops a
-    // share of measurement traffic.
-    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com https://analytics.twitter.com https://t.co https://static.ads-twitter.com" + rzp("https://api.razorpay.com https://lumberjack.razorpay.com"),
-    isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com" + rzp("https://api.razorpay.com https://checkout.razorpay.com"),
-  ].join("; "));
-  next();
-});
+// CSP, HSTS and friends. The policy lives in middleware/securityHeaders.ts.
+app.use(securityHeaders({ razorpay: RAZORPAY_CSP_ENABLED }));
 
 app.use(compression());
 
@@ -918,14 +887,6 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    console.error(`[error] ${status} ${message}`, err.stack || err);
-  });
-
   // Before the SPA catch-all in both modes, so it is never answered with the app shell.
   registerLlmsFull(app);
 
@@ -944,6 +905,10 @@ app.use((req, res, next) => {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
+
+  // Registered after static/SPA serving so errors raised there (including a
+  // malformed percent-encoding) are answered here, not by Express's default.
+  app.use(finalErrorHandler);
 
   setupComplete = true;
   console.log("[startup] Application setup complete");
