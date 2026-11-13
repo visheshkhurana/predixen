@@ -68,6 +68,7 @@ test("client tool pages take title/description from the shared meta", () => {
     "burn-multiple": "/tools/burn-multiple",
     dilution: "/tools/dilution",
     "ltv-cac": "/tools/ltv-cac",
+    "d2c-contribution-margin": "/tools/d2c-contribution-margin",
     "tools-index": "/tools",
   };
   for (const [name, path] of Object.entries(pages)) {
@@ -110,7 +111,7 @@ test("every free tool wires calculator_used on the first input; survival run sta
       name,
     );
   }
-  for (const name of ["runway-by-industry", "embed-survival"]) {
+  for (const name of ["d2c-contribution-margin", "runway-by-industry", "embed-survival"]) {
     assert.match(page(name), /useCalculatorUsed\(\s*\n?\s*"/, name);
   }
   const survival = page("survival-simulator");

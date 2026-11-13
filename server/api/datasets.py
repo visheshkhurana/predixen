@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from server.core.uploads import read_upload_capped
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -149,7 +150,7 @@ async def upload_dataset(
     if dataset_type not in ["financial", "transactions", "customers"]:
         raise HTTPException(status_code=400, detail="Invalid dataset type")
     
-    content = await file.read()
+    content = await read_upload_capped(file)
     content_str = content.decode("utf-8")
     
     df = parse_csv(content_str)
@@ -336,15 +337,16 @@ async def upload_termina_pdf(
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
     
+    content = await read_upload_capped(file)
     try:
-        content = await file.read()
-        
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             tmp_file.write(content)
             tmp_path = tmp_file.name
         
         try:
-            result = process_termina_pdf(tmp_path)
+            result = process_termina_pdf(
+                tmp_path, company_id=company_id, user_id=current_user.id
+            )
         finally:
             os.unlink(tmp_path)
         
@@ -430,15 +432,16 @@ async def upload_termina_excel(
     if ext not in ["xlsx", "xls"]:
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are accepted")
     
+    content = await read_upload_capped(file)
     try:
-        content = await file.read()
-        
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp_file:
             tmp_file.write(content)
             tmp_path = tmp_file.name
         
         try:
-            result = process_termina_excel(tmp_path)
+            result = process_termina_excel(
+                tmp_path, company_id=company_id, user_id=current_user.id
+            )
         finally:
             os.unlink(tmp_path)
         

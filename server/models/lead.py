@@ -67,5 +67,10 @@ class Lead(Base):
     source_page = Column(String(200), nullable=True)
     consent_status = Column(String(20), nullable=True)
 
+    # First-touch campaign. Nullable; existing rows stay NULL. No backfill.
+    utm_source = Column(String(200), nullable=True)
+    utm_medium = Column(String(200), nullable=True)
+    utm_campaign = Column(String(200), nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

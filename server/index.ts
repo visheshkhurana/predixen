@@ -2,12 +2,13 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { registerJarvisRoutes } from "./jarvis-routes";
 import { serveStatic } from "./static";
+import { registerLlmsFull } from "./llms-full";
 import { createServer } from "http";
 import { spawn, execSync, spawnSync, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupWebSocketServer } from "./websocket";
 import { registerTwilioRoutes } from "./twilio/routes";
-import { requireAuth } from "./middleware/requireAuth";
+import { requireAuth, requirePlatformAdmin } from "./middleware/requireAuth";
 import { existsSync } from "fs";
 import path from "path";
 import compression from "compression";
@@ -16,6 +17,9 @@ import { legacyRedirects } from "./middleware/legacyRedirects";
 import { aiAgentLog } from "./middleware/aiAgentLog";
 import { requestId } from "./middleware/requestId";
 import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
+import { razorpayBillingEnabled } from "./billing-gate";
+// The Notion integration is the platform workspace, not a tenant's.
+import { requirePlatformAdmin as requireNotionAdmin } from "./middleware/requireAuth";
 
 const app = express();
 app.disable("x-powered-by");
@@ -59,6 +63,12 @@ app.use((req, res, next) => {
 
 app.use(legacyRedirects());
 
+// Razorpay Checkout origins. Added to the CSP only when Razorpay is the active
+// billing provider (same rule as server/core/razorpay_billing.razorpay_enabled),
+// so with payments off the policy is byte-for-byte what it was.
+const RAZORPAY_CSP_ENABLED = razorpayBillingEnabled();
+const rzp = (sources: string) => (RAZORPAY_CSP_ENABLED ? ` ${sources}` : "");
+
 app.use((req, res, next) => {
   const isEmbed = req.path.startsWith("/embed/");
   if (!isEmbed) {
@@ -77,19 +87,19 @@ app.use((req, res, next) => {
     // static.ads-twitter.com serves uwt.js (the X Ads pixel). Omitting it means
     // the browser blocks the tag and X reports zero conversions — visually
     // identical to "the ads didn't work", which is the worst kind of bug.
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net https://static.ads-twitter.com https://analytics.twitter.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net https://static.ads-twitter.com https://analytics.twitter.com" + rzp("https://checkout.razorpay.com"),
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     // X fires its conversion beacons as image/pixel requests to t.co and
     // analytics.twitter.com as well as via fetch.
-    "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com https://t.co https://analytics.twitter.com https://static.ads-twitter.com",
+    "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com https://t.co https://analytics.twitter.com https://static.ads-twitter.com" + rzp("https://cdn.razorpay.com"),
     // GA4 sends /g/collect beacons to analytics.google.com, stats.g.doubleclick.net
     // and www.google.com — not just www.google-analytics.com. Google also routes
     // some traffic through regional endpoints (region1.google-analytics.com /
     // region1.analytics.google.com). Omitting any of them silently drops a
     // share of measurement traffic.
-    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com https://analytics.twitter.com https://t.co https://static.ads-twitter.com",
-    isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com",
+    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com https://analytics.twitter.com https://t.co https://static.ads-twitter.com" + rzp("https://api.razorpay.com https://lumberjack.razorpay.com"),
+    isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com" + rzp("https://api.razorpay.com https://checkout.razorpay.com"),
   ].join("; "));
   next();
 });
@@ -538,12 +548,12 @@ const FASTAPI_URL = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPor
 const messagingRouter = express.Router();
 messagingRouter.use(express.json());
 registerTwilioRoutes(messagingRouter);
-// Auth-gate all messaging routes: unauthenticated SMS/WhatsApp send is toll-fraud/PII risk.
-app.use("/api/messaging", requireAuth, messagingRouter);
+// Messaging sends SMS/WhatsApp from the platform account: platform owner only.
+app.use("/api/messaging", requirePlatformAdmin, messagingRouter);
 
 // Register Notion routes before the API proxy (handled by Express, not FastAPI)
 import { getNotionClient, listPages, listDatabases } from "./notion/client";
-app.get("/api/notion/pages", requireAuth, async (req, res) => {
+app.get("/api/notion/pages", requireNotionAdmin, async (req, res) => {
   try {
     const pages = await listPages();
     const simplified = pages.map((p: any) => ({
@@ -561,7 +571,7 @@ app.get("/api/notion/pages", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res) => {
+app.post("/api/notion/push-report", requireNotionAdmin, express.json(), async (req, res) => {
   try {
     const notion = await getNotionClient();
     const { pageId } = req.body;
@@ -710,7 +720,7 @@ app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res
   }
 });
 
-app.get("/api/notion/databases", requireAuth, async (req, res) => {
+app.get("/api/notion/databases", requireNotionAdmin, async (req, res) => {
   try {
     const dbs = await listDatabases();
     const simplified = dbs.map((d: any) => ({
@@ -916,6 +926,9 @@ app.use((req, res, next) => {
     res.status(status).json({ message });
     console.error(`[error] ${status} ${message}`, err.stack || err);
   });
+
+  // Before the SPA catch-all in both modes, so it is never answered with the app shell.
+  registerLlmsFull(app);
 
   const isProd = process.env["NODE_ENV"] === "production" || process.env["ENVIRONMENT"] === "production";
   if (isProd) {

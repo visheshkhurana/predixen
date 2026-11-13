@@ -1,5 +1,7 @@
 """Plan definitions and feature gating for FounderConsole."""
+import json
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional
 
 
@@ -56,6 +58,9 @@ PLAN_DETAILS: Dict[str, dict] = {
             Feature.BASIC_METRICS,
             Feature.CSV_UPLOAD,
             Feature.MANUAL_DATA_ENTRY,
+            Feature.SIMULATIONS,
+            Feature.COPILOT,
+            Feature.TRUTH_SCAN,
         ],
         "highlights": [
             "1 company",
@@ -67,8 +72,8 @@ PLAN_DETAILS: Dict[str, dict] = {
     },
     PlanTier.STARTER: {
         "name": "Starter",
-        "price_monthly": 29,
-        "price_annual": 290,
+        "price_monthly": 39,  # synced from shared/pricing.json below
+        "price_annual": 390,
         "tagline": "For early-stage founders",
         "max_companies": 1,
         "max_simulations_per_month": 50,
@@ -244,3 +249,107 @@ FEATURE_LABELS: Dict[str, str] = {
     Feature.FUNDRAISING_READINESS: "Fundraising Readiness Score",
     Feature.INVESTOR_ROOM: "Investor Room",
 }
+
+
+# ---------------------------------------------------------------------------
+# Regional pricing (Razorpay billing).
+#
+# Used only when BILLING_PROVIDER=razorpay. The Stripe path keeps using the
+# USD price_monthly / price_annual values above, unchanged.
+#
+# One table, keyed by (tier, currency, interval). Each entry carries the
+# amount and the name of the env var that holds the matching Razorpay plan id
+# (plan ids are created in the Razorpay dashboard and differ between test
+# and live mode, so they are never hardcoded).
+#
+# Owner pricing decision (2026-11-12, final):
+#   INR  ₹3,000 / month
+#   USD  $39 / month
+#   AED  AED 149 / month
+# The charge currency comes from the company's currency setting
+# (server/core/billing_region.py): INR -> INR, AED -> AED, else USD.
+# Annual billing is "2 months free": annual = monthly × ANNUAL_MULTIPLIER.
+# Annual amounts are derived, never written down separately, so changing a
+# monthly price updates the annual price automatically.
+#
+# The numbers live in shared/pricing.json, not here. The public /pricing and
+# /refund-policy pages (server/seo-prerender.ts and the React pages) read the
+# same file, so the price a visitor reads and the price checkout charges
+# cannot drift apart. shared/ ships in the runtime image (Dockerfile).
+#
+# Only STARTER is sold through Razorpay for now. GROWTH and SCALE keep their
+# USD Stripe config above and are hidden from the plan list when the
+# provider is Razorpay (no regional price = not offered).
+# ---------------------------------------------------------------------------
+
+PRICING_FILE = Path(__file__).resolve().parents[2] / "shared" / "pricing.json"
+_PRICING = json.loads(PRICING_FILE.read_text(encoding="utf-8"))
+
+SUPPORTED_CURRENCIES = ("INR", "USD", "AED")
+INTERVALS = ("monthly", "annual")
+ANNUAL_MULTIPLIER = int(_PRICING["annual_multiplier"])  # "2 months free"
+ANNUAL_LABEL = str(_PRICING["annual_label"])
+
+CURRENCY_SYMBOLS: Dict[str, str] = {"INR": "₹", "USD": "$", "AED": "AED "}
+
+# Monthly price per (tier, currency), in major units (rupees, dollars, dirhams).
+REGIONAL_MONTHLY_PRICES: Dict[tuple, int] = {
+    (str(tier), str(currency)): int(amount)
+    for tier, by_currency in _PRICING["regional_monthly_prices"].items()
+    for currency, amount in by_currency.items()
+}
+
+
+def annual_from_monthly(monthly: int) -> int:
+    return monthly * ANNUAL_MULTIPLIER
+
+
+def razorpay_plan_env_var(tier: str, currency: str, interval: str) -> str:
+    """e.g. RAZORPAY_PLAN_STARTER_MONTHLY_INR"""
+    return f"RAZORPAY_PLAN_{str(tier).upper()}_{interval.upper()}_{currency.upper()}"
+
+
+def _build_price_table() -> Dict[tuple, dict]:
+    table: Dict[tuple, dict] = {}
+    for (tier, currency), monthly in REGIONAL_MONTHLY_PRICES.items():
+        for interval in INTERVALS:
+            amount = monthly if interval == "monthly" else annual_from_monthly(monthly)
+            table[(tier, currency, interval)] = {
+                "amount": amount,
+                # Razorpay amounts are in the smallest unit (paise / cents / fils).
+                "amount_minor": amount * 100,
+                "currency": currency,
+                "plan_env": razorpay_plan_env_var(tier, currency, interval),
+            }
+    return table
+
+
+# (tier, currency, interval) -> {amount, amount_minor, currency, plan_env}
+PRICE_TABLE: Dict[tuple, dict] = _build_price_table()
+
+# Keep the USD list price on PLAN_DETAILS in step with shared/pricing.json, so
+# in-app plan cards and the admin views never show a stale Starter price.
+_STARTER_USD = REGIONAL_MONTHLY_PRICES.get((str(PlanTier.STARTER), "USD"))
+if _STARTER_USD is not None:
+    PLAN_DETAILS[PlanTier.STARTER]["price_monthly"] = _STARTER_USD
+    PLAN_DETAILS[PlanTier.STARTER]["price_annual"] = annual_from_monthly(_STARTER_USD)
+
+
+def normalize_currency(value) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    v = value.strip().upper()
+    return v if v in SUPPORTED_CURRENCIES else None
+
+
+def get_regional_price(tier: str, currency: str, interval: str) -> Optional[dict]:
+    tier = tier.value if isinstance(tier, PlanTier) else tier
+    return PRICE_TABLE.get((tier, currency, interval))
+
+
+def regional_tiers(currency: str) -> List[str]:
+    """Paid tiers that have a regional price in this currency."""
+    return [
+        t.value for t in (PlanTier.STARTER, PlanTier.GROWTH, PlanTier.SCALE)
+        if (t.value, currency, "monthly") in PRICE_TABLE
+    ]

@@ -1,20 +1,8 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import { registerChatRoutes } from "./replit_integrations/chat";
+import { requireInternalAuth } from "./middleware/internalAuth";
 import { broadcastMetricUpdate, broadcastSimulationUpdate, broadcastTruthScanUpdate, getConnectedClientsCount } from "./websocket";
-
-function requireInternalAuth(req: Request, res: Response, next: NextFunction) {
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV !== "production") return next();
-    return res.status(503).json({ error: "Internal routes not configured" });
-  }
-  const provided = req.headers["x-internal-secret"];
-  if (provided !== secret) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -42,7 +30,9 @@ export async function registerRoutes(
     if (!scenarioId || !status) {
       return res.status(400).json({ error: "Missing scenarioId or status" });
     }
-    broadcastSimulationUpdate(scenarioId, status, progress, results);
+    broadcastSimulationUpdate(scenarioId, status, progress, results).catch((err) => {
+      console.error("[WebSocket] simulation broadcast failed:", err);
+    });
     res.json({ success: true, clients: getConnectedClientsCount() });
   });
 

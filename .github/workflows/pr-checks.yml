@@ -55,11 +55,20 @@ jobs:
       - name: Typecheck (must not exceed error budget)
         run: bash scripts/tsc-error-budget.sh
 
+      - name: INR lakh/crore formatting tests
+        run: npx tsx server/tests/inr-format.test.ts
+
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
 
       - name: analytics-single-identity tests
         run: npx tsx server/tests/analytics-single-identity.test.ts
+
+      - name: gtag must not receive user_email
+        run: npx tsx --test server/tests/no-gtag-user-email.test.ts
+
+      - name: google signup conversion tests
+        run: npx tsx server/tests/google-signup-conversion.test.ts
 
       - name: lead-form-viewed tests
         run: npx tsx server/tests/lead-form-viewed.test.ts
@@ -81,6 +90,9 @@ jobs:
 
       - name: truth-scan suggested actions tests
         run: npx tsx server/tests/truth-scan-suggested-actions.test.ts
+
+      - name: what-if gross margin tests
+        run: npx tsx server/tests/whatif-gross-margin.test.ts
 
       - name: overview suggested action tests
         run: npx tsx server/tests/overview-suggested-action.test.ts
@@ -145,6 +157,12 @@ jobs:
 
       - name: upstream redirect rewrite tests
         run: npx tsx --test server/tests/upstream-redirect-rewrite.test.ts
+
+      - name: hiring-sim-results tests
+        run: npx tsx server/tests/hiring-sim-results.test.ts
+
+      - name: alerts-format tests
+        run: npx tsx server/tests/alerts-format.test.ts
 
       - name: legacy redirect tests
         run: npx tsx --test server/tests/legacy-redirects.test.ts
