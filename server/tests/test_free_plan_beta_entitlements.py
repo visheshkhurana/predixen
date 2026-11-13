@@ -38,8 +38,8 @@ from server.core.plans import PLAN_DETAILS, TRIAL_DURATION_DAYS, TRIAL_PLAN, Fea
 # this P0 does not make.
 _PAID_SNAPSHOT = {
     PlanTier.STARTER: {
-        "price_monthly": 29,
-        "price_annual": 290,
+        "price_monthly": 39,
+        "price_annual": 390,
         "max_companies": 1,
         "max_simulations_per_month": 50,
         "max_copilot_messages_per_month": 100,
