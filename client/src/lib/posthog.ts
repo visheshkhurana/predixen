@@ -1,12 +1,18 @@
+import { beforeSendPostHog as stripUrlTokens } from "./analytics-url";
 import { flushPostHogQueue, type PostHogClient, type QueuedPostHogCall } from "./posthog-queue";
 import {
-  beforeSendPostHog,
+  beforeSendPostHog as sanitizeCalculatorEvent,
   bindSessionRecordingClient,
   installRecordingConsentListener,
   syncSessionRecording,
 } from "./sessionRecording";
 
 export { setSurface, setTrackingSurface, syncSessionRecording } from "./sessionRecording";
+
+/** before_send: calculator-property scrubbing, then URL query/hash stripping. */
+export function beforeSendPostHog(event: any) {
+  return stripUrlTokens(sanitizeCalculatorEvent(event));
+}
 import { hasTrackingConsent, onConsentChange } from "./consent";
 
 // PostHog client tokens are public by design (they ship in the JS bundle).
@@ -86,8 +92,10 @@ async function loadAndInit(): Promise<PostHogSdk | null> {
         maskAllText: true,
         maskTextSelector: "*",
       },
-      // sanitize_properties is deprecated in posthog-js 1.438 (it logs on every
-      // event). before_send strips calculator query strings from URL properties.
+      // sanitize_properties logs on every event in posthog-js 1.438+.
+      // before_send strips ?query and #hash from URL properties on every path
+      // so verify / unsubscribe / reset / oauth tokens never leave the browser.
+      // Event names, including $pageview, are unchanged. utm_* stays.
       before_send: beforeSendPostHog,
     });
     client = sdk;

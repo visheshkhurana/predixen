@@ -13,6 +13,7 @@ import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
+import { withGtagPage } from '@/lib/analytics-url';
 import { readNextFromSearch } from "@/lib/loginNext";
 import { getBrowserDistinctId } from '@/lib/posthog';
 import { readFirstTouchAttribution } from '@/lib/attribution';
@@ -26,8 +27,8 @@ import {
 
 const identifyUser = (userId: number) => {
   if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(userId) });
-    (window as any).gtag('event', 'login', { method: 'email' });
+    (window as any).gtag('config', 'G-NJKW0TGC4C', withGtagPage({ user_id: String(userId) }));
+    (window as any).gtag('event', 'login', withGtagPage({ method: 'email' }));
   }
 };
 

@@ -97,6 +97,8 @@ jobs:
       - name: gtag must not receive user_email
         run: npx tsx --test server/tests/no-gtag-user-email.test.ts
 
+      - name: PostHog URL token strip
+        run: npx tsx --test server/tests/posthog-url-token.test.ts
       - name: google signup conversion tests
         run: npx tsx server/tests/google-signup-conversion.test.ts
 

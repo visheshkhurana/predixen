@@ -1,3 +1,4 @@
+import { withGtagPage } from './analytics-url';
 import { publicEventProperties } from './calculator-analytics';
 import { trackEvent as posthogTrack } from './posthog';
 import { trackXConversion } from './xads';
@@ -37,7 +38,7 @@ export function trackFunnel(name: string, params: Record<string, unknown> = {}) 
   }
   try {
     if (typeof window !== 'undefined' && (window as any).gtag) {
-      (window as any).gtag('event', name, safe);
+      (window as any).gtag('event', name, withGtagPage(safe));
     }
   } catch (err) {
     console.debug('[funnel] gtag failed', name, err);
