@@ -248,7 +248,12 @@ async def run_simulation(
                             "truth_dataset_id": truth_dataset_id,
                         }
                     )
-    
+
+    from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
+    reserve_monthly_quota(
+        db, current_user, PLAN_QUOTA_SIMULATION, company_id=scenario.company_id
+    )
+
     job_id = str(uuid.uuid4())
     config = request.config or SimulationConfigRequest()
     

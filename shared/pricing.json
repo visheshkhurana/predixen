@@ -1,0 +1,8 @@
+{
+  "_comment": "Single source of the Razorpay regional prices. Read by server/core/plans.py (checkout + /api/billing/plans), by server/seo-prerender.ts (the /pricing and /refund-policy HTML a crawler sees) and by client/src/data/public-pricing.ts (the React pages). Change a price here and every surface follows. Amounts are monthly, in major units (rupees, dollars, dirhams). Annual = monthly x annual_multiplier.",
+  "annual_multiplier": 10,
+  "annual_label": "2 months free",
+  "regional_monthly_prices": {
+    "starter": { "INR": 3000, "USD": 39, "AED": 149 }
+  }
+}

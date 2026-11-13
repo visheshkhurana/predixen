@@ -12,6 +12,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import { flushPostHogQueue, type QueuedPostHogCall } from "../../client/src/lib/posthog-queue";
 import { distinctIdFromPersistence } from "../../client/src/lib/posthog";
+import {
+  founderActivatedFlagKey,
+  rememberFounderActivated,
+  shouldEmitFounderActivated,
+  type FlagStore,
+} from "../../client/src/lib/activation-flag";
 
 const posthogLib = readFileSync("client/src/lib/posthog.ts", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
@@ -302,4 +308,93 @@ test("the calculator's number fields can actually be cleared", () => {
   const page = readFileSync("client/src/pages/runway-calculator.tsx", "utf8");
   assert.doesNotMatch(page, /onChange=\{\(e\) => set\w+\(Number\(e\.target\.value\)\)\}/);
   assert.match(page, /function toNumber\(text: string\): number/);
+});
+
+// --- founder_activated: the browser flag must be keyed by user id ----------
+//
+// Moved here from server/tests/founder-activated-flag-per-user.test.ts so these
+// guards run in CI: pr-checks.yml is an explicit per-file list with no glob, so
+// a standalone file is green on the author's machine and dead everywhere else.
+// The bug: the flag was one browser-wide `fc_founder_activated`. On a shared
+// browser the first account to activate set it and every later account emitted
+// nothing. That is a MISSING event, and it is invisible to the control built to
+// catch split identities - a dropped event shrinks count() and
+// uniqExact(user_id) together, so the ratio still reads 1.0.
+
+function memoryStore(): FlagStore & { keys(): string[] } {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k) => (map.has(k) ? map.get(k)! : null),
+    setItem: (k, v) => void map.set(k, v),
+    keys: () => [...map.keys()],
+  };
+}
+
+test("the flag key carries the user id", () => {
+  assert.equal(founderActivatedFlagKey(42), "fc_founder_activated:42");
+  assert.equal(founderActivatedFlagKey("42"), "fc_founder_activated:42");
+  assert.notEqual(founderActivatedFlagKey(42), founderActivatedFlagKey(43));
+});
+
+test("a second account on the same browser still emits (the defect)", () => {
+  const store = memoryStore();
+  // Account 42 activates: emits once, and never again on reload.
+  assert.equal(shouldEmitFounderActivated(store, 42), true);
+  rememberFounderActivated(store, 42);
+  assert.equal(shouldEmitFounderActivated(store, 42), false);
+  // Account 43 signs in on the same browser: the browser-wide flag used to
+  // silence this emit. It must not.
+  assert.equal(shouldEmitFounderActivated(store, 43), true);
+});
+
+test("each user's flag is its own key, not a rewrite of one", () => {
+  const store = memoryStore();
+  rememberFounderActivated(store, 42);
+  rememberFounderActivated(store, 43);
+  assert.deepEqual(store.keys().sort(), [
+    "fc_founder_activated:42",
+    "fc_founder_activated:43",
+  ]);
+});
+
+test("a blocked or absent store emits rather than losing the activation", () => {
+  assert.equal(shouldEmitFounderActivated(null, 42), true);
+  assert.equal(shouldEmitFounderActivated(undefined, 42), true);
+  assert.doesNotThrow(() => rememberFounderActivated(null, 42));
+  // A store that throws on read (private mode) is treated as absent.
+  const throwing: FlagStore = {
+    getItem: () => {
+      throw new Error("blocked");
+    },
+    setItem: () => {
+      throw new Error("blocked");
+    },
+  };
+  assert.equal(shouldEmitFounderActivated(throwing, 42), true);
+  assert.doesNotThrow(() => rememberFounderActivated(throwing, 42));
+});
+
+test("funnel.ts keys the guard by user id and keeps no browser-wide constant", () => {
+  assert.doesNotMatch(
+    funnel,
+    /const FOUNDER_ACTIVATED_KEY/,
+    "the browser-wide constant is back — that is the defect",
+  );
+  assert.match(funnel, /shouldEmitFounderActivated\(store, params\.user_id\)/);
+  assert.match(funnel, /rememberFounderActivated\(store, params\.user_id\)/);
+  assert.match(funnel, /user_id\?: number \| string \| null/);
+});
+
+test("both activation call sites pass the current user id", () => {
+  const hooks = readFileSync("client/src/api/hooks.ts", "utf8");
+  const calls = hooks.match(/trackFounderActivated\(\{/g) ?? [];
+  assert.equal(calls.length, 2, "expected exactly two activation call sites");
+  const withUserId = hooks.match(
+    /trackFounderActivated\(\{[\s\S]{0,220}?user_id: useFounderStore\.getState\(\)\.user\?\.id/g,
+  ) ?? [];
+  assert.equal(
+    withUserId.length,
+    2,
+    "a call site emits without a user id, so its flag cannot be scoped",
+  );
 });

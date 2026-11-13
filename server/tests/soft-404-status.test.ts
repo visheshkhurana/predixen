@@ -55,6 +55,7 @@ const TOOLS = [
   "/tools/burn-multiple",
   "/tools/dilution",
   "/tools/ltv-cac",
+  "/tools/d2c-contribution-margin",
 ];
 
 function startServer(): Promise<{ base: string; server: Server }> {

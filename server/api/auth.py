@@ -108,6 +108,14 @@ class RegisterRequest(BaseModel):
     name: str = ""
     # Anonymous browser distinct_id, so signup can alias the pre-account person.
     distinct_id: str | None = None
+    # First-touch campaign from the landing URL. Not stored on the user row.
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+    utm_term: str | None = None
+    fbclid: str | None = None
+    gclid: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -123,6 +131,22 @@ class RegisterRequest(BaseModel):
         if not isinstance(value, str):
             return None
         return sanitize_distinct_id(value)
+
+    @field_validator(
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term",
+        "fbclid",
+        "gclid",
+        mode="before",
+    )
+    @classmethod
+    def clean_campaign_fields(cls, value):
+        from server.services.attribution import clean_attribution_value
+
+        return clean_attribution_value(value)
 
     @field_validator("password")
     @classmethod
@@ -229,6 +253,15 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
             method="email",
             email=user.email,
             anonymous_distinct_id=req.distinct_id,
+            attribution={
+                "utm_source": req.utm_source,
+                "utm_medium": req.utm_medium,
+                "utm_campaign": req.utm_campaign,
+                "utm_content": req.utm_content,
+                "utm_term": req.utm_term,
+                "fbclid": req.fbclid,
+                "gclid": req.gclid,
+            },
         )
     except Exception as e:
         auth_logger.warning(f"signup_completed emit failed: {e}")
@@ -333,7 +366,11 @@ def admin_login(req: LoginRequest, request: Request, response: Response, db: Ses
         )
     
     admin_email_check = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
-    is_platform_admin = bool(admin_email_check and user.email.lower().strip() == admin_email_check)
+    is_platform_admin = bool(
+        admin_email_check
+        and user.email.lower().strip() == admin_email_check
+        and user.is_email_verified
+    )
     
     if not is_platform_admin:
         log_login_attempt(db, req.email, user.id, success=False,

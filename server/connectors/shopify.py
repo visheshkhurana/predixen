@@ -12,8 +12,9 @@ API Documentation: https://shopify.dev/docs/api/admin-rest
 
 import httpx
 import logging
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+import os
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import date, datetime, timedelta
 
 from .base import (
     BaseConnector,
@@ -29,6 +30,93 @@ from .base import (
 from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
+
+# Shopify retires each API version after about a year and then serves the
+# oldest supported one instead, so a stale pin silently changes behaviour.
+# 2026-10 is the latest stable as of Nov 2026; override with SHOPIFY_API_VERSION.
+DEFAULT_API_VERSION = "2026-10"
+
+# Upper bound on orders read for one month, so a runaway pagination loop
+# cannot hang a sync. A truncated month is reported, never presented as whole.
+MAX_ORDERS_PER_SYNC = 50_000
+
+COD_KEYWORDS = ("cod", "cash on delivery", "cash_on_delivery", "pay on delivery")
+
+
+def _money(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def is_cod_order(order: Dict[str, Any]) -> bool:
+    gateway = (order.get("gateway", "") or "").lower()
+    names = [str(p).lower() for p in order.get("payment_gateway_names", []) or []]
+    payment_str = " ".join([gateway] + names)
+    return any(kw in payment_str for kw in COD_KEYWORDS)
+
+
+def last_complete_month(today: date) -> Tuple[date, date]:
+    first_this_month = today.replace(day=1)
+    last_prev = first_this_month - timedelta(days=1)
+    return last_prev.replace(day=1), last_prev
+
+
+def summarize_orders(orders: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """One period of Shopify orders as D2C sales figures, ex-GST.
+
+    - Test orders are ignored. Cancelled orders are counted but earn nothing.
+    - COD orders count as sales. Shopify keeps them financial_status=pending
+      until the courier remits, and in India they are often most of the
+      orders; the old connector summed "paid" orders only and dropped them.
+    - Indian stores usually show tax-inclusive prices (taxes_included=true),
+      so GST is removed from subtotal_price to get net sales.
+    - Refunds come from the refund transactions actually issued.
+    - RTO is not visible in Shopify; it comes from the shipping partner.
+    """
+    gross_sales = discounts = net_sales_ex_gst = refunds = tax = 0.0
+    orders_count = cancelled = cod_orders = 0
+    customers = set()
+
+    for order in orders:
+        if order.get("test"):
+            continue
+        if order.get("cancelled_at"):
+            cancelled += 1
+            continue
+        orders_count += 1
+        gross_sales += _money(order.get("total_line_items_price"))
+        discounts += _money(order.get("total_discounts"))
+        order_tax = _money(order.get("total_tax"))
+        tax += order_tax
+        subtotal = _money(order.get("subtotal_price"))
+        net_sales_ex_gst += subtotal - order_tax if order.get("taxes_included") else subtotal
+        for refund in order.get("refunds", []) or []:
+            for txn in refund.get("transactions", []) or []:
+                if txn.get("kind") == "refund" and txn.get("status") == "success":
+                    refunds += _money(txn.get("amount"))
+        if is_cod_order(order):
+            cod_orders += 1
+        customer = order.get("customer") or {}
+        if customer.get("id"):
+            customers.add(customer["id"])
+
+    revenue = net_sales_ex_gst - refunds
+    return {
+        "orders": orders_count,
+        "cancelled_orders": cancelled,
+        "gross_sales": round(gross_sales, 2),
+        "discounts": round(discounts, 2),
+        "gst_collected": round(tax, 2),
+        "net_sales_ex_gst": round(net_sales_ex_gst, 2),
+        "refunds": round(refunds, 2),
+        "revenue": round(revenue, 2),
+        "cod_orders": cod_orders,
+        "cod_share": round(cod_orders / orders_count, 4) if orders_count else None,
+        "aov": round(net_sales_ex_gst / orders_count, 2) if orders_count else None,
+        "customers": len(customers),
+    }
 
 
 @ConnectorRegistry.register
@@ -53,7 +141,8 @@ class ShopifyConnector(BaseConnector):
 
     def _get_base_url(self) -> str:
         domain = self._shop_domain.replace(".myshopify.com", "").strip()
-        return f"https://{domain}.myshopify.com/admin/api/2024-01"
+        version = (os.getenv("SHOPIFY_API_VERSION") or DEFAULT_API_VERSION).strip()
+        return f"https://{domain}.myshopify.com/admin/api/{version}"
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -100,6 +189,7 @@ class ShopifyConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         limit: int = 250,
         status: str = "any",
+        end_date: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         if not self._authenticated:
             if not await self.authenticate():
@@ -117,6 +207,8 @@ class ShopifyConnector(BaseConnector):
                 }
                 if start_date:
                     params["created_at_min"] = start_date.strftime("%Y-%m-%dT00:00:00Z")
+                if end_date:
+                    params["created_at_max"] = end_date.strftime("%Y-%m-%dT23:59:59Z")
                 if page_info:
                     params = {"limit": min(limit, 250), "page_info": page_info}
 
@@ -187,15 +279,7 @@ class ShopifyConnector(BaseConnector):
             return []
 
     def _detect_payment_type(self, order: Dict[str, Any]) -> str:
-        gateway = (order.get("gateway", "") or "").lower()
-        payment_details = order.get("payment_gateway_names", [])
-        payment_str = " ".join([gateway] + [str(p).lower() for p in payment_details])
-
-        cod_keywords = ["cod", "cash on delivery", "cash_on_delivery", "pay on delivery"]
-        for kw in cod_keywords:
-            if kw in payment_str:
-                return "cod"
-        return "prepaid"
+        return "cod" if is_cod_order(order) else "prepaid"
 
     async def fetch_ledger(
         self,
@@ -366,6 +450,12 @@ class ShopifyConnector(BaseConnector):
         return result
 
     async def sync_all(self) -> SyncResult:
+        """Sync the last complete calendar month, every order in it.
+
+        One record per sync, dated to that month (see _declared_period in
+        server/api/connectors.py). The previous sync read the newest 500
+        orders of all time, three times over, and dated them to today.
+        """
         sync_started = datetime.utcnow()
         try:
             if not await self.authenticate():
@@ -377,25 +467,43 @@ class ShopifyConnector(BaseConnector):
                     sync_started=sync_started,
                 )
 
-            orders = await self.get_orders(limit=500)
+            period_start, period_end = last_complete_month(sync_started.date())
+            orders = await self.get_orders(
+                start_date=datetime.combine(period_start, datetime.min.time()),
+                end_date=datetime.combine(period_end, datetime.min.time()),
+                limit=MAX_ORDERS_PER_SYNC,
+            )
+            truncated = len(orders) >= MAX_ORDERS_PER_SYNC
+            summary = summarize_orders(orders)
             products = await self.get_products()
-            customers = await self.get_customers()
-            invoices = await self.fetch_invoices()
-            ledger = await self.fetch_ledger()
-            financials = self.map_to_financials(ledger_entries=ledger, invoices=invoices)
+
+            financials: Dict[str, Any] = {
+                "source_type": "connector_shopify",
+                "extraction_summary": (
+                    f"Synced from Shopify ({self._shop_domain}) for "
+                    f"{period_start:%b %Y}: {summary['orders']} orders, net of GST and refunds"
+                    + (" (TRUNCATED: order limit reached)" if truncated else "")
+                ),
+                "period_start": period_start.isoformat(),
+                "period_end": period_end.isoformat(),
+                "revenue": summary["revenue"],
+                "d2c": summary,
+            }
+            if summary["customers"]:
+                financials["customers"] = summary["customers"]
 
             return SyncResult(
                 success=True,
                 provider_id=self.PROVIDER_ID,
                 sync_type="full",
-                records_synced=len(orders) + len(products) + len(customers),
+                records_synced=len(orders) + len(products),
                 sync_started=sync_started,
                 sync_completed=datetime.utcnow(),
+                errors=["Order limit reached; the month is incomplete"] if truncated else [],
                 metadata={
                     "financials": financials,
                     "orders_count": len(orders),
                     "products_count": len(products),
-                    "customers_count": len(customers),
                 },
             )
 

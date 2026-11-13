@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { formatInrCompact, formatInrFull, getDisplayCurrency } from "@/lib/money"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -17,8 +18,9 @@ function cleanTrailingZeros(numStr: string): string {
   return numStr;
 }
 
-export function formatCurrencyAbbrev(value: number | null | undefined, currency = 'USD'): string {
+export function formatCurrencyAbbrev(value: number | null | undefined, currency = getDisplayCurrency()): string {
   if (value == null || isNaN(value)) return 'N/A';
+  if (currency === 'INR') return formatInrCompact(value);
   
   const absValue = Math.abs(value);
   const sign = value < 0 ? '-' : '';
@@ -54,8 +56,9 @@ export function formatCurrencyAbbrev(value: number | null | undefined, currency 
  * Format currency with full number formatting
  * Displays: $1,500,000
  */
-export function formatCurrencyFull(value: number | null | undefined, currency = 'USD'): string {
+export function formatCurrencyFull(value: number | null | undefined, currency = getDisplayCurrency()): string {
   if (value == null || isNaN(value)) return 'N/A';
+  if (currency === 'INR') return formatInrFull(value);
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
