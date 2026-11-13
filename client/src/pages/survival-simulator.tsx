@@ -1,6 +1,7 @@
 import { isSustainableRunway } from "@/lib/simulation/runwayFormat";
 import { CalculatorEmailOptIn } from "@/components/marketing/CalculatorEmailOptIn";
 import { useState, useEffect } from "react";
+import { simulatorPrefillFromSearch } from "@/lib/tools/simulatorPrefill";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useCalculatorUsedOnce } from "@/hooks/use-calculator-used";
@@ -138,7 +139,11 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
   isLoading: boolean;
   gated: boolean;
 }) {
-  const [inputs, setInputs] = useState<SimInputs>(defaultInputs);
+  // Prefill from /embed/survival's CTA (?cash=&burn=&revenue=).
+  const [inputs, setInputs] = useState<SimInputs>(() => ({
+    ...defaultInputs,
+    ...(typeof window === "undefined" ? {} : simulatorPrefillFromSearch(window.location.search)),
+  }));
   const [showAdvanced, setShowAdvanced] = useState(false);
   const onCalculatorInput = useCalculatorUsedOnce("survival-simulator");
 

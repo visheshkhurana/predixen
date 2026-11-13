@@ -102,15 +102,32 @@ test("with no pool target the round reduces to the simple formula, and founders 
   assert.equal(pct4(r.founderPct!), 71.1111);
 });
 
-test("the headline gap is real: the pool costs the founders more than the investor does", () => {
-  // 20 points to the investor, 32 to the founders. The page prints both numbers.
+test("the headline gap is measured from the founders' pre-round stake, not from 100%", () => {
+  // Founders hold F / T = 8M / 9M = 88.9% before the round. With the 12% pool top-up they
+  // finish at 68.0%: -20.9 points. Leaving the pool alone (the simple formula) they would
+  // keep 88.9% * 0.8 = 71.1%, so the option pool shuffle costs 3.1 extra points. The old
+  // copy said "32 points, not 20", which compared 68% against 100%.
   const r = computeDilution(WORKED_EXAMPLE);
-  const lostPoints = (1 - r.founderPct!) * 100;
-  assert.equal(Number(lostPoints.toFixed(2)), 32);
-  assert.ok(
-    lostPoints > r.simpleInvestorPct * 100,
-    "founder dilution must exceed the naive investor share when a pool is required",
-  );
+  assert.equal(Number((r.founderPrePct! * 100).toFixed(1)), 88.9);
+  assert.equal(Number((r.founderPct! * 100).toFixed(1)), 68.0);
+  assert.equal(Number((r.naiveFounderPct! * 100).toFixed(1)), 71.1);
+  const lostPoints = (r.founderPrePct! - r.founderPct!) * 100;
+  assert.equal(Number(lostPoints.toFixed(1)), 20.9);
+  const shuffleCost = (r.naiveFounderPct! - r.founderPct!) * 100;
+  assert.equal(Number(shuffleCost.toFixed(1)), 3.1);
+  // With no pool target the naive figure is exact.
+  const base = computeDilution(BASE);
+  assert.ok(Math.abs(base.naiveFounderPct! - base.founderPct!) < 1e-12);
+});
+
+test("price per share is pre-money over the post-pool share count", () => {
+  // The top-up is issued before the money, so V_pre is spread over T + dP shares and the
+  // investor's N shares cost exactly R: price = V_pre / (T + dP) = R / N.
+  const r = computeDilution(WORKED_EXAMPLE);
+  const s = r.shares!;
+  assert.ok(Math.abs(s.pricePerShare - 8_000_000 / (9_000_000 + s.newPoolShares)) < 1e-12);
+  assert.ok(Math.abs(s.pricePerShare * s.investorShares - 2_000_000) < 1e-6);
+  assert.equal(s.pricePerShare.toFixed(2), "0.85");
 });
 
 test("the multi-round figure is the reference script's own cumulative keep", () => {
