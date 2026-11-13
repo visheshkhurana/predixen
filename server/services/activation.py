@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+from server.services.attribution import attribution_properties
 from server.services.posthog import alias as posthog_alias
 from server.services.posthog import capture as posthog_capture
 from server.services.posthog import lead_distinct_id, sanitize_distinct_id, user_distinct_id
@@ -41,23 +42,27 @@ def emit_signup_completed(
     method: str,
     email: Optional[str] = None,
     anonymous_distinct_id: Optional[str] = None,
+    attribution: Optional[dict] = None,
 ) -> bool:
     """Server first-success signup. Never raises.
 
     distinct_id matches browser identifyUser: str(user_id).
     The anonymous browser id (when the client sent one) and the lead-hash
     fallback are aliased onto that id so earlier lead_captured events join
-    the account.
+    the account. Campaign parameters are copied onto the event when the
+    signup payload included them. They are not an IP address.
     """
     try:
         if not user_id or not method:
             return False
         distinct_id = user_distinct_id(user_id)
+        properties: dict[str, Any] = {"method": method, "user_id": user_id}
+        properties.update(attribution_properties(attribution))
         sent = bool(
             posthog_capture(
                 "signup_completed",
                 distinct_id,
-                {"method": method, "user_id": user_id},
+                properties,
             )
         )
         _alias_signup_identities(

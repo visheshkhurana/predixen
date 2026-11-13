@@ -37,7 +37,6 @@ export default function DemoRedirectPage() {
 
       if (typeof window !== 'undefined' && (window as any).gtag) {
         (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(result.user_id) });
-        (window as any).gtag('set', 'user_properties', { user_email: result.email });
         (window as any).gtag('event', 'login', { method: 'demo' });
       }
 

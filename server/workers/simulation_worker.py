@@ -254,9 +254,10 @@ def _parse_events(events_data):
 def _broadcast_completion(scenario_id: int, results: Dict):
     try:
         import httpx
+        from server.utils.websocket_broadcast import internal_headers
 
         with httpx.Client(timeout=5.0) as client:
-            client.post(
+            response = client.post(
                 f"{NODE_SERVER_URL}/internal/broadcast/simulation",
                 json={
                     "scenarioId": scenario_id,
@@ -264,7 +265,12 @@ def _broadcast_completion(scenario_id: int, results: Dict):
                     "progress": 100,
                     "results": results,
                 },
+                headers=internal_headers(),
             )
+            if response.status_code != 200:
+                logger.warning(
+                    f"Broadcast completion for scenario {scenario_id} returned {response.status_code}"
+                )
     except Exception as e:
         logger.warning(f"Failed to broadcast completion for scenario {scenario_id}: {e}")
 

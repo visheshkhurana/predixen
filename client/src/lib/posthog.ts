@@ -7,6 +7,7 @@ import {
 } from "./sessionRecording";
 
 export { setSurface, setTrackingSurface, syncSessionRecording } from "./sessionRecording";
+import { hasTrackingConsent, onConsentChange } from "./consent";
 
 // PostHog client tokens are public by design (they ship in the JS bundle).
 // The default below is the real project token — the VITE_POSTHOG_KEY that was
@@ -69,7 +70,9 @@ async function loadAndInit(): Promise<PostHogSdk | null> {
       // no way to tell a broken form from a bored visitor. Cheap insurance on the
       // one funnel step we cannot afford to be blind on.
       capture_exceptions: true,
-      persistence: "localStorage",
+      // Cookieless (in-memory id) until the visitor accepts tracking; see
+      // lib/consent.ts. Accepting upgrades this client in place.
+      persistence: hasTrackingConsent() ? "localStorage" : "memory",
       // Click autocapture records element text (runway, burn, revenue). Named
       // events still go through trackEvent / trackPageView.
       autocapture: false,
@@ -90,6 +93,15 @@ async function loadAndInit(): Promise<PostHogSdk | null> {
     client = sdk;
     bindSessionRecordingClient(sdk);
     syncSessionRecording(window.location.pathname);
+    onConsentChange((choice) => {
+      if (choice !== "accepted") return;
+      const upgradable = sdk as PostHogSdk & {
+        set_config?: (config: Record<string, unknown>) => void;
+      };
+      upgradable.set_config?.({ persistence: "localStorage" });
+      // Recording is not started here: sessionRecording decides by route
+      // (marketing only), and it listens for the same consent change.
+    });
     flushPostHogQueue(sdk, pending);
     return sdk;
   } catch (err) {
@@ -260,6 +272,42 @@ export function trackPageView(path: string) {
 
 export function trackEvent(event: string, properties?: Record<string, any>) {
   dispatch({ kind: "capture", event, properties });
+}
+
+/**
+ * Super properties for every later event. `unset` drops keys this session
+ * does not have, so a previous visit's campaign does not stick in
+ * localStorage after a landing URL with no parameters.
+ *
+ * Queued, not loaded. The pageview / idle init flushes this before the
+ * first event. Calling ensureClient here would pull posthog-js forward of
+ * that path on every document.
+ */
+export function registerSuperProperties(
+  properties: Record<string, string>,
+  unset: readonly string[] = [],
+) {
+  if (!POSTHOG_KEY) return;
+  const present: Record<string, string> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (typeof value === "string" && value.length > 0) present[key] = value;
+  }
+  const presentKeys = new Set(Object.keys(present));
+  const call: QueuedPostHogCall = {
+    kind: "register",
+    properties: present,
+    unset: unset.filter((key) => !presentKeys.has(key)),
+  };
+  if (client) {
+    flushPostHogQueue(client, [call]);
+    return;
+  }
+  pending.push(call);
+}
+
+/** Test seam: the calls waiting to become PostHog super properties. */
+export function takeQueuedPostHogCalls(): QueuedPostHogCall[] {
+  return pending.splice(0, pending.length);
 }
 
 export const isPostHogEnabled = () => !!POSTHOG_KEY;

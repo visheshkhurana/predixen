@@ -1,3 +1,4 @@
+import { onConsentChange } from "./consent";
 /**
  * Session replay gate.
  *
@@ -222,6 +223,8 @@ export function installRecordingConsentListener(): void {
     refreshSessionRecording();
   };
   window.addEventListener(COOKIE_CONSENT_EVENT, refresh);
+  // The banner records the choice through lib/consent.ts (saveConsent).
+  onConsentChange(refresh);
   window.addEventListener("storage", (event) => {
     if (event.key === COOKIE_CONSENT_KEY) refresh();
   });

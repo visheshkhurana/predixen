@@ -1,7 +1,8 @@
+import { getDisplayCurrency } from '@/lib/money';
 import { useState, useMemo, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSEO } from "@/lib/seo";
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -173,7 +174,8 @@ function formatNumber(n: number): string {
 }
 
 function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+  const currency = getDisplayCurrency();
+  return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', { style: 'currency', currency }).format(n);
 }
 
 function TypeBadge({ type }: { type: string }) {
@@ -1573,7 +1575,7 @@ export default function CapTablePage() {
                         <BarChart data={waterfallResult.payouts}>
                           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                           <XAxis dataKey="name" className="text-xs" />
-                          <YAxis tickFormatter={(v: number) => `$${(v / 1e6).toFixed(1)}M`} className="text-xs" />
+                          <YAxis tickFormatter={(v: number) => formatCurrencyAbbrev(v)} className="text-xs" />
                           <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
                           <Bar dataKey="payout" fill="#10b981" radius={[4, 4, 0, 0]} />
                         </BarChart>
