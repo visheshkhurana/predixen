@@ -14,11 +14,28 @@ from server.models.financial import FinancialRecord
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+def is_platform_admin(user) -> bool:
+    """True for the master session, or a verified account whose email matches ADMIN_MASTER_EMAIL.
+
+    A plain email match is not enough: an unverified account could have been
+    registered for that address by someone who does not own the inbox.
+    """
+    if user is None:
+        return False
+    if is_master_user(user):
+        return True
+    admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
+    if not admin_email:
+        return False
+    user_email = (getattr(user, "email", "") or "").lower().strip()
+    return user_email == admin_email and getattr(user, "is_email_verified", False) is True
+
+
 def require_platform_admin(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Ensures only the platform owner (whose email matches ADMIN_MASTER_EMAIL or is MasterUser)
-    can access admin endpoints. This is NOT a company-level role check.
-    All MasterUser access is logged for audit purposes.
+    Ensures only the platform owner (MasterUser, or the verified account whose
+    email matches ADMIN_MASTER_EMAIL) can access admin endpoints. This is NOT a
+    company-level role check. All MasterUser access is logged for audit purposes.
     """
     # MasterUser has automatic admin access
     if is_master_user(current_user):
@@ -32,17 +49,13 @@ def require_platform_admin(current_user: User = Depends(get_current_user), db: S
         )
         return current_user
 
-    admin_email = settings.ADMIN_MASTER_EMAIL
-    if not admin_email:
+    if not settings.ADMIN_MASTER_EMAIL:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin access is not configured"
         )
 
-    user_email = getattr(current_user, 'email', '').lower().strip()
-    admin_email_normalized = admin_email.lower().strip()
-
-    if user_email != admin_email_normalized:
+    if not is_platform_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. Only the platform owner can access admin features."
@@ -110,6 +123,11 @@ class DashboardMetrics(BaseModel):
     total_companies: int
     total_subscriptions: int
     mrr: float
+    # Per-currency native totals, USD conversions and the FX used (see
+    # server/core/admin_mrr.py). None when mrr came from the financial-records
+    # fallback below.
+    mrr_breakdown: Optional[dict] = None
+    mrr_source: str = "subscriptions"
     active_simulations: int
     truth_scans_today: int
 
@@ -143,11 +161,12 @@ def get_dashboard_metrics(
     total_companies = db.query(Company).count()
     total_subscriptions = db.query(Subscription).filter(Subscription.status == "active").count()
     
-    mrr_result = db.query(func.sum(Subscription.monthly_price)).filter(
-        Subscription.status == "active"
-    ).scalar()
-    mrr = float(mrr_result) if mrr_result else 0.0
-    
+    from server.core.admin_mrr import compute_platform_mrr
+    platform_mrr = compute_platform_mrr(db)
+    mrr = platform_mrr["mrr_usd"]
+    mrr_breakdown = platform_mrr["breakdown"]
+    mrr_source = "subscriptions"
+
     if mrr == 0:
         from sqlalchemy import desc
         latest_records = (
@@ -164,6 +183,8 @@ def get_dashboard_metrics(
         )
         if latest_mrr and latest_mrr > 0:
             mrr = float(latest_mrr)
+            mrr_source = "financial_records"
+            mrr_breakdown = None
     
     active_simulations = db.query(Scenario).filter(
         Scenario.created_at >= datetime.utcnow() - timedelta(days=7)
@@ -180,6 +201,8 @@ def get_dashboard_metrics(
         total_companies=total_companies,
         total_subscriptions=total_subscriptions,
         mrr=mrr,
+        mrr_breakdown=mrr_breakdown,
+        mrr_source=mrr_source,
         active_simulations=active_simulations,
         truth_scans_today=truth_scans_today
     )

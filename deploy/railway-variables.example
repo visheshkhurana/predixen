@@ -17,6 +17,11 @@ ENVIRONMENT=production
 # JWT signing secret. Generate: openssl rand -hex 48
 SECRET_KEY=
 
+# Shared secret for Express /internal/broadcast/* (live WebSocket updates from
+# FastAPI + the simulation worker; all three run in this one container and
+# share env). Required: unset means 503 and no live updates. openssl rand -hex 32
+INTERNAL_API_SECRET=
+
 # Set to your real domain once DNS is cut over; use the *.up.railway.app URL while testing.
 # CORS_ORIGINS MUST match the origin actually serving the app — a mismatch makes every
 # frontend API call fail CORS, which looks like an auth bug rather than a config one.

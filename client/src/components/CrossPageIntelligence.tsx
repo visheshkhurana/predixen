@@ -1,3 +1,4 @@
+import { currencySymbol } from '@/lib/money';
 import { useMemo } from 'react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useSimulation } from '@/api/hooks';
@@ -96,7 +97,7 @@ function generateAlerts(simulation: any, scenario: any, baseline: any): Intellig
       alerts.push({
         type: 'warning',
         title: 'High burn multiple',
-        description: `You're spending $${(burnMultiple).toFixed(1)} for every $1 of revenue. Focus on unit economics improvement.`,
+        description: `You're spending ${currencySymbol()}${(burnMultiple).toFixed(1)} for every ${currencySymbol()}1 of revenue. Focus on unit economics improvement.`,
         action: { label: 'Review Metrics', href: '/scenarios' },
         metric: `${burnMultiple.toFixed(1)}x`,
       });

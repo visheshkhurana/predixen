@@ -6,7 +6,7 @@ import {
   SlidersHorizontal, TrendingUp, TrendingDown, Play,
   RotateCcw, Loader2, Zap
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 interface BaseMetrics {
   cashOnHand: number;
@@ -169,9 +169,7 @@ export function SensitivitySliders({
   }
 
   function fmt(v: number): string {
-    if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-    if (Math.abs(v) >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
-    return `$${v.toFixed(0)}`;
+    return formatCurrencyAbbrev(v);
   }
 
   return (
@@ -300,7 +298,7 @@ function DeltaLabel({ value, suffix, higherIsBetter, isCurrency }: { value: numb
   const Icon = value > 0 ? TrendingUp : TrendingDown;
   const color = isBetter ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
   const display = isCurrency
-    ? `${value > 0 ? '+' : ''}$${Math.abs(Math.round(value / 1000))}K`
+    ? `${value > 0 ? '+' : ''}${formatCurrencyAbbrev(Math.abs(value))}`
     : `${value > 0 ? '+' : ''}${value.toFixed(1)} ${suffix}`;
   return (
     <span className={cn("flex items-center justify-center gap-0.5 text-[10px] font-medium", color)}>

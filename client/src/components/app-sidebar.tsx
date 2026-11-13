@@ -53,6 +53,7 @@ import {
   Brain,
   Plug,
   Zap,
+  IndianRupee,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -434,6 +435,18 @@ export function AppSidebar() {
                   <Link href="/overview">
                     <LayoutDashboard className="h-4 w-4" />
                     <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/profit"}
+                  data-testid="nav-profit"
+                >
+                  <Link href="/profit">
+                    <IndianRupee className="h-4 w-4" />
+                    <span>Profit per order</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

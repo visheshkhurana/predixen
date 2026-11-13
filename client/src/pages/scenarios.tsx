@@ -1137,23 +1137,47 @@ export default function ScenariosPage() {
     return bars;
   }, [baseMetrics]);
 
+  // Cost lines come from the company's real expense breakdown (baseline API).
+  // COGS is excluded here because it enters via grossMargin. With no breakdown
+  // the stress/what-if tools show "not available" instead of an invented split.
+  const stressTestCostBreakdown = useMemo(() => {
+    const eb = financialBaseline?.expenseBreakdown;
+    if (!eb) return null;
+    const payroll = eb.payroll ?? null;
+    const operating = eb.operating ?? null;
+    const marketing = eb.marketing ?? null;
+    const other = eb.otherOpex ?? null;
+    if ([payroll, operating, marketing, other].every((x) => x == null || x === 0)) return null;
+    return {
+      payroll: payroll ?? 0,
+      opex: (operating ?? 0) + (marketing ?? 0),
+      otherCosts: other ?? 0,
+    };
+  }, [financialBaseline]);
+
   const stressTestFinancialState: FinancialState = useMemo(() => {
-    const totalExpenses = baseMetrics?.monthlyExpenses || 80000;
-    return baseMetrics ? {
+    return baseMetrics && stressTestCostBreakdown ? {
       monthlyRevenue: baseMetrics.monthlyRevenue, grossMargin: baseMetrics.grossMargin,
-      opex: totalExpenses * 0.3, payroll: totalExpenses * 0.6, otherCosts: totalExpenses * 0.1,
+      opex: stressTestCostBreakdown.opex, payroll: stressTestCostBreakdown.payroll, otherCosts: stressTestCostBreakdown.otherCosts,
       cashBalance: baseMetrics.cashOnHand, churnRate: baseMetrics.churnRate, growthRate: baseMetrics.growthRate,
-      cac: baseMetrics.monthlyRevenue * 0.3, ltv: baseMetrics.churnRate > 0 ? (baseMetrics.monthlyRevenue / baseMetrics.churnRate) * 100 : baseMetrics.monthlyRevenue * 24,
+      cac: sharedMetrics.cac || 0, ltv: sharedMetrics.ltv || 0,
     } : { monthlyRevenue: 0, grossMargin: 0, opex: 0, payroll: 0, otherCosts: 0, cashBalance: 0, churnRate: 0, growthRate: 0, cac: 0, ltv: 0 };
-  }, [baseMetrics]);
+  }, [baseMetrics, stressTestCostBreakdown, sharedMetrics.cac, sharedMetrics.ltv]);
+
+  const stressTestAvailable = !!(baseMetrics && stressTestCostBreakdown);
 
   const stressTestCurrentRunway = useMemo(() => baseMetrics?.currentRunway || 0, [baseMetrics]);
 
-  const stressTestBaselineResults = useMemo(() => ({
-    runway: stressTestCurrentRunway,
-    survival18m: simulation?.survival_18m ?? (simulation?.survival_12m ? Math.max(0, simulation.survival_12m * 0.85) : 65),
-    cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - ((baseMetrics?.monthlyExpenses || 80000) - stressTestFinancialState.monthlyRevenue) * 18),
-  }), [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
+  const stressTestBaselineResults = useMemo(() => {
+    const netBurn = baseMetrics ? baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue : 0;
+    return {
+      runway: stressTestCurrentRunway,
+      // No simulation -> the same runway-based estimate the what-if tool uses
+      // for adjusted states, so baseline and adjusted are comparable.
+      survival18m: simulation?.survival_18m ?? Math.min(100, Math.max(0, (stressTestCurrentRunway / 18) * 100)),
+      cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - netBurn * 18),
+    };
+  }, [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
 
   const handleGeneratePDF = useCallback(async () => {
     if (!simulation) return;
@@ -2316,17 +2340,26 @@ export default function ScenariosPage() {
                 ))}
               </div>
 
+              {!stressTestAvailable && (
+                <div className="rounded-lg border border-dashed p-4 mb-6 text-sm text-muted-foreground" data-testid="stress-test-unavailable">
+                  Sensitivity, what-if and stress tests are not available: no expense breakdown (payroll / operating / marketing / other) has been provided for this company.
+                </div>
+              )}
+              {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
                 <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
               </div>
+              )}
 
               <SensitivityAnalysisPanel data={sensitivityResults} isLoading={sensitivityMutation.isPending} onRunAnalysis={handleRunSensitivityAnalysis} />
 
+              {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <StressTestPanel currentState={stressTestFinancialState} currentRunway={stressTestCurrentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
                 <ReverseStressTest currentState={stressTestFinancialState} />
               </div>
+              )}
 
               <CounterMoveCards
                 counterMoves={simulation?.counter_moves || null}

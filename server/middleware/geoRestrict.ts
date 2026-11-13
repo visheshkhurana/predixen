@@ -7,11 +7,18 @@
 //
 // Env:
 //   GEO_RESTRICTION_ENABLED=false  kill switch — disables the gate entirely
-//   GEO_ALLOWED_COUNTRIES=US,IN,GB extra/override allowlist (ISO-3166 alpha-2)
+//   GEO_ALLOWED_COUNTRIES=US,IN,AE,GB  override allowlist (ISO-3166 alpha-2).
+//                                  When set it REPLACES the default list, so a
+//                                  deployment that sets it must include AE
+//                                  itself to keep UAE visitors in.
+//
+// Default allowlist: US, IN, AE. AE was added with Razorpay billing, which
+// sells in AED (shared/pricing.json), and the UAE expansion.
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
+import { GENERIC_BOT_UA } from "./botUserAgent";
 
-const DEFAULT_ALLOWED = ["US", "IN"];
+const DEFAULT_ALLOWED = ["US", "IN", "AE"];
 
 function allowedCountries(): Set<string> {
   const raw = process.env.GEO_ALLOWED_COUNTRIES;
@@ -114,15 +121,17 @@ const CRAWLER_UA =
     "i",
   );
 
-/**
- * Generic non-browser heuristic, applied after the explicit list above.
- *
- * A backstop for the crawler we have not thought of yet. Given the gate fails
- * open everywhere else, letting an unrecognised bot through is consistent and
- * costs nothing; blocking one is what breaks things quietly.
- */
-const GENERIC_BOT_UA =
-  /(bot\b|\bbot|crawler|spider|crawl|fetcher|scraper|monitor|preview|validator|feedparser|headlesschrome|python-requests|curl\/|wget\/|axios\/|go-http-client|okhttp|java\/|libwww|undici|node-fetch|^node$)/i;
+// Generic non-browser heuristic, applied after the explicit list above.
+//
+// A backstop for the crawler we have not thought of yet. Given the gate fails
+// open everywhere else, letting an unrecognised bot through is consistent and
+// costs nothing; blocking one is what breaks things quietly.
+//
+// The list is shared with `aiAgentLog.ts` — see `botUserAgent.ts`. It is the
+// wider of the two lists that existed, and it is deliberately the one that
+// survived: narrowing it would make THIS gate stricter, and a stricter gate
+// turns away real people. Do not trim it to tidy up a log metric.
+// Used at the `GENERIC_BOT_UA.test(ua)` call below.
 
 /**
  * Private, loopback, link-local and carrier-grade-NAT ranges.

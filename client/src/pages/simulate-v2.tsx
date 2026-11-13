@@ -28,8 +28,13 @@ import {
 interface SimulationResult {
   simulationId: number;
   companyName: string;
-  shareToken: string;
+  // Set only after the owner creates a public link (POST .../share).
+  shareToken?: string;
   summary: {
+    /** Share of months with cash > 0 in this ONE simulated run (not a probability). */
+    monthsSolventPct?: number;
+    survivedHorizon?: boolean;
+    /** Deprecated alias of monthsSolventPct, kept for stored runs. */
     survivalProbability: number;
     fundingProbability: number;
     finalCash: number;
@@ -45,6 +50,7 @@ interface SimulationResult {
     cash_balance: number;
     monthly_revenue: number;
     monthly_burn: number;
+    net_burn?: number;
     runway_months: number;
     headcount: number;
     customers: number;
@@ -150,7 +156,7 @@ export default function SimulateV2Page() {
     onSuccess: (data: SimulationResult) => {
       setResult(data);
       setSelectedMonth(null);
-      toast({ title: 'Simulation complete', description: `Survival probability: ${data.summary.survivalProbability}%` });
+      toast({ title: 'Simulation complete', description: `Cash positive in ${monthsSolvent(data.summary).toFixed(0)}% of simulated months` });
     },
     onError: (err: Error) => {
       toast({ title: 'Simulation failed', description: err.message, variant: 'destructive' });
@@ -176,11 +182,46 @@ export default function SimulateV2Page() {
     setResult(null);
   };
 
-  const handleShare = () => {
-    if (!result?.shareToken) return;
-    const url = `${window.location.origin}/simulate-v2/shared/${result.shareToken}`;
-    navigator.clipboard.writeText(url);
-    toast({ title: 'Link copied', description: 'Share this link with your team or investors' });
+  const [isSharing, setIsSharing] = useState(false);
+
+  // The run does not get a public link automatically; sharing creates one.
+  const handleShare = async () => {
+    if (!result?.simulationId || !currentCompany) return;
+    setIsSharing(true);
+    try {
+      let token = result.shareToken;
+      if (!token) {
+        const res = await apiRequest(
+          'POST',
+          `/api/companies/${currentCompany.id}/simulation/agent-run/${result.simulationId}/share`,
+          {}
+        );
+        const data: { shareToken: string } = await res.json();
+        token = data.shareToken;
+        setResult(prev => (prev ? { ...prev, shareToken: token } : prev));
+      }
+      const url = `${window.location.origin}/simulate-v2/shared/${token}`;
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copied', description: 'Anyone with this link can view this run until you revoke it.' });
+    } catch (err) {
+      toast({ title: 'Could not create a share link', description: (err as Error).message, variant: 'destructive' });
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleRevokeShare = async () => {
+    if (!result?.simulationId || !result.shareToken || !currentCompany) return;
+    try {
+      await apiRequest(
+        'DELETE',
+        `/api/companies/${currentCompany.id}/simulation/agent-run/${result.simulationId}/share`
+      );
+      setResult(prev => (prev ? { ...prev, shareToken: undefined } : prev));
+      toast({ title: 'Link revoked', description: 'The shared link no longer works.' });
+    } catch (err) {
+      toast({ title: 'Could not revoke the link', description: (err as Error).message, variant: 'destructive' });
+    }
   };
 
   const filteredEvents = selectedMonth
@@ -221,8 +262,13 @@ export default function SimulateV2Page() {
             <RotateCcw className="h-4 w-4 mr-1" /> Reset
           </Button>
           {result && (
-            <Button variant="outline" size="sm" onClick={handleShare} data-testid="button-share">
-              <Share2 className="h-4 w-4 mr-1" /> Share
+            <Button variant="outline" size="sm" onClick={handleShare} disabled={isSharing} data-testid="button-share">
+              <Share2 className="h-4 w-4 mr-1" /> {result.shareToken ? 'Copy link' : 'Share'}
+            </Button>
+          )}
+          {result?.shareToken && (
+            <Button variant="ghost" size="sm" onClick={handleRevokeShare} data-testid="button-revoke-share">
+              Revoke link
             </Button>
           )}
           <Button
@@ -555,20 +601,25 @@ function SimulationLoading() {
 }
 
 
+function monthsSolvent(summary: Partial<SimulationResult['summary']> | undefined | null): number {
+  return summary?.monthsSolventPct ?? summary?.survivalProbability ?? 0;
+}
+
 function SummaryCards({ summary, report }: { summary: SimulationResult['summary']; report: SimulationResult['report'] }) {
   const ratingColor = report?.ratingColor || 'green';
-  const survivalColor = summary.survivalProbability >= 70 ? 'text-green-500' :
-    summary.survivalProbability >= 40 ? 'text-yellow-500' : 'text-red-500';
+  const solvent = monthsSolvent(summary);
+  const survivalColor = solvent >= 70 ? 'text-green-500' :
+    solvent >= 40 ? 'text-yellow-500' : 'text-red-500';
 
   return (
     <div className="grid grid-cols-4 gap-3" data-testid="summary-cards">
       <Card>
         <CardContent className="pt-4 pb-3">
-          <div className="text-xs text-muted-foreground mb-1">Survival</div>
+          <div className="text-xs text-muted-foreground mb-1">Months solvent</div>
           <div className={cn("text-2xl font-bold font-mono", survivalColor)}>
-            {summary.survivalProbability.toFixed(0)}%
+            {solvent.toFixed(0)}%
           </div>
-          <div className="text-xs text-muted-foreground">probability</div>
+          <div className="text-xs text-muted-foreground">of months in this run</div>
         </CardContent>
       </Card>
       <Card>
@@ -651,8 +702,8 @@ function TimelineView({ timeline, events, selectedMonth, onSelectMonth }: {
                   {formatCurrencyAbbrev(snap.monthly_revenue)}
                 </span>
                 <span className="font-mono">
-                  <span className="text-muted-foreground">Burn </span>
-                  {formatCurrencyAbbrev(snap.monthly_burn)}
+                  <span className="text-muted-foreground">Net burn </span>
+                  {formatCurrencyAbbrev(snap.net_burn ?? snap.monthly_burn)}
                 </span>
                 <span className="font-mono">
                   <span className="text-muted-foreground">Runway </span>
@@ -798,7 +849,7 @@ function ChartsView({ timeline, trajectories }: {
     month: `M${s.month}`,
     cash: Math.round(s.cash_balance),
     revenue: Math.round(s.monthly_revenue),
-    burn: Math.round(s.monthly_burn),
+    burn: Math.round(s.net_burn ?? s.monthly_burn),
     runway: Math.min(s.runway_months, 60),
     customers: s.customers,
     headcount: s.headcount,
@@ -898,12 +949,12 @@ export function SharedSimulationPage() {
           <div className="text-center">
             <div className={cn(
               "text-6xl font-bold font-mono mb-2",
-              data.summary?.survivalProbability >= 70 ? 'text-green-500' :
-              data.summary?.survivalProbability >= 40 ? 'text-yellow-500' : 'text-red-500'
+              monthsSolvent(data.summary) >= 70 ? 'text-green-500' :
+              monthsSolvent(data.summary) >= 40 ? 'text-yellow-500' : 'text-red-500'
             )}>
-              {data.summary?.survivalProbability?.toFixed(0) || 0}%
+              {monthsSolvent(data.summary).toFixed(0)}%
             </div>
-            <p className="text-lg text-muted-foreground mb-4">Survival Probability</p>
+            <p className="text-lg text-muted-foreground mb-4">of simulated months with cash above zero</p>
             {report.headline && <p className="text-sm max-w-lg mx-auto">{report.headline}</p>}
           </div>
         </CardContent>
