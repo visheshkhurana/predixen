@@ -72,8 +72,8 @@ PLAN_DETAILS: Dict[str, dict] = {
     },
     PlanTier.STARTER: {
         "name": "Starter",
-        "price_monthly": 29,
-        "price_annual": 290,
+        "price_monthly": 39,  # synced from shared/pricing.json below
+        "price_annual": 390,
         "tagline": "For early-stage founders",
         "max_companies": 1,
         "max_simulations_per_month": 50,
@@ -326,6 +326,13 @@ def _build_price_table() -> Dict[tuple, dict]:
 
 # (tier, currency, interval) -> {amount, amount_minor, currency, plan_env}
 PRICE_TABLE: Dict[tuple, dict] = _build_price_table()
+
+# Keep the USD list price on PLAN_DETAILS in step with shared/pricing.json, so
+# in-app plan cards and the admin views never show a stale Starter price.
+_STARTER_USD = REGIONAL_MONTHLY_PRICES.get((str(PlanTier.STARTER), "USD"))
+if _STARTER_USD is not None:
+    PLAN_DETAILS[PlanTier.STARTER]["price_monthly"] = _STARTER_USD
+    PLAN_DETAILS[PlanTier.STARTER]["price_annual"] = annual_from_monthly(_STARTER_USD)
 
 
 def normalize_currency(value) -> Optional[str]:
