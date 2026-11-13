@@ -5,6 +5,7 @@ import {
   hardRedirectToLogin,
   shouldHardRedirectOn401,
 } from '@/lib/authSession';
+import { backoffMsFor429, readBodyRetryAfter } from '@/lib/rateLimitBackoff';
 export { ApiError };
 
 const API_BASE = '/api';
@@ -24,7 +25,9 @@ function getCSRFToken(): string | null {
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
-const RETRYABLE_STATUS_CODES = [502, 503, 504, 429];
+// 429 is not in this list. A rate limit waits for Retry-After once (below),
+// instead of hammering the same bucket at 1s then 2s.
+const RETRYABLE_STATUS_CODES = [502, 503, 504];
 
 async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -67,6 +70,14 @@ async function request<T>(
             continue;
           }
         } catch {}
+      }
+
+      if (response.status === 429 && attempt < 1 && (!method || method === 'GET')) {
+        const bodyRetryAfter = await readBodyRetryAfter(response);
+        const delay = backoffMsFor429(response.headers.get('Retry-After'), bodyRetryAfter);
+        console.warn(`[API] Rate limited ${endpoint}. Waiting ${delay}ms (Retry-After) before one retry`);
+        await sleep(delay);
+        continue;
       }
 
       if (RETRYABLE_STATUS_CODES.includes(response.status) && attempt < MAX_RETRIES) {
@@ -179,20 +190,30 @@ async function request<T>(
 
 export const api = {
   auth: {
-    register: (email: string, password: string, distinctId?: string | null) =>
+    // `invite` is the token from /auth?invite=…; the server accepts it when
+    // it was sent to this email (workspace membership or platform role).
+    register: (email: string, password: string, distinctId?: string | null, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email,
           password,
+          ...(invite ? { invite } : {}),
           ...(distinctId ? { distinct_id: distinctId } : {}),
           ...readFirstTouchAttribution(),
         }),
       }),
-    login: (email: string, password: string) =>
+    login: (email: string, password: string, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
+      }),
+    // Opens a private demo workspace: a throwaway account with its own copy of
+    // the sample company. No credentials involved.
+    demo: () =>
+      request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean; is_demo: boolean }>('/auth/demo', {
+        method: 'POST',
+        body: JSON.stringify({}),
       }),
     adminLogin: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/admin/login', {
@@ -855,6 +876,8 @@ export const api = {
         sources: string[];
         last_updated: string;
         is_cached: boolean;
+        is_fallback?: boolean;
+        note?: string | null;
       }>('/benchmarks/search', {
         method: 'POST',
         body: JSON.stringify({ industry, stage }),

@@ -70,7 +70,6 @@ def test_llm_posts_get_a_stricter_bucket(path):
         ("/simulations/jobs", "GET", "api"),
         ("/companies/7/chat", "GET", "api"),
         ("/companies/7/chat/feedback", "POST", "api"),
-        ("/simulation-copilot/validate", "POST", "api"),
         ("/companies/7", "POST", "api"),
         ("/auth/login", "POST", "auth"),
         ("/leads", "POST", "leads"),

@@ -92,7 +92,9 @@ test("hiring planner runway from /truth/latest on canonical net burn", () => {
 test("pages call real routes and drop dead UI", () => {
   const planner = readFileSync("client/src/pages/hiring-planner.tsx", "utf8");
   assert.doesNotMatch(planner, /"truth-scan", "latest"/);
-  assert.match(planner, /"truth", "latest"/);
+  // The real /truth/latest route, either inline or via the shared useTruthScan hook
+  // (which calls api.truth.latest -> /companies/:id/truth/latest).
+  assert.match(planner, /"truth", "latest"|useTruthScan\(/);
 
   const twin = readFileSync("client/src/pages/digital-twin.tsx", "utf8");
   assert.doesNotMatch(twin, /1,000 Simulations/);

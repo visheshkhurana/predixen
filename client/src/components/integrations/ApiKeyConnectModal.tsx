@@ -4,15 +4,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Shield, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
-import { useForm } from 'react-hook-form';
 
 interface ApiKeyConnectModalProps {
   integration: IntegrationConfig | null;
   isOpen: boolean;
   onClose: () => void;
-  onConnect: (integrationId: string, credentials: Record<string, string>, selectedDataPoints: string[]) => void;
+  /**
+   * Performs the real connect request. Resolve on success; throw to keep the
+   * modal open and show the error. The modal never reports success itself.
+   */
+  onConnect: (integrationId: string, credentials: Record<string, string>) => Promise<void>;
 }
 
 export function ApiKeyConnectModal({
@@ -21,17 +23,17 @@ export function ApiKeyConnectModal({
   onClose,
   onConnect,
 }: ApiKeyConnectModalProps) {
-  const [step, setStep] = useState<'credentials' | 'datapoints' | 'connecting'>('credentials');
   const [isConnecting, setIsConnecting] = useState(false);
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
-  const [selectedDataPoints, setSelectedDataPoints] = useState<string[]>([]);
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!integration || !integration.apiKeyConfig) return null;
 
   const handleInputChange = (fieldName: string, value: string) => {
     setCredentials(prev => ({ ...prev, [fieldName]: value }));
+    setSubmitError(null);
     if (errors[fieldName]) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -58,51 +60,29 @@ export function ApiKeyConnectModal({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleContinue = () => {
-    if (validateCredentials()) {
-      setStep('datapoints');
-    }
-  };
-
-  const handleToggleDataPoint = (dpId: string) => {
-    setSelectedDataPoints(prev => 
-      prev.includes(dpId) 
-        ? prev.filter(id => id !== dpId)
-        : [...prev, dpId]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedDataPoints.length === integration.dataPoints.length) {
-      setSelectedDataPoints([]);
-    } else {
-      setSelectedDataPoints(integration.dataPoints.map(dp => dp.id));
-    }
+  const handleClose = () => {
+    if (isConnecting) return;
+    setCredentials({});
+    setErrors({});
+    setSubmitError(null);
+    setShowPasswords({});
+    onClose();
   };
 
   const handleConnect = async () => {
+    if (!validateCredentials()) return;
     setIsConnecting(true);
-    setStep('connecting');
-    
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    onConnect(
-      integration.id, 
-      credentials,
-      selectedDataPoints.length > 0 ? selectedDataPoints : integration.dataPoints.map(dp => dp.id)
-    );
-    
-    setIsConnecting(false);
-    handleClose();
-  };
-
-  const handleClose = () => {
-    setStep('credentials');
-    setCredentials({});
-    setSelectedDataPoints([]);
-    setErrors({});
-    setShowPasswords({});
-    onClose();
+    setSubmitError(null);
+    try {
+      await onConnect(integration.id, credentials);
+      setIsConnecting(false);
+      setCredentials({});
+      setShowPasswords({});
+      onClose();
+    } catch (err) {
+      setIsConnecting(false);
+      setSubmitError(err instanceof Error && err.message ? err.message : 'Connection failed. Check your credentials.');
+    }
   };
 
   return (
@@ -113,13 +93,10 @@ export function ApiKeyConnectModal({
             Connect {integration.name}
           </DialogTitle>
           <DialogDescription>
-            {step === 'credentials' && 'Enter your API credentials to connect.'}
-            {step === 'datapoints' && 'Select which data points you want to sync.'}
-            {step === 'connecting' && 'Testing connection and syncing data...'}
+            Enter your API credentials. We check them with {integration.name} before saving.
           </DialogDescription>
         </DialogHeader>
 
-        {step === 'credentials' && (
           <div className="space-y-4">
             <div className="bg-muted/50 rounded-lg p-3 flex items-start gap-2">
               <Shield className="w-4 h-4 text-primary mt-0.5" />
@@ -153,6 +130,7 @@ export function ApiKeyConnectModal({
                         size="icon"
                         className="absolute right-0 top-0 h-full"
                         onClick={() => togglePasswordVisibility(field.name)}
+                        aria-label={showPasswords[field.name] ? `Hide ${field.label}` : `Show ${field.label}`}
                         data-testid={`button-toggle-${field.name}`}
                       >
                         {showPasswords[field.name] ? (
@@ -176,76 +154,21 @@ export function ApiKeyConnectModal({
               ))}
             </div>
           </div>
-        )}
-
-        {step === 'datapoints' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Available Data Points</Label>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleSelectAll}
-                data-testid="button-select-all"
-              >
-                {selectedDataPoints.length === integration.dataPoints.length ? 'Deselect All' : 'Select All'}
-              </Button>
-            </div>
-            
-            <div className="max-h-64 overflow-y-auto space-y-2">
-              {integration.dataPoints.map((dp) => (
-                <div 
-                  key={dp.id} 
-                  className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <Checkbox
-                    id={dp.id}
-                    checked={selectedDataPoints.includes(dp.id)}
-                    onCheckedChange={() => handleToggleDataPoint(dp.id)}
-                    data-testid={`checkbox-datapoint-${dp.id}`}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor={dp.id} className="font-medium text-sm cursor-pointer">
-                      {dp.name}
-                    </Label>
-                    <p className="text-xs text-muted-foreground">{dp.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step === 'connecting' && (
-          <div className="py-8 flex flex-col items-center gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">
-              Connecting to {integration.name}...
-            </p>
-          </div>
-        )}
+            {submitError && (
+              <p className="text-sm text-destructive flex items-center gap-1" role="alert" data-testid="text-connect-error">
+                <AlertCircle className="w-4 h-4" />
+                {submitError}
+              </p>
+            )}
 
         <DialogFooter>
-          {step === 'credentials' && (
-            <>
-              <Button variant="outline" onClick={handleClose} data-testid="button-cancel">
-                Cancel
-              </Button>
-              <Button onClick={handleContinue} data-testid="button-continue">
-                Continue
-              </Button>
-            </>
-          )}
-          {step === 'datapoints' && (
-            <>
-              <Button variant="outline" onClick={() => setStep('credentials')} data-testid="button-back">
-                Back
-              </Button>
-              <Button onClick={handleConnect} data-testid="button-connect">
-                Connect
-              </Button>
-            </>
-          )}
+          <Button variant="outline" onClick={handleClose} disabled={isConnecting} data-testid="button-cancel">
+            Cancel
+          </Button>
+          <Button onClick={handleConnect} disabled={isConnecting} data-testid="button-connect">
+            {isConnecting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {isConnecting ? 'Checking credentials...' : 'Connect'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

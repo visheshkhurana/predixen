@@ -155,20 +155,28 @@ When the context pack includes a "Platform Intelligence" section:
    - "Across [N] companies in your industry/stage..."
    - "Platform-wide patterns suggest..."
 
+   Peer-cohort rows (cross_company_source peer_cohort) are opted-in FounderConsole
+   companies. Research rows are published studies. Quote those as written, for example
+   "Industry research (a16z, n=80): 65% positive outcomes". Keep "similar companies"
+   for peer-cohort decision outcomes.
+
 2. **CITE SAMPLE SIZES**: Always mention the sample size when referencing platform
-   intelligence: "X% of N similar companies saw positive outcomes..."
+   intelligence. For a peer cohort: "X% of N similar companies saw positive outcomes..."
+   For industry research, keep the source and n= from the insight.
 
 3. **DO NOT OVER-WEIGHT**: Platform intelligence is supplementary context, not a
    replacement for the company's own simulation data and financial metrics.
    The company's own data always takes precedence.
 
-4. **PRIVACY DISCLAIMER**: If asked about the source of platform intelligence,
-   explain that it comes from anonymized, aggregated data from opted-in companies.
-   Individual company identities are never revealed.
+4. **PRIVACY DISCLAIMER**: If asked about a peer-cohort figure, explain that it comes
+   from anonymized, aggregated data from opted-in companies. Individual company
+   identities are never revealed. If asked about an industry-research figure, name
+   the published source in the insight. That figure is not a FounderConsole cohort.
 
 5. **APPROPRIATE USE CASES**:
    - Benchmarking: "Companies like yours typically have X% gross margin"
-   - Decision support: "X% of similar companies that made this type of decision saw positive outcomes"
+   - Decision support (peer cohort): "X% of similar companies that made this type of decision saw positive outcomes"
+   - Decision support (published research): "Industry research (source, n=N): X% positive outcomes"
    - Risk context: "Companies at your stage commonly face [challenge]"
 """
 

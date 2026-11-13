@@ -186,6 +186,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(llm_usage_api.router)
     app.include_router(doc_generator_api.router)
     app.include_router(slack_bot_api.router)
+    app.include_router(slack_bot_api.link_router)
     app.include_router(digital_twin_api.router)
     app.include_router(intelligence_graph_api.router)
     app.include_router(agent_simulation_api.router)
@@ -332,6 +333,17 @@ async def _run_deferred_startup():
                 logger.info("Skipping demo data seeding (SEED_DEMO_DATA=false)")
         except Exception as e:
             logger.error(f"Error during seeding: {e}")
+        try:
+            # Per-visitor demo workspaces past their TTL, and the opt-in
+            # one-time reset of the legacy shared demo account
+            # (DEMO_LEGACY_CLEANUP=true). Both only touch demo-owned rows.
+            from server.core.demo_workspace import cleanup_expired_demo_users, cleanup_legacy_demo_account
+            db.rollback()
+            cleanup_legacy_demo_account(db)
+            cleanup_expired_demo_users(db)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Demo workspace cleanup skipped: {e}")
         finally:
             db.close()
 
@@ -468,7 +480,7 @@ app = FastAPI(
 )
 
 print(f"[main.py] Adding middleware... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
-from server.middleware.rate_limiter import RateLimiterMiddleware
+from server.middleware.rate_limiter import CORS_EXPOSE_HEADERS, RateLimiterMiddleware
 from server.middleware.csrf_protection import CSRFProtectionMiddleware
 from server.middleware.security_headers import SecurityHeadersMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -499,6 +511,7 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",
     "/auth/register",
     "/auth/login",
+    "/auth/demo",
     "/auth/admin/login",
     "/auth/refresh",
     "/companies/*/seed-sample",
@@ -509,14 +522,21 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/api/email/unsubscribe",
 ])
 
+# Demo sessions: no admin, no email/invite/share/billing/integration writes.
+from server.middleware.demo_guard import DemoGuardMiddleware
+app.add_middleware(DemoGuardMiddleware)
+
 app.add_middleware(
     RateLimiterMiddleware,
     rate_limit_auth=settings.RATE_LIMIT_AUTH,
     rate_limit_admin_login=settings.RATE_LIMIT_ADMIN_LOGIN,
     rate_limit_api=settings.RATE_LIMIT_API,
+    rate_limit_read=settings.RATE_LIMIT_READ,
+    rate_limit_read_burst=settings.RATE_LIMIT_READ_BURST,
     rate_limit_upload=settings.RATE_LIMIT_UPLOAD,
     rate_limit_simulation=settings.RATE_LIMIT_SIMULATION,
     rate_limit_llm=settings.RATE_LIMIT_LLM,
+    rate_limit_email=settings.RATE_LIMIT_EMAIL,
 )
 
 app.add_middleware(
@@ -525,7 +545,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-CSRF-Token", "X-Request-ID"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=CORS_EXPOSE_HEADERS,
 )
 
 @app.get("/")
