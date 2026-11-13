@@ -179,20 +179,23 @@ async function request<T>(
 
 export const api = {
   auth: {
-    register: (email: string, password: string, distinctId?: string | null) =>
+    // `invite` is the token from /auth?invite=…; the server accepts it when
+    // it was sent to this email (workspace membership or platform role).
+    register: (email: string, password: string, distinctId?: string | null, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email,
           password,
+          ...(invite ? { invite } : {}),
           ...(distinctId ? { distinct_id: distinctId } : {}),
           ...readFirstTouchAttribution(),
         }),
       }),
-    login: (email: string, password: string) =>
+    login: (email: string, password: string, invite?: string | null) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(invite ? { email, password, invite } : { email, password }),
       }),
     adminLogin: (email: string, password: string) =>
       request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean; is_email_verified: boolean }>('/auth/admin/login', {

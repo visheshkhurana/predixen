@@ -104,7 +104,8 @@ def test_admin_login_ignores_email_case(db):
     from server.api.auth import router
     from server.core.config import settings
 
-    _user(db, "owner@example.com")
+    # Main requires a verified email for the admin login (hardening since #143).
+    _user(db, "owner@example.com", is_email_verified=True)
     with patch.object(settings, "ADMIN_MASTER_EMAIL", "owner@example.com"), \
          patch.object(settings, "ADMIN_MASTER_PASSWORD_HASH", None):
         r = _client(db, router).post("/auth/admin/login", json={"email": "OWNER@example.com", "password": "secret123"})
