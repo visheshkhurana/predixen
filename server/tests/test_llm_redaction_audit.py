@@ -343,7 +343,7 @@ def test_simulation_v2_closes_session_when_body_setup_fails(llm_sink, monkeypatc
     db = RecordingDB()
     monkeypatch.setattr(simulation_v2, "SessionLocal", lambda: db)
 
-    def _reject_malformed(request):
+    def _reject_malformed(request, **_kwargs):
         assert request.total_rounds == 6
         raise ValueError("malformed simulation body")
 

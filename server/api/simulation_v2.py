@@ -20,7 +20,10 @@ from server.core.plan_usage import PLAN_QUOTA_SIMULATION, reserve_monthly_quota
 from server.models import User
 from server.lib.llm.openai_client import get_audited_client
 from server.services.simulation.engine import SimulationEngine
-from server.services.simulation.input_normalization import inputs_for_simulation_request
+from server.services.simulation.input_normalization import (
+    inputs_for_simulation_request,
+    sync_records_from_financial_provenance,
+)
 from server.services.simulation.types import CompanyState, AgentAction, net_runway_months
 
 logger = logging.getLogger(__name__)
@@ -144,6 +147,30 @@ def _simulation_company_id(db, user) -> Optional[int]:
         return None
 
 
+def _simulation_sync_records(db, user) -> dict:
+    """Latest connector-synced inputs for the user's company, as sync_records.
+
+    Best effort: provenance is additive, so any failure (no company, a table
+    without the provenance columns, a stand-in session) runs the simulation
+    on the request and canned baseline exactly as before.
+    """
+    try:
+        company_id = _simulation_company_id(db, user)
+        if company_id is None:
+            return {}
+        from server.services.input_provenance import get_input_provenance_sources
+
+        sources = get_input_provenance_sources(company_id, db, include_values=True)
+        return sync_records_from_financial_provenance(sources)
+    except Exception:
+        logger.warning("Could not load synced inputs for simulation_v2; using request values only")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {}
+
+
 def _audited_simulation_client(db, user):
     """The same audited OpenAI client llm_router uses, with a thread-safe session.
 
@@ -184,7 +211,8 @@ async def run_simulation_v2_sse(
 
         reserve_monthly_quota(db, current_user, PLAN_QUOTA_SIMULATION)
 
-        normalized, input_provenance = inputs_for_simulation_request(request)
+        sync_records = _simulation_sync_records(db, current_user)
+        normalized, input_provenance = inputs_for_simulation_request(request, sync_records=sync_records)
         initial_state, scenario_params, total_rounds = build_simulation_v2_state(normalized)
 
         engine = SimulationEngine(llm_client=client, model="gpt-5-mini")

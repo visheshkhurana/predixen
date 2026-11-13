@@ -8,6 +8,7 @@ baselines for everything else.
 
 from __future__ import annotations
 
+import math
 from datetime import date, datetime
 from typing import Any, Mapping, Optional
 
@@ -41,6 +42,61 @@ IMPLIED_ASSUMPTIONS: dict[str, Any] = {
     "brand_reputation": 0.5,
     "investor_confidence": 0.5,
 }
+
+
+# simulation_v2 input -> FinancialRecord column whose latest synced value can
+# fill it (server/services/input_provenance.py). Only one-to-one fields are
+# listed. monthly_burn is GROSS spend and growth_rate is a fraction while
+# mom_growth is stored as a percentage, so neither maps without a conversion
+# and both are left to the founder or the canned baseline.
+SIMULATION_SYNC_FIELDS: dict[str, str] = {
+    "monthly_revenue": "mrr",
+    "cash_balance": "cash_balance",
+    "customers": "customers",
+    "team_size": "headcount",
+}
+
+# Lower bounds on SimulationV2Request for the mapped fields. A synced number
+# outside them would fail request validation, so it is not used.
+_SYNC_MINIMUMS: dict[str, float] = {
+    "monthly_revenue": 0,
+    "cash_balance": 0,
+    "customers": 0,
+    "team_size": 1,
+}
+_SYNC_INTEGER_FIELDS = frozenset({"customers", "team_size"})
+
+
+def sync_records_from_financial_provenance(
+    sources: Optional[Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Turn ``get_input_provenance_sources(..., include_values=True)`` into sync_records.
+
+    ``sources`` is keyed by FinancialRecord column and each entry carries
+    ``value``, ``source`` and ``synced_at``. The result is keyed by
+    simulation_v2 input name, the shape ``normalize_simulation_inputs``
+    expects. Entries without a usable number are dropped.
+    """
+    records: dict[str, dict[str, Any]] = {}
+    if not isinstance(sources, Mapping):
+        return records
+    for sim_field, column in SIMULATION_SYNC_FIELDS.items():
+        entry = sources.get(column)
+        if not isinstance(entry, Mapping):
+            continue
+        value = entry.get("value")
+        if not _is_number(value) or not math.isfinite(value):
+            continue
+        if value < _SYNC_MINIMUMS[sim_field]:
+            continue
+        if sim_field in _SYNC_INTEGER_FIELDS:
+            value = int(value)
+        record: dict[str, Any] = {"value": value}
+        for key in ("source", "synced_at"):
+            if entry.get(key) is not None:
+                record[key] = entry[key]
+        records[sim_field] = record
+    return records
 
 
 def _is_number(value: Any) -> bool:
@@ -162,13 +218,18 @@ def normalize_simulation_inputs(
     return values, provenance
 
 
-def inputs_for_simulation_request(request: Any) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
+def inputs_for_simulation_request(
+    request: Any,
+    sync_records: Optional[Mapping[str, Any]] = None,
+) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
     """Normalise a SimulationV2Request.
 
-    Fields the client actually sent are entered. Pydantic defaults, omitted
-    fields, and explicit nulls are assumed (canned baseline). When the request
-    has no ``model_fields_set``, every non-None field it carries is entered
-    and missing or null fields fall back to the canned baseline.
+    Fields the client actually sent are entered. A field the client did not
+    send takes the connector value from ``sync_records`` when there is one
+    (synced, with source and synced_at). Pydantic defaults, omitted fields,
+    and explicit nulls otherwise are assumed (canned baseline). When the
+    request has no ``model_fields_set``, every non-None field it carries is
+    entered and missing or null fields fall back as above.
     """
     fields_set = getattr(request, "model_fields_set", None)
     explicit: dict[str, Any] = {}
@@ -183,4 +244,4 @@ def inputs_for_simulation_request(request: Any) -> tuple[dict[str, Any], dict[st
                 value = getattr(request, name, None)
                 if value is not None:
                     explicit[name] = value
-    return normalize_simulation_inputs(request_fields=explicit)
+    return normalize_simulation_inputs(request_fields=explicit, sync_records=sync_records)
