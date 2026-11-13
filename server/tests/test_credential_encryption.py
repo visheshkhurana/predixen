@@ -129,6 +129,21 @@ class TestCredentialEncryptor:
         assert masked["service_url"] == "https://api.example.com"
         assert masked["username"] == "testuser"
 
+    def test_mask_credentials_account_number_is_last_four_only(self):
+        """Bank account numbers use last-4 masking, other secrets keep first2...last2."""
+        credentials = {
+            "api_key": "sk_live_abc123def456",
+            "account_number": "9182736450192837",
+            "short_account_number": "1234",
+        }
+
+        masked = mask_credentials(credentials)
+
+        assert masked["api_key"] == "sk...56"
+        assert masked["account_number"] == "••••2837"
+        assert masked["short_account_number"] == "****"
+        assert "9182736450192837" not in str(masked)
+
     def test_mask_credentials_short_values(self):
         """Test masking of short sensitive values."""
         credentials = {

@@ -178,7 +178,13 @@ class CredentialEncryptor:
 
         masked = {}
         for key, value in credentials.items():
-            key_lower = key.lower()
+            key_lower = key.lower().replace("-", "_")
+
+            # Bank account numbers are shown as last-4 only. Other secrets keep
+            # the first2...last2 mask below.
+            if key_lower in ("account_number", "accountnumber") or key_lower.endswith("_account_number"):
+                masked[key] = mask_account_number(value) if isinstance(value, str) else "****"
+                continue
 
             # Check if this is a sensitive field
             if key_lower in sensitive_fields or any(
@@ -197,6 +203,18 @@ class CredentialEncryptor:
                 masked[key] = value
 
         return masked
+
+
+def mask_account_number(value: Any) -> str:
+    """Mask a bank account number to the last four characters.
+
+    Values of four characters or fewer are fully hidden so the mask is not
+    the whole number.
+    """
+    text = "" if value is None else str(value).strip()
+    if len(text) <= 4:
+        return "****"
+    return f"••••{text[-4:]}"
 
 
 # Global encryptor instance (lazy-loaded)

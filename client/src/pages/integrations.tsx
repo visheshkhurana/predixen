@@ -75,6 +75,9 @@ interface ConnectorMetadata extends IntegrationProvider {
 
 type ConnectorCategory = "all" | "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "captable" | "other";
 
+// Catalog id first. razorpayx_payroll is the old id; connections saved under it still resolve.
+const RAZORPAYX_IDS = ["razorpayx", "razorpayx_payroll"];
+
 const providerIcons: Record<string, React.ReactNode> = {
   quickbooks: <SiQuickbooks className="h-6 w-6" />,
   xero: <SiXero className="h-6 w-6" />,
@@ -90,7 +93,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   tally: <Database className="h-6 w-6" />,
   shiprocket: <Truck className="h-6 w-6" />,
   meta_ads: <Megaphone className="h-6 w-6" />,
-  razorpayx_payroll: <DollarSign className="h-6 w-6" />,
+  razorpayx: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
   keka: <Users className="h-6 w-6" />,
   peoplestrong: <Users className="h-6 w-6" />,
@@ -253,18 +256,14 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
       "View company information",
     ],
   },
-  razorpayx_payroll: {
+  razorpayx: {
     dataImported: [
-      "Employee salary data",
-      "PF/ESI contributions",
-      "TDS deductions",
-      "Reimbursements",
-      "Monthly payroll runs",
+      "Processed salary payouts (INR)",
+      "Active employee contacts",
     ],
     permissions: [
-      "Read employee data",
-      "Access payroll records",
-      "View compliance details",
+      "Read RazorpayX contacts",
+      "Read RazorpayX payouts",
     ],
   },
   greythr: {
@@ -363,7 +362,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   freshbooks: { setupTime: "~10 min", category: "accounting" },
   zoho_books: { setupTime: "~10 min", category: "accounting" },
   tally: { setupTime: "~15 min", category: "accounting" },
-  razorpayx_payroll: { setupTime: "~10 min", category: "hr" },
+  razorpayx: { setupTime: "~10 min", category: "hr" },
   greythr: { setupTime: "~10 min", category: "hr" },
   keka: { setupTime: "~10 min", category: "hr" },
   peoplestrong: { setupTime: "~15 min", category: "hr" },
@@ -438,10 +437,10 @@ const payrollProviders: IntegrationProvider[] = [
     features: ["Employee Costs", "Payroll Runs", "Headcount Tracking", "Tax Obligations"],
   },
   {
-    id: "razorpayx_payroll",
+    id: "razorpayx",
     name: "RazorpayX Payroll",
-    description: "Automated payroll and compliance for Indian startups",
-    features: ["Employee Salaries", "Statutory Payments (PF, ESI, TDS)", "Reimbursements", "Payslips"],
+    description: "Salary payouts and employee contacts from RazorpayX",
+    features: ["Processed salary payouts", "Employee headcount", "INR payroll cost"],
   },
   {
     id: "greythr",
@@ -682,13 +681,14 @@ export default function IntegrationsPage() {
       records_synced: number;
       error: string | null;
       needs_reauth?: boolean;
+      account_hint?: string | null;
     }>;
   }>({
     queryKey: ["/api/connectors/companies", companyId, "status"],
     enabled: !!companyId,
   });
 
-  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
@@ -784,7 +784,10 @@ export default function IntegrationsPage() {
   type IntegrationType = "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable";
   
   const getConnectorInfo = (providerId: string) => {
-    return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
+    // razorpayx_payroll is the legacy id for razorpayx; rows stored under it still count.
+    const ids = RAZORPAYX_IDS.includes(providerId) ? RAZORPAYX_IDS : [providerId];
+    const matches = connectorStatus?.connectors?.filter(c => ids.includes(c.provider_id)) ?? [];
+    return matches.find(c => c.connected) ?? matches[0];
   };
 
   const isRegistryIntegrationConnected = (integration: IntegrationConfig) =>
@@ -797,7 +800,7 @@ export default function IntegrationsPage() {
     }
   };
   
-  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -875,6 +878,7 @@ export default function IntegrationsPage() {
               lastSync={lastSync ?? null}
               syncDetails={syncDetails}
               isSyncing={isSyncing}
+              accountHint={connectorInfo?.account_hint}
             />
           )}
 
@@ -1223,7 +1227,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
                 {connectorStatus?.connectors?.some(c => 
-                  ["razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
+                  ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
                 ) ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
@@ -1234,7 +1238,7 @@ export default function IntegrationsPage() {
                 <p className="font-medium">Payroll</p>
                 <p className="text-sm text-muted-foreground truncate">
                   {connectorStatus?.connectors?.find(c => 
-                    ["razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
+                    ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
                   )?.provider_id?.replace(/_/g, " ") || "Not connected"}
                 </p>
               </div>
@@ -1335,14 +1339,22 @@ export default function IntegrationsPage() {
 function SyncStatusDisplay({ 
   lastSync, 
   syncDetails, 
-  isSyncing 
+  isSyncing,
+  accountHint,
 }: { 
   lastSync: string | null; 
   syncDetails?: SyncDetails;
   isSyncing: boolean;
+  accountHint?: string | null;
 }) {
   return (
     <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+      {accountHint && (
+        <div className="flex items-center gap-2 text-sm" data-testid="saved-account-hint">
+          <Shield className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Account {accountHint}</span>
+        </div>
+      )}
       {isSyncing ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm">
@@ -1382,9 +1394,10 @@ function SyncStatusDisplay({
 }
 
 const providerCredentialFields: Record<string, { field: string; label: string; placeholder: string }[]> = {
-  razorpayx_payroll: [
-    { field: "api_key", label: "API Key", placeholder: "Enter RazorpayX API Key" },
-    { field: "api_secret", label: "API Secret", placeholder: "Enter RazorpayX API Secret" },
+  razorpayx: [
+    { field: "api_key", label: "API Key", placeholder: "RazorpayX Key Id" },
+    { field: "api_secret", label: "API Secret", placeholder: "RazorpayX Key Secret" },
+    { field: "account_number", label: "Account number", placeholder: "Customer Identifier or current account number" },
   ],
   greythr: [
     { field: "api_access_id", label: "API Access ID", placeholder: "Enter GreytHR Access ID" },
@@ -1545,7 +1558,7 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
+  const connectorBackedProviders = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
   const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {
