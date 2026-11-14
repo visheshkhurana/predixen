@@ -24,7 +24,7 @@ _CANDIDATE_ADMIN_URLS = (
     os.environ.get("TEST_PG_ADMIN_URL"),
     "postgresql+psycopg2:///postgres",
     "postgresql+psycopg2://localhost/postgres",
-    "postgresql://localhost/postgres",
+    "postgresql+psycopg2://localhost/postgres",
 )
 
 

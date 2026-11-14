@@ -60,8 +60,9 @@ def live_paths():
     # `_register_remaining_routers` runs on a daemon thread during startup, so a
     # plain import only ever sees the critical routers (8 of 417).
     main._register_remaining_routers(main.app)
-    templates = sorted({getattr(r, "path", "") for r in main.app.routes}
-                       - {""})
+    from server.lib.route_listing import route_paths
+
+    templates = sorted(route_paths(main.app))
     assert len(templates) > 100, (
         f"only {len(templates)} routes were registered -- the app did not finish "
         "assembling, so this test would pass vacuously"

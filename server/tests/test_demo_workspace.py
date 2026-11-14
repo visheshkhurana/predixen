@@ -25,7 +25,7 @@ from server.core.demo_workspace import (
 )
 from server.middleware.demo_guard import is_blocked_for_demo
 
-PG_ADMIN_URL = os.environ.get("TEST_PG_ADMIN_URL", "postgresql://localhost/postgres")
+PG_ADMIN_URL = os.environ.get("TEST_PG_ADMIN_URL", "postgresql+psycopg2://localhost/postgres")
 TEST_DB_NAME = "fc_demo_workspace_test"
 
 

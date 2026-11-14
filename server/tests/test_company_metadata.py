@@ -22,7 +22,7 @@ from server.core.company_metadata import (
     save_metadata_value,
 )
 
-PG_ADMIN_URL = os.environ.get("TEST_PG_ADMIN_URL", "postgresql://localhost/postgres")
+PG_ADMIN_URL = os.environ.get("TEST_PG_ADMIN_URL", "postgresql+psycopg2://localhost/postgres")
 TEST_DB_NAME = "fc_metadata_test"
 
 
