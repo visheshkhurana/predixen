@@ -6,6 +6,7 @@
  *   import { relations } from "drizzle-orm";
  *   import { createInsertSchema, createSelectSchema } from "drizzle-zod";
  *   import { z } from "zod";
+ *   import type { z as z4 } from "zod/v4"; // drizzle-zod 0.8 builds Zod v4 schemas
  *
  * The existing `leads` table is minimal. We extend it below via ALTER
  * in the migration. Add the new columns here first so Drizzle generates
@@ -84,7 +85,7 @@ export const leads = pgTable("leads", {
 export const insertLeadSchema = createInsertSchema(leads).omit({
   id: true, createdAt: true, updatedAt: true,
 });
-export type InsertLead = z.infer<typeof insertLeadSchema>;
+export type InsertLead = z4.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
 
 // ============================================================
@@ -126,7 +127,7 @@ export const insertLeadCampaignSchema = createInsertSchema(leadCampaigns).omit({
   id: true, createdAt: true, updatedAt: true,
 });
 export type LeadCampaign = typeof leadCampaigns.$inferSelect;
-export type InsertLeadCampaign = z.infer<typeof insertLeadCampaignSchema>;
+export type InsertLeadCampaign = z4.infer<typeof insertLeadCampaignSchema>;
 
 // ============================================================
 // NEW: lead_events — every interaction (email sent, opened, replied, ...)
@@ -203,7 +204,7 @@ export const insertLeadTemplateSchema = createInsertSchema(leadTemplates).omit({
   id: true, createdAt: true, updatedAt: true,
 });
 export type LeadTemplate = typeof leadTemplates.$inferSelect;
-export type InsertLeadTemplate = z.infer<typeof insertLeadTemplateSchema>;
+export type InsertLeadTemplate = z4.infer<typeof insertLeadTemplateSchema>;
 
 // ============================================================
 // NEW: lead_gen_settings — n8n connection + feature flags (singleton row)

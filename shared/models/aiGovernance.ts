@@ -1,5 +1,7 @@
 import { pgTable, serial, text, timestamp, boolean, real, jsonb, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+// drizzle-zod 0.8 builds Zod v4 schemas; zod 3.25 ships v4 at "zod/v4".
+import type { z as z4 } from "zod/v4";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 
@@ -98,14 +100,14 @@ export const insertAiSystemStateSchema = createInsertSchema(aiSystemState).omit(
 
 // Types
 export type AiRequest = typeof aiRequests.$inferSelect;
-export type InsertAiRequest = z.infer<typeof insertAiRequestSchema>;
+export type InsertAiRequest = z4.infer<typeof insertAiRequestSchema>;
 export type AiAgentEvent = typeof aiAgentEvents.$inferSelect;
-export type InsertAiAgentEvent = z.infer<typeof insertAiAgentEventSchema>;
+export type InsertAiAgentEvent = z4.infer<typeof insertAiAgentEventSchema>;
 export type AiDecision = typeof aiDecisions.$inferSelect;
-export type InsertAiDecision = z.infer<typeof insertAiDecisionSchema>;
+export type InsertAiDecision = z4.infer<typeof insertAiDecisionSchema>;
 export type AiCodeChange = typeof aiCodeChanges.$inferSelect;
-export type InsertAiCodeChange = z.infer<typeof insertAiCodeChangeSchema>;
+export type InsertAiCodeChange = z4.infer<typeof insertAiCodeChangeSchema>;
 export type AiApproval = typeof aiApprovals.$inferSelect;
-export type InsertAiApproval = z.infer<typeof insertAiApprovalSchema>;
+export type InsertAiApproval = z4.infer<typeof insertAiApprovalSchema>;
 export type AiSystemState = typeof aiSystemState.$inferSelect;
-export type InsertAiSystemState = z.infer<typeof insertAiSystemStateSchema>;
+export type InsertAiSystemState = z4.infer<typeof insertAiSystemStateSchema>;
