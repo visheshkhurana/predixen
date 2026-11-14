@@ -18,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 
 from server.core.company_purge import describe_plan, plan_company_purge
 
-PG_ADMIN_URL = os.environ.get("TEST_PG_ADMIN_URL", "postgresql://localhost/postgres")
+PG_ADMIN_URL = os.environ.get("TEST_PG_ADMIN_URL", "postgresql+psycopg2://localhost/postgres")
 TEST_DB_NAME = "fc_company_purge_test"
 
 

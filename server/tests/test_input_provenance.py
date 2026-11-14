@@ -502,7 +502,7 @@ def test_startup_migration_emits_postgres_add_column_if_not_exists():
         assert "UPDATE " not in upper and "DROP " not in upper
 
 
-PG_ADMIN_URL = os.environ.get("TEST_PG_ADMIN_URL", "postgresql://localhost/postgres")
+PG_ADMIN_URL = os.environ.get("TEST_PG_ADMIN_URL", "postgresql+psycopg2://localhost/postgres")
 PG_TEST_DB = "fc_provenance_test"
 
 

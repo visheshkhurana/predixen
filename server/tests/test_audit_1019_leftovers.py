@@ -118,7 +118,7 @@ def _pg_ok():
     import os
     from sqlalchemy import create_engine, text
     try:
-        e = create_engine(os.environ.get("TEST_PG_ADMIN_URL", "postgresql://localhost/postgres"),
+        e = create_engine(os.environ.get("TEST_PG_ADMIN_URL", "postgresql+psycopg2://localhost/postgres"),
                           connect_args={"connect_timeout": 2})
         with e.connect() as c:
             c.execute(text("SELECT 1"))
@@ -137,7 +137,7 @@ def test_purge_with_raw_sql_tables_on_postgres():
     from server.core.company_purge import _load_all_models, purge_company
     from server.core.db import Base
 
-    admin_url = os.environ.get("TEST_PG_ADMIN_URL", "postgresql://localhost/postgres")
+    admin_url = os.environ.get("TEST_PG_ADMIN_URL", "postgresql+psycopg2://localhost/postgres")
     dbname = "fc_purge_raw_" + uuid.uuid4().hex[:8]
     admin = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     with admin.connect() as c:

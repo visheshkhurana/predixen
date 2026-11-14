@@ -202,7 +202,9 @@ def test_callback_refuses_an_email_google_has_not_verified(monkeypatch):
     app = FastAPI()
     app.include_router(oauth_api.router, prefix="/api")
     app.dependency_overrides[get_db] = lambda: MagicMock()
-    paths = [r.path for r in app.routes if getattr(r, "path", "").endswith("/google/callback")]
+    from server.lib.route_listing import route_paths
+
+    paths = [p for p in route_paths(app) if p.endswith("/google/callback")]
     resp = TestClient(app).get(f"{paths[0]}?code=c&state=st", follow_redirects=False)
 
     assert resp.status_code == 302

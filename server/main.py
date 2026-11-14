@@ -202,7 +202,8 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(system_router.router)
 
     _startup_state["routers_loaded"] = True
-    logger.info(f"All {len(app.routes)} routes registered in {time.time() - t0:.1f}s")
+    from server.lib.route_listing import route_paths
+    logger.info(f"All {len(route_paths(app))} routes registered in {time.time() - t0:.1f}s")
 
 
 async def _run_deferred_startup():
