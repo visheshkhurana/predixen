@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, real, jsonb, serial, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+// drizzle-zod 0.8 builds Zod v4 schemas; zod 3.25 ships v4 at "zod/v4".
+import type { z as z4 } from "zod/v4";
 import { z } from "zod";
 
 export const users = pgTable("users", {
@@ -23,7 +25,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password_hash: true,
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertUser = z4.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // Financial Input Schema - core financial data
