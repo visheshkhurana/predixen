@@ -17,9 +17,9 @@ rather than reimplemented, for a throwaway database only.
 
 WHAT IT DOES NOT DO
 -------------------
-It does not mask an incomplete schema. Some tables carry raw
-`sqlalchemy.dialects.postgresql.JSONB` columns, which SQLite's dialect cannot
-render at all:
+It does not mask an incomplete schema. Before SQLAlchemy 2.1, tables with raw
+`sqlalchemy.dialects.postgresql.JSONB` columns could not be rendered by SQLite's
+dialect at all (2.1 renders them, so none are skipped today):
 
     sqlalchemy.exc.CompileError: (in table 'leads', column 'tags'):
     Compiler <SQLiteTypeCompiler> can't render element of type JSONB
@@ -42,20 +42,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
-# Tables whose columns are PostgreSQL-only (`JSONB`). SQLite's dialect refuses to
-# compile the CREATE TABLE. None of them are in the QA lab's path - the lab
-# touches users, companies, financial_records, scenarios, truth_scans and the
-# simulation tables, all of which SQLite renders.
+# Tables whose columns are PostgreSQL-only. Up to SQLAlchemy 2.0 this held the
+# JSONB tables (leads, simulation_accuracy, lead_campaigns, lead_events) because
+# SQLite's dialect refused to compile JSONB; SQLAlchemy 2.1 renders JSONB on
+# SQLite, so the list is empty. Add a table here only if its CREATE TABLE
+# fails.
 #
 # If this list is wrong in either direction the script fails: a table that
 # becomes renderable is a stale entry, and a table that stops being renderable is
 # a new gap.
-UNRENDERABLE_ON_SQLITE = frozenset({
-    "leads",                 # server/models/lead.py:60        tags = Column(JSONB, ...)
-    "simulation_accuracy",   # server/models/simulation_accuracy.py:23
-    "lead_campaigns",        # server/models/lead_gen.py:25
-    "lead_events",           # server/models/lead_gen.py:63
-})
+UNRENDERABLE_ON_SQLITE: frozenset[str] = frozenset()
 
 # Imported for their side effect of registering tables on `Base.metadata`.
 # Mirrors the model imports at the top of `qa_runner.py`, plus the modules it
