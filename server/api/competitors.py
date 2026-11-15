@@ -132,13 +132,18 @@ def _extract_json_array(text: str) -> List[Dict[str, Any]]:
         return []
 
 
+WEB_SEARCH_MODELS = ("gpt-5-mini", "gpt-4.1")
+
+
 def _scan_competitor_web(
     competitor: Competitor, user_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
-    """Use OpenAI's web-search model to gather recent signals about a competitor.
+    """Use OpenAI web search to gather recent signals about a competitor.
 
-    gpt-4o-search-preview performs real web search. It does NOT accept a
-    temperature param, so we don't send one.
+    Responses API with the ``web_search`` tool. The gpt-4o*-search-preview chat
+    models were retired (404 model_not_found in prod, 2026-11-15) and the
+    project key is restricted to a short model list, so search runs as a tool
+    on models the key can use. No temperature: gpt-5-mini rejects it.
     """
     from server.lib.llm.openai_client import open_audited_openai
 
@@ -172,9 +177,8 @@ def _scan_competitor_web(
         "Only include real, recent, verifiable items with real URLs. If you find nothing, return []."
     )
 
-    # Try the full search model, fall back to the mini one (broadly allowed in
-    # restricted projects). Both do real web search; neither accepts temperature.
-    # The audited wrapper redacts the prompt and writes the audit row. The raw
+    # gpt-5-mini first, gpt-4.1 as fallback; both are on the key's allow-list
+    # and both support the web_search tool. The audited wrapper redacts the prompt and writes the audit row. The raw
     # client above is what actually gets called, so a missing key still raises
     # the same RuntimeError and still uses this endpoint's base URL.
     resp = None
@@ -184,12 +188,14 @@ def _scan_competitor_web(
         user_id=user_id,
         provider_client=raw_client,
     ) as client:
-        for search_model in ("gpt-4o-search-preview", "gpt-4o-mini-search-preview"):
+        for search_model in WEB_SEARCH_MODELS:
             try:
-                resp = client.chat.completions.create(
+                resp = client.responses.create(
                     model=search_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=1500,
+                    tools=[{"type": "web_search"}],
+                    input=prompt,
+                    # Reasoning and search-call tokens count against this cap.
+                    max_output_tokens=6000,
                 )
                 break
             except Exception as e:
@@ -197,7 +203,7 @@ def _scan_competitor_web(
                 continue
     if resp is None:
         raise last_err or RuntimeError("No web-search model available")
-    content = resp.choices[0].message.content if resp.choices else ""
+    content = getattr(resp, "output_text", "") or ""
     items = _extract_json_array(content or "")
 
     cleaned: List[Dict[str, Any]] = []

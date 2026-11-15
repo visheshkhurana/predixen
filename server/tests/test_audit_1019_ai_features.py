@@ -594,8 +594,8 @@ def test_safe_http_url(url, expected):
 
 def test_scan_drops_non_http_urls():
     content = '[{"title": "A", "url": "javascript:alert(1)"}, {"title": "B", "url": "https://ok.example/b"}]'
-    resp = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
-    fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **k: resp)))
+    resp = SimpleNamespace(output_text=content)
+    fake = SimpleNamespace(responses=SimpleNamespace(create=lambda **k: resp))
     competitor = SimpleNamespace(name="Rival", website=None, blog_url=None, linkedin_url=None, x_handle=None)
     from contextlib import contextmanager
 
