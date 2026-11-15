@@ -102,15 +102,8 @@ def is_cache_valid(cache_entry: Dict[str, Any]) -> bool:
     return datetime.now() - cache_time < timedelta(hours=CACHE_TTL_HOURS)
 
 
-async def search_benchmarks_with_perplexity(industry: str, stage: str) -> Dict[str, Any]:
-    api_key = os.environ.get("PERPLEXITY_API_KEY")
-    if not api_key:
-        # Not a client error -- a missing optional integration. Raise a plain
-        # exception so the endpoint's generic handler returns the default
-        # benchmark set instead of surfacing a 500 to the founder.
-        raise RuntimeError("Perplexity API key not configured")
-    
-    search_query = f"""Find the latest SaaS industry benchmarks for {industry} companies at {stage} stage. 
+def _benchmark_search_query(industry: str, stage: str) -> str:
+    return f"""Find the latest SaaS industry benchmarks for {industry} companies at {stage} stage. 
 I need the following metrics with their 25th, 50th (median), and 75th percentile values:
 1. Monthly revenue growth rate (%)
 2. Gross margin (%)
@@ -121,7 +114,7 @@ I need the following metrics with their 25th, 50th (median), and 75th percentile
 7. Net revenue retention (%)
 8. CAC payback period (months)
 
-Please provide actual benchmark data from recent reports (2024-2025) from sources like:
+Please provide actual benchmark data from reports published in the last 24 months, from sources like:
 - OpenView SaaS Benchmarks
 - Bessemer Cloud Index
 - KeyBanc SaaS Survey
@@ -130,12 +123,82 @@ Please provide actual benchmark data from recent reports (2024-2025) from source
 
 Format each metric with p25, p50, p75 values. Indicate whether higher or lower is better for each metric."""
 
+
+_BENCHMARK_SYSTEM_PROMPT = (
+    "You are a financial analyst specializing in SaaS metrics and benchmarks. "
+    "Provide accurate, data-driven benchmark information with specific percentile values. "
+    "Always cite your sources."
+)
+
+
+async def search_benchmarks(industry: str, stage: str, user_id: Optional[int] = None) -> Dict[str, Any]:
+    """Web-search raw benchmark text. Perplexity when its key is set, else
+    OpenAI web search (prod has no Perplexity key: every search fell back to
+    generic defaults until 2026-11-15). Returns the Perplexity response shape:
+    {"choices": [{"message": {"content": ...}}], "citations": [...]}."""
+    if os.environ.get("PERPLEXITY_API_KEY"):
+        return await search_benchmarks_with_perplexity(industry, stage)
+    return await asyncio.to_thread(search_benchmarks_with_openai, industry, stage, user_id)
+
+
+def _response_citations(resp: Any) -> List[str]:
+    urls: List[str] = []
+    for item in getattr(resp, "output", None) or []:
+        if getattr(item, "type", None) != "message":
+            continue
+        for part in getattr(item, "content", None) or []:
+            for ann in getattr(part, "annotations", None) or []:
+                url = getattr(ann, "url", None)
+                if getattr(ann, "type", None) == "url_citation" and url and url not in urls:
+                    urls.append(url)
+    return urls
+
+
+# gpt-4.1 first: measured 2026-11-15 on this prompt it answered in ~11s with
+# 8 cited sources, while gpt-5-mini ran past 60s at default effort and asked a
+# clarifying question instead of answering at low effort.
+BENCHMARK_SEARCH_MODELS = ("gpt-4.1", "gpt-5-mini")
+
+
+def search_benchmarks_with_openai(industry: str, stage: str, user_id: Optional[int] = None) -> Dict[str, Any]:
+    from server.lib.llm.openai_client import open_audited_openai
+
+    prompt = f"{_BENCHMARK_SYSTEM_PROMPT}\n\n{_benchmark_search_query(industry, stage)}"
+    resp = None
+    last_err: Optional[Exception] = None
+    with open_audited_openai(user_id=user_id) as client:
+        for model in BENCHMARK_SEARCH_MODELS:
+            try:
+                resp = client.responses.create(
+                    model=model,
+                    tools=[{"type": "web_search"}],
+                    input=prompt,
+                    max_output_tokens=8000,
+                )
+                break
+            except Exception as e:
+                last_err = e
+                continue
+    if resp is None:
+        raise last_err or RuntimeError("No web-search model available")
+    return {
+        "choices": [{"message": {"content": getattr(resp, "output_text", "") or ""}}],
+        "citations": _response_citations(resp),
+    }
+
+
+async def search_benchmarks_with_perplexity(industry: str, stage: str) -> Dict[str, Any]:
+    api_key = os.environ.get("PERPLEXITY_API_KEY")
+    if not api_key:
+        raise RuntimeError("Perplexity API key not configured")
+    search_query = _benchmark_search_query(industry, stage)
+
     payload = {
         "model": "sonar",
         "messages": [
             {
                 "role": "system",
-                "content": "You are a financial analyst specializing in SaaS metrics and benchmarks. Provide accurate, data-driven benchmark information with specific percentile values. Always cite your sources."
+                "content": _BENCHMARK_SYSTEM_PROMPT
             },
             {
                 "role": "user",
@@ -318,12 +381,12 @@ async def search_industry_benchmarks(
             is_cached=True
         )
 
-    # Cache hits are free; only a miss spends Perplexity + LLM calls.
+    # Cache hits are free; only a miss spends web-search + LLM calls.
     from server.core.llm_rate_limit import check_llm_rate_limit
     check_llm_rate_limit(current_user.id)
 
     try:
-        perplexity_response = await search_benchmarks_with_perplexity(request.industry, request.stage)
+        perplexity_response = await search_benchmarks(request.industry, request.stage, user_id=current_user.id)
         result = await parse_benchmarks_with_ai(
             perplexity_response, request.industry, request.stage, user_id=current_user.id
         )
