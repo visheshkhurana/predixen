@@ -81,6 +81,8 @@ Next: Profit page prefill from onboarding revenue; KPI tooltip GM targets per in
   onboarding screen to match it and made the field hints say so, instead of changing stored data semantics.
 
 ## Blocked
+- Team access: invited teammates can't access the company (company routes check Company.user_id only). Team tab reverted. See MORNING_REPORT §7.1.
+- Copilot quota counted when AI unavailable; Free connectors not enforced; 30-day Scale trial on /billing; opex semantics — see MORNING_REPORT §7.
 - /billing offers 'Try all features free for 30 days — Scale plan, no card' while marketing dropped the trial; a Free user at the limit can trial instead of paying. Decide: keep trial (then say so on pricing) or hide it. Recommendation: keep a 14-day Starter trial, not Scale.
 - No self-serve account deletion (privacy page promises deletion on request). Recommendation: add a 'Delete account' request button next session (irreversible, needs care).
 - Free plan advertises 0 connectors but nothing enforces it. Decide: enforce (hurts D2C activation: Shopify
@@ -100,4 +102,6 @@ Next: Profit page prefill from onboarding revenue; KPI tooltip GM targets per in
 | 8 | 02:30-02:45 | revenue labels, benchmark honesty, demo-account regression check; copilot decision answer subagent; hardened launcher (all AI keys unset after finding GEMINI/OPENROUTER etc exported; logs show only Anthropic 401s); stopped :5070 | 7e9a6e3f 8f865c43 bf05985d | independent review running |
 | 9 | 02:45-03:02 | independent review (no blockers, 5 should-fix) → all 4 numeric/UX fixes + 2 nits | e0b7b339 | |
 | 10 | 03:02-03:15 | upload errors; reset/logout/invite audit; delegated copilot invented-CAC context + team UI | 7e463d93 | 2 subagents |
+| 11 | 03:15-03:35 | team UI built then REVERTED after e2e showed teammates can't access the company (Blocked); copilot invented-CAC context committed | 3281ca66→0da7ac59, 795add1b | |
+| 12 | 03:35-03:55 | copilot currency; final new-founder journey (16s automated to first value, numbers consistent); timestamp UTC fix; final checks: pytest 1646/2 known, tsc 0, build ok, 57/57 TS steps | af1381a7, 49b68611 | stop: remaining items Blocked or low value |
 | 4 | 01:52-01:58 | plan-limit upgrade dialog; audit billing, profit, leaving | shipped 8bee2c44 | fine |
