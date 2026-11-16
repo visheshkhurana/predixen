@@ -253,10 +253,45 @@ def _gather_company_data(db: Session, company: Company) -> Dict[str, Any]:
     }
 
 
+def _indian_grouping(value: float) -> str:
+    """12,50,000 style grouping: Indian founders and investors read lakhs."""
+    neg = value < 0
+    digits = f"{abs(value):.0f}"
+    if len(digits) > 3:
+        head, tail = digits[:-3], digits[-3:]
+        groups = []
+        while len(head) > 2:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            groups.insert(0, head)
+        digits = ",".join(groups + [tail])
+    return ("-" if neg else "") + digits
+
+
 def _money(value: float, currency: Optional[str]) -> str:
     code = (currency or "USD").upper()
-    symbol = {"USD": "$", "INR": "\u20b9", "EUR": "\u20ac", "GBP": "\u00a3"}.get(code)
+    value = float(value or 0)
+    if code == "INR":
+        return f"\u20b9{_indian_grouping(value)}"
+    symbol = {"USD": "$", "EUR": "\u20ac", "GBP": "\u00a3", "SGD": "S$"}.get(code)
     return f"{symbol}{value:,.0f}" if symbol else f"{code} {value:,.0f}"
+
+
+def _burn_phrase(burn: float, currency: Optional[str]) -> str:
+    """Net burn in words. Negative burn is a monthly surplus, never '-X burn'."""
+    burn = float(burn or 0)
+    if burn > 0:
+        return f"{_money(burn, currency)}/month net burn"
+    if burn < 0:
+        return f"not burning cash (monthly surplus of {_money(-burn, currency)})"
+    return "break-even (no net burn)"
+
+
+def _runway_phrase(metrics: Dict[str, Any]) -> str:
+    if metrics.get("runway_sustainable") or float(metrics.get("burn_rate") or 0) < 0:
+        return "runway is not a constraint while revenue covers costs"
+    return f"approximately {float(metrics.get('runway_months') or 0):.1f} months of runway"
 
 
 def _cac_basis(metrics: Dict[str, Any]) -> str:
@@ -307,16 +342,18 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
     company_name = data["company"]["name"]
     metrics = data["metrics"]
     section_title = section["title"]
+    cur = (data.get("company") or {}).get("currency")
 
     runway_val = metrics.get('runway_months', 0)
     runway_display = "Sustainable (profitable)" if metrics.get('runway_sustainable') else f"{runway_val:.1f} months"
 
     metrics_summary = (
         f"Company: {company_name}\n"
-        f"MRR: ${metrics.get('mrr', 0):,.0f}, ARR: ${metrics.get('arr', 0):,.0f}\n"
-        f"Monthly Revenue: ${metrics.get('monthly_revenue', 0):,.0f}\n"
-        f"Net Burn: ${metrics.get('net_burn', 0):,.0f}/mo\n"
-        f"Cash Balance: ${metrics.get('cash_balance', 0):,.0f}\n"
+        f"Currency: {(cur or 'USD').upper()} (state every amount in this currency)\n"
+        f"MRR: {_money(metrics.get('mrr', 0), cur)}, ARR: {_money(metrics.get('arr', 0), cur)}\n"
+        f"Monthly Revenue: {_money(metrics.get('monthly_revenue', 0), cur)}\n"
+        f"Net Burn: {_burn_phrase(metrics.get('burn_rate', 0), cur)}\n"
+        f"Cash Balance: {_money(metrics.get('cash_balance', 0), cur)}\n"
         f"Runway: {runway_display}\n"
         f"Profitable: {'Yes' if metrics.get('is_profitable') else 'No'}\n"
         f"Gross Margin: {metrics.get('gross_margin', 0):.1f}%\n"
@@ -375,9 +412,9 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
         status = fr.get("status", "")
         use_of_funds = fr.get("use_of_funds", "")
         pre_money = fr.get("pre_money_valuation")
-        line = f"- {name}: Target ${target:,.0f}" if target else f"- {name}"
+        line = f"- {name}: Target {_money(target, cur)}" if target else f"- {name}"
         if pre_money:
-            line += f" at ${pre_money:,.0f} pre-money"
+            line += f" at {_money(pre_money, cur)} pre-money"
         if status:
             line += f" ({status})"
         fundraising_text += line + "\n"
@@ -583,12 +620,16 @@ def _generate_fallback_narrative(section: Dict, data: Dict) -> str:
     cash = metrics.get("cash_balance", 0)
     runway = metrics.get("runway_months", 0)
     growth = metrics.get("revenue_growth", 0)
+    cur = (data.get("company") or {}).get("currency")
+    m = lambda v: _money(v, cur)  # noqa: E731
+    burn_words = _burn_phrase(burn, cur)
+    runway_words = _runway_phrase(metrics)
 
     if "executive" in title.lower() or "overview" in title.lower():
         return (
-            f"{company_name} generated ${revenue:,.0f} in monthly revenue with "
-            f"{growth:.1f}% month-over-month growth. Current burn rate is ${burn:,.0f}/month "
-            f"with ${cash:,.0f} in cash, providing approximately {runway:.1f} months of runway."
+            f"{company_name} generated {m(revenue)} in monthly revenue with "
+            f"{growth:.1f}% month-over-month growth. The company is at {burn_words} "
+            f"with {m(cash)} in cash; {runway_words}."
         )
     elif "decision" in title.lower() or "next steps" in title.lower():
         decisions = data.get("decisions", [])
@@ -613,7 +654,7 @@ def _generate_fallback_narrative(section: Dict, data: Dict) -> str:
         customers = metrics.get("customers")
         with_customers = f" with {customers:,.0f} customers" if customers else ""
         return (
-            f"{company_name} has ${revenue:,.0f} in monthly revenue growing at "
+            f"{company_name} has {m(revenue)} in monthly revenue growing at "
             f"{growth:.1f}% MoM{with_customers}."
         )
     elif "scenario" in title.lower() or "comparison" in title.lower():
@@ -623,14 +664,18 @@ def _generate_fallback_narrative(section: Dict, data: Dict) -> str:
             return f"Active scenarios under analysis: {names}."
         return "No scenarios available for comparison."
     elif "risk" in title.lower() or "sensitivity" in title.lower():
+        if float(burn or 0) <= 0:
+            return (
+                f"Revenue currently covers costs ({burn_words}); key risks are margin "
+                f"pressure and growth deceleration."
+            )
         return (
-            f"With {runway:.1f} months of runway and ${burn:,.0f}/month burn, "
+            f"With {runway_words} at {burn_words}, "
             f"key risks include cash depletion and growth deceleration."
         )
     elif "funds" in title.lower() or "milestone" in title.lower():
         return (
-            f"Current cash position of ${cash:,.0f} with ${burn:,.0f}/month burn rate. "
-            f"Projected runway: {runway:.1f} months."
+            f"Current cash position of {m(cash)}, at {burn_words}; {runway_words}."
         )
     elif "projection" in title.lower():
         sim = data.get("simulation", {})
@@ -639,11 +684,11 @@ def _generate_fallback_narrative(section: Dict, data: Dict) -> str:
         return f"Financial projections show a median runway of {p50:.1f} months based on current trajectory."
     elif "recommendation" in title.lower():
         return (
-            f"Based on current metrics ({growth:.1f}% MoM growth, {runway:.1f} months runway), "
+            f"Based on current metrics ({growth:.1f}% MoM growth; {runway_words}), "
             f"focus areas include optimizing burn rate and accelerating revenue growth."
         )
     else:
         return (
-            f"{company_name}: Revenue ${revenue:,.0f}/mo, Burn ${burn:,.0f}/mo, "
-            f"Cash ${cash:,.0f}, Runway {runway:.1f}mo, Growth {growth:.1f}% MoM."
+            f"{company_name}: Revenue {m(revenue)}/mo, {burn_words}, "
+            f"Cash {m(cash)}, {runway_words}, Growth {growth:.1f}% MoM."
         )
