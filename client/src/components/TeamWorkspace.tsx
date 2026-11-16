@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -14,6 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Users, UserPlus, MoreVertical, Shield, Edit, Trash2, Mail, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { parseServerDate } from '@/lib/teamInvites';
 
 export interface TeamMember {
   id: number;
@@ -214,26 +214,28 @@ export function TeamWorkspace({
               <Skeleton className="h-16 w-full" />
             </div>
           ) : (
-            <ScrollArea className="h-[300px]">
+            // Plain overflow, not ScrollArea: Radix's table-layout viewport stops
+            // long emails from truncating at phone width.
+            <div className="max-h-[300px] overflow-y-auto">
               <div className="space-y-2">
                 {members.map(member => (
                   <div
                     key={member.id}
-                    className="flex items-center justify-between gap-4 p-3 rounded-lg border"
+                    className="flex items-center justify-between gap-2 sm:gap-4 p-3 rounded-lg border"
                     data-testid={`member-row-${member.id}`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <Avatar>
                         <AvatarFallback>{getInitials(member.email)}</AvatarFallback>
                       </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{member.email}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium truncate" title={member.email}>{member.email}</span>
                           {member.email === currentUserEmail && (
-                            <Badge variant="outline" className="text-xs">You</Badge>
+                            <Badge variant="outline" className="text-xs shrink-0">You</Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                           <Badge variant="secondary" className="gap-1">
                             <span className={cn('w-1.5 h-1.5 rounded-full', ROLE_COLORS[member.role])} />
                             {member.role}
@@ -241,7 +243,7 @@ export function TeamWorkspace({
                           {member.joined_at && (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              Joined {formatDistanceToNow(new Date(member.joined_at), { addSuffix: true })}
+                              Joined {formatDistanceToNow(parseServerDate(member.joined_at), { addSuffix: true })}
                             </span>
                           )}
                         </div>
@@ -250,7 +252,7 @@ export function TeamWorkspace({
                     {canManageTeam && member.role !== 'owner' && member.email !== currentUserEmail && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label="More options">
+                          <Button variant="ghost" size="icon" className="shrink-0" aria-label={`Manage ${member.email}`}>
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -280,7 +282,7 @@ export function TeamWorkspace({
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -298,38 +300,43 @@ export function TeamWorkspace({
               {pendingInvites.map(invite => (
                 <div
                   key={invite.id}
-                  className="flex items-center justify-between gap-4 p-3 rounded-lg border border-dashed"
+                  className="flex items-center justify-between gap-2 sm:gap-4 p-3 rounded-lg border border-dashed"
+                  data-testid={`invite-row-${invite.id}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <Avatar className="opacity-50">
                       <AvatarFallback>{getInitials(invite.email)}</AvatarFallback>
                     </Avatar>
-                    <div>
-                      <span className="font-medium">{invite.email}</span>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="min-w-0">
+                      <span className="block font-medium truncate" title={invite.email}>{invite.email}</span>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                         <Badge variant="outline" className="gap-1">
                           <span className={cn('w-1.5 h-1.5 rounded-full', ROLE_COLORS[invite.role])} />
                           {invite.role}
                         </Badge>
-                        <span>Invited {formatDistanceToNow(new Date(invite.invited_at), { addSuffix: true })}</span>
+                        <span>Invited {formatDistanceToNow(parseServerDate(invite.invited_at), { addSuffix: true })}</span>
                       </div>
                     </div>
                   </div>
                   {canManageTeam && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => onResendInvite(invite.id)}
+                        aria-label={`Resend invite to ${invite.email}`}
+                        data-testid={`button-resend-invite-${invite.id}`}
                       >
-                        <Mail className="h-4 w-4 mr-1" />
-                        Resend
+                        <Mail className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Resend</span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => onRevokeInvite(invite.id)}
                         className="text-destructive"
+                        aria-label={`Revoke invite to ${invite.email}`}
+                        data-testid={`button-revoke-invite-${invite.id}`}
                       >
                         <XCircle className="h-4 w-4" />
                       </Button>

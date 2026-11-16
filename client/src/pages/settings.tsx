@@ -9,14 +9,183 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFounderStore } from '@/store/founderStore';
 import { apiRequest } from '@/lib/queryClient';
-import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/api/workspace';
-import { Settings, Lock, Mail, Bell, LogOut, Loader2, User, Shield, Check } from 'lucide-react';
+import {
+  useNotificationPreferences,
+  useUpdateNotificationPreferences,
+  useWorkspaceMembers,
+  useWorkspaceInvites,
+  useInviteMember,
+  useUpdateMemberRole,
+  useRemoveMember,
+  useRevokeInvite,
+  useResendInvite,
+} from '@/api/workspace';
+import { Lock, Bell, LogOut, Loader2, User, Shield, Check, Users } from 'lucide-react';
 import { FadeIn } from '@/components/ui/motion-primitives';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TeamWorkspace } from '@/components/TeamWorkspace';
+import {
+  canManageTeam,
+  inviteCreatedCopy,
+  inviteRenewedCopy,
+  roleForEmail,
+  teamErrorMessage,
+} from '@/lib/teamInvites';
+
+type SettingsTab = 'account' | 'team';
+
+function initialTab(): SettingsTab {
+  if (typeof window === 'undefined') return 'account';
+  return new URLSearchParams(window.location.search).get('tab') === 'team' ? 'team' : 'account';
+}
+
+/** Settings → Team: invite teammates to the current company's workspace. */
+function TeamSettingsTab() {
+  const { user, currentCompany } = useFounderStore();
+  const { toast } = useToast();
+  const companyId = currentCompany?.id ?? 0;
+  const isSample = !!currentCompany?.is_sample;
+
+  const membersQuery = useWorkspaceMembers(isSample ? 0 : companyId);
+  const role = roleForEmail(membersQuery.data, user?.email);
+  const manager = canManageTeam(role);
+  const invitesQuery = useWorkspaceInvites(companyId, { enabled: !isSample && manager });
+  const inviteMember = useInviteMember();
+  const updateRole = useUpdateMemberRole();
+  const removeMember = useRemoveMember();
+  const revokeInvite = useRevokeInvite();
+  const resendInvite = useResendInvite();
+
+  if (!currentCompany) {
+    return (
+      <Card data-testid="card-team-no-company">
+        <CardContent className="pt-6 text-sm text-muted-foreground">
+          Add your company first, then you can invite teammates here.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isSample) {
+    return (
+      <Card data-testid="card-team-sample">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Team
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          {currentCompany.name} is a sample company, so you can't invite people to it.
+          Switch to your own company to invite teammates.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const fail = (title: string, err: unknown) =>
+    toast({ title, description: teamErrorMessage(err), variant: 'destructive' });
+
+  const handleInvite = async (email: string, inviteRole: string) => {
+    const trimmed = email.trim();
+    try {
+      const res = await inviteMember.mutateAsync({ companyId, email: trimmed, role: inviteRole });
+      let emailSent: boolean | undefined;
+      try {
+        emailSent = (await res.json())?.email_sent;
+      } catch {
+        emailSent = undefined;
+      }
+      toast(inviteCreatedCopy(trimmed, emailSent === true));
+    } catch (err) {
+      fail("Couldn't create the invite", err);
+      // Keep the dialog open with the same message inline.
+      throw new Error(teamErrorMessage(err));
+    }
+  };
+
+  const handleUpdateRole = async (memberId: number, newRole: string) => {
+    try {
+      await updateRole.mutateAsync({ memberId, role: newRole, companyId });
+      toast({ title: 'Role updated' });
+    } catch (err) {
+      fail("Couldn't change the role", err);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: number) => {
+    try {
+      await removeMember.mutateAsync({ memberId, companyId });
+      toast({ title: 'Member removed' });
+    } catch (err) {
+      fail("Couldn't remove the member", err);
+    }
+  };
+
+  const handleRevokeInvite = async (inviteId: number) => {
+    try {
+      await revokeInvite.mutateAsync({ inviteId, companyId });
+      toast({ title: 'Invite revoked' });
+    } catch (err) {
+      fail("Couldn't revoke the invite", err);
+    }
+  };
+
+  const handleResendInvite = async (inviteId: number) => {
+    const email = invitesQuery.data?.find((i) => i.id === inviteId)?.email ?? 'this teammate';
+    try {
+      await resendInvite.mutateAsync({ inviteId, companyId });
+      toast(inviteRenewedCopy(email));
+    } catch (err) {
+      fail("Couldn't renew the invite", err);
+    }
+  };
+
+  if (membersQuery.isError) {
+    return (
+      <Card data-testid="card-team-error">
+        <CardContent className="pt-6 text-sm text-muted-foreground">
+          We couldn't load your team: {teamErrorMessage(membersQuery.error)}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <TeamWorkspace
+      companyId={companyId}
+      companyName={currentCompany.name}
+      members={membersQuery.data ?? []}
+      invites={(invitesQuery.data ?? []).map((i) => ({ ...i, expires_at: i.expires_at ?? '' }))}
+      isLoading={membersQuery.isLoading}
+      currentUserEmail={user?.email ?? ''}
+      currentUserRole={role}
+      onInviteMember={handleInvite}
+      onUpdateRole={handleUpdateRole}
+      onRemoveMember={handleRemoveMember}
+      onRevokeInvite={handleRevokeInvite}
+      onResendInvite={handleResendInvite}
+    />
+  );
+}
 
 export default function SettingsPage() {
   const { user, logout } = useFounderStore();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [tab, setTab] = useState<SettingsTab>(initialTab);
+
+  const handleTabChange = (value: string) => {
+    const next: SettingsTab = value === 'team' ? 'team' : 'account';
+    setTab(next);
+    // Keep the tab in the URL so "Settings → Team" can be linked to.
+    try {
+      const url = new URL(window.location.href);
+      if (next === 'team') url.searchParams.set('tab', 'team');
+      else url.searchParams.delete('tab');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    } catch {}
+  };
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -104,9 +273,20 @@ export default function SettingsPage() {
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-settings-title">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your account preferences and security</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage your account, security and team</p>
       </div>
 
+      <Tabs value={tab} onValueChange={handleTabChange} className="space-y-6">
+      <TabsList>
+        <TabsTrigger value="account" data-testid="tab-settings-account">Account</TabsTrigger>
+        <TabsTrigger value="team" data-testid="tab-settings-team">Team</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="team" className="mt-0">
+        <TeamSettingsTab />
+      </TabsContent>
+
+      <TabsContent value="account" className="mt-0 space-y-6">
       <Card data-testid="card-profile">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -260,6 +440,8 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      </TabsContent>
+      </Tabs>
     </div>
     </FadeIn>
   );
