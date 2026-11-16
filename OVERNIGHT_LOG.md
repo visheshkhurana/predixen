@@ -51,6 +51,12 @@ Next: Profit page prefill from onboarding revenue; KPI tooltip GM targets per in
 |---|---|---|---|---|
 | Signup/form validation errors readable | predixen | 9d629512 | sign up with x@brand.test → 'Please use a real email address…' | |
 | Onboarding stepper fits; AED default for UAE; D2C connect copy | predixen | cd7a20c5 | onboarding at 1200px and 375px; Dubai TZ → AED | |
+| Copilot labels AI-down fallback honestly | predixen | aa1833af | /copilot with no LLM key → red 'AI assistant unavailable' | |
+| CAC from D2C months; board/realtime no invented unit economics | predixen | 26231159 | /overview D2C with Oct inputs → CAC ₹417 Computed | |
+| Board deck currency + real burn wording | predixen | 4b011cf2 | test_board_export_currency.py | |
+| D2C revenue labels (Monthly Revenue / Annual Run-Rate) | predixen | 7e9a6e3f | /overview D2C | |
+| Benchmark card admits generic defaults; D2C GM tooltip | predixen | 8f865c43 | /overview D2C without live benchmarks | |
+| Copilot decision route leads with model answer | predixen | bf05985d | needs a working model; tests use fake router | not live-verified with a model |
 | Dashboard honest: no invented CAC/LTV, surplus as surplus, D2C margin target | predixen | f5b039e5 | /overview as profitable D2C | board export follow-up in progress |
 | Public pages: 'Free plan · No credit card' not 'free during public beta' | predixen | 80ec1b0c | curl / /for/d2c /signup /llms.txt | /faq payments-off copy still says beta (gated) |
 | Dashboard profit-per-order card for goods businesses | predixen | cc4abd30 | /overview D2C with/without /profit months | |
@@ -61,6 +67,8 @@ Next: Profit page prefill from onboarding revenue; KPI tooltip GM targets per in
 | Onboarding health check honest + in founder's currency | predixen | 0dd169ce | Sign up, pick D2C + INR, enter 25L rev/55% GM/9L opex/8L payroll/2L other/3Cr cash → Health check "Not burning", "Monthly Surplus ₹5.8L", labels ₹; dashboard burn -₹5.8L | example FX rates are rough, labelled as estimates |
 
 ## Decisions and assumptions
+- Local launcher originally unset only OpenAI/Anthropic keys; the shell also exports Gemini, OpenRouter, xAI, Mistral, DeepSeek keys. Surviving logs show no successful outbound model call (25 Anthropic 401s); earlier logs were overwritten on restart, so this can't be fully proven. Launcher now unsets all of them.
+- Copilot decision-route change alters the normal (model-working) output; verified only with a fake router.
 - Treated `predixen` as the FounderConsole app repo despite the "Predixen read-only" line: it is the repo
   founderconsole.ai deploys; the named repos are archived. Branch-only, never main.
 - Kept the server's rule that typed opex/other already include COGS (documented, deliberate); fixed the
@@ -82,4 +90,6 @@ Next: Profit page prefill from onboarding revenue; KPI tooltip GM targets per in
 | 3 | 01:48-01:52 | 422 messages, stepper/AED/connect copy; delegated dashboard honesty + beta copy | shipped 9d629512, cd7a20c5 | 2 subagents |
 | 5 | 01:58-02:05 | reviewed+verified dashboard & copy subagents; committed | f5b039e5, 80ec1b0c; full pytest 1590 pass/2 known; build ok; 55 CI TS steps pass; draft PR #267 for CI | |
 | 6 | 02:05-02:13 | D2C profit card, signup D2C panel, admin banner, mobile overview; delegated copilot-fallback + unit-economics-from-D2C | shipped cc4abd30 4c297c8d 410d91b7 a1be27c2 | 2 subagents |
+| 7 | 02:13-02:30 | reviewed+committed copilot fallback & unit economics subagents; board currency fix | aa1833af 26231159 4b011cf2 | |
+| 8 | 02:30-02:45 | revenue labels, benchmark honesty, demo-account regression check; copilot decision answer subagent; hardened launcher (all AI keys unset after finding GEMINI/OPENROUTER etc exported; logs show only Anthropic 401s); stopped :5070 | 7e9a6e3f 8f865c43 bf05985d | independent review running |
 | 4 | 01:52-01:58 | plan-limit upgrade dialog; audit billing, profit, leaving | shipped 8bee2c44 | fine |
