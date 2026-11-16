@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { D2CProfitCard } from '@/components/D2CProfitCard';
+import { isGoodsIndustry } from '@/lib/d2cProfitSummary';
 import { useLocation, Link } from 'wouter';
 import { useSEO } from "@/lib/seo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1308,6 +1310,10 @@ export default function OverviewPage() {
         companyId={currentCompany.id}
         industry={currentCompany.industry}
       />
+
+      {!currentCompany.is_sample && isGoodsIndustry(currentCompany.industry) && (
+        <D2CProfitCard companyId={currentCompany.id} currency={(currentCompany.currency || 'USD').toUpperCase()} />
+      )}
 
       {isSampleCompany(currentCompany) && (
         <SampleInsightExplainer

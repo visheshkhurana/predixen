@@ -91,6 +91,9 @@ jobs:
       - name: plan limit opens the upgrade dialog
         run: npx tsx server/tests/plan-limit-dialog.test.ts
 
+      - name: dashboard profit-per-order card
+        run: npx tsx server/tests/d2c-profit-card.test.ts
+
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
 
