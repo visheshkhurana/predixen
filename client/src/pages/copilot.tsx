@@ -1639,8 +1639,9 @@ Type **help** for a full list of what I can do.`,
         let errorContent = '';
         let structuredFallback: CopilotApiResponse | undefined = undefined;
         const errMsg = error instanceof Error ? error.message : String(error ?? '');
-        if (errMsg.includes('401')) {
-          // Keep the saved draft for after sign-in, and put it back in the box.
+        if (errMsg.includes('401') || errMsg.includes('402')) {
+          // Keep the draft: after sign-in (401) or an upgrade (402) the
+          // founder can send the same question without retyping it.
           setInput(messageText);
         } else {
           clearCopilotDraft();

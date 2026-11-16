@@ -252,3 +252,28 @@ def test_copilot_page_renders_ai_unavailable_notice():
     assert "ai_unavailable?: boolean" in src
     assert "structuredResponse?.ai_notice" in src
     assert "from '@/components/ui/alert'" in src
+
+
+def test_partial_never_raises_a_low_confidence_line():
+    from server.copilot.llm_availability import downgrade_confidence_lines
+    out = downgrade_confidence_lines(["x", "Confidence: LOW", "Confidence: HIGH"], label="MEDIUM (partly rule-based)")
+    assert out == ["x", "Confidence: LOW", "Confidence: MEDIUM (partly rule-based)"]
+    out = downgrade_confidence_lines(["Confidence: MEDIUM"])
+    assert out == ["Confidence: LOW (rule-based, AI unavailable)"]
+
+
+def test_budget_exceeded_is_flagged_separately():
+    from server.copilot.llm_availability import TrackedLLMRouter
+    from server.lib.llm.llm_router import LLMBudgetExceeded
+
+    class _Broke:
+        def chat(self, *a, **k):
+            raise LLMBudgetExceeded("AI budget used up")
+
+    r = TrackedLLMRouter(_Broke())
+    try:
+        r.chat(messages=[])
+    except LLMBudgetExceeded:
+        pass
+    assert r.budget_exceeded is True
+    assert r.status == "unavailable"

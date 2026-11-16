@@ -25,6 +25,7 @@ from server.copilot.prompt_injection_defense import PromptInjectionDefense
 from server.copilot.llm_availability import (
     AI_PARTIAL_NOTICE,
     AI_UNAVAILABLE_NOTICE,
+    AI_BUDGET_NOTICE,
     LLM_STATUS_PARTIAL,
     LLM_STATUS_UNAVAILABLE,
     TrackedLLMRouter,
@@ -1503,7 +1504,7 @@ async def _copilot_chat_inner(
             "Copilot chat for company %s answered by rule-based fallback: no LLM call succeeded (%s)",
             company_id, llm_router.last_error,
         )
-        ai_notice = AI_UNAVAILABLE_NOTICE
+        ai_notice = AI_BUDGET_NOTICE if getattr(llm_router, "budget_exceeded", False) else AI_UNAVAILABLE_NOTICE
         response.confidence = ConfidenceLevel.LOW
         if grounding_status_value == GroundingStatus.VERIFIED.value:
             # The run behind the numbers is real, but nothing grounded an

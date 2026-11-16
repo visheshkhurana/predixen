@@ -261,7 +261,8 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const churnRatePct = churnRaw > 0 && churnRaw <= 1 ? churnRaw * 100 : churnRaw;
     const churnRateDecimal = churnRatePct / 100;
 
-    const totalCustomers = vPos(c.totalCustomers, ext?.customers, tsVal('customer_count'), tsVal('total_customers'));
+    // The truth scan's default 150-customer book must not feed ARPU or payback.
+    const totalCustomers = vPos(c.totalCustomers, ext?.customers, tsReal('customer_count'), tsReal('total_customers'));
     const headcount = v(c.headcount, ext?.headcount, tsVal('headcount'))
       || (currentCompany ? (currentCompany as any).employees || 0 : 0);
     const arpu = v(c.arpu) || (totalCustomers > 0 ? mrr / totalCustomers : 0);
@@ -366,7 +367,10 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     // CAC / LTV / LTV:CAC / payback already ignore estimated truth-scan values
     // above, so anything left in them came from the founder's records (via
     // /metrics/computed or the baseline) and keeps its own badge.
-    const fromRecords: Record<string, number> = { cac, ltv, ltvCacRatio, paybackPeriod };
+    // Payback counts as real only when every input is: a reported payback, or CAC
+    // from records with a customer count that isn't the truth scan's default.
+    const paybackReal = (c.paybackPeriod ?? 0) > 0 || (paybackPeriod > 0 && totalCustomers > 0);
+    const fromRecords: Record<string, number> = { cac, ltv, ltvCacRatio, paybackPeriod: paybackReal ? paybackPeriod : 0 };
     for (const [truthKey, clientKey] of Object.entries(TRUTH_TO_METRIC_KEY)) {
       if (!tsEstimatedMap[truthKey]) continue;
       if (clientKey in fromRecords && fromRecords[clientKey] > 0) continue;

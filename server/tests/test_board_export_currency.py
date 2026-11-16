@@ -51,3 +51,16 @@ def test_usd_burning_company_reads_as_before():
     data = _data("USD", burn=40_000, runway=18.5)
     text = be._generate_fallback_narrative({"title": "Executive Summary"}, data)
     assert "$2,500,000" in text and "$40,000/month net burn" in text and "18.5 months" in text
+
+
+def test_unknown_burn_is_not_break_even():
+    data = _data("INR", burn=-1)
+    data["metrics"]["burn_rate"] = None
+    data["metrics"]["runway_months"] = 0
+    prompt = be._build_narrative_prompt("investor_update", {"title": "Executive Summary"}, data)
+    assert "Net Burn: net burn not available" in prompt
+    assert "break-even" not in prompt
+    for title in ("Executive Summary", "Risks", "Use of Funds and Milestones", "Other"):
+        text = be._generate_fallback_narrative({"title": title}, data)
+        assert "break-even" not in text and "covers costs" not in text, (title, text)
+        assert "0.0 months" not in text, (title, text)

@@ -215,7 +215,11 @@ def _gather_company_data(db: Session, company: Company) -> Dict[str, Any]:
         "monthly_revenue": extract_metric_value(metrics.get("monthly_revenue"), 0),
         "mrr": extract_metric_value(metrics.get("mrr"), 0),
         "arr": extract_metric_value(metrics.get("arr"), 0),
-        "burn_rate": extract_metric_value(metrics.get("net_burn"), 0),
+        # None when the truth scan has no net burn: 0 would read as break-even.
+        "burn_rate": (
+            extract_metric_value(metrics.get("net_burn"), 0)
+            if metrics.get("net_burn") is not None else None
+        ),
         "cash_balance": extract_metric_value(metrics.get("cash_balance"), 0),
         "runway_months": extract_metric_value(metrics.get("runway_p50"), 0),
         "gross_margin": extract_metric_value(metrics.get("gross_margin"), 0),
@@ -279,8 +283,11 @@ def _money(value: float, currency: Optional[str]) -> str:
 
 
 def _burn_phrase(burn: float, currency: Optional[str]) -> str:
-    """Net burn in words. Negative burn is a monthly surplus, never '-X burn'."""
-    burn = float(burn or 0)
+    """Net burn in words. Negative burn is a monthly surplus, never '-X burn'.
+    Unknown burn is said to be unknown, never 'break-even'."""
+    if burn is None:
+        return "net burn not available (no expense data; do not estimate)"
+    burn = float(burn)
     if burn > 0:
         return f"{_money(burn, currency)}/month net burn"
     if burn < 0:
@@ -291,6 +298,8 @@ def _burn_phrase(burn: float, currency: Optional[str]) -> str:
 def _runway_phrase(metrics: Dict[str, Any]) -> str:
     if metrics.get("runway_sustainable") or float(metrics.get("burn_rate") or 0) < 0:
         return "runway is not a constraint while revenue covers costs"
+    if metrics.get("burn_rate") is None and not float(metrics.get("runway_months") or 0):
+        return "runway not available yet (needs expense and cash data)"
     return f"approximately {float(metrics.get('runway_months') or 0):.1f} months of runway"
 
 
@@ -664,7 +673,7 @@ def _generate_fallback_narrative(section: Dict, data: Dict) -> str:
             return f"Active scenarios under analysis: {names}."
         return "No scenarios available for comparison."
     elif "risk" in title.lower() or "sensitivity" in title.lower():
-        if float(burn or 0) <= 0:
+        if burn is not None and float(burn) <= 0:
             return (
                 f"Revenue currently covers costs ({burn_words}); key risks are margin "
                 f"pressure and growth deceleration."

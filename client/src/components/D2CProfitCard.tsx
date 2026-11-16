@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { ArrowRight, IndianRupee } from 'lucide-react';
+import { ArrowRight, IndianRupee, Coins } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrencyAbbrev } from '@/lib/utils';
@@ -24,7 +24,11 @@ export function D2CProfitCard({ companyId, currency }: { companyId: number; curr
     <Card data-testid="card-d2c-profit">
       <CardContent className="p-5 flex flex-col md:flex-row md:items-center gap-4 justify-between">
         <div className="flex items-start gap-3 min-w-0">
-          <IndianRupee className="h-5 w-5 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+          {currency === 'INR' ? (
+            <IndianRupee className="h-5 w-5 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+          ) : (
+            <Coins className="h-5 w-5 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+          )}
           {summary.state === 'ready' ? (
             <div className="min-w-0">
               <p className="text-sm font-medium">Profit per order, {summary.period}</p>

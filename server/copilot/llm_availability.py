@@ -18,6 +18,12 @@ AI_UNAVAILABLE_NOTICE = (
     "of your numbers, not an answer to your question. Try again in a few minutes."
 )
 
+AI_BUDGET_NOTICE = (
+    "Your company's AI budget for this period is used up, so the assistant did "
+    "not answer. Below is a rule-based summary of your numbers. An admin can "
+    "raise the budget, or it resets with the next period."
+)
+
 AI_PARTIAL_NOTICE = (
     "Part of the AI analysis failed, so some of this answer is a rule-based "
     "summary of your numbers rather than a model's answer. Try again in a few "
@@ -55,6 +61,7 @@ class TrackedLLMRouter:
         self.successes = 0
         self.failures = 0
         self.last_error: Optional[str] = None
+        self.budget_exceeded = False
 
     def _record(self, ok: bool, error: Optional[BaseException] = None) -> None:
         with self._lock:
@@ -64,6 +71,8 @@ class TrackedLLMRouter:
                 self.failures += 1
                 if error is not None:
                     self.last_error = f"{type(error).__name__}: {error}"[:300]
+                    if type(error).__name__ == "LLMBudgetExceeded":
+                        self.budget_exceeded = True
 
     def _wrap(self, name: str):
         fn = getattr(self._inner, name)
@@ -98,14 +107,28 @@ class TrackedLLMRouter:
             return LLM_STATUS_OK
 
 
+_LEVEL_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
 def downgrade_confidence_lines(lines: Any, label: str = "LOW (rule-based, AI unavailable)") -> Any:
-    """Rewrite "Confidence: HIGH" style lines produced by rule-based agents."""
+    """Rewrite "Confidence: HIGH" style lines produced by rule-based agents.
+
+    Only ever lowers a level: a line already at or below the label's level
+    (e.g. "Confidence: LOW" on the partial path, label MEDIUM) is kept.
+    """
     if not isinstance(lines, list):
         return lines
-    return [
-        f"Confidence: {label}" if isinstance(s, str) and _CONFIDENCE_LINE.match(s) else s
-        for s in lines
-    ]
+    target = _LEVEL_RANK.get(label.split()[0].lower(), 0)
+
+    def rewrite(s: Any) -> Any:
+        if not (isinstance(s, str) and _CONFIDENCE_LINE.match(s)):
+            return s
+        current = _LEVEL_RANK.get(s.split(":", 1)[1].strip().lower())
+        if current is not None and current <= target:
+            return s
+        return f"Confidence: {label}"
+
+    return [rewrite(s) for s in lines]
 
 
 def downgrade_decision_advisor(advisor: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
