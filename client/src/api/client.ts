@@ -1,5 +1,5 @@
 import { readFirstTouchAttribution } from '@/lib/attribution';
-import { ApiError, safeParseJSON } from '@/lib/errors';
+import { ApiError, safeParseJSON, validationDetailMessage } from '@/lib/errors';
 import {
   attemptTokenRefresh,
   hardRedirectToLogin,
@@ -118,7 +118,10 @@ async function request<T>(
         const error = await safeParseJSON(response, `Request failed (${response.status})`);
         if (error) {
           detail = error.detail || error;
-          if (typeof detail === 'object') {
+          const validation = validationDetailMessage(detail);
+          if (validation) {
+            errorMessage = validation;
+          } else if (typeof detail === 'object') {
             errorMessage = detail.message || error.message || `Request failed (${response.status})`;
           } else if (typeof detail === 'string') {
             errorMessage = detail;
