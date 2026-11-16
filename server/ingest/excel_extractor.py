@@ -281,6 +281,36 @@ def convert_currency(value: float, from_currency: str, to_currency: str = 'USD',
     return value
 
 
+def _use_label_column_as_index(df: pd.DataFrame) -> pd.DataFrame:
+    """Make the first column the row index when it holds line-item labels.
+
+    P&L exports name that column all sorts of things ("Particulars",
+    "Line item", "Account", ...). Matching only a fixed list of headers left
+    every other export with a numeric index, so no rows were ever found.
+    Treat the first column as labels when its header is a known one, or when
+    most of its values are text rather than numbers.
+    """
+    if len(df.columns) == 0:
+        return df
+    first = df.columns[0]
+    if first in ['index', 'Index', 'Metric', 'metric', 'Unnamed: 0']:
+        return df.set_index(first)
+    values = df[first].dropna()
+    if values.empty:
+        return df
+    def _is_label(v: Any) -> bool:
+        if not isinstance(v, str) or not v.strip():
+            return False
+        try:
+            float(v.replace(',', ''))
+            return False
+        except ValueError:
+            return True
+    if values.map(_is_label).mean() >= 0.5:
+        return df.set_index(first)
+    return df
+
+
 def get_value_from_row(df: pd.DataFrame, row_names: List[str], column: str) -> Optional[float]:
     """Extract value from a row matching any of the given names."""
     for name in row_names:
@@ -336,8 +366,7 @@ def parse_income_statement(file_path: str, fx_rate: Optional[float] = None) -> D
         
         df = pd.read_excel(xl, sheet_name=sheet_name)
         
-        if df.columns[0] in ['index', 'Index', 'Metric', 'metric', 'Unnamed: 0']:
-            df = df.set_index(df.columns[0])
+        df = _use_label_column_as_index(df)
         
         detected_currency = detect_currency(df, file_path)
         logger.info(f"Detected currency: {detected_currency}")
@@ -638,8 +667,7 @@ def parse_income_statement_canonical(file_path: str, fx_rate: Optional[float] = 
         
         df = pd.read_excel(xl, sheet_name=sheet_name)
         
-        if len(df.columns) > 0 and df.columns[0] in ['index', 'Index', 'Metric', 'metric', 'Unnamed: 0']:
-            df = df.set_index(df.columns[0])
+        df = _use_label_column_as_index(df)
         
         detected_currency = detect_currency(df, file_path)
         logger.info(f"[CANONICAL] Detected currency: {detected_currency}")
@@ -701,7 +729,7 @@ def parse_income_statement_canonical(file_path: str, fx_rate: Optional[float] = 
             exclude_keywords=['cogs', 'payroll', 'salary']
         )
         sources['marketing'] = SourceReference(sheet=sheet_name, row_labels=marketing_rows, column=str(latest_col), raw_value=marketing_val)
-        logger.info(f"[CANONICAL] Marketing aggregation: ${marketing_val:,.0f} from {len(marketing_rows)} rows: {marketing_rows}")
+        logger.info(f"[CANONICAL] Marketing aggregation: ${(marketing_val or 0):,.0f} from {len(marketing_rows)} rows: {marketing_rows}")
         
         payroll_val, payroll_rows = aggregate_rows_by_keywords(df, latest_col, PAYROLL_KEYWORDS)
         sources['payroll'] = SourceReference(sheet=sheet_name, row_labels=payroll_rows, column=str(latest_col), raw_value=payroll_val)
@@ -752,7 +780,7 @@ def parse_income_statement_canonical(file_path: str, fx_rate: Optional[float] = 
         financials.compute_derived_metrics()
         financials = run_validation(financials)
         
-        logger.info(f"[CANONICAL] Results: revenue=${financials.revenue:,.0f}, totalExp=${financials.total_expenses:,.0f}, netBurn=${financials.net_burn:,.0f}, isProfitable={financials.is_profitable}")
+        logger.info(f"[CANONICAL] Results: revenue=${(financials.revenue or 0):,.0f}, totalExp=${(financials.total_expenses or 0):,.0f}, netBurn=${(financials.net_burn or 0):,.0f}, isProfitable={financials.is_profitable}")
         
         return {
             'success': True,
@@ -968,6 +996,6 @@ def process_termina_excel(
         result['validation_errors'] = canonical.get('validation', {}).get('errors', [])
         result['sources'] = canonical.get('sources', {})
         
-        logger.info(f"[CANONICAL] Merged canonical data into result: revenue=${canonical.get('revenue'):,.0f}, marketing=${canonical['expenses'].get('marketing') or 0:,.0f}")
+        logger.info(f"[CANONICAL] Merged canonical data into result: revenue=${(canonical.get('revenue') or 0):,.0f}, marketing=${canonical['expenses'].get('marketing') or 0:,.0f}")
     
     return result
