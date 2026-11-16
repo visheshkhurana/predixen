@@ -82,6 +82,9 @@ jobs:
       - name: INR lakh/crore formatting tests
         run: npx tsx server/tests/inr-format.test.ts
 
+      - name: onboarding health check matches the stored baseline
+        run: npx tsx server/tests/onboarding-baseline.test.ts
+
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
 
