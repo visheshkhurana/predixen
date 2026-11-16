@@ -19,6 +19,7 @@ from server.api.companies import _get_stage_sample_financials
 from server.core.db import Base
 from server.models.company import Company
 from server.models.company_state import CompanyState
+from server.models.d2c_month import D2CMonth
 from server.models.financial import FinancialRecord
 from server.models.truth_scan import TruthScan
 from server.models.twin_event import TwinEvent
@@ -49,6 +50,7 @@ def db(monkeypatch):
             FinancialRecord.__table__,
             TruthScan.__table__,
             TwinEvent.__table__,
+            D2CMonth.__table__,
         ],
     )
     session = sessionmaker(bind=engine)()

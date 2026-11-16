@@ -182,6 +182,35 @@ def _gather_company_data(db: Session, company: Company) -> Dict[str, Any]:
             "mom_growth": float(fr.mom_growth or 0) if fr.mom_growth is not None else None,
         })
 
+    # Unit economics the truth scan invented from defaults (CAC, LTV, LTV:CAC,
+    # customers, NDR...) are never presented to a board as the company's own.
+    # CAC / LTV come from the founder's record, then a D2C month's marketing
+    # spend / new customers, then real truth-scan values -- the same rule as
+    # /metrics/computed. Anything still unknown is None ("not available").
+    from server.services.d2c_months import latest_d2c_cac
+    from server.truth.invented_metrics import (
+        resolve_unit_economics,
+        strip_invented_unit_economics,
+    )
+    unit_econ = resolve_unit_economics(
+        metrics,
+        financial_records[0] if financial_records else None,
+        latest_d2c_cac(db, company.id),
+    )
+    real_metrics = strip_invented_unit_economics(metrics)
+
+    def _known(value: float) -> Optional[float]:
+        return value if value and value > 0 else None
+
+    latest_customers = financial_records[0].customers if financial_records else None
+    customers = _known(
+        float(latest_customers or 0)
+        or extract_metric_value(real_metrics.get("customers"), 0)
+        or extract_metric_value(real_metrics.get("customer_count"), 0)
+    )
+    latest_ndr = financial_records[0].ndr if financial_records else None
+    ndr = _known(float(latest_ndr or 0) or extract_metric_value(real_metrics.get("net_revenue_retention"), 0))
+
     extracted_metrics = {
         "monthly_revenue": extract_metric_value(metrics.get("monthly_revenue"), 0),
         "mrr": extract_metric_value(metrics.get("mrr"), 0),
@@ -191,12 +220,14 @@ def _gather_company_data(db: Session, company: Company) -> Dict[str, Any]:
         "runway_months": extract_metric_value(metrics.get("runway_p50"), 0),
         "gross_margin": extract_metric_value(metrics.get("gross_margin"), 0),
         "revenue_growth": extract_metric_value(metrics.get("revenue_growth_mom"), 0),
-        "customers": extract_metric_value(metrics.get("customers"), extract_metric_value(metrics.get("customer_count"), 0)),
+        "customers": customers,
         "churn_rate": extract_metric_value(metrics.get("churn_rate"), 0),
-        "cac": extract_metric_value(metrics.get("cac"), 0),
-        "ltv": extract_metric_value(metrics.get("ltv"), 0),
-        "ltv_cac_ratio": extract_metric_value(metrics.get("ltv_cac_ratio"), 0),
-        "ndr": extract_metric_value(metrics.get("net_revenue_retention"), 0),
+        "cac": _known(unit_econ["cac"]),
+        "cac_source": unit_econ["cac_source"],
+        "cac_period": unit_econ["cac_period"],
+        "ltv": _known(unit_econ["ltv"]),
+        "ltv_cac_ratio": _known(unit_econ["ltv_cac_ratio"]),
+        "ndr": ndr,
         "headcount": extract_metric_value(metrics.get("headcount"), 0),
         "is_profitable": bool(extract_metric_value(metrics.get("is_profitable"), False)),
         "runway_sustainable": bool(extract_metric_value(metrics.get("runway_sustainable"), False)),
@@ -216,10 +247,60 @@ def _gather_company_data(db: Session, company: Company) -> Dict[str, Any]:
         "scenarios": scenario_data,
         "decisions": decision_data,
         "simulation": sim_outputs,
-        "truth_scan_raw": metrics,
+        "truth_scan_raw": real_metrics,
         "fundraising_rounds": fundraising_rounds,
         "generated_at": datetime.utcnow().isoformat(),
     }
+
+
+def _money(value: float, currency: Optional[str]) -> str:
+    code = (currency or "USD").upper()
+    symbol = {"USD": "$", "INR": "\u20b9", "EUR": "\u20ac", "GBP": "\u00a3"}.get(code)
+    return f"{symbol}{value:,.0f}" if symbol else f"{code} {value:,.0f}"
+
+
+def _cac_basis(metrics: Dict[str, Any]) -> str:
+    if metrics.get("cac_source") == "d2c_month" and metrics.get("cac_period"):
+        return f" (marketing spend / new customers, {metrics['cac_period'][:7]})"
+    return ""
+
+
+def _unit_economics_lines(metrics: Dict[str, Any], data: Dict[str, Any]) -> str:
+    """Prompt lines for CAC / LTV / LTV:CAC / NDR. Unknown values are stated as
+    not available so the model never fills them in or reads 0 as measured."""
+    currency = (data.get("company") or {}).get("currency")
+    cac, ltv, ratio, ndr = (metrics.get(k) for k in ("cac", "ltv", "ltv_cac_ratio", "ndr"))
+    na = "not available (no data; do not estimate)"
+    return (
+        f"CAC: {_money(cac, currency) + _cac_basis(metrics) if cac else na}\n"
+        f"LTV: {_money(ltv, currency) if ltv else na}\n"
+        f"LTV/CAC: {f'{ratio:.1f}x' if ratio else na}\n"
+        f"NDR: {f'{ndr:.0f}%' if ndr else na}\n"
+    )
+
+
+def _unit_economics_sentence(metrics: Dict[str, Any], data: Dict[str, Any]) -> str:
+    """Rule-based unit-economics text: only metrics backed by data are named."""
+    currency = (data.get("company") or {}).get("currency")
+    cac, ltv, ratio = metrics.get("cac"), metrics.get("ltv"), metrics.get("ltv_cac_ratio")
+    parts = []
+    if ratio and cac and ltv:
+        parts.append(
+            f"LTV/CAC ratio stands at {ratio:.1f}x (LTV: {_money(ltv, currency)}, "
+            f"CAC: {_money(cac, currency)})."
+        )
+    else:
+        if cac:
+            parts.append(f"CAC is {_money(cac, currency)}{_cac_basis(metrics)}.")
+        if ltv:
+            parts.append(f"LTV is {_money(ltv, currency)}.")
+        missing = [n for n, v in (("CAC", cac), ("LTV", ltv), ("LTV/CAC", ratio)) if not v]
+        if missing:
+            parts.append(f"{', '.join(missing)} not available yet (needs customer and marketing data).")
+    gm = metrics.get("gross_margin")
+    if gm:
+        parts.append(f"Gross margin is {gm:.1f}%.")
+    return " ".join(parts)
 
 
 def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
@@ -242,8 +323,7 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
         f"Revenue Growth MoM: {metrics.get('revenue_growth', 0):.1f}%\n"
         f"Headcount: {int(metrics.get('headcount', 0))}\n"
         f"Churn Rate: {metrics.get('churn_rate', 0):.1f}%\n"
-        f"LTV/CAC: {metrics.get('ltv_cac_ratio', 0):.1f}x\n"
-        f"NDR: {metrics.get('ndr', 0):.0f}%\n"
+        f"{_unit_economics_lines(metrics, data)}"
         f"Data Confidence: {data.get('confidence', 50)}%\n"
     )
 
@@ -528,17 +608,13 @@ def _generate_fallback_narrative(section: Dict, data: Dict) -> str:
             f"Monte Carlo simulation projects a median runway of {p50:.1f} months."
         )
     elif "unit economics" in title.lower():
-        ltv_cac = metrics.get("ltv_cac_ratio", 0)
-        cac = metrics.get("cac", 0)
-        ltv = metrics.get("ltv", 0)
-        return (
-            f"LTV/CAC ratio stands at {ltv_cac:.1f}x (LTV: ${ltv:,.0f}, CAC: ${cac:,.0f}). "
-            f"Gross margin is {metrics.get('gross_margin', 0):.1f}%."
-        )
+        return _unit_economics_sentence(metrics, data)
     elif "traction" in title.lower():
+        customers = metrics.get("customers")
+        with_customers = f" with {customers:,.0f} customers" if customers else ""
         return (
             f"{company_name} has ${revenue:,.0f} in monthly revenue growing at "
-            f"{growth:.1f}% MoM with {metrics.get('customers', 0):.0f} customers."
+            f"{growth:.1f}% MoM{with_customers}."
         )
     elif "scenario" in title.lower() or "comparison" in title.lower():
         scenarios = data.get("scenarios", [])

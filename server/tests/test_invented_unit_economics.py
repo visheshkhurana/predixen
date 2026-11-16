@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from server.api.ingest import get_computed_metrics
 from server.truth.invented_metrics import strip_invented_unit_economics
@@ -49,14 +49,15 @@ def _record(**overrides):
     return SimpleNamespace(**base)
 
 
-def _computed(record, ts_metrics):
+def _computed(record, ts_metrics, d2c_cac=None):
     db = MagicMock()
     company = SimpleNamespace(id=1, user_id=1, currency="INR")
     q = db.query.return_value.filter.return_value
     q.first.return_value = company
     scan = SimpleNamespace(outputs_json={"metrics": ts_metrics})
     q.order_by.return_value.first.side_effect = [record, scan]
-    return asyncio.run(get_computed_metrics(1, db=db, current_user=SimpleNamespace(id=1)))
+    with patch("server.services.d2c_months.latest_d2c_cac", return_value=d2c_cac):
+        return asyncio.run(get_computed_metrics(1, db=db, current_user=SimpleNamespace(id=1)))
 
 
 def test_strip_drops_only_flagged_unit_economics():

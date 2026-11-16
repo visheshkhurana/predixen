@@ -330,6 +330,13 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       ? 'computed'
       : 'estimated';
     mark('cac', c.cac || ext?.cac, cac, !!tsReal('cac'));
+    // The server says where its CAC came from: marketing spend / new customers
+    // from a D2C month is arithmetic on the founder's inputs ("Computed"); a
+    // CAC on the financial record is the founder's own figure ("Verified").
+    if (c.cac > 0 && cac === c.cac) {
+      if (c.cacSource === 'd2c_month') sources['cac'] = 'computed';
+      else if (c.cacSource === 'reported') sources['cac'] = 'reported';
+    }
     mark('ltv', c.ltv || ext?.ltv, ltv, !!tsReal('ltv'));
     sources['ltvCacRatio'] = tsReal('ltv_cac_ratio') ? 'reported' : (cac > 0 && ltv > 0 ? 'computed' : 'estimated');
     mark('grossMargin', c.grossMarginPct || ext?.grossMargin, grossMarginPct, !!tsVal('gross_margin'));

@@ -83,7 +83,10 @@ def _computed(record):
     q.first.return_value = company
     q.order_by.return_value.first.side_effect = [record, None]
     import asyncio
-    return asyncio.run(get_computed_metrics(1, db=db, current_user=SimpleNamespace(id=1)))
+    from unittest.mock import patch
+    # No D2C months for this company (the reader is covered in test_d2c_cac_readers).
+    with patch("server.services.d2c_months.latest_d2c_cac", return_value=None):
+        return asyncio.run(get_computed_metrics(1, db=db, current_user=SimpleNamespace(id=1)))
 
 
 def test_dashboard_runway_matches_onboarding():

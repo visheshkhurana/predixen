@@ -403,3 +403,44 @@ def ad_spend_view(
         "marketing_spend_source": marketing_source,
         "manual_override": marketing_source == MANUAL and bool(ads),
     }
+
+
+
+def _cac_months_query(db: Session, company_id: int):
+    """Months with both inputs CAC needs. A month with zero spend is skipped:
+    readers treat a 0 CAC as "not known", so it would only show as missing."""
+    return db.query(D2CMonth).filter(
+        D2CMonth.company_id == company_id,
+        D2CMonth.marketing_spend.isnot(None),
+        D2CMonth.marketing_spend > 0,
+        D2CMonth.new_customers.isnot(None),
+        D2CMonth.new_customers > 0,
+    )
+
+
+def _cac_view(row: D2CMonth) -> Dict[str, Any]:
+    spend = float(row.marketing_spend)
+    customers = int(row.new_customers)
+    return {
+        "cac": spend / customers,
+        "period": row.period.isoformat(),
+        "marketing_spend": spend,
+        "new_customers": customers,
+    }
+
+
+def latest_d2c_cac(db: Session, company_id: int) -> Optional[Dict[str, Any]]:
+    """CAC from the newest month that has both marketing spend and new customers.
+
+    Same rule as the D2C engine (``server/core/d2c.py``): marketing_spend /
+    new_customers. Months without both inputs are skipped rather than guessed.
+
+    Returns ``{"cac", "period", "marketing_spend", "new_customers"}`` or None.
+    """
+    row = _cac_months_query(db, company_id).order_by(D2CMonth.period.desc()).first()
+    return _cac_view(row) if row is not None else None
+
+
+def d2c_cac_by_month(db: Session, company_id: int) -> Dict[date, Dict[str, Any]]:
+    """Every month's D2C CAC (as :func:`latest_d2c_cac`), keyed by month start."""
+    return {row.period: _cac_view(row) for row in _cac_months_query(db, company_id).all()}

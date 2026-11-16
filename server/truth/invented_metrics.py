@@ -36,3 +36,74 @@ def strip_invented_unit_economics(ts_metrics: Any) -> Dict[str, Any]:
         return dict(ts_metrics)
     drop = INVENTED_UNIT_ECONOMICS_KEYS.intersection(str(x) for x in listed)
     return {k: v for k, v in ts_metrics.items() if k not in drop}
+
+
+def _num(value: Any) -> float:
+    """A truth-scan / record value as a float; 0.0 when absent or not numeric."""
+    if isinstance(value, dict):
+        value = value.get("value")
+    if isinstance(value, bool) or value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def resolve_unit_economics(
+    ts_metrics: Any,
+    record: Any = None,
+    d2c_cac: Any = None,
+) -> Dict[str, Any]:
+    """CAC / LTV / LTV:CAC from real inputs only, in one order for every reader.
+
+    - ``ts_metrics``: raw truth-scan metrics; invented values are stripped here.
+    - ``record``: a ``FinancialRecord`` (or anything with ``cac``/``ltv``/
+      ``ltv_cac_ratio`` attributes); founder-entered or connected values win.
+    - ``d2c_cac``: the result of ``server.services.d2c_months.latest_d2c_cac``
+      (marketing spend / new customers from a D2C month), or None.
+
+    CAC order: record > D2C month > real truth-scan value. LTV only comes from
+    the record or a real truth-scan value (one month of D2C data is not enough
+    to model lifetime value). The ratio is reported, or LTV / CAC when both are
+    known. Unknown values are 0.0 (readers already treat 0 as "not available")
+    and their source is None.
+    """
+    ts = strip_invented_unit_economics(ts_metrics)
+
+    def rec(attr: str) -> float:
+        return _num(getattr(record, attr, None)) if record is not None else 0.0
+
+    cac, cac_source, cac_period = rec("cac"), None, None
+    if cac > 0:
+        cac_source = "reported"
+    elif isinstance(d2c_cac, dict) and _num(d2c_cac.get("cac")) > 0:
+        cac, cac_source = _num(d2c_cac.get("cac")), "d2c_month"
+        cac_period = d2c_cac.get("period")
+    elif _num(ts.get("cac")) > 0:
+        cac, cac_source = _num(ts.get("cac")), "truth_scan"
+    else:
+        cac = 0.0
+
+    ltv, ltv_source = rec("ltv"), None
+    if ltv > 0:
+        ltv_source = "reported"
+    elif _num(ts.get("ltv")) > 0:
+        ltv, ltv_source = _num(ts.get("ltv")), "truth_scan"
+    else:
+        ltv = 0.0
+
+    ratio = rec("ltv_cac_ratio") or _num(ts.get("ltv_cac_ratio"))
+    if ratio <= 0 and ltv > 0 and cac > 0:
+        ratio = ltv / cac
+    if ratio <= 0:
+        ratio = 0.0
+
+    return {
+        "cac": cac,
+        "ltv": ltv,
+        "ltv_cac_ratio": ratio,
+        "cac_source": cac_source,
+        "cac_period": cac_period,
+        "ltv_source": ltv_source,
+    }
