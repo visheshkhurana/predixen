@@ -1284,7 +1284,7 @@ export default function OverviewPage() {
             <h1 className="text-3xl font-bold tracking-tight" data-testid="text-company-name">{currentCompany.name}</h1>
             <p className="text-sm text-muted-foreground/70">Financial Intelligence Overview</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {getConfidenceBadge()}
             <BoardExportButton companyId={currentCompany.id} />
             <Button
@@ -1824,7 +1824,7 @@ export default function OverviewPage() {
       {/* Goals widget removed: it showed hardcoded targets and there is no goals backend. */}
 
       <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm" data-testid="segment-analysis-section">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
           <div className="space-y-1">
             <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
               <Scale className="h-4 w-4 text-primary" />
