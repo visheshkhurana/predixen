@@ -27,6 +27,10 @@
 | Billing page | pay | loads, ₹3,000 Starter; offers 30-day Scale trial (see Blocked) | :5070 | 01:56 |
 | Profit per order | D2C core action | works; CM1/2/3, MER, CAC, RTO math checked by hand; empty after onboarding (no prefill) | acct B Oct inputs | 01:57 |
 | Account deletion / export | leaving | no self-serve deletion (privacy page says 'request'); financial CSV export exists | openapi | 01:52 |
+| Password reset | account | works; same reply for unknown email (no enumeration) | API | 03:12 |
+| Logout | account | works; session 401 after | API | 03:12 |
+| Team invites | team | API works, cross-company 403; NO UI mounted (TeamWorkspace unused) → being wired | API | 03:14 |
+| Uploads (invalid/empty) | import | 400 with raw library text → FIXED 7e463d93 | API | 03:08 |
 | Data isolation | safety | works: 92 company GET routes 403/404 cross-account, 401 signed out; 34 object routes no cross-company rows | API probe | 01:47 |
 
 ## Backlog (ranked)
@@ -51,6 +55,8 @@ Next: Profit page prefill from onboarding revenue; KPI tooltip GM targets per in
 |---|---|---|---|---|
 | Signup/form validation errors readable | predixen | 9d629512 | sign up with x@brand.test → 'Please use a real email address…' | |
 | Onboarding stepper fits; AED default for UAE; D2C connect copy | predixen | cd7a20c5 | onboarding at 1200px and 375px; Dubai TZ → AED | |
+| Review fixes: payback from invented book, board unknown burn, partial confidence, simulate-workspace 402, budget notice, draft kept | predixen | e0b7b339 | see commit | |
+| Unreadable uploads: plain message | predixen | 7e463d93 | upload fake.xlsx → 'We couldn't read this spreadsheet…' | |
 | Copilot labels AI-down fallback honestly | predixen | aa1833af | /copilot with no LLM key → red 'AI assistant unavailable' | |
 | CAC from D2C months; board/realtime no invented unit economics | predixen | 26231159 | /overview D2C with Oct inputs → CAC ₹417 Computed | |
 | Board deck currency + real burn wording | predixen | 4b011cf2 | test_board_export_currency.py | |
@@ -92,4 +98,6 @@ Next: Profit page prefill from onboarding revenue; KPI tooltip GM targets per in
 | 6 | 02:05-02:13 | D2C profit card, signup D2C panel, admin banner, mobile overview; delegated copilot-fallback + unit-economics-from-D2C | shipped cc4abd30 4c297c8d 410d91b7 a1be27c2 | 2 subagents |
 | 7 | 02:13-02:30 | reviewed+committed copilot fallback & unit economics subagents; board currency fix | aa1833af 26231159 4b011cf2 | |
 | 8 | 02:30-02:45 | revenue labels, benchmark honesty, demo-account regression check; copilot decision answer subagent; hardened launcher (all AI keys unset after finding GEMINI/OPENROUTER etc exported; logs show only Anthropic 401s); stopped :5070 | 7e9a6e3f 8f865c43 bf05985d | independent review running |
+| 9 | 02:45-03:02 | independent review (no blockers, 5 should-fix) → all 4 numeric/UX fixes + 2 nits | e0b7b339 | |
+| 10 | 03:02-03:15 | upload errors; reset/logout/invite audit; delegated copilot invented-CAC context + team UI | 7e463d93 | 2 subagents |
 | 4 | 01:52-01:58 | plan-limit upgrade dialog; audit billing, profit, leaving | shipped 8bee2c44 | fine |
