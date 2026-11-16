@@ -4,6 +4,7 @@ import { TrendingUp, TrendingDown, Minus, Info, Database, Calculator, Clock, Git
 import { cn } from '@/lib/utils';
 import { Sparkline } from './Sparkline';
 import { formatDistanceToNow } from 'date-fns';
+import { parseServerDate } from '@/lib/serverDate';
 import { motion, useReducedMotion } from 'framer-motion';
 
 export interface MetricProvenance {
@@ -174,7 +175,7 @@ export function MetricCard({
                       {provenance.timestamp && (
                         <div className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          <span>{formatDistanceToNow(new Date(provenance.timestamp), { addSuffix: true })}</span>
+                          <span>{formatDistanceToNow(parseServerDate(provenance.timestamp), { addSuffix: true })}</span>
                         </div>
                       )}
                       {provenance.runId && (
@@ -237,7 +238,7 @@ export function MetricCard({
 
       {lastUpdated && (
         <p className="text-[9px] text-muted-foreground/40 mt-2 font-mono" data-testid={`${testId}-last-updated`}>
-          {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
+          {formatDistanceToNow(parseServerDate(lastUpdated), { addSuffix: true })}
         </p>
       )}
     </Wrapper>
