@@ -19,6 +19,7 @@ from server.models.financial import FinancialRecord
 from server.ingest.pdf_extractor import process_termina_pdf, extract_text_from_pdf
 from server.ingest.excel_extractor import process_termina_excel
 from server.core.units import gross_margin_pct as gross_margin_pct_of
+from server.truth.invented_metrics import strip_invented_unit_economics
 
 logger = logging.getLogger(__name__)
 
@@ -734,6 +735,9 @@ async def get_computed_metrics(
         oj = latest_ts.outputs_json
         if isinstance(oj, dict):
             ts_metrics = oj.get('metrics', oj.get('computed_metrics', {}))
+    # Never pass on CAC / LTV / customers the truth scan invented; values from
+    # the founder's own FinancialRecord are read first below and are unaffected.
+    ts_metrics = strip_invented_unit_economics(ts_metrics)
 
     def fr_val(attr, default=0):
         if latest_record is None:

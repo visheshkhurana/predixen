@@ -728,8 +728,8 @@ export default function TruthScanPage() {
   }, [kpiHistory]);
 
   const suggestedActions = useMemo(
-    () => generateSuggestedActions(metrics, flags),
-    [metrics, flags],
+    () => generateSuggestedActions(metrics, flags, { industry: currentCompany?.industry }),
+    [metrics, flags, currentCompany?.industry],
   );
   
   if (!currentCompany) {
