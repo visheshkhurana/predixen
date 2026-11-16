@@ -88,6 +88,9 @@ jobs:
       - name: validation errors read as sentences
         run: npx tsx server/tests/validation-error-message.test.ts
 
+      - name: plan limit opens the upgrade dialog
+        run: npx tsx server/tests/plan-limit-dialog.test.ts
+
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
 
@@ -137,6 +140,9 @@ jobs:
 
       - name: overview suggested action tests
         run: npx tsx server/tests/overview-suggested-action.test.ts
+
+      - name: overview burn / unit economics honesty tests
+        run: npx tsx server/tests/overview-burn-unit-economics.test.ts
 
       - name: entry-bundle no framer-motion on critical path
         run: npx tsx server/tests/entry-no-framer-motion.test.ts

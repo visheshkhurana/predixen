@@ -1,5 +1,6 @@
 import { readFirstTouchAttribution } from '@/lib/attribution';
 import { ApiError, safeParseJSON, validationDetailMessage } from '@/lib/errors';
+import { announcePlanLimit } from '@/lib/planLimit';
 import {
   attemptTokenRefresh,
   hardRedirectToLogin,
@@ -143,6 +144,7 @@ async function request<T>(
       errorMessage = `Request failed (${response.status})`;
     }
     console.error(`API Error: ${response.status} ${endpoint}`, errorMessage);
+    announcePlanLimit(response.status, detail);
 
     if (response.status === 401 && !endpoint.startsWith('/auth/')) {
       const refreshed = await attemptTokenRefresh();

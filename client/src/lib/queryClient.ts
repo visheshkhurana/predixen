@@ -1,4 +1,5 @@
 import { QueryCache, QueryClient, QueryFunction } from "@tanstack/react-query";
+import { announcePlanLimit } from "@/lib/planLimit";
 import { toast } from "@/hooks/use-toast";
 import { createDedupedNotifier } from "./queryErrorToast";
 import { ApiError, safeParseJSON } from "./errors";
@@ -47,6 +48,7 @@ async function throwIfResNotOk(res: Response, method?: string) {
       message = res.statusText || 'Request failed';
     }
 
+    announcePlanLimit(res.status, detail);
     const error = new ApiError(res.status, `${res.status}: ${message}`, detail);
     throw error;
   }
