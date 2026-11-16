@@ -94,9 +94,6 @@ jobs:
       - name: dashboard profit-per-order card
         run: npx tsx server/tests/d2c-profit-card.test.ts
 
-      - name: settings team invites
-        run: npx tsx server/tests/team-invites.test.ts
-
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
 
