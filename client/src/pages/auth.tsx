@@ -405,7 +405,7 @@ export default function AuthPage({
             <div className="max-w-xl">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-medium text-blue-300 tracking-wide uppercase">Now in Public Beta</span>
+                <span className="text-xs font-medium text-blue-300 tracking-wide uppercase">Free plan available</span>
               </div>
               
               <h1 className="text-4xl xl:text-5xl font-bold text-white leading-[1.1] tracking-tight mb-5">

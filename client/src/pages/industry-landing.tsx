@@ -101,7 +101,7 @@ function Hero({ page, onChangeIndustry }: { page: IndustryPage; onChangeIndustry
             </Button>
           )}
         </div>
-        <p className="mt-5 text-xs text-muted-foreground">Free during public beta · No credit card required</p>
+        <p className="mt-5 text-xs text-muted-foreground">Free plan · No credit card required</p>
       </div>
     </section>
   );
@@ -298,7 +298,7 @@ function FinalCta({ page }: { page: IndustryPage }) {
         <Zap className="mx-auto mb-4 h-8 w-8 text-primary" aria-hidden />
         <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">Start free in a few minutes</h2>
         <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
-          Connect a data source or type in your numbers. Every feature is free during the public beta.
+          Connect a data source or type in your numbers. Start on the free plan, no credit card required.
         </p>
         <div className="mt-8 flex justify-center">
           <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/25" asChild data-testid="button-industry-bottom-cta">

@@ -234,9 +234,13 @@ test("no planned prices, retired offers, stale counts or invented social proof",
   }
   // No "N founders/brands/companies/customers use ..." style counts.
   assert.doesNotMatch(copy, /\b\d[\d,.]*\+?\s*(founders|brands|companies|customers|startups|teams)\b/i);
-  // Every page states the free beta.
+  // Every page states the Free plan (true with payments on or off) and none
+  // still claims the public beta, which ended when paid plans went live.
   for (const p of INDUSTRY_PAGES) {
-    assert.ok(/free during (the )?public beta/i.test(JSON.stringify(p)), `${p.slug} must state free during beta`);
+    const json = JSON.stringify(p);
+    assert.ok(/free plan/i.test(json), `${p.slug} must state the free plan`);
+    assert.ok(/no credit card/i.test(json), `${p.slug} must say no credit card`);
+    assert.ok(!/public beta/i.test(json), `${p.slug} still claims the public beta`);
   }
   // The config file itself (comments included) carries no planned price.
   assert.ok(!CONFIG_SOURCE.includes("$29"));

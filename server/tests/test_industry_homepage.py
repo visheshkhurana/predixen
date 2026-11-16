@@ -66,7 +66,11 @@ def test_copy_respects_published_facts():
         assert phrase not in text, phrase
     for count in re.findall(r"(\d+) (?:read-only )?(?:data )?connectors", text):
         assert count == "36"
-    assert "free during the public beta" in text.lower()
+    # Paid plans are live (2026-11-15): the only price claim is the Free plan,
+    # which is true whether payments are on or off.
+    assert "public beta" not in text.lower()
+    assert "free plan" in text.lower()
+    assert "no credit card" in text.lower()
 
 
 def test_connectors_named_are_registered():

@@ -3,7 +3,7 @@
 > FounderConsole is an AI decision simulator for startup founders and D2C (direct-to-consumer)
 > brands. It connects your company's financial data, runs Monte Carlo simulations, and answers
 > runway, burn, contribution margin and fundraising questions with probability ranges
-> (P10/P50/P90) instead of a single spreadsheet forecast. Free during public beta; no credit
+> (P10/P50/P90) instead of a single spreadsheet forecast. There is a free plan; no credit
 > card required.
 
 Who it is for: founders and finance leads of Indian D2C and Shopify brands who track
@@ -29,9 +29,9 @@ Last updated: 2026-11-12.
 - Other published health bands: net revenue retention elite above 120%; monthly churn
   best-in-class under 1%; LTV:CAC excellent above 5x; CAC payback excellent under 6 months;
   SaaS gross margin best-in-class 80% or higher.
-- Pricing, as published on /pricing: every feature is free during the public beta
-  (early access). No credit card is required, and no plan is charged yet. Paid
-  tiers come later.
+- Pricing, as published on /pricing: there is a free plan (3 simulations and 10
+  copilot messages a month) with no credit card required. Paid plans add more
+  simulations, copilot messages and connectors; current prices are on /pricing.
 
 ## D2C finance: definitions and formulas
 

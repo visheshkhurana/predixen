@@ -125,12 +125,15 @@ def test_registry_has_36_connectors():
     assert len(registered) == 36, sorted(registered)
 
 
-def test_llms_txt_prices_the_free_beta_and_counts_36_connectors():
+def test_llms_txt_prices_the_free_plan_and_counts_36_connectors():
+    # Paid plans went live 2026-11-15. llms.txt is static (no billing gate),
+    # so it states only what is true in both states: the Free plan, no card.
     text = LLMS.read_text()
     lowered = " ".join(text.lower().split())
-    assert "every feature is free during the public beta" in lowered
-    assert "no plan is charged yet" in lowered
-    assert "paid tiers come later" in lowered
+    assert "public beta" not in lowered
+    assert "no plan is charged yet" not in lowered
+    assert "paid tiers come later" not in lowered
+    assert "there is a free plan (3 simulations and 10 copilot messages a month) with no credit card required" in lowered
     # Planned dollar amounts must not be the citable price. /pricing still
     # shows them as the later plan, and this file must not.
     assert "$29" not in text
