@@ -23,6 +23,10 @@
 | Onboarding manual entry + Health Check | first value | was wrong ($ labels, burn ≠ dashboard, profitable → "add data"); FIXED 0dd169ce | 2 accounts | 01:41 |
 | Onboarding step 4 sim preview | learn | hard-coded P10/P50/P90 unlabelled; FIXED (labelled) | | 01:41 |
 | Dashboard /overview | see business | loads; burn agrees; SaaS framing, "AI Estimated" on typed burn, invented CAC/LTV, D2C told 70% GM target | | 01:42 |
+| Plan limit at 402 | paid conversion | was generic error; FIXED 8bee2c44 (upgrade dialog → /billing) | paid-mode local instance :5070 | 01:56 |
+| Billing page | pay | loads, ₹3,000 Starter; offers 30-day Scale trial (see Blocked) | :5070 | 01:56 |
+| Profit per order | D2C core action | works; CM1/2/3, MER, CAC, RTO math checked by hand; empty after onboarding (no prefill) | acct B Oct inputs | 01:57 |
+| Account deletion / export | leaving | no self-serve deletion (privacy page says 'request'); financial CSV export exists | openapi | 01:52 |
 | Data isolation | safety | works: 92 company GET routes 403/404 cross-account, 401 signed out; 34 object routes no cross-company rows | API probe | 01:47 |
 
 ## Backlog (ranked)
@@ -42,6 +46,9 @@
 ## Shipped
 | Item | Repo | Commit | How to test | Watch |
 |---|---|---|---|---|
+| Signup/form validation errors readable | predixen | 9d629512 | sign up with x@brand.test → 'Please use a real email address…' | |
+| Onboarding stepper fits; AED default for UAE; D2C connect copy | predixen | cd7a20c5 | onboarding at 1200px and 375px; Dubai TZ → AED | |
+| Upgrade dialog at plan limit | predixen | 8bee2c44 | needs payments on: 4th sim on Free → dialog → See plans → /billing | PostHog plan_limit_shown / upgrade_click |
 | Onboarding health check honest + in founder's currency | predixen | 0dd169ce | Sign up, pick D2C + INR, enter 25L rev/55% GM/9L opex/8L payroll/2L other/3Cr cash → Health check "Not burning", "Monthly Surplus ₹5.8L", labels ₹; dashboard burn -₹5.8L | example FX rates are rough, labelled as estimates |
 
 ## Decisions and assumptions
@@ -51,6 +58,8 @@
   onboarding screen to match it and made the field hints say so, instead of changing stored data semantics.
 
 ## Blocked
+- /billing offers 'Try all features free for 30 days — Scale plan, no card' while marketing dropped the trial; a Free user at the limit can trial instead of paying. Decide: keep trial (then say so on pricing) or hide it. Recommendation: keep a 14-day Starter trial, not Scale.
+- No self-serve account deletion (privacy page promises deletion on request). Recommendation: add a 'Delete account' request button next session (irreversible, needs care).
 - Free plan advertises 0 connectors but nothing enforces it. Decide: enforce (hurts D2C activation: Shopify
   is the fastest path to real numbers) or change pricing copy. Recommendation: allow 1 connector on Free.
 - Headline "a free AI CFO" on /for/d2c etc. while paid plans are live: positioning call.
@@ -61,3 +70,5 @@
 | 0 | 01:24-01:30 | setup, baseline | ok | fine |
 | 1 | 01:30-01:44 | audit signup→dashboard; onboarding health check fix | shipped 0dd169ce | fine |
 | 2 | 01:44-01:48 | data isolation probe | no leaks | fine |
+| 3 | 01:48-01:52 | 422 messages, stepper/AED/connect copy; delegated dashboard honesty + beta copy | shipped 9d629512, cd7a20c5 | 2 subagents |
+| 4 | 01:52-01:58 | plan-limit upgrade dialog; audit billing, profit, leaving | shipped 8bee2c44 | fine |
