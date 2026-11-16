@@ -118,6 +118,6 @@ All work is on branch `overnight/2026-11-17`: 21 shipped commits, 1 reverted pai
 
 ## 11. Numbers
 - **Session:** 01:24 to ~03:55 Asia/Dubai, stopped early. The remaining backlog is either your decision (section 7) or low value, which is the brief's stop condition.
-- **Shipped:** 21 changes, 1 reverted. 11 developer subagents (7 builders, 1 independent reviewer, plus re-checks), each verified by me.
-- **Python tests:** before, 1590 passed / 2 known local failures; after, **1646 passed** / the same 2. **TS CI steps:** 52 → **57** passing. Type-check 0 errors; build passes; PR #267 CI green.
+- **Shipped:** 21 changes, 1 reverted. 8 developer subagents (7 builders, 1 independent reviewer), each verified by me.
+- **Python tests:** before, 1590 passed / 2 known local failures; after, **1646 passed** / the same 2. **TS CI steps:** 51 → **57** passing. Type-check 0 errors; build passes; PR #267 CI green.
 - **Time lost to throttling:** none.
