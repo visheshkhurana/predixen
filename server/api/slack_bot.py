@@ -162,7 +162,9 @@ def _get_metrics_snapshot(db: Session, company: Company) -> Dict[str, Any]:
 
     metrics = {}
     if truth_scan and truth_scan.outputs_json:
-        ts_metrics = truth_scan.outputs_json.get("metrics", {})
+        # Invented CAC / LTV never reach a Slack answer.
+        from server.truth.invented_metrics import strip_invented_unit_economics
+        ts_metrics = strip_invented_unit_economics(truth_scan.outputs_json.get("metrics", {}))
         for key in [
             "mrr", "arr", "cash_balance", "runway_months",
             "net_burn", "gross_margin", "headcount",

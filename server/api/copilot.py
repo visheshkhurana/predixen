@@ -439,8 +439,17 @@ def _build_data_summary(context: Dict[str, Any]) -> str:
         metrics = ts.get("metrics", {})
         parts.append(f"\n--- Current Metrics (Truth Scan, computed {ts.get('computed_at', 'N/A')}) ---")
         for k, v in metrics.items():
-            if v is not None:
+            if v is not None and not str(k).startswith("_"):
                 parts.append(f"  {k}: {v}")
+
+    # Unit economics from real inputs only (founder record > D2C month > real
+    # truth-scan value). Unknowns are spelled out so the model doesn't fill
+    # them in with the truth scan's invented CAC / LTV / 150 customers.
+    if "unit_economics" in context:
+        from server.copilot.unit_economics import format_unit_economics_lines
+        parts.append("\n--- Unit Economics (only these values are known; never estimate the rest) ---")
+        for line in format_unit_economics_lines(context.get("unit_economics"), company.get("currency") or "USD"):
+            parts.append(f"  {line}")
 
     history = context.get("financial_history", [])
     if history:
@@ -611,10 +620,21 @@ def _guard_available_metrics(db: Session, company_id: int, truth_scan: Optional[
         ).order_by(FinancialRecord.period_end.desc()).first()
     except Exception:
         latest_record = None
-    return merge_available_metrics(
+    merged = merge_available_metrics(
         truth_scan.outputs_json if truth_scan else None,
         latest_record,
     )
+    # A CAC the founder entered on a D2C month (marketing spend / new
+    # customers) is verified too; without it the guard refused the real figure.
+    if not merged.get("cac"):
+        try:
+            from server.services.d2c_months import latest_d2c_cac
+            d2c = latest_d2c_cac(db, company_id)
+            if d2c and d2c.get("cac"):
+                merged["cac"] = d2c["cac"]
+        except Exception:
+            pass
+    return merged
 
 
 @router.post("/companies/{company_id}/quick-chat", response_model=QuickChatResponse)
@@ -1332,10 +1352,27 @@ async def _copilot_chat_inner(
             sanitized_content = PromptInjectionDefense.sanitize_user_input(msg.content)
             conversation_context.append({"role": msg.role, "content": sanitized_content})
     
+    # Agents see the scan without its invented unit economics; real CAC / LTV
+    # (record > D2C month > real scan value) arrive as "unit_economics".
+    from server.truth.invented_metrics import strip_invented_from_outputs
+    from server.copilot.unit_economics import company_unit_economics
+    from server.models.financial import FinancialRecord as _FinancialRecord
+    _latest_record = db.query(_FinancialRecord).filter(
+        _FinancialRecord.company_id == company_id
+    ).order_by(_FinancialRecord.period_end.desc()).first()
+    unit_economics = company_unit_economics(
+        db,
+        company_id,
+        (truth_scan.outputs_json or {}).get("metrics", {}) if truth_scan else {},
+        _latest_record,
+    )
+
     context = {
         "has_document": False,
         "extracted_financials": None,
-        "truth_scan": truth_scan.outputs_json if truth_scan else None,
+        "truth_scan": strip_invented_from_outputs(truth_scan.outputs_json) if truth_scan else None,
+        "unit_economics": unit_economics,
+        "currency": company.currency or "USD",
         "mode": request.mode,
         "challenge_mode": request.challenge_mode,
         "investor_lens": request.investor_lens,

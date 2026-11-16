@@ -26,16 +26,71 @@ INVENTED_UNIT_ECONOMICS_KEYS = frozenset({
 def strip_invented_unit_economics(ts_metrics: Any) -> Dict[str, Any]:
     """Copy of truth-scan metrics without the unit-economics values it invented.
 
-    Only keys that are both unit-economics keys and listed on
-    ``_estimated_metrics`` are removed; everything else is passed through.
+    - ``_estimated_metrics`` present (a list): only unit-economics keys listed
+      on it are removed; everything else is passed through.
+    - ``_estimated_metrics`` ABSENT (a scan saved before the flag existed, or a
+      null): every unit-economics key is removed. Every version of the truth
+      scan has computed CAC from assumed marketing spend (30% of payroll + 40%
+      of opex), LTV from an assumed churn floor, LTV:CAC and payback from those,
+      and NRR as a 100/108 placeholder, so none of them can be real in an old
+      scan. ARPU / customer count are real only when customer rows existed, but
+      an old scan cannot be told apart from the 150-customer default (a real
+      150 is possible), and real counts are read from FinancialRecord anyway.
+      Re-running the scan restores a real customer count.
+    - ``_estimated_metrics`` present but malformed: passed through unchanged.
     """
     if not isinstance(ts_metrics, dict):
         return {}
-    listed = ts_metrics.get("_estimated_metrics") or []
-    if not isinstance(listed, (list, tuple, set)):
+    listed = ts_metrics.get("_estimated_metrics")
+    if listed is None:
+        drop = INVENTED_UNIT_ECONOMICS_KEYS
+    elif not isinstance(listed, (list, tuple, set)):
         return dict(ts_metrics)
-    drop = INVENTED_UNIT_ECONOMICS_KEYS.intersection(str(x) for x in listed)
+    else:
+        drop = INVENTED_UNIT_ECONOMICS_KEYS.intersection(str(x) for x in listed)
     return {k: v for k, v in ts_metrics.items() if k not in drop}
+
+
+def strip_invented_from_outputs(outputs: Any) -> Dict[str, Any]:
+    """Copy of a truth scan's whole ``outputs_json`` without invented unit economics.
+
+    Strips ``metrics`` (see :func:`strip_invented_unit_economics`; a list kept
+    at the top level of ``outputs`` is honoured too) and drops the flags and
+    benchmark comparisons computed from the removed values (e.g. "Low LTV:CAC
+    Ratio" from an invented ratio). Everything else is passed through.
+    """
+    if not isinstance(outputs, dict):
+        return {}
+    out = dict(outputs)
+    raw_metrics = outputs.get("metrics")
+    if not isinstance(raw_metrics, dict):
+        return out
+    metrics = dict(raw_metrics)
+    if "_estimated_metrics" not in metrics and isinstance(outputs.get("_estimated_metrics"), list):
+        metrics["_estimated_metrics"] = outputs["_estimated_metrics"]
+    kept = strip_invented_unit_economics(metrics)
+    if "_estimated_metrics" not in raw_metrics:
+        kept.pop("_estimated_metrics", None)
+    removed = {k for k in raw_metrics if k not in kept}
+    out["metrics"] = kept
+    if not removed:
+        return out
+
+    flags = outputs.get("flags")
+    if isinstance(flags, list):
+        out["flags"] = [
+            f for f in flags
+            if not (isinstance(f, dict) and removed.intersection(
+                str(m) for m in (f.get("metrics_involved") or [])
+            ))
+        ]
+    comparisons = outputs.get("benchmark_comparisons")
+    if isinstance(comparisons, list):
+        out["benchmark_comparisons"] = [
+            c for c in comparisons
+            if not (isinstance(c, dict) and str(c.get("metric")) in removed)
+        ]
+    return out
 
 
 def _num(value: Any) -> float:

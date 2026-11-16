@@ -9,6 +9,8 @@ from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
 from server.models.financial import FinancialRecord, FinancialMetricPoint
 from server.core.burn import burn_summary
+from server.truth.invented_metrics import strip_invented_from_outputs
+from server.copilot.unit_economics import company_unit_economics
 
 
 def _serialize_financial_record(rec: FinancialRecord) -> Dict[str, Any]:
@@ -100,7 +102,10 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
     }
     
     if truth_scan:
-        ts_data = truth_scan.outputs_json
+        # Invented unit economics (CAC from 30% of payroll, 150-customer book,
+        # NRR 108...) and the flags / benchmark rows built on them never reach
+        # the model; real values come from context["unit_economics"].
+        ts_data = strip_invented_from_outputs(truth_scan.outputs_json or {})
         context["truth_scan"] = {
             "id": truth_scan.id,
             "computed_at": truth_scan.created_at.isoformat(),
@@ -111,6 +116,15 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
             "benchmark_comparisons": ts_data.get("benchmark_comparisons", [])
         }
     
+    # CAC / LTV / customers etc. under the shared rule (record > D2C month >
+    # real truth scan); None = unknown. Scoped to this company only.
+    context["unit_economics"] = company_unit_economics(
+        db,
+        company.id,
+        (truth_scan.outputs_json or {}).get("metrics", {}) if truth_scan else {},
+        financial_records[0] if financial_records else None,
+    )
+
     if financial_records:
         context["burn_status"] = burn_summary(financial_records[0])
         context["financial_history"] = [
