@@ -30,6 +30,9 @@
 | Data isolation | safety | works: 92 company GET routes 403/404 cross-account, 401 signed out; 34 object routes no cross-company rows | API probe | 01:47 |
 
 ## Backlog (ranked)
+In progress (subagents): copilot fallback honesty when AI is down; CAC from D2C months + board export/realtime without invented unit economics.
+Next: Profit page prefill from onboarding revenue; KPI tooltip GM targets per industry; outage copy; MRR/ARR labels for non-subscription businesses.
+
 | Rank | Item | Type | I | C | E | Score | Why |
 |---|---|---|---|---|---|---|---|
 | 1 | Dashboard numbers/labels honest for a new D2C company (typed ≠ "AI Estimated", no invented CAC/LTV, D2C GM target, broken copy) | bug | 5 | 4 | 3 | 6.7 | first screen after onboarding; trust |
@@ -48,6 +51,12 @@
 |---|---|---|---|---|
 | Signup/form validation errors readable | predixen | 9d629512 | sign up with x@brand.test → 'Please use a real email address…' | |
 | Onboarding stepper fits; AED default for UAE; D2C connect copy | predixen | cd7a20c5 | onboarding at 1200px and 375px; Dubai TZ → AED | |
+| Dashboard honest: no invented CAC/LTV, surplus as surplus, D2C margin target | predixen | f5b039e5 | /overview as profitable D2C | board export follow-up in progress |
+| Public pages: 'Free plan · No credit card' not 'free during public beta' | predixen | 80ec1b0c | curl / /for/d2c /signup /llms.txt | /faq payments-off copy still says beta (gated) |
+| Dashboard profit-per-order card for goods businesses | predixen | cc4abd30 | /overview D2C with/without /profit months | |
+| Signup panel D2C-aware | predixen | 4c297c8d | /signup?industry=d2c | |
+| Admin billing banner reflects payments | predixen | 410d91b7 | admin /admin/billing | not browser-verified |
+| Dashboard header/segment tabs wrap on phone | predixen | a1be27c2 | /overview at 375px | |
 | Upgrade dialog at plan limit | predixen | 8bee2c44 | needs payments on: 4th sim on Free → dialog → See plans → /billing | PostHog plan_limit_shown / upgrade_click |
 | Onboarding health check honest + in founder's currency | predixen | 0dd169ce | Sign up, pick D2C + INR, enter 25L rev/55% GM/9L opex/8L payroll/2L other/3Cr cash → Health check "Not burning", "Monthly Surplus ₹5.8L", labels ₹; dashboard burn -₹5.8L | example FX rates are rough, labelled as estimates |
 
@@ -71,4 +80,6 @@
 | 1 | 01:30-01:44 | audit signup→dashboard; onboarding health check fix | shipped 0dd169ce | fine |
 | 2 | 01:44-01:48 | data isolation probe | no leaks | fine |
 | 3 | 01:48-01:52 | 422 messages, stepper/AED/connect copy; delegated dashboard honesty + beta copy | shipped 9d629512, cd7a20c5 | 2 subagents |
+| 5 | 01:58-02:05 | reviewed+verified dashboard & copy subagents; committed | f5b039e5, 80ec1b0c; full pytest 1590 pass/2 known; build ok; 55 CI TS steps pass; draft PR #267 for CI | |
+| 6 | 02:05-02:13 | D2C profit card, signup D2C panel, admin banner, mobile overview; delegated copilot-fallback + unit-economics-from-D2C | shipped cc4abd30 4c297c8d 410d91b7 a1be27c2 | 2 subagents |
 | 4 | 01:52-01:58 | plan-limit upgrade dialog; audit billing, profit, leaving | shipped 8bee2c44 | fine |
