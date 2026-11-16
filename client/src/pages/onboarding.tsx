@@ -98,11 +98,13 @@ function baselineTextToNumbers(text: BaselineText): BaselineNumbers {
   };
 }
 
-// India is the primary market: a browser on India time starts in rupees.
+// India is the primary market: a browser on India time starts in rupees, UAE in dirhams.
 function defaultCurrencyForBrowser(): string {
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta') return 'INR';
+    // UAE is priced in dirhams (AED 149), and billing follows the company currency.
+    if (tz === 'Asia/Dubai') return 'AED';
   } catch {
     // fall through
   }
@@ -741,7 +743,7 @@ export default function OnboardingPage() {
 
           <div className="flex items-center gap-1">
             {STEPS.map((s, idx) => (
-              <div key={s.id} className="flex items-center flex-1">
+              <div key={s.id} className="flex items-center flex-1 min-w-0" title={s.description}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full font-medium text-sm shrink-0 ${
                     completedSteps.includes(s.id)
@@ -758,11 +760,10 @@ export default function OnboardingPage() {
                   </div>
                   <div className="hidden sm:block min-w-0">
                     <p className="text-sm font-medium truncate">{s.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{s.description}</p>
                   </div>
                 </div>
                 {idx < STEPS.length - 1 && (
-                  <div className={`h-0.5 w-6 mx-2 shrink-0 ${
+                  <div className={`h-0.5 w-4 mx-1 shrink-0 ${
                     completedSteps.includes(s.id) ? 'bg-green-500' : 'bg-muted'
                   }`} />
                 )}
@@ -1100,7 +1101,9 @@ export default function OnboardingPage() {
                       <div className="flex-1">
                         <h3 className="font-medium">Connect Apps</h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Sync with Stripe, QuickBooks, Gusto, and 20+ integrations for real-time data.
+                          {isGoods
+                            ? 'Sync Shopify, Shiprocket, Meta Ads, Tally and 30+ more tools for real-time data.'
+                            : 'Sync Stripe, QuickBooks, Gusto and 30+ more tools for real-time data.'}
                         </p>
                         {dataSourceChoice === 'connect' && (
                           <div className="mt-3 flex flex-wrap gap-2">
