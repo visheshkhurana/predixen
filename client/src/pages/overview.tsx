@@ -539,6 +539,11 @@ export default function OverviewPage() {
   const { metrics: sharedMetrics, isLoading: metricsLoading } = useFinancialMetrics();
   const isEmptyState = !truthLoading && !metricsLoading && (!sharedMetrics?.mrr && !sharedMetrics?.cashOnHand && !sharedMetrics?.totalMonthlyExpenses);
   const terms = useIndustryTerms();
+  // Goods businesses don't have recurring revenue; MRR/ARR read as SaaS jargon.
+  const goodsLabels = isGoodsIndustry(currentCompany?.industry);
+  const revenueLabel = goodsLabels
+    ? { short: 'Monthly Revenue', long: 'Net sales in the latest month', annualShort: 'Annual Run-Rate', annualLong: 'Monthly revenue × 12' }
+    : { short: 'MRR', long: 'Monthly Recurring Revenue', annualShort: 'ARR', annualLong: 'Annual Recurring Revenue' };
   const { scaleMultiplier, scale: companyScale, scaleLabel: companyScaleLabel } = useCurrency();
   const runTruthScanMutation = useRunTruthScan();
   const seedSampleMutation = useSeedSample();
@@ -652,8 +657,8 @@ export default function OverviewPage() {
 
   const getDrillDownData = useCallback((metricKey: string) => {
     const metricTitles: Record<string, string> = {
-      mrr: 'Monthly Recurring Revenue',
-      arr: 'Annual Recurring Revenue',
+      mrr: revenueLabel.long,
+      arr: goodsLabels ? 'Annual Run-Rate' : 'Annual Recurring Revenue',
       cash: 'Cash on Hand',
       burnRate: 'Monthly Burn Rate',
       cac: 'Customer Acquisition Cost',
@@ -695,7 +700,7 @@ export default function OverviewPage() {
       projections,
       format: (v: number) => formatCurrency(v),
     };
-  }, [assumptions, baseData]);
+  }, [assumptions, baseData, goodsLabels, revenueLabel.long]);
 
   const drillDownChartData = useMemo(() => {
     if (!selectedDrillDownMetric) return [];
@@ -1363,7 +1368,7 @@ export default function OverviewPage() {
                 <p className="text-[11px] text-muted-foreground/60 font-mono" data-testid="text-briefing-date">{briefingDate}</p>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-briefing-summary">
-                MRR is at <span className="font-medium text-foreground">{formatCurrency(baseData.mrr)}</span> with{' '}
+                {revenueLabel.short} is at <span className="font-medium text-foreground">{formatCurrency(baseData.mrr)}</span> with{' '}
                 <span className="font-medium text-foreground">{safeToFixed(briefingMrrGrowth, 1)}%</span> growth.
                 {' '}{briefingBurnText}{' '}
                 {briefingRunwayText}
@@ -1440,9 +1445,9 @@ export default function OverviewPage() {
             <div className="space-y-6">
               <StaggerChildren className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" staggerDelay={0.06}>
                 <StaggerItem><MetricCard
-                  title="MRR"
+                  title={revenueLabel.short}
                   value={formatCurrency(baseData.mrr)}
-                  subtitle="Monthly Recurring Revenue"
+                  subtitle={revenueLabel.long}
                   trend="up"
                   trendValue={formatSignedPct(assumptions.growthRate)}
                   metricSource={sharedMetrics.sources['mrr']}
@@ -1450,7 +1455,7 @@ export default function OverviewPage() {
                   testId="metric-mrr"
                   onClick={() => setSelectedDrillDownMetric('mrr')}
                   provenance={{
-                    definition: 'Monthly Recurring Revenue from your validated financial data.',
+                    definition: `${revenueLabel.long} from your validated financial data.`,
                     source: 'truth_scan',
                     timestamp: truthScan?.computed_at,
                     confidence: truthScan?.data_confidence_score,
@@ -1492,17 +1497,19 @@ export default function OverviewPage() {
                   }}
                 /></StaggerItem>
                 <StaggerItem><MetricCard
-                  title="ARR"
+                  title={revenueLabel.annualShort}
                   value={formatCurrency(baseData.arr)}
-                  subtitle="Annual Recurring Revenue"
+                  subtitle={revenueLabel.annualLong}
                   trend="up"
                   metricSource={sharedMetrics.sources['arr']}
                   lastUpdated={truthScan?.computed_at}
                   testId="metric-arr"
                   onClick={() => setSelectedDrillDownMetric('arr')}
                   provenance={{
-                    definition: 'Annual Recurring Revenue - your MRR multiplied by 12.',
-                    formula: 'MRR × 12',
+                    definition: goodsLabels
+                      ? 'Annual run-rate: your latest monthly revenue multiplied by 12.'
+                      : 'Annual Recurring Revenue - your MRR multiplied by 12.',
+                    formula: goodsLabels ? 'Monthly revenue × 12' : 'MRR × 12',
                     source: 'computed',
                     timestamp: truthScan?.computed_at,
                     confidence: truthScan?.data_confidence_score,
