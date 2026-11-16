@@ -887,16 +887,18 @@ export default function OverviewPage() {
         direction: growthBenchmark.direction,
         status: getBenchmarkStatus(assumptions.growthRate, growthBenchmark),
       },
-      { 
-        metric: 'Gross Margin', 
-        value: baseData.grossMargin, 
-        p25: grossMarginBenchmark.p25, 
-        p50: grossMarginBenchmark.p50, 
+      // The static fallback margins are software numbers (70%+). A goods
+      // business only gets a margin benchmark when a live one loaded.
+      ...(goodsLabels && (!getDynamicBenchmark('gross_margin') || (dynamicBenchmarks as any)?.is_fallback) ? [] : [{
+        metric: 'Gross Margin',
+        value: baseData.grossMargin,
+        p25: grossMarginBenchmark.p25,
+        p50: grossMarginBenchmark.p50,
         p75: grossMarginBenchmark.p75,
         unit: '%',
         direction: grossMarginBenchmark.direction,
         status: getBenchmarkStatus(baseData.grossMargin, grossMarginBenchmark),
-      },
+      }]),
       // Only benchmark LTV:CAC when both sides are real; a ratio of invented
       // defaults is not a competitive position.
       ...(unitEconomicsAvailability({ cac: baseData.cac, ltv: baseData.ltv, ltvCacRatio: baseData.ltvCacRatio, sources: sharedMetrics.sources }).ratioKnown
@@ -954,7 +956,7 @@ export default function OverviewPage() {
       },
     ];
     return rows;
-  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources, isRunwayProfitable]);
+  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources, isRunwayProfitable, goodsLabels]);
 
   const exportToCSV = useCallback(() => {
     const timestamp = new Date().toISOString();
@@ -1243,7 +1245,7 @@ export default function OverviewPage() {
 
   const kpiHealthData = [
     { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
-    { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
+    { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: goodsLabels ? '50%+' : '70%+', badRange: goodsLabels ? '< 40%' : '< 50%' } },
     { name: terms.churn.charAt(0).toUpperCase() + terms.churn.slice(1), value: sharedMetrics.sources['churnRate'] === 'estimated' || (!sharedMetrics.sources['churnRate'] && sharedMetrics.churnRatePct === 0) ? null : baseData.churnRate, metric: 'churnRate', tooltip: { formula: `Lost ${terms.customers} / Total ${terms.customers}`, goodRange: '< 3%', badRange: '> 7%' } },
     { name: 'LTV/CAC', value: baseData.ltvCacRatio > 0 ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
     { name: 'Growth Rate', value: isNaN(sharedMetrics.monthlyGrowthRate) ? null : sharedMetrics.monthlyGrowthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
@@ -2131,8 +2133,10 @@ export default function OverviewPage() {
                 </Badge>
               )}
             </div>
-            <CardDescription>
-              Real-time benchmarks from industry reports
+            <CardDescription data-testid="text-benchmark-description">
+              {(dynamicBenchmarks as any)?.is_fallback
+                ? ((dynamicBenchmarks as any)?.note || 'Live benchmarks are unavailable right now; these are generic defaults, not figures for your industry.')
+                : 'Real-time benchmarks from industry reports'}
             </CardDescription>
             <div className="flex items-center gap-2 mt-2">
               <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
