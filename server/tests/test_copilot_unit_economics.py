@@ -320,3 +320,16 @@ def test_snapshot_fallback_unknown_unit_economics_is_none(db):
         assert engine._get_snapshot_value(1, "net_burn") == 0.0  # a real zero stays
     with patch("server.api.realtime.get_company_kpi_metrics", return_value={"cac": 416.67}):
         assert engine._get_snapshot_value(1, "cac") == pytest.approx(416.67)
+
+
+def test_business_context_uses_company_currency_and_surplus_wording():
+    from server.copilot.business_context import format_context_for_prompt
+    text = format_context_for_prompt({
+        "company": {"name": "Chai Point Direct", "currency": "INR"},
+        "financials": {"revenue": 2_500_000, "net_burn": -575_000, "opex": 100_000},
+    })
+    assert "Monthly Revenue: ₹2,500,000" in text
+    assert "Net Burn: none (monthly surplus of ₹575,000" in text
+    assert "$" not in text
+    usd = format_context_for_prompt({"company": {"currency": "USD"}, "financials": {"revenue": 40_000}})
+    assert "Monthly Revenue: $40,000" in usd
