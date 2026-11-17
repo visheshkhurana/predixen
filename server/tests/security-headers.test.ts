@@ -9,7 +9,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import type { Server } from "http";
-import { buildCsp, securityHeaders, HSTS_VALUE } from "../middleware/securityHeaders";
+import { buildCsp, securityHeaders, HSTS_VALUE, CSP_HARDENING } from "../middleware/securityHeaders";
+
+const hardened = (csp: string, isEmbed: boolean) => [csp, ...CSP_HARDENING(isEmbed)].join("; ");
 
 // The policy as server/index.ts built it before the move (dev and prod alike),
 // keyed "<razorpay>-<isEmbed>".
@@ -23,23 +25,29 @@ const BEFORE: Record<string, string> = {
 const directive = (csp: string, name: string) =>
   (csp.split("; ").find((d) => d.startsWith(name + " ")) || "").split(" ").slice(1);
 
-test("development policy is unchanged from the inline original", () => {
+test("development policy is the inline original plus the hardening directives", () => {
   for (const razorpay of [false, true]) {
     for (const isEmbed of [false, true]) {
-      assert.equal(buildCsp({ isEmbed, razorpay, dev: true }), BEFORE[`${razorpay}-${isEmbed}`]);
+      assert.equal(buildCsp({ isEmbed, razorpay, dev: true }), hardened(BEFORE[`${razorpay}-${isEmbed}`], isEmbed));
     }
   }
 });
 
-test("production policy differs only in its socket sources", () => {
+test("production policy differs only in socket sources, no unsafe-eval, and hardening", () => {
   delete process.env.APP_BASE_URL;
   for (const razorpay of [false, true]) {
     for (const isEmbed of [false, true]) {
       const prod = buildCsp({ isEmbed, razorpay, dev: false });
       assert.equal(
         prod,
-        BEFORE[`${razorpay}-${isEmbed}`].replace("connect-src 'self' ws: wss: ", "connect-src 'self' wss://founderconsole.ai "),
+        hardened(
+          BEFORE[`${razorpay}-${isEmbed}`]
+            .replace("connect-src 'self' ws: wss: ", "connect-src 'self' wss://founderconsole.ai ")
+            .replace(" 'unsafe-eval'", ""),
+          isEmbed,
+        ),
       );
+      assert.ok(!prod.includes("unsafe-eval"));
     }
   }
 });
@@ -83,6 +91,7 @@ test("middleware sets the headers; embeds may be framed, pages may not", { timeo
     assert.equal(page.headers.get("strict-transport-security"), HSTS_VALUE);
     assert.equal(page.headers.get("x-frame-options"), "DENY");
     assert.ok(!(page.headers.get("content-security-policy") || "").includes("frame-ancestors *"));
+    assert.ok((page.headers.get("content-security-policy") || "").includes("frame-ancestors 'none'"));
     const embed = await fetch(`${base}/embed/survival`);
     assert.equal(embed.headers.get("x-frame-options"), null);
     assert.ok((embed.headers.get("content-security-policy") || "").includes("frame-ancestors *"));

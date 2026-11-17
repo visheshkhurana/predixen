@@ -59,7 +59,10 @@ app.use(aiAgentLog());
 app.use((req, res, next) => {
   const host = req.hostname || req.headers.host || "";
   if (host === "www.founderconsole.ai") {
-    return res.redirect(301, `https://founderconsole.ai${req.originalUrl}`);
+    // Origin is fixed; the path must be origin-relative so a request target
+    // such as "@evil.example" can never become the userinfo/host part.
+    const path = req.originalUrl.startsWith("/") ? req.originalUrl : "/";
+    return res.redirect(301, `https://founderconsole.ai${path}`);
   }
   next();
 });
@@ -537,7 +540,7 @@ app.get("/api/notion/pages", requireNotionAdmin, async (req, res) => {
     }));
     res.json({ pages: simplified });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("[notion] request failed:", err); res.status(500).json({ error: "Notion request failed. Check the server log." });
   }
 });
 
@@ -686,7 +689,7 @@ app.post("/api/notion/push-report", requireNotionAdmin, express.json(), async (r
     res.json({ success: true, blocksAdded: blocks.length });
   } catch (err: any) {
     console.error("Notion push error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("[notion] request failed:", err); res.status(500).json({ error: "Notion request failed. Check the server log." });
   }
 });
 
@@ -700,7 +703,7 @@ app.get("/api/notion/databases", requireNotionAdmin, async (req, res) => {
     }));
     res.json({ databases: simplified });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("[notion] request failed:", err); res.status(500).json({ error: "Notion request failed. Check the server log." });
   }
 });
 

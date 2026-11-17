@@ -33,6 +33,15 @@ export interface CspOptions {
   dev?: boolean;
 }
 
+/**
+ * Directives added after the 2026-11-17 audit. Pages may not be framed by
+ * anyone (CSP twin of X-Frame-Options: DENY); embeds keep frame-ancestors *.
+ * No plugins, and no <base> pointing scripts at another origin.
+ */
+export function CSP_HARDENING(isEmbed: boolean): string[] {
+  return [...(isEmbed ? [] : ["frame-ancestors 'none'"]), "object-src 'none'", "base-uri 'self'"];
+}
+
 export function buildCsp(opts: CspOptions): string {
   const dev = opts.dev ?? !isProductionEnv();
   const rzp = (sources: string) => (opts.razorpay ? ` ${sources}` : "");
@@ -46,7 +55,10 @@ export function buildCsp(opts: CspOptions): string {
     // static.ads-twitter.com serves uwt.js (the X Ads pixel). Omitting it means
     // the browser blocks the tag and X reports zero conversions — visually
     // identical to "the ads didn't work", which is the worst kind of bug.
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net https://static.ads-twitter.com https://analytics.twitter.com" + rzp("https://checkout.razorpay.com"),
+    // 'unsafe-eval' only for the Vite dev server. The production bundle has no
+    // eval/new Function (two Function("return this") fallbacks in lodash/recharts
+    // only run when globalThis is missing, which no supported browser lacks).
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""} https://us.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net https://static.ads-twitter.com https://analytics.twitter.com` + rzp("https://checkout.razorpay.com"),
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     // X fires its conversion beacons as image/pixel requests to t.co and
@@ -59,6 +71,7 @@ export function buildCsp(opts: CspOptions): string {
     // share of measurement traffic.
     `connect-src 'self' ${sockets} https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com https://analytics.twitter.com https://t.co https://static.ads-twitter.com` + rzp("https://api.razorpay.com https://lumberjack.razorpay.com"),
     opts.isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com" + rzp("https://api.razorpay.com https://checkout.razorpay.com"),
+    ...CSP_HARDENING(opts.isEmbed),
   ].join("; ");
 }
 
