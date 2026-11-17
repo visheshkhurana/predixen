@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.pagination import paginate, create_paginated_response
@@ -61,7 +62,7 @@ class ComputeRequest(BaseModel):
 def _get_company_or_404(company_id: int, user: User, db: Session) -> Company:
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == user.id
+        company_access_clause(user)
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -98,7 +99,7 @@ async def list_metrics(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         return create_paginated_response(
@@ -768,7 +769,7 @@ async def initialize_metrics(
     """Initialize system metrics for a company."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         return {"success": True, "created_count": 0, "metrics": []}

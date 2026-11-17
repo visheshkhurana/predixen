@@ -258,7 +258,7 @@ def test_appsecret_proof_is_sent_when_the_app_secret_is_set(monkeypatch):
 @pytest.fixture
 def db():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    User.metadata.create_all(engine, tables=[User.__table__, Company.__table__, D2CMonth.__table__,
+    User.metadata.create_all(engine, tables=[User.__table__, Company.__table__, __import__('server.models.workspace', fromlist=['WorkspaceMember']).WorkspaceMember.__table__, D2CMonth.__table__,
                                              D2CAdSpend.__table__, ExchangeRate.__table__])
     session = sessionmaker(bind=engine)()
     owner = User(email="owner@brand.in", is_active=True)

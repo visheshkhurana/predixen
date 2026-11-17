@@ -242,6 +242,16 @@ async def _run_deferred_startup():
             logger.warning(f"Could not ensure competitor tables: {e}")
 
         try:
+            # Company access (company_access_clause) reads workspace_members on
+            # every company route, so it must exist even with CREATE_SCHEMA off.
+            from server.models.workspace import WorkspaceInvite, WorkspaceMember
+            WorkspaceMember.__table__.create(bind=engine, checkfirst=True)
+            WorkspaceInvite.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured workspace member/invite tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure workspace tables: {e}")
+
+        try:
             from server.models.d2c_month import D2CAdSpend, D2CMonth
             D2CMonth.__table__.create(bind=engine, checkfirst=True)
             D2CAdSpend.__table__.create(bind=engine, checkfirst=True)
@@ -504,6 +514,8 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(RequestIDMiddleware)
+from server.core.company_access import RequestContextMiddleware
+app.add_middleware(RequestContextMiddleware)
 
 from server.core import error_scrub as _error_scrub
 _error_scrub.install(app)

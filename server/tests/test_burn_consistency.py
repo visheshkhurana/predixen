@@ -77,7 +77,7 @@ def db():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(
         engine,
-        tables=[Company.__table__, FinancialRecord.__table__, ImportSession.__table__,
+        tables=[Company.__table__, __import__('server.models.workspace', fromlist=['WorkspaceMember']).WorkspaceMember.__table__, FinancialRecord.__table__, ImportSession.__table__,
                 Dataset.__table__, TruthScan.__table__, D2CMonth.__table__],
     )
     session = sessionmaker(bind=engine)()

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from server.core.company_access import company_access_clause
 from server.core.uploads import read_upload_capped
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -93,7 +94,7 @@ def list_datasets(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
 
     if not company:
@@ -141,7 +142,7 @@ async def upload_dataset(
 ):
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -247,7 +248,7 @@ def manual_baseline(
 ):
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -328,7 +329,7 @@ async def upload_termina_pdf(
     """Upload a Termina PDF report and extract financial metrics using AI."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -419,7 +420,7 @@ async def upload_termina_excel(
     """Upload a Termina Excel export and extract financial metrics."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:

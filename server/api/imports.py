@@ -11,6 +11,7 @@ import tempfile
 import os
 import logging
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models import (
@@ -170,7 +171,7 @@ async def upload_excel(
     """Upload and parse an Excel file, returning an import session for verification."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -252,7 +253,7 @@ async def upload_pdf(
     """Upload and parse a PDF file, returning an import session for verification."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -333,7 +334,7 @@ async def get_import_session(
     """Get an existing import session."""
     session = db.query(ImportSession).join(Company).filter(
         ImportSession.id == session_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not session:
@@ -371,7 +372,7 @@ async def verify_import(
     """Verify and preview computed metrics before saving."""
     session = db.query(ImportSession).join(Company).filter(
         ImportSession.id == session_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not session:
@@ -467,7 +468,7 @@ async def save_import(
     """Save verified import data to FinancialRecord."""
     session = db.query(ImportSession).join(Company).filter(
         ImportSession.id == session_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not session:
@@ -634,7 +635,7 @@ async def delete_import_session(
     """Delete an import session."""
     session = db.query(ImportSession).join(Company).filter(
         ImportSession.id == session_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not session:

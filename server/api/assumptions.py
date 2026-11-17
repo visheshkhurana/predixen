@@ -14,6 +14,7 @@ import json
 import uuid
 import logging
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models import User, Company
@@ -58,7 +59,7 @@ async def create_assumption_set(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -137,7 +138,7 @@ async def list_assumption_sets(
     """List all assumption sets for a company."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -177,7 +178,7 @@ async def get_assumption_set(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -212,7 +213,7 @@ async def update_assumption_set(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -268,7 +269,7 @@ async def delete_assumption_set(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -403,7 +404,7 @@ async def start_simulation(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -507,7 +508,7 @@ async def get_simulation_status(
         if cached.company_id:
             company = db.query(Company).filter(
                 Company.id == cached.company_id,
-                Company.user_id == current_user.id
+                company_access_clause(current_user)
             ).first()
             if not company:
                 raise HTTPException(status_code=403, detail="Access denied")
@@ -584,7 +585,7 @@ async def get_simulation_metrics(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -661,7 +662,7 @@ async def run_goal_optimization(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -735,7 +736,7 @@ async def validate_assumption_set_ranges(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:

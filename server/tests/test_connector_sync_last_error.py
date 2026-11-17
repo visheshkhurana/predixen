@@ -31,7 +31,7 @@ def client():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[Company.__table__, FinancialRecord.__table__])
+    Base.metadata.create_all(engine, tables=[Company.__table__, __import__('server.models.workspace', fromlist=['WorkspaceMember']).WorkspaceMember.__table__, FinancialRecord.__table__])
     Session = sessionmaker(bind=engine)
     app = FastAPI()
     app.include_router(router)

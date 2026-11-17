@@ -32,6 +32,17 @@ class PDFExportRequest(BaseModel):
     include_summary: bool = True
 
 
+def _can_access(db, company, user) -> bool:
+    """Owner, active workspace member, or platform admin (get_user_company's rule)."""
+    from fastapi import HTTPException as _HTTPException
+    from server.core.company_access import get_user_company
+    try:
+        get_user_company(db, company.id, user)
+        return True
+    except _HTTPException:
+        return False
+
+
 def verify_resource_ownership(
     db: Session, 
     resource_type: str, 
@@ -47,7 +58,7 @@ def verify_resource_ownership(
         if not scenario:
             return False, None
         company = db.query(Company).filter(Company.id == scenario.company_id).first()
-        if not company or company.user_id != user.id:
+        if not company or not _can_access(db, company, user):
             return False, scenario
         return True, scenario
     
@@ -59,13 +70,13 @@ def verify_resource_ownership(
         if not scenario:
             return False, sim
         company = db.query(Company).filter(Company.id == scenario.company_id).first()
-        if not company or company.user_id != user.id:
+        if not company or not _can_access(db, company, user):
             return False, sim
         return True, sim
     
     elif resource_type == "dashboard":
         company = db.query(Company).filter(Company.id == resource_id).first()
-        if not company or company.user_id != user.id:
+        if not company or not _can_access(db, company, user):
             return False, company
         return True, company
     

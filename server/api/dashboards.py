@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -56,7 +57,7 @@ async def list_dashboards(
     """List all dashboards for a company."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -78,7 +79,7 @@ async def create_dashboard(
     """Create a new dashboard."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -108,7 +109,7 @@ async def get_dashboard(
     
     company = db.query(Company).filter(
         Company.id == dashboard.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -130,7 +131,7 @@ async def update_dashboard(
     
     company = db.query(Company).filter(
         Company.id == dashboard.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -159,7 +160,7 @@ async def delete_dashboard(
     
     company = db.query(Company).filter(
         Company.id == dashboard.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -183,7 +184,7 @@ async def create_widget(
     
     company = db.query(Company).filter(
         Company.id == dashboard.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -215,7 +216,7 @@ async def list_widgets(
     
     company = db.query(Company).filter(
         Company.id == dashboard.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -242,7 +243,7 @@ async def update_widget(
     dashboard = db.query(Dashboard).filter(Dashboard.id == widget.dashboard_id).first()
     company = db.query(Company).filter(
         Company.id == dashboard.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -276,7 +277,7 @@ async def delete_widget(
     dashboard = db.query(Dashboard).filter(Dashboard.id == widget.dashboard_id).first()
     company = db.query(Company).filter(
         Company.id == dashboard.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")

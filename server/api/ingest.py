@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from server.core.company_access import company_access_clause
 from server.core.uploads import read_upload_capped
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, ConfigDict, model_validator
@@ -333,7 +334,7 @@ async def ingest_financials(
     """
     company = db.query(Company).filter(
         Company.id == companyId,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -584,7 +585,7 @@ async def get_financial_baseline(
     """Get the latest financial baseline for a company."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -717,7 +718,7 @@ async def get_computed_metrics(
     
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -892,7 +893,7 @@ async def save_financial_baseline(
     
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -1667,7 +1668,7 @@ async def export_financials(
     
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:

@@ -16,6 +16,7 @@ from datetime import datetime, date
 import logging
 import json
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.company_metadata import delete_metadata_value, save_metadata_value
@@ -456,7 +457,7 @@ async def get_connector_status(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -497,7 +498,7 @@ async def connect_provider(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -595,7 +596,7 @@ async def disconnect_provider(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -653,7 +654,7 @@ async def sync_provider(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -866,7 +867,7 @@ async def get_sync_history(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -1217,7 +1218,7 @@ async def test_with_sample_data(
 ) -> Dict[str, Any]:
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
 
     if not company:

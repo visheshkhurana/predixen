@@ -15,6 +15,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 import json
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models import User, Company, Scenario
@@ -60,7 +61,7 @@ async def get_company_macro(
     """Get the active macro environment for a company."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -105,7 +106,7 @@ async def update_company_macro(
     """Update or create macro environment for a company."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -169,7 +170,7 @@ async def list_scenario_versions(
     
     company = db.query(Company).filter(
         Company.id == scenario.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -207,7 +208,7 @@ async def create_scenario_version(
     
     company = db.query(Company).filter(
         Company.id == scenario.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -261,7 +262,7 @@ async def clone_scenario(
     
     company = db.query(Company).filter(
         Company.id == scenario.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -321,7 +322,7 @@ async def compare_scenario_versions(
     
     company = db.query(Company).filter(
         Company.id == scenario.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -419,7 +420,7 @@ async def run_sensitivity_analysis(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -477,7 +478,7 @@ async def get_sensitivity_results(
     
     company = db.query(Company).filter(
         Company.id == sensitivity_run.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -518,7 +519,7 @@ async def generate_recommendations(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -588,7 +589,7 @@ async def get_company_recommendations(
     """Get recent recommendations for a company."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -701,7 +702,7 @@ async def run_constrained_optimization(
     
     company = db.query(Company).filter(
         Company.id == assumption.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:

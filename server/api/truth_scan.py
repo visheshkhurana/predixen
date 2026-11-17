@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -73,7 +74,7 @@ def create_truth_scan_from_import_session(
     """Create a truth scan from an import session."""
     company = db.query(Company).filter(
         Company.id == request.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -104,7 +105,7 @@ def create_truth_scan_from_dataset(
     """Create a truth scan from a dataset."""
     company = db.query(Company).filter(
         Company.id == request.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -135,7 +136,7 @@ def create_truth_scan_from_manual_baseline(
     """Create a truth scan from a manual baseline entry."""
     company = db.query(Company).filter(
         Company.id == request.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -173,7 +174,7 @@ def get_truth_scan_upload(
     
     company = db.query(Company).filter(
         Company.id == upload.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -291,7 +292,7 @@ def resolve_truth_scan_issues(
     
     company = db.query(Company).filter(
         Company.id == upload.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -337,7 +338,7 @@ def finalize_truth_scan(
     
     company = db.query(Company).filter(
         Company.id == upload.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -409,7 +410,7 @@ def get_company_latest_truth(
     """Get the latest finalized truth dataset for a company."""
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -463,7 +464,7 @@ def run_truth_scan(
     
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -516,7 +517,7 @@ def get_decision_log(
     
     company = db.query(Company).filter(
         Company.id == upload.company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
