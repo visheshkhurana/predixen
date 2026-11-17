@@ -14,6 +14,7 @@ from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.company import Company
 from server.models.d2c_month import D2CAdSpend, D2CMonth
+from server.models.financial import FinancialRecord
 from server.models.user import User
 from server.services import d2c_months
 
@@ -21,7 +22,7 @@ from server.services import d2c_months
 @pytest.fixture
 def Session():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    User.metadata.create_all(engine, tables=[User.__table__, Company.__table__, D2CMonth.__table__, D2CAdSpend.__table__])
+    User.metadata.create_all(engine, tables=[User.__table__, Company.__table__, D2CMonth.__table__, D2CAdSpend.__table__, FinancialRecord.__table__])
     S = sessionmaker(bind=engine)
     db = S()
     owner = User(email="owner@brand.in", is_active=True)
@@ -126,3 +127,27 @@ def test_other_users_cannot_read_or_write(Session):
     client = _client(Session, "other@brand.in")
     assert client.get("/companies/1/d2c/months").status_code == 403
     assert client.put("/companies/1/d2c/months/2026-10", json={"cogs": 1}).status_code == 403
+
+
+def test_months_list_suggests_sales_and_cogs_from_latest_financials(Session):
+    client = _client(Session, "owner@brand.in")
+    assert client.get("/companies/1/d2c/months").json()["baseline"] is None
+
+    db = Session()
+    db.add(FinancialRecord(company_id=1, period_start=date(2026, 9, 1), period_end=date(2026, 9, 30), revenue=1_000_000, cogs=400_000))
+    db.add(FinancialRecord(company_id=1, period_start=date(2026, 11, 1), period_end=date(2026, 11, 17), revenue=2_500_000, cogs=1_125_000))
+    db.commit()
+    db.close()
+
+    body = client.get("/companies/1/d2c/months").json()
+    assert body["baseline"] == {"gross_sales": 2_500_000, "cogs": 1_125_000, "period": "2026-11"}
+    assert body["months"] == [], "a suggestion is never saved as a month"
+
+
+def test_no_suggestion_for_sample_company(Session):
+    db = Session()
+    db.get(Company, 1).metadata_json = {"is_sample": True}
+    db.add(FinancialRecord(company_id=1, period_start=date(2026, 11, 1), period_end=date(2026, 11, 17), revenue=2_500_000, cogs=1_000_000))
+    db.commit()
+    db.close()
+    assert _client(Session, "owner@brand.in").get("/companies/1/d2c/months").json()["baseline"] is None

@@ -100,6 +100,8 @@ jobs:
         run: npx tsx server/tests/team-invites.test.ts
       - name: viewer role helper
         run: npx tsx --test server/tests/company-role.test.ts
+      - name: profit page prefill
+        run: npx tsx --test server/tests/profit-prefill.test.ts
 
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
