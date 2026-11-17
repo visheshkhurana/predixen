@@ -24,6 +24,7 @@ import { Lock, Bell, LogOut, Loader2, User, Shield, Check, Users } from 'lucide-
 import { FadeIn } from '@/components/ui/motion-primitives';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TeamWorkspace } from '@/components/TeamWorkspace';
+import { CompanySettings } from '@/components/CompanySettings';
 import {
   canManageTeam,
   inviteCreatedCopy,
@@ -32,11 +33,13 @@ import {
   teamErrorMessage,
 } from '@/lib/teamInvites';
 
-type SettingsTab = 'account' | 'team';
+type SettingsTab = 'account' | 'team' | 'company';
+const SETTINGS_TABS: SettingsTab[] = ['account', 'team', 'company'];
 
 function initialTab(): SettingsTab {
   if (typeof window === 'undefined') return 'account';
-  return new URLSearchParams(window.location.search).get('tab') === 'team' ? 'team' : 'account';
+  const t = new URLSearchParams(window.location.search).get('tab') as SettingsTab | null;
+  return t && SETTINGS_TABS.includes(t) ? t : 'account';
 }
 
 /** Settings → Team: invite teammates to the current company's workspace. */
@@ -178,18 +181,23 @@ const ACCOUNT_DELETION_MAILTO =
   encodeURIComponent('Please permanently delete my FounderConsole account and all associated data. I am writing from the email address I sign in with.');
 
 export default function SettingsPage() {
-  const { user, logout } = useFounderStore();
+  const { user, logout, currentCompany } = useFounderStore();
+  // Your role in the current company (owner / admin / editor / viewer). The
+  // account-level user.role is an internal default and read "viewer" even for
+  // the founder who created the company.
+  const { data: roleMembers } = useWorkspaceMembers(currentCompany && !currentCompany.is_sample ? currentCompany.id : 0);
+  const companyRole = roleMembers ? roleForEmail(roleMembers, user?.email) : null;
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [tab, setTab] = useState<SettingsTab>(initialTab);
 
   const handleTabChange = (value: string) => {
-    const next: SettingsTab = value === 'team' ? 'team' : 'account';
+    const next: SettingsTab = SETTINGS_TABS.includes(value as SettingsTab) ? (value as SettingsTab) : 'account';
     setTab(next);
     // Keep the tab in the URL so "Settings → Team" can be linked to.
     try {
       const url = new URL(window.location.href);
-      if (next === 'team') url.searchParams.set('tab', 'team');
+      if (next !== 'account') url.searchParams.set('tab', next);
       else url.searchParams.delete('tab');
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     } catch {}
@@ -281,14 +289,19 @@ export default function SettingsPage() {
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-settings-title">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your account, security and team</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage your account, company and team</p>
       </div>
 
       <Tabs value={tab} onValueChange={handleTabChange} className="space-y-6">
       <TabsList>
         <TabsTrigger value="account" data-testid="tab-settings-account">Account</TabsTrigger>
+        <TabsTrigger value="company" data-testid="tab-settings-company">Company</TabsTrigger>
         <TabsTrigger value="team" data-testid="tab-settings-team">Team</TabsTrigger>
       </TabsList>
+
+      <TabsContent value="company" className="mt-0">
+        <CompanySettings />
+      </TabsContent>
 
       <TabsContent value="team" className="mt-0">
         <TeamSettingsTab />
@@ -311,9 +324,11 @@ export default function SettingsPage() {
             <div className="space-y-1">
               <p className="font-medium" data-testid="text-user-email">{user?.email || 'No email'}</p>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs" data-testid="badge-user-role">
-                  {user?.role || 'Member'}
-                </Badge>
+                {companyRole && (
+                  <Badge variant="outline" className="text-xs capitalize" data-testid="badge-user-role">
+                    {companyRole}{currentCompany ? ` · ${currentCompany.name}` : ''}
+                  </Badge>
+                )}
                 {user?.is_email_verified && (
                   <Badge variant="outline" className="text-xs text-emerald-500 border-emerald-500/30">
                     <Check className="h-3 w-3 mr-1" />

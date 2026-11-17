@@ -1,5 +1,9 @@
 INDUSTRY_ALIASES = {
     "general_saas": "saas",
+    # AI products: no AI-specific benchmark set yet, so they compare against
+    # software. Kept as its own value so it can get one later.
+    "ai": "saas",
+    "ai-ml": "saas",
     "ecommerce": "marketplace",
     "healthcare": "healthtech",
     "edtech": "saas",
@@ -21,6 +25,9 @@ INDUSTRY_ALIASES = {
 }
 
 STAGE_ALIASES = {
+    # Bootstrapped brands (common in Indian D2C) compare with seed-stage peers.
+    "bootstrapped": "seed",
+    "series_c": "series_b_plus",
     "pre_series_a": "seed",
     "series_b": "series_b_plus",
     "growth": "series_b_plus",

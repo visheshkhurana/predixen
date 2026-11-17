@@ -126,6 +126,9 @@ export default function AuthPage({
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Set when sign-up hits an email that already has an account, so the form
+  // can offer to sign in or reset the password instead of a dead end.
+  const [existingAccountEmail, setExistingAccountEmail] = useState<string | null>(null);
   const [signupStarted, setSignupStarted] = useState(false);
 
   // Marketing CTAs link to /auth?tab=register so ad traffic lands directly on
@@ -320,6 +323,10 @@ export default function AuthPage({
         setLocation('/onboarding');
       }
     } catch (err) {
+      if (err instanceof ApiError && err.status === 400 && /already registered/i.test(`${err.message} ${typeof err.detail === 'string' ? err.detail : ''}`)) {
+        setExistingAccountEmail(registerForm.email.trim());
+        return;
+      }
       let description = 'An unexpected error occurred. Please try again.';
       if (err instanceof ApiError) {
         description = err.message;
@@ -694,7 +701,7 @@ export default function AuthPage({
                       value={registerForm.email}
                       onFocus={handleSignupStart}
                       onChange={(e) => {
-                        setRegisterForm({ ...registerForm, email: e.target.value });
+                        setRegisterForm({ ...registerForm, email: e.target.value }); setExistingAccountEmail(null);
                         if (errors.email) setErrors({ ...errors, email: '' });
                       }}
                       data-testid="input-register-email"
@@ -777,6 +784,39 @@ export default function AuthPage({
                   )}
                 </Button>
                 
+                {existingAccountEmail && (
+                  <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm space-y-2" data-testid="panel-existing-account">
+                    <p>There's already an account for <span className="font-medium">{existingAccountEmail}</span>.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          setLoginForm({ email: existingAccountEmail, password: '' });
+                          setExistingAccountEmail(null);
+                          setActiveTab('login');
+                        }}
+                        data-testid="button-existing-signin"
+                      >
+                        Sign in instead
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setForgotPasswordEmail(existingAccountEmail);
+                          setExistingAccountEmail(null);
+                          setShowForgotPassword(true);
+                        }}
+                        data-testid="button-existing-reset"
+                      >
+                        Reset password
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
                   By creating an account, you agree to our{' '}
                   <a href="/terms" className="text-foreground hover:underline" data-testid="link-auth-terms">Terms</a>

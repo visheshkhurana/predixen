@@ -1,4 +1,5 @@
 import { formatCurrencyAbbrev } from '@/lib/utils';
+import { INDUSTRY_OPTIONS, STAGE_OPTIONS } from '@/lib/companyOptions';
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -160,26 +161,8 @@ const SAMPLE_PROMPTS = [
   "What are the biggest risks to our financial health?",
 ];
 
-const STAGES = [
-  { value: "pre_seed", label: "Pre-Seed" },
-  { value: "seed", label: "Seed" },
-  { value: "series_a", label: "Series A" },
-  { value: "series_b", label: "Series B" },
-  { value: "series_c", label: "Series C+" },
-  { value: "growth", label: "Growth" },
-];
-
-const INDUSTRIES = [
-  { value: "saas", label: "SaaS / Software" },
-  { value: "fintech", label: "Fintech" },
-  { value: "healthcare", label: "Healthcare / Biotech" },
-  { value: "ecommerce", label: "E-commerce / Retail" },
-  { value: "marketplace", label: "Marketplace" },
-  { value: "ai-ml", label: "AI / Machine Learning" },
-  { value: "consumer", label: "Consumer" },
-  { value: "enterprise", label: "Enterprise" },
-  { value: "other", label: "Other" },
-];
+const STAGES = STAGE_OPTIONS;
+const INDUSTRIES = INDUSTRY_OPTIONS;
 
 const CONFIDENCE_THRESHOLD = 0.60;
 
