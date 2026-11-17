@@ -89,6 +89,42 @@ def _schedule_internal_user_flag(
     )
 
 
+# Per-account brute-force guard. The gateway rate limit is per IP, so many
+# IPs could keep guessing one account's password. After this many failed
+# sign-ins for one email inside the window, further attempts get 429 until the
+# window passes. The reply is the same whether or not the account exists.
+FAILED_LOGIN_LIMIT = 10
+FAILED_LOGIN_WINDOW = timedelta(minutes=15)
+
+
+def _refuse_if_too_many_failed_logins(db: Session, email: str) -> None:
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return
+    since = datetime.utcnow() - FAILED_LOGIN_WINDOW
+    try:
+        failed = (
+            db.query(func.count(LoginHistory.id))
+            .filter(
+                func.lower(LoginHistory.email) == normalized,
+                LoginHistory.success.is_(False),
+                LoginHistory.created_at >= since,
+            )
+            .scalar()
+        ) or 0
+    except Exception:
+        auth_logger.exception("failed-login count unavailable; not blocking sign-in")
+        return
+    if not isinstance(failed, int):
+        return
+    if failed >= FAILED_LOGIN_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed sign-in attempts for this account. Try again in 15 minutes, or reset your password.",
+            headers={"Retry-After": str(int(FAILED_LOGIN_WINDOW.total_seconds()))},
+        )
+
+
 def log_login_attempt(db: Session, email: str, user_id: int = None, success: bool = True, 
                       failure_reason: str = None, request: Request = None):
     """Log a login attempt to the database."""
@@ -411,6 +447,7 @@ def login(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    _refuse_if_too_many_failed_logins(db, req.email)
     user = find_user_by_email(db, req.email)
     if not user or not _password_ok(user, req.password):
         log_login_attempt(db, req.email, user.id if user else None, success=False,
@@ -471,7 +508,8 @@ def admin_login(
     db: Session = Depends(get_db),
 ):
     """Admin-only login endpoint with master credentials support."""
-    
+    _refuse_if_too_many_failed_logins(db, req.email)
+
     admin_email_config = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     req_email_lower = req.email.lower().strip()
     

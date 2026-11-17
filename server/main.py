@@ -504,6 +504,9 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(RequestIDMiddleware)
+
+from server.core import error_scrub as _error_scrub
+_error_scrub.install(app)
 app.add_middleware(SecurityHeadersMiddleware)
 
 from server.core.subscription import PaywallMiddleware
