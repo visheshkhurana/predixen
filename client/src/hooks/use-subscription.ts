@@ -1,4 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { attemptTokenRefresh, hardRedirectToLogin } from '@/lib/authSession';
+
+/**
+ * POST for billing actions. These used raw fetch, so an expired session showed
+ * "Could not start checkout" instead of the login page (prod, 2026-11-15).
+ * Same policy as apiRequest for mutations: refresh once, retry, and if the
+ * session is really gone send the user to sign in (with ?next= back here).
+ */
+async function billingPost(url: string, body?: unknown): Promise<Response> {
+  const init: RequestInit = {
+    method: 'POST',
+    credentials: 'include',
+    ...(body === undefined
+      ? {}
+      : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  };
+  let res = await fetch(url, init);
+  if (res.status === 401 && (await attemptTokenRefresh())) {
+    res = await fetch(url, init);
+  }
+  if (res.status === 401) {
+    hardRedirectToLogin();
+    throw new Error('Your session expired. Please sign in again.');
+  }
+  return res;
+}
 
 export interface SubscriptionData {
   plan: string;
@@ -91,10 +117,7 @@ export function useStartTrial() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/billing/start-trial', {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const res = await billingPost('/api/billing/start-trial');
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Failed to start trial' }));
         throw new Error(typeof err.detail === 'string' ? err.detail : 'Failed to start trial');
@@ -110,12 +133,7 @@ export function useStartTrial() {
 export function useSubscribe() {
   return useMutation({
     mutationFn: async ({ planId, interval = 'monthly' }: { planId: string; interval?: 'monthly' | 'annual' }): Promise<SubscribeResponse> => {
-      const res = await fetch(`/api/billing/subscribe/${planId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ interval }),
-      });
+      const res = await billingPost(`/api/billing/subscribe/${planId}`, { interval });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Could not start checkout' }));
         throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not start checkout');
@@ -126,12 +144,7 @@ export function useSubscribe() {
 }
 
 async function postJson<T>(url: string, body: unknown, fallback: string): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const res = await billingPost(url, body);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: fallback }));
     throw new Error(typeof err.detail === 'string' ? err.detail : fallback);
@@ -166,10 +179,7 @@ export function useCancelSubscription() {
 export function useBillingPortal() {
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/billing/portal', {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const res = await billingPost('/api/billing/portal');
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Could not open billing portal' }));
         throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not open billing portal');
