@@ -421,7 +421,7 @@ export default function ProfitPage() {
             <CardContent>
               {prefilled && (
                 <p className="mb-4 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground" data-testid="profit-prefill-note">
-                  Sales{prefill.cogs ? " and COGS" : ""} are filled in from the monthly numbers you entered for {data?.baseline?.period}. Check they are ex-GST for {period}, add orders, then save.
+                  Sales{prefill.cogs ? " and COGS" : ""} are filled in from the monthly revenue you entered for {data?.baseline?.period}. That figure is usually what you kept after RTO and returns; this field is sales of every order shipped, ex-GST, so it is normally higher. Adjust it for {period}, add orders, then save.
                 </p>
               )}
               <form

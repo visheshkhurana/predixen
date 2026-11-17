@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -21,13 +22,19 @@ MAX_CSV_ROWS = 10_000
 
 
 COLUMN_MAPPINGS = {
-    "date": ["date", "period", "month", "period_end", "period_start"],
-    "revenue": ["revenue", "total_revenue", "income", "sales"],
-    "expenses": ["expenses", "total_expenses", "costs", "total_costs", "opex", "operating_expenses"],
-    "cogs": ["cogs", "cost_of_goods", "cost_of_sales", "direct_costs"],
-    "other_costs": ["other_costs", "other_expenses", "misc_costs"],
-    "cash_balance": ["cash", "cash_balance", "cash_on_hand", "bank_balance", "ending_cash"],
-    "payroll": ["payroll", "salaries", "wages", "personnel"],
+    "date": ["date", "period", "month", "period_end", "period_start", "month_year"],
+    "revenue": ["revenue", "total_revenue", "income", "sales", "net_sales", "gross_sales",
+                "net_revenue", "total_sales", "revenue_from_operations", "turnover"],
+    "expenses": ["expenses", "total_expenses", "costs", "total_costs", "opex", "operating_expenses",
+                 "operating_costs", "overheads", "rent_ops", "rent_and_ops", "rent"],
+    "marketing": ["marketing", "marketing_spend", "ad_spend", "ads", "advertising",
+                  "performance_marketing", "marketing_expenses", "ads_spend"],
+    "cogs": ["cogs", "cost_of_goods", "cost_of_goods_sold", "cost_of_sales", "direct_costs",
+             "product_cost", "landed_cost"],
+    "other_costs": ["other_costs", "other_expenses", "misc_costs", "misc", "miscellaneous", "other"],
+    "cash_balance": ["cash", "cash_balance", "cash_on_hand", "bank_balance", "ending_cash",
+                     "closing_balance", "closing_cash"],
+    "payroll": ["payroll", "salaries", "salary", "wages", "personnel", "staff_costs", "employee_costs"],
     "mrr": ["mrr", "monthly_recurring_revenue"],
     "arr": ["arr", "annual_recurring_revenue"],
     "customers": ["customers", "customer_count", "num_customers"],
@@ -37,10 +44,50 @@ COLUMN_MAPPINGS = {
     "cac": ["cac", "customer_acquisition_cost"],
 }
 
+# Month formats founders actually use: 2026-05, May 2026, Oct-2026, Oct-26, 05/2026.
+DATE_FORMATS = [
+    "%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d", "%m-%d-%Y", "%d-%m-%Y",
+    "%Y-%m", "%Y/%m", "%m/%Y", "%m-%Y",
+    "%b %Y", "%B %Y", "%b-%Y", "%B-%Y", "%b %y", "%b-%y", "%B %y", "%B-%y",
+]
+
+
+def normalize_header(header: str) -> str:
+    """'Net Sales (₹)' -> 'net_sales', 'Rent & Ops' -> 'rent_ops'."""
+    h = re.sub(r"\(.*?\)", " ", str(header or "").lower())
+    h = re.sub(r"[^a-z0-9]+", "_", h)
+    return h.strip("_")
+
+
+def parse_period(raw: str) -> Optional[datetime]:
+    value = re.sub(r"\s+", " ", str(raw or "").strip())
+    for fmt in DATE_FORMATS:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def parse_amount(raw: Any) -> Optional[float]:
+    """'₹25,00,000', 'Rs. 1,200', '(5,000)', '12.5%' -> numbers. Blank or '-' -> None."""
+    val = str(raw if raw is not None else "").strip()
+    if not val:
+        return None
+    negative = val.startswith("(") and val.endswith(")")
+    val = re.sub(r"(?i)\b(?:inr|usd|aed|rs)\b\.?", "", val)
+    val = re.sub(r"[₹$€£,%\s()]", "", val)
+    if not val or val == "-":
+        return None
+    number = float(val)
+    return -number if negative else number
+
 
 def detect_columns(headers: List[str]) -> Dict[str, str]:
     mapping = {}
-    normalized = {h.lower().strip().replace(" ", "_"): h for h in headers}
+    normalized: Dict[str, str] = {}
+    for h in headers:
+        normalized.setdefault(normalize_header(h), h)
     
     for field, aliases in COLUMN_MAPPINGS.items():
         for alias in aliases:
@@ -126,6 +173,12 @@ async def detect_csv_columns(
             raise HTTPException(status_code=413, detail=f"CSV exceeds {MAX_CSV_ROWS} row limit")
         rows.append(dict(row))
 
+    if not headers or not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="This CSV has no rows to import. Check it has a header row and at least one month of numbers.",
+        )
+
     suggested = detect_columns(headers)
 
     return {
@@ -163,13 +216,7 @@ def import_csv_data(
             date_col = mappings.get("date")
             date_val = None
             if date_col and row.get(date_col):
-                raw = str(row[date_col]).strip()
-                for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d", "%m-%d-%Y", "%b %Y", "%B %Y"]:
-                    try:
-                        date_val = datetime.strptime(raw, fmt)
-                        break
-                    except ValueError:
-                        continue
+                date_val = parse_period(row[date_col])
 
             if date_val is None:
                 # period_start/period_end are non-nullable — a bad date would
@@ -181,10 +228,7 @@ def import_csv_data(
                 col = mappings.get(field)
                 if not col or not row.get(col):
                     return None
-                val = str(row[col]).replace(",", "").replace("$", "").replace("%", "").strip()
-                if not val or val == "-":
-                    return None
-                return float(val)
+                return parse_amount(row[col])
 
             def get_int(field):
                 v = get_float(field)
@@ -192,6 +236,11 @@ def import_csv_data(
 
             revenue = get_float("revenue")
             expenses = get_float("expenses")  # stored as opex — the model splits costs
+            marketing = get_float("marketing")
+            if marketing is not None:
+                # No separate column for marketing: it is an operating cost, so it
+                # joins opex rather than being dropped from the cost base.
+                expenses = (expenses or 0.0) + marketing
             cogs = get_float("cogs")
             other_costs = get_float("other_costs")
             cash = get_float("cash_balance")

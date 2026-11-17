@@ -265,6 +265,25 @@ def test_connect_accepts_catalog_id_and_legacy_alias(client, provider_id, monkey
     assert secret not in stored
 
 
+def test_rejected_credentials_are_400_not_401(client, monkeypatch):
+    """A wrong API key must not look like an expired login: the browser signs
+    the founder out on any 401."""
+    http, Session = client
+
+    async def _rejected(self):
+        self.auth_error = "RazorpayX rejected this key."
+        return False
+
+    monkeypatch.setattr(RazorpayXConnector, "authenticate", _rejected)
+    company_id = _company(Session, {})
+    response = http.post(
+        f"/connectors/companies/{company_id}/connect",
+        json={"provider_id": "razorpayx", "credentials": {"api_key": "rzp_test", "api_secret": "wrong"}},
+    )
+    assert response.status_code == 400, response.text
+    assert "rejected this key" in response.json()["detail"]
+
+
 def test_unknown_provider_is_rejected(client):
     http, Session = client
     company_id = _company(Session, {})
