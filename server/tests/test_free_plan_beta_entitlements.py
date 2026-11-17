@@ -141,7 +141,7 @@ def test_paid_plans_and_free_numeric_limits_match_main():
     assert free["max_companies"] == 1
     assert free["max_simulations_per_month"] == 3
     assert free["max_copilot_messages_per_month"] == 10
-    assert free["max_connectors"] == 0
+    assert free["max_connectors"] == 1
     assert _feature_values(PlanTier.FREE) == [
         "dashboard",
         "basic_metrics",
@@ -150,9 +150,9 @@ def test_paid_plans_and_free_numeric_limits_match_main():
         "simulations",
         "copilot",
         "truth_scan",
+        "data_connectors",
     ]
     for still_paid in (
-        Feature.DATA_CONNECTORS,
         Feature.FUNDRAISING_OS,
         Feature.SIMULATION_UNLIMITED,
         Feature.COPILOT_UNLIMITED,
@@ -169,8 +169,8 @@ def test_paid_plans_and_free_numeric_limits_match_main():
             else:
                 assert live[key] == value, (tier, key)
 
-    assert TRIAL_DURATION_DAYS == 30
-    assert TRIAL_PLAN == PlanTier.SCALE
+    assert TRIAL_DURATION_DAYS == 14
+    assert TRIAL_PLAN == PlanTier.STARTER
 
 
 def _limit_detail(response) -> dict:
@@ -344,7 +344,7 @@ def free_client(monkeypatch):
     app.include_router(copilot.router)
     app.include_router(events.router)
 
-    @app.post("/connectors/probe")
+    @app.post("/companies/1/fundraising-probe")
     def connectors_probe():
         return {"ok": True}
 
@@ -390,7 +390,7 @@ def test_fresh_free_account_can_scan_simulate_and_chat_within_limits(free_client
     db.close()
 
     # Paywall is on: a feature Free did not gain is still locked.
-    locked = client.post("/connectors/probe", headers=headers)
+    locked = client.post("/companies/1/fundraising-probe", headers=headers)
     assert locked.status_code == 403, locked.text
     assert _limit_detail(locked)["error"] == "feature_locked"
 

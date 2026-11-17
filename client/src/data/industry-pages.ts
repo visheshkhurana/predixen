@@ -119,12 +119,12 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "d2c",
     title: "AI CFO for D2C Brands in India: CM1/CM2/CM3, RTO and Runway | FounderConsole",
     description:
-      "Free AI CFO for Indian D2C and e-commerce brands. See CM1, CM2 and CM3 in ₹, what RTO and COD cost you, MER, and how much runway your inventory leaves. Connects Shopify, WooCommerce, Tally and Zoho Books. Free plan, no credit card.",
+      "AI CFO for Indian D2C and e-commerce brands. See CM1, CM2 and CM3 in ₹, what RTO and COD cost you, MER, and how much runway your inventory leaves. Connects Shopify, WooCommerce, Tally and Zoho Books. Free plan, no credit card.",
     audience: "D2C and e-commerce brand founders",
     eyebrow: "For D2C & e-commerce brands",
     headline: "Know which orders actually make you money",
     subhead:
-      "A free AI CFO for Indian D2C brands. See CM1, CM2 and CM3 in ₹, what RTO and COD really cost, and how many months of runway are left once your next inventory buy is paid for.",
+      "An AI CFO for Indian D2C brands, free to start. See CM1, CM2 and CM3 in ₹, what RTO and COD really cost, and how many months of runway are left once your next inventory buy is paid for.",
     pains: [
       {
         pain: "Shopify says one number, the bank account says another.",
@@ -200,7 +200,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "general_saas",
     title: "AI CFO for SaaS Startups: MRR, NRR, Burn Multiple and Runway | FounderConsole",
     description:
-      "Free AI CFO for SaaS and B2B software startups. Track MRR, ARR, churn, net revenue retention, burn multiple and CAC payback from Stripe and QuickBooks, and simulate runway to your next round. Free plan, no credit card.",
+      "AI CFO for SaaS and B2B software startups. Track MRR, ARR, churn, net revenue retention, burn multiple and CAC payback from Stripe and QuickBooks, and simulate runway to your next round. Free plan, no credit card.",
     audience: "SaaS and B2B software founders",
     eyebrow: "For SaaS & B2B software",
     headline: "Your burn multiple, NRR and runway, from live billing data",
@@ -276,7 +276,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "marketplace",
     title: "Financial Planning for Marketplaces: GMV, Take Rate and Unit Economics | FounderConsole",
     description:
-      "Free AI CFO for marketplace and platform startups. Separate GMV from take rate and net revenue, price supply and demand incentives, and see contribution per order and runway before you expand. Free plan, no credit card.",
+      "AI CFO for marketplace and platform startups. Separate GMV from take rate and net revenue, price supply and demand incentives, and see contribution per order and runway before you expand. Free plan, no credit card.",
     audience: "Marketplace and platform founders",
     eyebrow: "For marketplaces & platforms",
     headline: "GMV is not revenue. See what your marketplace keeps.",
@@ -350,7 +350,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "agency",
     title: "Cash Flow, Margin and Hiring Planning for Agencies | FounderConsole",
     description:
-      "Free AI CFO for agencies and services firms. Track utilisation and project margins, see the gap between invoicing and getting paid, and test whether you can afford the next hire. Connects QuickBooks, Xero, Zoho Books and FreshBooks. Free plan, no credit card.",
+      "AI CFO for agencies and services firms. Track utilisation and project margins, see the gap between invoicing and getting paid, and test whether you can afford the next hire. Connects QuickBooks, Xero, Zoho Books and FreshBooks. Free plan, no credit card.",
     audience: "Agency and professional services founders",
     eyebrow: "For agencies & services firms",
     headline: "Keep the team busy and cash ahead of payroll",
@@ -423,7 +423,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "fintech",
     title: "Financial Planning for Fintech Startups: Unit Economics, Capital and Burn | FounderConsole",
     description:
-      "Free AI CFO for fintech startups. Track unit economics per user, LTV against CAC and CAC payback, keep your regulatory capital requirement in view, and stress-test runway with Monte Carlo simulation. Free plan, no credit card.",
+      "AI CFO for fintech startups. Track unit economics per user, LTV against CAC and CAC payback, keep your regulatory capital requirement in view, and stress-test runway with Monte Carlo simulation. Free plan, no credit card.",
     audience: "Fintech founders",
     eyebrow: "For fintech founders",
     headline: "Per-user economics, capital buffers and burn in one model",
@@ -498,7 +498,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "startup",
     title: "Runway, Burn and Fundraising Planner for Early-Stage Startups | FounderConsole",
     description:
-      "Free AI CFO for early-stage and pre-revenue startups. Know your runway and burn, plan hires, and see your fundraising timeline as a range, not a guess. Monte Carlo simulation and an AI copilot. Free plan, no credit card.",
+      "AI CFO for early-stage and pre-revenue startups. Know your runway and burn, plan hires, and see your fundraising timeline as a range, not a guess. Monte Carlo simulation and an AI copilot. Free plan, no credit card.",
     audience: "Early-stage and pre-revenue startup founders",
     eyebrow: "For early-stage & pre-revenue startups",
     headline: "Know how many months you have, and when to start raising",

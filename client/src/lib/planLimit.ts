@@ -37,7 +37,14 @@ export function planLimitFromError(status: number, detail: unknown): PlanLimitIn
 export function planLimitNoun(limit: string): string {
   if (limit === 'max_simulations_per_month') return 'simulations';
   if (limit === 'max_copilot_messages_per_month') return 'Copilot messages';
+  if (limit === 'max_connectors') return 'data connectors';
   return 'uses';
+}
+
+/** Dialog title. Connectors are a plan size, not a monthly allowance. */
+export function planLimitTitle(limit: string): string {
+  if (limit === 'max_connectors') return "You've reached your plan's data connectors";
+  return `You've used this month's ${planLimitNoun(limit)}`;
 }
 
 export function announcePlanLimit(status: number, detail: unknown): void {

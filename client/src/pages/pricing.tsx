@@ -41,6 +41,7 @@ const paidTiers: Tier[] = [
       "1 company",
       "3 simulations / month",
       "10 copilot messages / month",
+      "1 data connector",
       "CSV upload & manual entry",
       "Basic dashboard",
     ],
@@ -185,7 +186,7 @@ export default function PricingPage() {
                 Simple pricing for founders
               </h1>
               <p className="mt-3 max-w-xl mx-auto text-lg text-muted-foreground" data-testid="text-pricing-subtitle">
-                Start free. Upgrade to Starter for live connectors and more simulations — billed monthly or annually, cancel anytime.
+                Start free. Upgrade to Starter for more connectors and simulations — billed monthly or annually, cancel anytime.
               </p>
             </>
           ) : (

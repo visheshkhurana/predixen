@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { trackEvent } from '@/lib/posthog';
-import { PLAN_LIMIT_EVENT, planLimitNoun, type PlanLimitInfo } from '@/lib/planLimit';
+import { PLAN_LIMIT_EVENT, planLimitTitle, type PlanLimitInfo } from '@/lib/planLimit';
 
 /** Opens when any request hits 402 plan_limit_reached; offers the upgrade. */
 export function PlanLimitDialog() {
@@ -34,7 +34,7 @@ export function PlanLimitDialog() {
     <Dialog open={info !== null} onOpenChange={(open) => !open && close()}>
       <DialogContent data-testid="dialog-plan-limit">
         <DialogHeader>
-          <DialogTitle>You've used this month's {info ? planLimitNoun(info.limit) : 'allowance'}</DialogTitle>
+          <DialogTitle>{info ? planLimitTitle(info.limit) : "You've used this month's allowance"}</DialogTitle>
           <DialogDescription data-testid="text-plan-limit-message">{info?.message}</DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">

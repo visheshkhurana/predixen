@@ -637,12 +637,35 @@ def _guard_available_metrics(db: Session, company_id: int, truth_scan: Optional[
     return merged
 
 
+def _refund_copilot_quota_if_unavailable(db, current_user, company_id, result) -> None:
+    """A fallback reply ("AI assistant unavailable") is not a Copilot answer,
+    so it must not use up one of the Free plan's monthly messages."""
+    unavailable = (
+        result.get("ai_unavailable") if isinstance(result, dict)
+        else getattr(result, "ai_unavailable", False)
+    )
+    if unavailable:
+        from server.core.plan_usage import PLAN_QUOTA_COPILOT, release_monthly_quota
+        release_monthly_quota(db, current_user, PLAN_QUOTA_COPILOT, company_id=company_id)
+
+
 @router.post("/companies/{company_id}/quick-chat", response_model=QuickChatResponse)
 async def copilot_quick_chat(
     company_id: int,
     request: QuickChatRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
+):
+    result = await _copilot_quick_chat_impl(company_id, request, db, current_user)
+    _refund_copilot_quota_if_unavailable(db, current_user, company_id, result)
+    return result
+
+
+async def _copilot_quick_chat_impl(
+    company_id: int,
+    request: QuickChatRequest,
+    db: Session,
+    current_user: User,
 ):
     """
     Natural language copilot chat for the Cmd+K drawer.
@@ -1026,12 +1049,15 @@ async def copilot_chat(
     
     import asyncio
     try:
-        return await asyncio.wait_for(
+        result = await asyncio.wait_for(
             _copilot_chat_inner(company_id, company, request, db, current_user),
             timeout=90.0
         )
+        _refund_copilot_quota_if_unavailable(db, current_user, company.id, result)
+        return result
     except asyncio.TimeoutError:
         _logger.warning(f"Copilot chat timed out for company {company_id}")
+        _refund_copilot_quota_if_unavailable(db, current_user, company.id, {"ai_unavailable": True})
         return CopilotChatResponse(
             executive_summary=[
                 "I'm taking longer than expected to analyze this. Please try asking again or simplify your question."

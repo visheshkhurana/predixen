@@ -509,6 +509,9 @@ async def connect_provider(
     if not connector_class:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider_id}")
 
+    from server.core.plan_usage import enforce_connector_limit
+    enforce_connector_limit(db, current_user, company, provider_id)
+
     # RazorpayX account numbers are financial PII. They belong in the encrypted
     # credential blob with the key and secret, not in plaintext settings.
     creds_to_store = dict(credentials.credentials or {})
