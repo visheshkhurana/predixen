@@ -73,10 +73,21 @@ def _install_openai(monkeypatch, sink, content='{"company_name": "Acme"}', raise
                 raise raise_error
             return _FakeResponse(content)
 
+    class _Responses:
+        def create(self, **kwargs):
+            sink.append(kwargs)
+            if raise_error is not None:
+                raise raise_error
+            return SimpleNamespace(
+                output_text=content,
+                usage=SimpleNamespace(input_tokens=4, output_tokens=3),
+            )
+
     class _OpenAI:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.chat = SimpleNamespace(completions=_Completions())
+            self.responses = _Responses()
 
     monkeypatch.setattr("openai.OpenAI", _OpenAI)
     return _OpenAI
@@ -280,9 +291,36 @@ def test_competitor_scan_redacts_and_audits(monkeypatch):
     assert found[0]["source_type"] == "news"
     _assert_pii_redacted(sink)
     _assert_audit(db, 19, 6)
-    assert sink[0]["model"] == "gpt-4o-search-preview"
+    assert sink[0]["model"] == "gpt-5-mini"
+    assert sink[0]["tools"] == [{"type": "web_search"}]
     assert "temperature" not in sink[0]
-    assert sink[0]["max_tokens"] == 1500
+    assert _logs(db)[0].endpoint == "responses"
+
+
+def test_competitor_scan_falls_back_to_second_model(monkeypatch):
+    sink = []
+    _plain_key(monkeypatch)
+    calls = {"n": 0}
+
+    class _Responses:
+        def create(self, **kwargs):
+            sink.append(kwargs)
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("model_not_found")
+            return SimpleNamespace(output_text='[{"title": "B", "url": "https://ok.example/b"}]', usage=None)
+
+    class _OpenAI:
+        def __init__(self, **kwargs):
+            self.responses = _Responses()
+
+    monkeypatch.setattr("openai.OpenAI", _OpenAI)
+    _session(monkeypatch)
+    found = competitors._scan_competitor_web(
+        SimpleNamespace(name="Acme", website=None, blog_url=None, linkedin_url=None, x_handle=None, company_id=1)
+    )
+    assert [c["model"] for c in sink] == list(competitors.WEB_SEARCH_MODELS)
+    assert found[0]["url"] == "https://ok.example/b"
 
 
 def test_provider_error_still_closes_the_audit_session(monkeypatch):
