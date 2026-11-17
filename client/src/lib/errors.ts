@@ -87,3 +87,31 @@ export function isTruthScanRequired(err: any): boolean {
 export function getTruthScanUploadId(err: any): string | undefined {
   return err?.upload_id || err?.detail?.upload_id;
 }
+
+const FIELD_LABELS: Record<string, string> = {
+  email: 'Email',
+  password: 'Password',
+  name: 'Name',
+  company_name: 'Company name',
+};
+
+/**
+ * FastAPI validation errors arrive as `detail: [{loc, msg}, ...]`. Shown as-is
+ * the founder only saw "Request failed (422)". Turn the first entry into a
+ * sentence they can act on.
+ */
+export function validationDetailMessage(detail: unknown): string | null {
+  if (!Array.isArray(detail) || detail.length === 0) return null;
+  const first = detail[0] as { loc?: unknown[]; msg?: unknown };
+  const msg = typeof first?.msg === 'string' ? first.msg : '';
+  if (!msg) return null;
+  const loc = Array.isArray(first.loc) ? first.loc : [];
+  const field = String(loc[loc.length - 1] ?? '');
+  if (field === 'email' || /email address/i.test(msg)) {
+    return 'Please use a real email address you can receive mail at.';
+  }
+  const label = FIELD_LABELS[field] ?? (field ? field.replace(/_/g, ' ') : '');
+  const clean = msg.replace(/^Value error,\s*/i, '');
+  const sentence = clean.charAt(0).toUpperCase() + clean.slice(1);
+  return label ? `${label.charAt(0).toUpperCase() + label.slice(1)}: ${sentence}` : sentence;
+}

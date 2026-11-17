@@ -215,6 +215,7 @@ class CKBStorage:
         }
         
         if truth_scan:
-            context["truth_scan"] = truth_scan.outputs_json
+            from server.truth.invented_metrics import strip_invented_from_outputs
+            context["truth_scan"] = strip_invented_from_outputs(truth_scan.outputs_json)
         
         return context

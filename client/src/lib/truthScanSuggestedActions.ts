@@ -121,10 +121,47 @@ function wizardQueryParams(action: SuggestedAction): Record<string, string | num
 }
 
 /**
+ * company.industry values that sell physical goods. Their gross margin carries
+ * product, packaging and fulfilment cost, so a healthy margin sits around
+ * 40–60% — the 70%+ software target would flag a perfectly normal D2C brand.
+ */
+export const PHYSICAL_GOODS_INDUSTRIES: ReadonlySet<string> = new Set([
+  'd2c',
+  'ecommerce',
+  'food',
+  'marketplace',
+]);
+
+export type GrossMarginTarget = {
+  /** Flag the margin when it is below this percentage. */
+  flagBelow: number;
+  /** Target shown to the founder, e.g. "70%+". */
+  targetLabel: string;
+};
+
+/** Industry-aware gross-margin threshold for the pricing suggestion. */
+export function grossMarginTargetFor(industry?: string | null): GrossMarginTarget {
+  const key = (industry ?? '').trim().toLowerCase();
+  if (PHYSICAL_GOODS_INDUSTRIES.has(key)) {
+    return { flagBelow: 40, targetLabel: '50%+' };
+  }
+  return { flagBelow: 65, targetLabel: '70%+' };
+}
+
+export type SuggestedActionOptions = {
+  /** company.industry — sets the gross-margin target. */
+  industry?: string | null;
+};
+
+/**
  * 2–3 CTAs from the reddest Truth Scan metrics. Prefills use the same lever
  * names ScenarioWizard / StrategicScenarioBuilder already persist.
  */
-export function generateSuggestedActions(metrics: any, _flags: any[] = []): SuggestedAction[] {
+export function generateSuggestedActions(
+  metrics: any,
+  _flags: any[] = [],
+  options: SuggestedActionOptions = {},
+): SuggestedAction[] {
   const actions: SuggestedAction[] = [];
 
   const runwayP50 = getMetricValue(metrics?.runway_p50);
@@ -198,12 +235,13 @@ export function generateSuggestedActions(metrics: any, _flags: any[] = []): Sugg
     });
   }
 
-  if (grossMargin != null && grossMargin < 65) {
+  const marginTarget = grossMarginTargetFor(options.industry);
+  if (grossMargin != null && grossMargin < marginTarget.flagBelow) {
     actions.push({
       id: 'action-margin',
       title: 'Test Pricing Optimization',
       description: 'Model a 12% price increase and +8pp gross margin, then run the scenario.',
-      metricIssue: `Gross margin is ${grossMargin.toFixed(0)}% (target: 70%+)`,
+      metricIssue: `Gross margin is ${grossMargin.toFixed(0)}% (target: ${marginTarget.targetLabel})`,
       actionType: 'margin',
       scenarioName: 'Truth Scan · Price Increase',
       priority: 'high',
@@ -277,11 +315,14 @@ export function resolveOverviewSuggestedAction(input: {
   enabled: boolean;
   isSample: boolean | undefined;
   scan: { metrics?: unknown; flags?: unknown[] } | null | undefined;
+  industry?: string | null;
 }): SuggestedAction | null {
   if (!input.enabled) return null;
   if (input.isSample !== false) return null;
   if (!input.scan) return null;
-  const actions = generateSuggestedActions(input.scan.metrics, (input.scan.flags ?? []) as any[]);
+  const actions = generateSuggestedActions(input.scan.metrics, (input.scan.flags ?? []) as any[], {
+    industry: input.industry,
+  });
   return actions[0] ?? null;
 }
 

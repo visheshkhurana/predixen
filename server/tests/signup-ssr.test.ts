@@ -47,8 +47,9 @@ test("/signup SSR body is non-empty and preserves the register funnel", () => {
   for (const href of REQUIRED_HREFS) {
     assert.ok(body.includes(`href="${href}"`), `missing href ${href}`);
   }
-  assert.match(text, /early access/i);
+  assert.match(text, /free plan/i);
   assert.match(text, /no credit card/i);
+  assert.doesNotMatch(text, /early access|public beta/i);
   assert.match(text, /create a free account/i);
 
   const title = (out.match(/<title>([^<]*)<\/title>/) || [, ""])[1];

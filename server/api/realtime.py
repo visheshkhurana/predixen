@@ -15,6 +15,8 @@ from server.models import User, Company
 from server.models.financial import FinancialRecord
 from server.models.truth_scan import TruthScan
 from server.core.burn import burn_summary
+from server.services.d2c_months import d2c_cac_by_month, latest_d2c_cac
+from server.truth.invented_metrics import resolve_unit_economics
 
 router = APIRouter(prefix="/realtime", tags=["realtime"])
 
@@ -83,8 +85,9 @@ def get_company_kpi_metrics(company_id: int, db: Session) -> dict:
         outputs = truth_scan.outputs_json
         ts_metrics = outputs.get("metrics", {})
         
-        # Override with truth scan values if present
-        for key in ["churn_rate", "cac", "ltv", "ltv_cac_ratio"]:
+        # Override with truth scan values if present. CAC / LTV / LTV:CAC are
+        # resolved below from real inputs only.
+        for key in ["churn_rate"]:
             val = ts_metrics.get(key)
             if isinstance(val, (int, float)):
                 metrics[key] = val
@@ -98,10 +101,23 @@ def get_company_kpi_metrics(company_id: int, db: Session) -> dict:
         # floor $100, LTV floor $500, ratio 0.5x-20x) replaced real values with
         # invented ones.
     
+    # CAC / LTV / LTV:CAC: the financial record, then a D2C month's marketing
+    # spend / new customers, then real truth-scan values -- never the defaults
+    # the truth scan invents (same rule as /metrics/computed). 0 = unknown.
+    unit_econ = resolve_unit_economics(
+        (truth_scan.outputs_json or {}).get("metrics", {}) if truth_scan else {},
+        latest_financial,
+        latest_d2c_cac(db, company_id),
+    )
+    for key in ("cac", "ltv", "ltv_cac_ratio"):
+        metrics[key] = unit_econ[key]
+
     # Final fallback to metadata (runway is never back-filled: null means
     # profitable or cash unknown, and a stored number would contradict that).
+    # Unit economics are never back-filled either: nothing records where a
+    # metadata value came from.
     for key in metrics:
-        if key in ("runway_months", "runway_status", "is_profitable"):
+        if key in ("runway_months", "runway_status", "is_profitable", "cac", "ltv", "ltv_cac_ratio"):
             continue
         if metrics[key] in (0, None) and key in metadata:
             metrics[key] = metadata.get(key, 0)
@@ -241,6 +257,8 @@ def get_kpi_history(
     if truth_scan and truth_scan.outputs_json:
         ts_metrics = truth_scan.outputs_json.get("metrics", {})
 
+    d2c_cacs = d2c_cac_by_month(db, company_id)
+
     history = []
     for record in reversed(financials):
         revenue = record.revenue or 0
@@ -263,20 +281,17 @@ def get_kpi_history(
         if churn_rate is not None and churn_rate > 1:
             churn_rate = churn_rate / 100
 
-        cac_val = ts_metrics.get("cac")
-        if isinstance(cac_val, dict):
-            cac_val = cac_val.get("value", 0)
-        cac = cac_val if isinstance(cac_val, (int, float)) else 0
-
-        ltv_val = ts_metrics.get("ltv")
-        if isinstance(ltv_val, dict):
-            ltv_val = ltv_val.get("value", 0)
-        ltv = ltv_val if isinstance(ltv_val, (int, float)) else 0
-
-        ltv_cac_val = ts_metrics.get("ltv_cac_ratio")
-        if isinstance(ltv_cac_val, dict):
-            ltv_cac_val = ltv_cac_val.get("value", 0)
-        ltv_cac_ratio = ltv_cac_val if isinstance(ltv_cac_val, (int, float)) else 0
+        # Same rule as the snapshot, per month: this record's own CAC/LTV,
+        # then the D2C month for the same period, then real truth-scan values.
+        # Invented truth-scan defaults never appear. 0 = unknown.
+        record_date = record.period_start or record.period_end
+        record_month = record_date.replace(day=1) if record_date else None
+        unit_econ = resolve_unit_economics(
+            ts_metrics, record, d2c_cacs.get(record_month) if record_month else None
+        )
+        cac = unit_econ["cac"]
+        ltv = unit_econ["ltv"]
+        ltv_cac_ratio = unit_econ["ltv_cac_ratio"]
 
         history.append({
             "time": period_label,

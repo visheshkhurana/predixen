@@ -294,7 +294,7 @@ export default function D2cContributionMarginPage() {
             </h3>
             <p className="mt-2 text-sm text-muted-foreground max-w-lg mx-auto">
               FounderConsole connects your store and finance data and turns margin, burn and cash into
-              runway you can plan against. Free during the public beta, no credit card required.
+              runway you can plan against. Start free, no credit card required.
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
               <Link href="/signup" onClick={() => trackFunnel("cta_click", { location: "d2c-contribution-margin" })}>

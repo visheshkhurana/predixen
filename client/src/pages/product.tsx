@@ -8,14 +8,14 @@ export default function ProductPage() {
   useSEO({
     title: "Product — Financial Intelligence for Startup Founders | FounderConsole",
     description:
-      "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free during early access.",
+      "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — start free, no credit card.",
     path: "/product",
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "WebPage",
       name: "FounderConsole Product",
       description:
-        "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free during early access.",
+        "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — start free, no credit card.",
       url: "https://founderconsole.ai/product",
       isPartOf: { "@type": "WebSite", name: "FounderConsole", url: "https://founderconsole.ai" },
     },
@@ -61,10 +61,10 @@ export default function ProductPage() {
         </ul>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tight text-foreground">
-          Free during early access
+          Start with the free plan
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Every feature is free while we are in early access — no credit card required. Planned paid tiers after early access are on the{" "}
+          There is a free plan with no credit card required. Paid plans add more simulations, copilot messages and connectors — see the{" "}
           <Link href="/pricing" className="text-primary hover:underline" data-testid="link-product-pricing">
             pricing
           </Link>{" "}

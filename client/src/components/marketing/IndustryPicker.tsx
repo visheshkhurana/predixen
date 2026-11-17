@@ -168,7 +168,7 @@ export function IndustryPickerDialog({
             </div>
 
             <div className="mt-5 flex flex-col-reverse items-center justify-between gap-3 border-t pt-4 sm:flex-row">
-              <p className="text-xs text-muted-foreground">Free during public beta · No credit card required</p>
+              <p className="text-xs text-muted-foreground">Free plan · No credit card required</p>
               <button
                 type="button"
                 onClick={onSkip}

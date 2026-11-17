@@ -22,6 +22,12 @@ import { SAMPLE_COMPANY, SAMPLE_FINANCIALS } from '@/lib/sampleCompany';
 import { SampleFirstRunCard } from '@/components/sample-data/SampleFirstRunCard';
 import { toNumber } from '@/lib/clearableNumber';
 import { onboardingIndustryPrefill, readStoredIndustry } from '@/lib/industryPicker';
+import { currencySymbol } from '@/lib/money';
+import { exampleAmount, summarizeBaseline } from '@/lib/onboarding-baseline';
+
+// Physical-goods businesses carry product cost in COGS; their margins sit far
+// below software's, so hints and examples must not quote SaaS numbers.
+const GOODS_INDUSTRIES = new Set(['d2c', 'ecommerce', 'food', 'marketplace']);
 
 const STEPS = [
   { id: 1, title: 'Welcome', description: 'Tell us about your startup' },
@@ -92,11 +98,13 @@ function baselineTextToNumbers(text: BaselineText): BaselineNumbers {
   };
 }
 
-// India is the primary market: a browser on India time starts in rupees.
+// India is the primary market: a browser on India time starts in rupees, UAE in dirhams.
 function defaultCurrencyForBrowser(): string {
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta') return 'INR';
+    // UAE is priced in dirhams (AED 149), and billing follows the company currency.
+    if (tz === 'Asia/Dubai') return 'AED';
   } catch {
     // fall through
   }
@@ -166,7 +174,24 @@ export default function OnboardingPage() {
   const [uploadDragActive, setUploadDragActive] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const stageDefaults = companyData.stage ? STAGE_DEFAULTS[companyData.stage] : undefined;
+  const isGoods = GOODS_INDUSTRIES.has(companyData.industry);
+  const money = currencySymbol(companyData.currency);
+  // Example figures in the chosen currency (STAGE_DEFAULTS are in USD), with a
+  // goods-business margin where it applies.
+  const stageDefaults = (() => {
+    const d = companyData.stage ? STAGE_DEFAULTS[companyData.stage] : undefined;
+    if (!d) return undefined;
+    const c = companyData.currency;
+    return {
+      ...d,
+      monthly_revenue: exampleAmount(d.monthly_revenue, c),
+      gross_margin_pct: isGoods && d.gross_margin_pct > 0 ? 50 : d.gross_margin_pct,
+      opex: exampleAmount(d.opex, c),
+      payroll: exampleAmount(d.payroll, c),
+      other_costs: exampleAmount(d.other_costs, c),
+      cash_balance: exampleAmount(d.cash_balance, c),
+    };
+  })();
 
   const updateBaselineText = (patch: Partial<BaselineText>) => {
     setBaselineTouched(true);
@@ -488,18 +513,23 @@ export default function OnboardingPage() {
     setLocation('/');
   };
 
-  const totalExpenses = baselineData.opex + baselineData.payroll + baselineData.other_costs;
-  const netBurn = totalExpenses - baselineData.monthly_revenue;
+  // Same burn and runway the dashboard shows once this baseline is saved.
+  const baselineSummary = summarizeBaseline(baselineData);
+  const totalExpenses = baselineSummary.totalCosts;
+  const netBurn = baselineSummary.netBurn;
   // Only treat the baseline as real if the founder actually put numbers in.
   // Everything on the Health Check hangs off this: without it, an untouched
   // form still rendered a burn rate, a runway and a health score.
   const hasBaselineNumbers =
     baselineTouched &&
     (totalExpenses > 0 || baselineData.cash_balance > 0 || baselineData.monthly_revenue > 0);
-  const runwayMonths = hasBaselineNumbers && netBurn > 0 && baselineData.cash_balance > 0 ? baselineData.cash_balance / netBurn : null;
+  const runwayMonths = hasBaselineNumbers ? baselineSummary.runwayMonths : null;
+  const notBurning = hasBaselineNumbers && baselineSummary.notBurning;
   const healthScore = (() => {
     let score = 50;
-    if (runwayMonths !== null) {
+    if (notBurning) {
+      score += 30;
+    } else if (runwayMonths !== null) {
       if (runwayMonths >= 18) score += 30;
       else if (runwayMonths >= 12) score += 20;
       else if (runwayMonths >= 6) score += 10;
@@ -516,13 +546,17 @@ export default function OnboardingPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <div className="flex items-center gap-1">
-            <Label htmlFor="revenue">Monthly Revenue ($)</Label>
+            <Label htmlFor="revenue">Monthly Revenue ({money})</Label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-xs">
-                <p>Your total monthly recurring revenue (MRR).</p>
+                <p>
+                  {isGoods
+                    ? 'Net sales for a typical month, after discounts and returns, before GST.'
+                    : 'Your total monthly revenue. For subscriptions, your MRR.'}
+                </p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -546,7 +580,11 @@ export default function OnboardingPage() {
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-xs">
-                <p>SaaS companies typically have 70-85%.</p>
+                <p>
+                  {isGoods
+                    ? 'Revenue minus product cost (COGS), as a %. D2C brands are usually 40-65%.'
+                    : 'Revenue minus direct costs, as a %. Software companies are usually 70-85%.'}
+                </p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -566,7 +604,21 @@ export default function OnboardingPage() {
 
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="opex">Opex ($)</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="opex">Opex ({money})</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" aria-label="What goes in opex" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p>
+                  {isGoods
+                    ? 'Every monthly cost except payroll, including product cost (COGS), ads, shipping and packaging, rent and tools.'
+                    : 'Every monthly cost except payroll, including hosting and other direct costs, marketing, rent and tools.'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <Input
             id="opex"
             type="number"
@@ -579,7 +631,7 @@ export default function OnboardingPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="payroll">Payroll ($)</Label>
+          <Label htmlFor="payroll">Payroll ({money})</Label>
           <Input
             id="payroll"
             type="number"
@@ -592,7 +644,7 @@ export default function OnboardingPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="other-costs">Other ($)</Label>
+          <Label htmlFor="other-costs">Other ({money})</Label>
           <Input
             id="other-costs"
             type="number"
@@ -609,7 +661,7 @@ export default function OnboardingPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <div className="flex items-center gap-1">
-            <Label htmlFor="cash">Cash Balance ($)</Label>
+            <Label htmlFor="cash">Cash Balance ({money})</Label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -691,7 +743,7 @@ export default function OnboardingPage() {
 
           <div className="flex items-center gap-1">
             {STEPS.map((s, idx) => (
-              <div key={s.id} className="flex items-center flex-1">
+              <div key={s.id} className="flex items-center flex-1 min-w-0" title={s.description}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full font-medium text-sm shrink-0 ${
                     completedSteps.includes(s.id)
@@ -708,11 +760,10 @@ export default function OnboardingPage() {
                   </div>
                   <div className="hidden sm:block min-w-0">
                     <p className="text-sm font-medium truncate">{s.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{s.description}</p>
                   </div>
                 </div>
                 {idx < STEPS.length - 1 && (
-                  <div className={`h-0.5 w-6 mx-2 shrink-0 ${
+                  <div className={`h-0.5 w-4 mx-1 shrink-0 ${
                     completedSteps.includes(s.id) ? 'bg-green-500' : 'bg-muted'
                   }`} />
                 )}
@@ -1050,7 +1101,9 @@ export default function OnboardingPage() {
                       <div className="flex-1">
                         <h3 className="font-medium">Connect Apps</h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Sync with Stripe, QuickBooks, Gusto, and 20+ integrations for real-time data.
+                          {isGoods
+                            ? 'Sync Shopify, Shiprocket, Meta Ads, Tally and 30+ more tools for real-time data.'
+                            : 'Sync Stripe, QuickBooks, Gusto and 30+ more tools for real-time data.'}
                         </p>
                         {dataSourceChoice === 'connect' && (
                           <div className="mt-3 flex flex-wrap gap-2">
@@ -1118,7 +1171,7 @@ export default function OnboardingPage() {
                         <span className="text-sm font-medium text-muted-foreground">Runway Estimate</span>
                       </div>
                       <p className="text-2xl font-bold" data-testid="text-runway-value">
-                        {runwayMonths !== null ? `${runwayMonths.toFixed(1)} mo` : 'N/A'}
+                        {runwayMonths !== null ? `${runwayMonths.toFixed(1)} mo` : notBurning ? 'Not burning' : 'N/A'}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {runwayMonths !== null
@@ -1127,6 +1180,8 @@ export default function OnboardingPage() {
                             : runwayMonths >= 6
                             ? 'Consider fundraising soon'
                             : 'Critical - act now'
+                          : notBurning
+                          ? 'Revenue covers your monthly costs'
                           : 'Add financial data to calculate'}
                       </p>
                     </CardContent>
@@ -1136,7 +1191,7 @@ export default function OnboardingPage() {
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-2">
                         <TrendingDown className="w-5 h-5 text-primary" />
-                        <span className="text-sm font-medium text-muted-foreground">Net Burn Rate</span>
+                        <span className="text-sm font-medium text-muted-foreground">{notBurning ? 'Monthly Surplus' : 'Net Burn Rate'}</span>
                       </div>
                       <p className="text-2xl font-bold" data-testid="text-burn-value">
                         {hasBaselineNumbers && totalExpenses > 0 ? formatCurrency(Math.abs(netBurn), companyData.currency) : 'N/A'}
@@ -1144,7 +1199,7 @@ export default function OnboardingPage() {
                       <p className="text-xs text-muted-foreground mt-1">
                         {!hasBaselineNumbers || totalExpenses === 0
                           ? 'Add expense data to calculate'
-                          : netBurn < 0 ? 'Cash flow positive' : 'Monthly net burn'}
+                          : netBurn <= 0 ? 'Revenue minus all costs: cash is growing' : 'Monthly net burn'}
                       </p>
                     </CardContent>
                   </Card>
@@ -1279,6 +1334,9 @@ export default function OnboardingPage() {
                     Instead of guessing what might happen, we run thousands of scenarios with different assumptions. 
                     You get P10 (pessimistic), P50 (likely), and P90 (optimistic) outcomes — the same analysis venture capitalists use.
                   </p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2" data-testid="text-example-runway-label">
+                    Example output, not your company yet: months of runway
+                  </p>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="text-center p-3 rounded-lg bg-background/50 border">
                       <p className="text-xs text-muted-foreground mb-1">P10 (Worst)</p>
@@ -1298,18 +1356,15 @@ export default function OnboardingPage() {
                 <div className="p-4 bg-muted/30 rounded-md border">
                   <h4 className="font-medium text-sm mb-2">Try these scenarios after setup:</h4>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-primary shrink-0" />
-                      What if we hire 3 engineers next quarter?
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-primary shrink-0" />
-                      What if we raise prices by 20%?
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-primary shrink-0" />
-                      When should we start fundraising?
-                    </li>
+                    {(isGoods
+                      ? ['What if RTO drops from 25% to 15%?', 'What if we cut ad spend by 20%?', 'What if we raise prices by 10%?']
+                      : ['What if we hire 3 engineers next quarter?', 'What if we raise prices by 20%?', 'When should we start fundraising?']
+                    ).map((q) => (
+                      <li key={q} className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-primary shrink-0" />
+                        {q}
+                      </li>
+                    ))}
                   </ul>
                 </div>
 

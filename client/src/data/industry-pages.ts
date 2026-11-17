@@ -25,7 +25,8 @@
  *     product does not compute (GMV, take rate, utilisation, ...) are tagged
  *     `custom`: you can track them as a custom metric, and the page says so.
  *   - No customer logos, counts, testimonials or invented benchmarks. The
- *     product is free during the public beta and that is the only price claim.
+ *     product has a free plan (no credit card) and that is the only price
+ *     claim; prices live only on the billing-gated /pricing surfaces.
  *
  * Keep this file free of imports (and of "@/" aliases in particular): the
  * server bundle and the sitemap script import it by relative path.
@@ -104,9 +105,9 @@ export const INDUSTRY_STORAGE_KEY = "fc_industry";
 /** Value stored when the visitor chose "just show me everything". */
 export const INDUSTRY_SKIPPED = "all";
 
-const FREE_DURING_BETA_FAQ: IndustryFaq = {
+const FREE_PLAN_FAQ: IndustryFaq = {
   q: "Is FounderConsole free?",
-  a: "Yes. Every feature is free during the public beta, and no credit card is required. The free calculators linked on this page need no account at all.",
+  a: "Yes, there is a free plan with no credit card required. Paid plans add more simulations, copilot messages and connectors; see /pricing. The free calculators linked on this page need no account at all.",
 };
 
 export const INDUSTRY_PAGES: readonly IndustryPage[] = [
@@ -118,7 +119,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "d2c",
     title: "AI CFO for D2C Brands in India: CM1/CM2/CM3, RTO and Runway | FounderConsole",
     description:
-      "Free AI CFO for Indian D2C and e-commerce brands. See CM1, CM2 and CM3 in ₹, what RTO and COD cost you, MER, and how much runway your inventory leaves. Connects Shopify, WooCommerce, Tally and Zoho Books. Free during public beta.",
+      "Free AI CFO for Indian D2C and e-commerce brands. See CM1, CM2 and CM3 in ₹, what RTO and COD cost you, MER, and how much runway your inventory leaves. Connects Shopify, WooCommerce, Tally and Zoho Books. Free plan, no credit card.",
     audience: "D2C and e-commerce brand founders",
     eyebrow: "For D2C & e-commerce brands",
     headline: "Know which orders actually make you money",
@@ -188,7 +189,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
         q: "Does it publish D2C margin benchmarks?",
         a: "No. We have not found a sourced benchmark for Indian D2C contribution margins that we are willing to quote, so we do not invent one. The calculator shows your own numbers and the arithmetic behind them.",
       },
-      FREE_DURING_BETA_FAQ,
+      FREE_PLAN_FAQ,
     ],
   },
   {
@@ -199,7 +200,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "general_saas",
     title: "AI CFO for SaaS Startups: MRR, NRR, Burn Multiple and Runway | FounderConsole",
     description:
-      "Free AI CFO for SaaS and B2B software startups. Track MRR, ARR, churn, net revenue retention, burn multiple and CAC payback from Stripe and QuickBooks, and simulate runway to your next round. Free during public beta.",
+      "Free AI CFO for SaaS and B2B software startups. Track MRR, ARR, churn, net revenue retention, burn multiple and CAC payback from Stripe and QuickBooks, and simulate runway to your next round. Free plan, no credit card.",
     audience: "SaaS and B2B software founders",
     eyebrow: "For SaaS & B2B software",
     headline: "Your burn multiple, NRR and runway, from live billing data",
@@ -264,7 +265,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
         q: "How much runway should a SaaS startup have?",
         a: "A common rule of thumb is 18 to 24 months after a seed round and 12 to 18 months after a Series A, and starting a raise with at least 9 to 12 months left. FounderConsole shows your runway as a range so you can see how much margin you really have.",
       },
-      FREE_DURING_BETA_FAQ,
+      FREE_PLAN_FAQ,
     ],
   },
   {
@@ -275,7 +276,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "marketplace",
     title: "Financial Planning for Marketplaces: GMV, Take Rate and Unit Economics | FounderConsole",
     description:
-      "Free AI CFO for marketplace and platform startups. Separate GMV from take rate and net revenue, price supply and demand incentives, and see contribution per order and runway before you expand. Free during public beta.",
+      "Free AI CFO for marketplace and platform startups. Separate GMV from take rate and net revenue, price supply and demand incentives, and see contribution per order and runway before you expand. Free plan, no credit card.",
     audience: "Marketplace and platform founders",
     eyebrow: "For marketplaces & platforms",
     headline: "GMV is not revenue. See what your marketplace keeps.",
@@ -338,7 +339,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
         q: "Can I model a change in commission or incentives?",
         a: "Yes. Scenarios let you change pricing, growth, costs and margins and compare the effect on burn and runway, and the Monte Carlo simulator shows the range of outcomes rather than a single forecast.",
       },
-      FREE_DURING_BETA_FAQ,
+      FREE_PLAN_FAQ,
     ],
   },
   {
@@ -349,7 +350,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "agency",
     title: "Cash Flow, Margin and Hiring Planning for Agencies | FounderConsole",
     description:
-      "Free AI CFO for agencies and services firms. Track utilisation and project margins, see the gap between invoicing and getting paid, and test whether you can afford the next hire. Connects QuickBooks, Xero, Zoho Books and FreshBooks. Free during public beta.",
+      "Free AI CFO for agencies and services firms. Track utilisation and project margins, see the gap between invoicing and getting paid, and test whether you can afford the next hire. Connects QuickBooks, Xero, Zoho Books and FreshBooks. Free plan, no credit card.",
     audience: "Agency and professional services founders",
     eyebrow: "For agencies & services firms",
     headline: "Keep the team busy and cash ahead of payroll",
@@ -411,7 +412,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
         q: "Which accounting tools does it connect to?",
         a: "QuickBooks, Xero, Zoho Books, FreshBooks, Wave and NetSuite, plus HubSpot and Pipedrive for pipeline and Gusto, Deel, Rippling and Keka for payroll. All 37 connectors are read-only. CSV upload and manual entry also work.",
       },
-      FREE_DURING_BETA_FAQ,
+      FREE_PLAN_FAQ,
     ],
   },
   {
@@ -422,7 +423,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "fintech",
     title: "Financial Planning for Fintech Startups: Unit Economics, Capital and Burn | FounderConsole",
     description:
-      "Free AI CFO for fintech startups. Track unit economics per user, LTV against CAC and CAC payback, keep your regulatory capital requirement in view, and stress-test runway with Monte Carlo simulation. Free during public beta.",
+      "Free AI CFO for fintech startups. Track unit economics per user, LTV against CAC and CAC payback, keep your regulatory capital requirement in view, and stress-test runway with Monte Carlo simulation. Free plan, no credit card.",
     audience: "Fintech founders",
     eyebrow: "For fintech founders",
     headline: "Per-user economics, capital buffers and burn in one model",
@@ -486,7 +487,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
         q: "How is a Monte Carlo stress test different from a downside case?",
         a: "A downside case is one set of bad assumptions you picked. Monte Carlo runs your model thousands of times with varied inputs and shows how often each outcome happens, so you see the P10 case as well as the median.",
       },
-      FREE_DURING_BETA_FAQ,
+      FREE_PLAN_FAQ,
     ],
   },
   {
@@ -497,7 +498,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
     onboardingIndustry: "startup",
     title: "Runway, Burn and Fundraising Planner for Early-Stage Startups | FounderConsole",
     description:
-      "Free AI CFO for early-stage and pre-revenue startups. Know your runway and burn, plan hires, and see your fundraising timeline as a range, not a guess. Monte Carlo simulation and an AI copilot. Free during public beta.",
+      "Free AI CFO for early-stage and pre-revenue startups. Know your runway and burn, plan hires, and see your fundraising timeline as a range, not a guess. Monte Carlo simulation and an AI copilot. Free plan, no credit card.",
     audience: "Early-stage and pre-revenue startup founders",
     eyebrow: "For early-stage & pre-revenue startups",
     headline: "Know how many months you have, and when to start raising",
@@ -560,7 +561,7 @@ export const INDUSTRY_PAGES: readonly IndustryPage[] = [
         q: "Do I need to connect anything to start?",
         a: "No. You can type in your numbers or upload a CSV. Connecting a bank or accounting tool through one of the 37 read-only connectors keeps them up to date.",
       },
-      FREE_DURING_BETA_FAQ,
+      FREE_PLAN_FAQ,
     ],
   },
 ];
@@ -613,7 +614,7 @@ export function industryJsonLd(page: IndustryPage): object[] {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Free during public beta — no credit card required",
+          description: "Free plan — no credit card required",
         },
         audience: { "@type": "BusinessAudience", audienceType: page.audience },
       },

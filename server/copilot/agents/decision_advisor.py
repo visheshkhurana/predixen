@@ -382,6 +382,9 @@ class DecisionAdvisorAgent(BaseAgent):
         fin = ckb.financials or {}
         truth = context.get("truth_scan") or {}
         metrics = truth.get("metrics") if isinstance(truth.get("metrics"), dict) else {}
+        # No invented ARPU (MRR / an assumed 150 customers) etc.
+        from server.truth.invented_metrics import strip_invented_unit_economics
+        metrics = strip_invented_unit_economics(metrics)
         # Tolerate a flat legacy payload as a last resort.
         sources = [fin, metrics, truth]
 

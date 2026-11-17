@@ -78,7 +78,7 @@ const landingFaqs = [
   },
   {
     q: "Is FounderConsole free?",
-    a: "Yes. Every feature is free during early access. No credit card is required, and no plan is charged yet. Paid tiers come later.",
+    a: "Yes, there is a free plan with no credit card required. Paid plans add more simulations, copilot messages and connectors; see /pricing.",
   },
   {
     q: "How does FounderConsole help with fundraising?",
@@ -275,7 +275,7 @@ function Hero() {
           transition={{ delay: 0.9 }}
           className="mt-4 text-xs text-muted-foreground"
         >
-          Free during early access · No credit card required
+          Free plan · No credit card required
         </motion.p>
       </motion.div>
 
@@ -800,7 +800,7 @@ export default function LandingPage() {
   useSEO({
     title: "FounderConsole — AI Decision Simulator for Founders",
     description:
-      "FounderConsole is the AI-powered decision simulator for startup founders and D2C brands. Runway, burn and contribution margin with Monte Carlo simulations, an AI copilot, fundraising CRM and 37 data connectors. Free during public beta.",
+      "FounderConsole is the AI-powered decision simulator for startup founders and D2C brands. Runway, burn and contribution margin with Monte Carlo simulations, an AI copilot, fundraising CRM and 37 data connectors. Free plan, no credit card.",
     path: "/",
     jsonLd: [
       {
@@ -829,7 +829,7 @@ export default function LandingPage() {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Free during early access. No credit card is required, and no plan is charged yet.",
+          description: "Free plan — no credit card required.",
         },
         featureList:
           "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
@@ -916,7 +916,7 @@ export default function LandingPage() {
                 </Button>
               </Magnetic>
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">Free during early access · No credit card required.</p>
+            <p className="mt-4 text-xs text-muted-foreground">Free plan · No credit card required.</p>
           </motion.div>
         </div>
       </section>

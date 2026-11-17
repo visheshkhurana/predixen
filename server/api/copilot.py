@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, field_validator
@@ -21,12 +22,23 @@ from server.copilot.trust import (
     merge_available_metrics,
 )
 from server.copilot.prompt_injection_defense import PromptInjectionDefense
+from server.copilot.llm_availability import (
+    AI_PARTIAL_NOTICE,
+    AI_UNAVAILABLE_NOTICE,
+    AI_BUDGET_NOTICE,
+    LLM_STATUS_PARTIAL,
+    LLM_STATUS_UNAVAILABLE,
+    TrackedLLMRouter,
+    downgrade_confidence_lines,
+    downgrade_decision_advisor,
+)
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
 from server.lib.privacy.pii_redactor import redact_text, detect_pii
 from server.api.simulations import extract_metric_value
 from server.utils.survival import format_survival_line
 
 router = APIRouter(tags=["copilot"])
+_copilot_logger = logging.getLogger(__name__)
 
 class SimulateDeltas(BaseModel):
     pricing_change_pct: float = 0
@@ -291,6 +303,13 @@ class CopilotChatResponse(BaseModel):
     web_research_citations: Optional[List[str]] = None
     web_research_type: Optional[str] = None
     data_gaps: Optional[List[str]] = None
+    # Set when no model answered (provider down, no key, 401, timeout) and the
+    # body is the rule-based fallback. The UI must show ai_notice and must not
+    # present the summary as a confident AI answer to the question.
+    ai_unavailable: bool = False
+    ai_notice: Optional[str] = None
+    # "ok" | "partial" | "unavailable" | "not_used"
+    llm_status: Optional[str] = None
 
 
 class CopilotFeedbackRequest(BaseModel):
@@ -312,6 +331,7 @@ class QuickChatResponse(BaseModel):
     response: str
     sources_used: List[str] = []
     suggested_followups: List[str] = []
+    ai_unavailable: bool = False
 
 
 QUICK_CHAT_SYSTEM_PROMPT = """You are FounderConsole AI, a world-class strategy consultant and financial advisor for startup founders and CXOs. You have access to the company's complete financial data, market intelligence, and simulation engine.
@@ -419,8 +439,17 @@ def _build_data_summary(context: Dict[str, Any]) -> str:
         metrics = ts.get("metrics", {})
         parts.append(f"\n--- Current Metrics (Truth Scan, computed {ts.get('computed_at', 'N/A')}) ---")
         for k, v in metrics.items():
-            if v is not None:
+            if v is not None and not str(k).startswith("_"):
                 parts.append(f"  {k}: {v}")
+
+    # Unit economics from real inputs only (founder record > D2C month > real
+    # truth-scan value). Unknowns are spelled out so the model doesn't fill
+    # them in with the truth scan's invented CAC / LTV / 150 customers.
+    if "unit_economics" in context:
+        from server.copilot.unit_economics import format_unit_economics_lines
+        parts.append("\n--- Unit Economics (only these values are known; never estimate the rest) ---")
+        for line in format_unit_economics_lines(context.get("unit_economics"), company.get("currency") or "USD"):
+            parts.append(f"  {line}")
 
     history = context.get("financial_history", [])
     if history:
@@ -591,10 +620,21 @@ def _guard_available_metrics(db: Session, company_id: int, truth_scan: Optional[
         ).order_by(FinancialRecord.period_end.desc()).first()
     except Exception:
         latest_record = None
-    return merge_available_metrics(
+    merged = merge_available_metrics(
         truth_scan.outputs_json if truth_scan else None,
         latest_record,
     )
+    # A CAC the founder entered on a D2C month (marketing spend / new
+    # customers) is verified too; without it the guard refused the real figure.
+    if not merged.get("cac"):
+        try:
+            from server.services.d2c_months import latest_d2c_cac
+            d2c = latest_d2c_cac(db, company_id)
+            if d2c and d2c.get("cac"):
+                merged["cac"] = d2c["cac"]
+        except Exception:
+            pass
+    return merged
 
 
 @router.post("/companies/{company_id}/quick-chat", response_model=QuickChatResponse)
@@ -726,6 +766,31 @@ async def copilot_quick_chat(
                 response=str(budget_err),
                 sources_used=[],
                 suggested_followups=[],
+            )
+        except Exception as llm_err:
+            # Provider down / no key / 401 / timeout: say so plainly instead of
+            # handing back anything that reads like an answer.
+            _logger.error(f"Quick chat LLM call failed for company {company_id}: {llm_err}")
+            return QuickChatResponse(
+                response=(
+                    "The AI assistant is unavailable right now, so I can't answer "
+                    "this question. Your numbers are still on the Dashboard. "
+                    "Try again in a few minutes."
+                ),
+                sources_used=[],
+                suggested_followups=[],
+                ai_unavailable=True,
+            )
+
+        if not (result.get("content") or "").strip():
+            return QuickChatResponse(
+                response=(
+                    "The AI assistant returned no answer this time. "
+                    "Try again in a few minutes."
+                ),
+                sources_used=[],
+                suggested_followups=[],
+                ai_unavailable=True,
             )
 
         response_text = result.get("content", "I wasn't able to generate a response. Please try again.")
@@ -977,6 +1042,9 @@ async def copilot_chat(
             next_questions=["Can you rephrase that more specifically?"],
             confidence="Low",
             intent_detected="timeout",
+            ai_unavailable=True,
+            ai_notice=AI_UNAVAILABLE_NOTICE,
+            llm_status=LLM_STATUS_UNAVAILABLE,
         )
     except HTTPException:
         raise
@@ -1059,8 +1127,11 @@ async def copilot_chat(
                 "Show me my current runway",
                 "Run a simulation cutting burn by 20%",
             ],
-            confidence="Medium",
+            confidence="Low",
             intent_detected="error_recovery_with_data",
+            ai_unavailable=True,
+            ai_notice=AI_UNAVAILABLE_NOTICE,
+            llm_status=LLM_STATUS_UNAVAILABLE,
         )
 
 
@@ -1281,10 +1352,27 @@ async def _copilot_chat_inner(
             sanitized_content = PromptInjectionDefense.sanitize_user_input(msg.content)
             conversation_context.append({"role": msg.role, "content": sanitized_content})
     
+    # Agents see the scan without its invented unit economics; real CAC / LTV
+    # (record > D2C month > real scan value) arrive as "unit_economics".
+    from server.truth.invented_metrics import strip_invented_from_outputs
+    from server.copilot.unit_economics import company_unit_economics
+    from server.models.financial import FinancialRecord as _FinancialRecord
+    _latest_record = db.query(_FinancialRecord).filter(
+        _FinancialRecord.company_id == company_id
+    ).order_by(_FinancialRecord.period_end.desc()).first()
+    unit_economics = company_unit_economics(
+        db,
+        company_id,
+        (truth_scan.outputs_json or {}).get("metrics", {}) if truth_scan else {},
+        _latest_record,
+    )
+
     context = {
         "has_document": False,
         "extracted_financials": None,
-        "truth_scan": truth_scan.outputs_json if truth_scan else None,
+        "truth_scan": strip_invented_from_outputs(truth_scan.outputs_json) if truth_scan else None,
+        "unit_economics": unit_economics,
+        "currency": company.currency or "USD",
         "mode": request.mode,
         "challenge_mode": request.challenge_mode,
         "investor_lens": request.investor_lens,
@@ -1300,12 +1388,15 @@ async def _copilot_chat_inner(
         "data_gaps": business_ctx.get("data_gaps", []),
     }
     
-    llm_router = get_llm_router(
+    # Wrap the router so we can tell afterwards whether any model actually
+    # answered. The agents swallow provider errors and fall back to rule-based
+    # output; without this the fallback was labelled high-confidence/VERIFIED.
+    llm_router = TrackedLLMRouter(get_llm_router(
         db_session=db,
         company_id=company_id,
         user_id=current_user.id,
         pii_mode=pii_mode
-    )
+    ))
     
     router = RouterAgent(llm_router=llm_router)
     response = await router.process(redacted_message, ckb, context)
@@ -1440,6 +1531,31 @@ async def _copilot_chat_inner(
         response.risks = []
         response.confidence = ConfidenceLevel.LOW
         provenance_response = None
+
+    llm_status = llm_router.status
+    ai_unavailable = llm_status == LLM_STATUS_UNAVAILABLE
+    ai_notice = None
+    decision_advisor_output = response.decision_advisor_output
+    if ai_unavailable:
+        _copilot_logger.warning(
+            "Copilot chat for company %s answered by rule-based fallback: no LLM call succeeded (%s)",
+            company_id, llm_router.last_error,
+        )
+        ai_notice = AI_BUDGET_NOTICE if getattr(llm_router, "budget_exceeded", False) else AI_UNAVAILABLE_NOTICE
+        response.confidence = ConfidenceLevel.LOW
+        if grounding_status_value == GroundingStatus.VERIFIED.value:
+            # The run behind the numbers is real, but nothing grounded an
+            # answer to the question, so the response itself is not verified.
+            grounding_status_value = GroundingStatus.UNVERIFIED.value
+        output["executive_summary"] = downgrade_confidence_lines(output.get("executive_summary", []))
+        decision_advisor_output = downgrade_decision_advisor(decision_advisor_output)
+    elif llm_status == LLM_STATUS_PARTIAL:
+        ai_notice = AI_PARTIAL_NOTICE
+        if response.confidence == ConfidenceLevel.HIGH:
+            response.confidence = ConfidenceLevel.MEDIUM
+        output["executive_summary"] = downgrade_confidence_lines(
+            output.get("executive_summary", []), label="MEDIUM (partly rule-based)"
+        )
     
     conv_state.clear_pending_clarification()
     conversation_store.save(conv_state)
@@ -1477,6 +1593,9 @@ async def _copilot_chat_inner(
     
     citations = generate_citations(truth_scan, output, scenario_id_for_citation, run_id_for_citation)
     highlighted_claims = generate_highlighted_claims(output, citations)
+    if ai_unavailable:
+        for claim in highlighted_claims:
+            claim["confidence"] = "low"
     
     conv_state.add_message("user", request.message, metadata={"web_research_used": web_research_used})
     summary_text = output.get("executive_summary", [""])[0] if output.get("executive_summary") else ""
@@ -1514,7 +1633,7 @@ async def _copilot_chat_inner(
         intent_detected=intent_detected,
         clarifications=clarifications,
         follow_up_actions=follow_up_actions,
-        decision_advisor=response.decision_advisor_output,
+        decision_advisor=decision_advisor_output,
         provenance=provenance_response,
         grounding_status=grounding_status_value,
         response_mode=response_mode if isinstance(response_mode, str) else response_mode.value,
@@ -1526,6 +1645,9 @@ async def _copilot_chat_inner(
         web_research_citations=web_research_citations,
         web_research_type=web_research_type,
         data_gaps=new_gaps,
+        ai_unavailable=ai_unavailable,
+        ai_notice=ai_notice,
+        llm_status=llm_status,
     )
 
 

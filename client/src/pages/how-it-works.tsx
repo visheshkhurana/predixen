@@ -110,7 +110,7 @@ export default function HowItWorksPage() {
           <Link href="/pricing" className="text-primary hover:underline" data-testid="link-hiw-pricing">
             pricing
           </Link>{" "}
-          (every feature is free during early access).
+          (there is a free plan, no credit card required).
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-hiw-auth">

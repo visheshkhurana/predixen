@@ -19,6 +19,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { FeedbackButton } from '@/components/FeedbackButton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, ReferenceLine
@@ -298,6 +299,10 @@ interface CopilotApiResponse {
   web_research_citations?: string[];
   web_research_type?: string;
   data_gaps?: string[];
+  /** True when no model answered and the body is the rule-based fallback. */
+  ai_unavailable?: boolean;
+  ai_notice?: string | null;
+  llm_status?: 'ok' | 'partial' | 'unavailable' | 'not_used' | null;
 }
 
 interface Message {
@@ -1098,8 +1103,8 @@ function StructuredResponseDisplay({ response, messageIndex, showSources, onTryP
       )}
       
       <div className="flex items-center flex-wrap gap-2 text-xs text-muted-foreground">
-        <Badge variant="outline" className={response.confidence === 'High' ? 'text-green-400 border-green-500/30' : response.confidence === 'Low' ? 'text-red-400 border-red-500/30' : 'text-yellow-400 border-yellow-500/30'} data-testid="badge-confidence">
-          {response.confidence} Confidence
+        <Badge variant="outline" className={response.confidence?.toLowerCase() === 'high' ? 'text-green-400 border-green-500/30' : response.confidence?.toLowerCase() === 'low' ? 'text-red-400 border-red-500/30' : 'text-yellow-400 border-yellow-500/30'} data-testid="badge-confidence">
+          {response.confidence ? response.confidence.charAt(0).toUpperCase() + response.confidence.slice(1).toLowerCase() : ''} Confidence{response.ai_unavailable ? ' (rule-based)' : ''}
         </Badge>
         {response.web_research_used && (
           <Badge variant="outline" className="text-purple-400 border-purple-500/30" data-testid="badge-web-research">
@@ -1634,8 +1639,9 @@ Type **help** for a full list of what I can do.`,
         let errorContent = '';
         let structuredFallback: CopilotApiResponse | undefined = undefined;
         const errMsg = error instanceof Error ? error.message : String(error ?? '');
-        if (errMsg.includes('401')) {
-          // Keep the saved draft for after sign-in, and put it back in the box.
+        if (errMsg.includes('401') || errMsg.includes('402')) {
+          // Keep the draft: after sign-in (401) or an upgrade (402) the
+          // founder can send the same question without retyping it.
           setInput(messageText);
         } else {
           clearCopilotDraft();
@@ -2007,6 +2013,21 @@ Type **help** for a full list of what I can do.`,
                   }`}
                   data-testid={`message-${message.role}-${i}`}
                 >
+                  {message.role === 'assistant' && message.structuredResponse?.ai_notice && (
+                    <Alert
+                      variant={message.structuredResponse.ai_unavailable ? 'destructive' : 'default'}
+                      className="mb-3"
+                      data-testid={`alert-ai-unavailable-${i}`}
+                    >
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle className="text-sm">
+                        {message.structuredResponse.ai_unavailable ? 'AI assistant unavailable' : 'Partial AI answer'}
+                      </AlertTitle>
+                      <AlertDescription className="text-xs">
+                        {message.structuredResponse.ai_notice}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {message.role === 'assistant' ? (
                     <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2">
                       <ReactMarkdown>{message.content}</ReactMarkdown>

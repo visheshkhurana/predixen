@@ -773,7 +773,7 @@ def process_termina_pdf(
             extraction_method = "vision"
         except Exception as e:
             logger.error(f"Vision extraction also failed: {e}")
-            raise ValueError(f"Could not extract data from PDF. Please ensure the file is a valid financial report. Error: {str(e)}")
+            raise ValueError("We couldn't read this PDF. Check that it opens on your computer and is a profit & loss or financial statement, or enter your numbers by hand.")
     
     if not metrics:
         raise ValueError("Failed to extract any metrics from the PDF.")

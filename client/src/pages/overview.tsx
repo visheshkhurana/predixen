@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { D2CProfitCard } from '@/components/D2CProfitCard';
+import { isGoodsIndustry } from '@/lib/d2cProfitSummary';
 import { useLocation, Link } from 'wouter';
 import { useSEO } from "@/lib/seo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,6 +77,7 @@ import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBenchmarkIndustries, useSeedSample } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct, formatRunway } from '@/lib/utils';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
+import { burnCardDisplay, briefingBurnSentence, briefingRunwaySentence, unitEconomicsAvailability } from '@/lib/overviewDisplay';
 import { useIndustryTerms } from '@/hooks/useIndustryTerms';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useToast } from '@/hooks/use-toast';
@@ -536,6 +539,11 @@ export default function OverviewPage() {
   const { metrics: sharedMetrics, isLoading: metricsLoading } = useFinancialMetrics();
   const isEmptyState = !truthLoading && !metricsLoading && (!sharedMetrics?.mrr && !sharedMetrics?.cashOnHand && !sharedMetrics?.totalMonthlyExpenses);
   const terms = useIndustryTerms();
+  // Goods businesses don't have recurring revenue; MRR/ARR read as SaaS jargon.
+  const goodsLabels = isGoodsIndustry(currentCompany?.industry);
+  const revenueLabel = goodsLabels
+    ? { short: 'Monthly Revenue', long: 'Net sales in the latest month', annualShort: 'Annual Run-Rate', annualLong: 'Monthly revenue × 12' }
+    : { short: 'MRR', long: 'Monthly Recurring Revenue', annualShort: 'ARR', annualLong: 'Annual Recurring Revenue' };
   const { scaleMultiplier, scale: companyScale, scaleLabel: companyScaleLabel } = useCurrency();
   const runTruthScanMutation = useRunTruthScan();
   const seedSampleMutation = useSeedSample();
@@ -649,8 +657,8 @@ export default function OverviewPage() {
 
   const getDrillDownData = useCallback((metricKey: string) => {
     const metricTitles: Record<string, string> = {
-      mrr: 'Monthly Recurring Revenue',
-      arr: 'Annual Recurring Revenue',
+      mrr: revenueLabel.long,
+      arr: goodsLabels ? 'Annual Run-Rate' : 'Annual Recurring Revenue',
       cash: 'Cash on Hand',
       burnRate: 'Monthly Burn Rate',
       cac: 'Customer Acquisition Cost',
@@ -692,7 +700,7 @@ export default function OverviewPage() {
       projections,
       format: (v: number) => formatCurrency(v),
     };
-  }, [assumptions, baseData]);
+  }, [assumptions, baseData, goodsLabels, revenueLabel.long]);
 
   const drillDownChartData = useMemo(() => {
     if (!selectedDrillDownMetric) return [];
@@ -879,26 +887,32 @@ export default function OverviewPage() {
         direction: growthBenchmark.direction,
         status: getBenchmarkStatus(assumptions.growthRate, growthBenchmark),
       },
-      { 
-        metric: 'Gross Margin', 
-        value: baseData.grossMargin, 
-        p25: grossMarginBenchmark.p25, 
-        p50: grossMarginBenchmark.p50, 
+      // The static fallback margins are software numbers (70%+). A goods
+      // business only gets a margin benchmark when a live one loaded.
+      ...(goodsLabels && (!getDynamicBenchmark('gross_margin') || (dynamicBenchmarks as any)?.is_fallback) ? [] : [{
+        metric: 'Gross Margin',
+        value: baseData.grossMargin,
+        p25: grossMarginBenchmark.p25,
+        p50: grossMarginBenchmark.p50,
         p75: grossMarginBenchmark.p75,
         unit: '%',
         direction: grossMarginBenchmark.direction,
         status: getBenchmarkStatus(baseData.grossMargin, grossMarginBenchmark),
-      },
-      { 
-        metric: 'LTV:CAC', 
-        value: baseData.ltvCacRatio, 
-        p25: ltvCacBenchmark.p25, 
-        p50: ltvCacBenchmark.p50, 
-        p75: ltvCacBenchmark.p75,
-        unit: 'x',
-        direction: ltvCacBenchmark.direction,
-        status: getBenchmarkStatus(baseData.ltvCacRatio, ltvCacBenchmark),
-      },
+      }]),
+      // Only benchmark LTV:CAC when both sides are real; a ratio of invented
+      // defaults is not a competitive position.
+      ...(unitEconomicsAvailability({ cac: baseData.cac, ltv: baseData.ltv, ltvCacRatio: baseData.ltvCacRatio, sources: sharedMetrics.sources }).ratioKnown
+        ? [{
+            metric: 'LTV:CAC',
+            value: baseData.ltvCacRatio,
+            p25: ltvCacBenchmark.p25,
+            p50: ltvCacBenchmark.p50,
+            p75: ltvCacBenchmark.p75,
+            unit: 'x',
+            direction: ltvCacBenchmark.direction,
+            status: getBenchmarkStatus(baseData.ltvCacRatio, ltvCacBenchmark),
+          }]
+        : []),
       { 
         metric: 'Runway', 
         value: baseData.runway, 
@@ -942,7 +956,7 @@ export default function OverviewPage() {
       },
     ];
     return rows;
-  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources, isRunwayProfitable]);
+  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources, isRunwayProfitable, goodsLabels]);
 
   const exportToCSV = useCallback(() => {
     const timestamp = new Date().toISOString();
@@ -1231,7 +1245,7 @@ export default function OverviewPage() {
 
   const kpiHealthData = [
     { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
-    { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
+    { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: goodsLabels ? '50%+' : '70%+', badRange: goodsLabels ? '< 40%' : '< 50%' } },
     { name: terms.churn.charAt(0).toUpperCase() + terms.churn.slice(1), value: sharedMetrics.sources['churnRate'] === 'estimated' || (!sharedMetrics.sources['churnRate'] && sharedMetrics.churnRatePct === 0) ? null : baseData.churnRate, metric: 'churnRate', tooltip: { formula: `Lost ${terms.customers} / Total ${terms.customers}`, goodRange: '< 3%', badRange: '> 7%' } },
     { name: 'LTV/CAC', value: baseData.ltvCacRatio > 0 ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
     { name: 'Growth Rate', value: isNaN(sharedMetrics.monthlyGrowthRate) ? null : sharedMetrics.monthlyGrowthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
@@ -1243,10 +1257,20 @@ export default function OverviewPage() {
   const briefingGreeting = briefingHour < 12 ? 'Good Morning' : briefingHour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   const briefingMrrGrowth = baseData.mrr > 0 ? ((baseData.mrr - (baseData.mrr / (1 + assumptions.growthRate / 100))) / (baseData.mrr / (1 + assumptions.growthRate / 100)) * 100) : 0;
-  const briefingBurnStatus = baseData.burnRate > 0
-    ? (baseData.burnRate < baseData.mrr ? 'below revenue — you are burning efficiently' : 'above revenue — monitor spending closely')
-    : 'AI-estimated';
-  const briefingRunwayShift = baseData.runway >= 18 ? 'comfortably above 18 months' : baseData.runway >= 12 ? 'in the safe zone at 12+ months' : baseData.runway >= 6 ? 'getting tight — consider extending' : 'critically low — immediate action needed';
+  // Burn and runway come from the founder's own figures: say what they are in
+  // plain words. A surplus is "not burning cash", never a negative burn.
+  const briefingBurnText = briefingBurnSentence(baseData.burnRate, baseData.mrr, formatCurrency);
+  const briefingRunwayText = briefingRunwaySentence(sharedMetrics.runway, (m) => formatRunway(m));
+  const burnCard = burnCardDisplay(baseData.burnRate);
+  // CAC / LTV / LTV:CAC are only shown when they come from real inputs. With no
+  // marketing spend or customer data the truth scan fills them from defaults
+  // and flags them estimated — those are N/A here, not "AI Estimated" facts.
+  const unitEconomics = unitEconomicsAvailability({
+    cac: baseData.cac,
+    ltv: baseData.ltv,
+    ltvCacRatio: baseData.ltvCacRatio,
+    sources: sharedMetrics.sources,
+  });
   const briefingCriticalCount = riskAlerts.filter(a => a.type === 'critical').length;
   const briefingWarningCount = riskAlerts.filter(a => a.type === 'warning').length;
 
@@ -1267,7 +1291,7 @@ export default function OverviewPage() {
             <h1 className="text-3xl font-bold tracking-tight" data-testid="text-company-name">{currentCompany.name}</h1>
             <p className="text-sm text-muted-foreground/70">Financial Intelligence Overview</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {getConfidenceBadge()}
             <BoardExportButton companyId={currentCompany.id} />
             <Button
@@ -1291,7 +1315,12 @@ export default function OverviewPage() {
         isSample={currentCompany.is_sample}
         scan={truthScan ?? null}
         companyId={currentCompany.id}
+        industry={currentCompany.industry}
       />
+
+      {!currentCompany.is_sample && isGoodsIndustry(currentCompany.industry) && (
+        <D2CProfitCard companyId={currentCompany.id} currency={(currentCompany.currency || 'USD').toUpperCase()} />
+      )}
 
       {isSampleCompany(currentCompany) && (
         <SampleInsightExplainer
@@ -1341,12 +1370,10 @@ export default function OverviewPage() {
                 <p className="text-[11px] text-muted-foreground/60 font-mono" data-testid="text-briefing-date">{briefingDate}</p>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-briefing-summary">
-                MRR is at <span className="font-medium text-foreground">{formatCurrency(baseData.mrr)}</span> with{' '}
+                {revenueLabel.short} is at <span className="font-medium text-foreground">{formatCurrency(baseData.mrr)}</span> with{' '}
                 <span className="font-medium text-foreground">{safeToFixed(briefingMrrGrowth, 1)}%</span> growth.
-                Burn is {briefingBurnStatus} at{' '}
-                <span className="font-medium text-foreground">{formatCurrency(baseData.burnRate)}/mo</span>.
-                Runway is {briefingRunwayShift} at{' '}
-                <span className="font-medium text-foreground">{runwayText(baseData.runway)}</span>.
+                {' '}{briefingBurnText}{' '}
+                {briefingRunwayText}
                 {briefingCriticalCount > 0 && (
                   <span className="text-red-400 font-medium"> {briefingCriticalCount} critical alert{briefingCriticalCount > 1 ? 's' : ''} detected.</span>
                 )}
@@ -1420,9 +1447,9 @@ export default function OverviewPage() {
             <div className="space-y-6">
               <StaggerChildren className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" staggerDelay={0.06}>
                 <StaggerItem><MetricCard
-                  title="MRR"
+                  title={revenueLabel.short}
                   value={formatCurrency(baseData.mrr)}
-                  subtitle="Monthly Recurring Revenue"
+                  subtitle={revenueLabel.long}
                   trend="up"
                   trendValue={formatSignedPct(assumptions.growthRate)}
                   metricSource={sharedMetrics.sources['mrr']}
@@ -1430,7 +1457,7 @@ export default function OverviewPage() {
                   testId="metric-mrr"
                   onClick={() => setSelectedDrillDownMetric('mrr')}
                   provenance={{
-                    definition: 'Monthly Recurring Revenue from your validated financial data.',
+                    definition: `${revenueLabel.long} from your validated financial data.`,
                     source: 'truth_scan',
                     timestamp: truthScan?.computed_at,
                     confidence: truthScan?.data_confidence_score,
@@ -1453,33 +1480,38 @@ export default function OverviewPage() {
                   }}
                 /></StaggerItem>
                 <StaggerItem><MetricCard
-                  title="Burn Rate"
-                  value={formatCurrency(baseData.burnRate)}
-                  subtitle="/month"
+                  title={burnCard.title}
+                  value={formatCurrency(burnCard.amount)}
+                  subtitle={burnCard.subtitle}
+                  variant={burnCard.variant}
                   metricSource={sharedMetrics.sources['netBurn']}
                   lastUpdated={truthScan?.computed_at}
                   onClick={() => setSelectedDrillDownMetric('burnRate')}
                   testId="metric-burn-rate"
                   provenance={{
-                    definition: 'Monthly cash consumption. Negative = burning cash, Positive = cash positive.',
-                    formula: 'Revenue - Total Expenses',
+                    definition: burnCard.isSurplus
+                      ? 'Revenue exceeds total expenses, so the company is not burning cash. Computed from your own figures.'
+                      : 'Monthly cash consumption: total expenses minus revenue. Computed from your own figures.',
+                    formula: burnCard.isSurplus ? 'Revenue - Total Expenses' : 'Total Expenses - Revenue',
                     source: 'truth_scan',
                     timestamp: truthScan?.computed_at,
                     confidence: truthScan?.data_confidence_score,
                   }}
                 /></StaggerItem>
                 <StaggerItem><MetricCard
-                  title="ARR"
+                  title={revenueLabel.annualShort}
                   value={formatCurrency(baseData.arr)}
-                  subtitle="Annual Recurring Revenue"
+                  subtitle={revenueLabel.annualLong}
                   trend="up"
                   metricSource={sharedMetrics.sources['arr']}
                   lastUpdated={truthScan?.computed_at}
                   testId="metric-arr"
                   onClick={() => setSelectedDrillDownMetric('arr')}
                   provenance={{
-                    definition: 'Annual Recurring Revenue - your MRR multiplied by 12.',
-                    formula: 'MRR × 12',
+                    definition: goodsLabels
+                      ? 'Annual run-rate: your latest monthly revenue multiplied by 12.'
+                      : 'Annual Recurring Revenue - your MRR multiplied by 12.',
+                    formula: goodsLabels ? 'Monthly revenue × 12' : 'MRR × 12',
                     source: 'computed',
                     timestamp: truthScan?.computed_at,
                     confidence: truthScan?.data_confidence_score,
@@ -1490,9 +1522,9 @@ export default function OverviewPage() {
               <StaggerChildren className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" staggerDelay={0.04} initialDelay={0.2}>
                 <StaggerItem><MetricCard
                   title="CAC"
-                  value={baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
-                  subtitle={baseData.cac > 0 ? "Cost to Acquire" : undefined}
-                  metricSource={sharedMetrics.sources['cac']}
+                  value={unitEconomics.cacKnown ? formatCurrency(baseData.cac) : 'N/A'}
+                  subtitle={unitEconomics.cacKnown ? "Cost to Acquire" : 'needs marketing spend & new customers'}
+                  metricSource={unitEconomics.cacKnown ? sharedMetrics.sources['cac'] : undefined}
                   lastUpdated={truthScan?.computed_at}
                   testId="metric-cac"
                   onClick={() => setSelectedDrillDownMetric('cac')}
@@ -1506,10 +1538,12 @@ export default function OverviewPage() {
                 /></StaggerItem>
                 <StaggerItem><MetricCard
                   title="LTV"
-                  value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
-                  subtitle={baseData.ltvCacRatio > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
-                  variant={baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
-                  metricSource={sharedMetrics.sources['ltv']}
+                  value={unitEconomics.ltvKnown ? formatCurrency(baseData.ltv) : 'N/A'}
+                  subtitle={unitEconomics.ratioKnown
+                    ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}`
+                    : unitEconomics.ltvKnown ? undefined : `needs ${terms.customers} data`}
+                  variant={unitEconomics.ratioKnown ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
+                  metricSource={unitEconomics.ltvKnown ? sharedMetrics.sources['ltv'] : undefined}
                   lastUpdated={truthScan?.computed_at}
                   testId="metric-ltv"
                   onClick={() => setSelectedDrillDownMetric('ltv')}
@@ -1584,11 +1618,7 @@ export default function OverviewPage() {
                       {/* Both inputs (CAC, LTV) fall back to invented defaults when
                           there is no customer data — don't present the ratio as fact. */}
                       {(() => {
-                        const ratioIsReal =
-                          baseData.ltvCacRatio > 0 &&
-                          sharedMetrics.sources['ltvCacRatio'] !== 'estimated' &&
-                          sharedMetrics.sources['cac'] !== 'estimated' &&
-                          sharedMetrics.sources['ltv'] !== 'estimated';
+                        const ratioIsReal = unitEconomics.ratioKnown;
                         return (
                           <span className={`text-2xl font-semibold font-mono tracking-tight leading-none ${
                             ratioIsReal ? (baseData.ltvCacRatio >= 3 ? 'text-emerald-400' : baseData.ltvCacRatio >= 2 ? 'text-amber-400' : 'text-red-400') : 'text-muted-foreground'
@@ -1599,9 +1629,7 @@ export default function OverviewPage() {
                       })()}
                     </div>
                     <p className="text-[11px] text-muted-foreground/70 mt-1.5">
-                      {sharedMetrics.sources['cac'] === 'estimated' || sharedMetrics.sources['ltv'] === 'estimated'
-                        ? `needs ${terms.customers} data`
-                        : 'unit economics'}
+                      {unitEconomics.ratioKnown ? 'unit economics' : `needs ${terms.customers} data`}
                     </p>
                   </div>
                 </StaggerItem>
@@ -1805,7 +1833,7 @@ export default function OverviewPage() {
       {/* Goals widget removed: it showed hardcoded targets and there is no goals backend. */}
 
       <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm" data-testid="segment-analysis-section">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
           <div className="space-y-1">
             <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
               <Scale className="h-4 w-4 text-primary" />
@@ -1940,7 +1968,8 @@ export default function OverviewPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-sm font-medium text-muted-foreground">{item.name}</span>
-                      {source && source !== 'reported' && (
+                      {/* No value shown (N/A) means nothing to badge — not an "AI estimate". */}
+                      {source && source !== 'reported' && item.value != null && (
                         <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid={`badge-source-${item.metric}`}>
                           {source === 'computed' ? 'Derived' : 'AI Est.'}
                         </Badge>
@@ -1967,6 +1996,8 @@ export default function OverviewPage() {
                     <span className="text-2xl font-bold">
                       {item.metric === 'runway' && isRunwayProfitable
                         ? 'Profitable'
+                        : item.value == null
+                        ? 'N/A'
                         : item.metric === 'runway' || item.metric === 'paybackPeriod'
                         ? `${safeToFixed(item.value)} mo`
                         : item.metric === 'ltv_cac' || item.metric === 'burnMultiple'
@@ -2102,8 +2133,10 @@ export default function OverviewPage() {
                 </Badge>
               )}
             </div>
-            <CardDescription>
-              Real-time benchmarks from industry reports
+            <CardDescription data-testid="text-benchmark-description">
+              {(dynamicBenchmarks as any)?.is_fallback
+                ? ((dynamicBenchmarks as any)?.note || 'Live benchmarks are unavailable right now; these are generic defaults, not figures for your industry.')
+                : 'Real-time benchmarks from industry reports'}
             </CardDescription>
             <div className="flex items-center gap-2 mt-2">
               <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>

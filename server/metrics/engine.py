@@ -291,7 +291,16 @@ class MetricEngine:
             ts_metrics = {}
             if truth_scan and truth_scan.outputs_json:
                 ts_metrics = truth_scan.outputs_json.get("metrics", {})
-            
+
+            # CAC / LTV / LTV:CAC per month under the shared rule (same as the
+            # realtime history): this record's values, then the D2C month for
+            # the same period, then real truth-scan values. Invented truth-scan
+            # defaults never appear; unknown is None (no point), not 0.
+            from server.services.d2c_months import d2c_cac_by_month
+            from server.truth.invented_metrics import resolve_unit_economics
+            needs_unit_econ = snapshot_key in self._UNIT_ECONOMICS_KEYS
+            d2c_cacs = d2c_cac_by_month(self.db, company_id) if needs_unit_econ else {}
+
             result = []
             for record in reversed(financials):
                 revenue = record.revenue or 0
@@ -316,10 +325,16 @@ class MetricEngine:
                     "headcount": headcount,
                     "customers": record.customers,
                     "churn_rate": self._ts_metric_val(ts_metrics, "churn_rate", None),
-                    "cac": self._ts_metric_val(ts_metrics, "cac", 0),
-                    "ltv": self._ts_metric_val(ts_metrics, "ltv", 0),
-                    "ltv_cac_ratio": self._ts_metric_val(ts_metrics, "ltv_cac_ratio", 0),
                 }
+                if needs_unit_econ:
+                    record_date = record.period_start or record.period_end
+                    record_month = record_date.replace(day=1) if record_date else None
+                    unit_econ = resolve_unit_economics(
+                        ts_metrics, record,
+                        d2c_cacs.get(record_month) if record_month else None,
+                    )
+                    for key in self._UNIT_ECONOMICS_KEYS:
+                        snapshot_row[key] = unit_econ[key] or None
                 
                 val = snapshot_row.get(snapshot_key)
                 if val is not None:
@@ -362,6 +377,9 @@ class MetricEngine:
         "net_burn": "net_burn",
     }
 
+    # Snapshot keys whose 0 means "unknown" (resolve_unit_economics), not zero.
+    _UNIT_ECONOMICS_KEYS = ("cac", "ltv", "ltv_cac_ratio")
+
     def _get_snapshot_value(self, company_id: int, metric_key: str) -> Optional[float]:
         """Fall back to real-time KPI snapshot for a metric value."""
         from server.api.realtime import get_company_kpi_metrics
@@ -371,7 +389,14 @@ class MetricEngine:
         try:
             snapshot = get_company_kpi_metrics(company_id, self.db)
             val = snapshot.get(snapshot_key)
-            return float(val) if val is not None else None
+            if val is None:
+                return None
+            val = float(val)
+            # The realtime snapshot reports unknown CAC / LTV as 0.0; serving
+            # that as a value would show "CAC 0" instead of "not available".
+            if snapshot_key in self._UNIT_ECONOMICS_KEYS and val <= 0:
+                return None
+            return val
         except Exception:
             return None
 

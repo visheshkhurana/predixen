@@ -208,13 +208,32 @@ test("/faq pricing answers: real Starter price, beta wording when billing is off
   assert.ok(offBeta.includes("₹3,000") && !offBeta.includes("$29"), "beta /pricing shows the real Starter price");
 });
 
-test("landing prerender: beta FAQ unchanged when billing is off, real Starter price when live", () => {
+test("landing prerender: free-plan FAQ when billing is off, real Starter price when live", () => {
   const off = textOf(withBillingEnv(null, () => injectSEO(SHELL, "/")));
   const on = textOf(withBillingEnv(LIVE, () => injectSEO(SHELL, "/")));
   for (const text of [off, on]) {
     for (const old of ["$29", "$49", "$99"]) assert.ok(!text.includes(old), old);
+    // Paid plans went live 2026-11-15; the static copy must be true in both states.
+    assert.doesNotMatch(text, /public beta/i);
+    assert.doesNotMatch(text, /no plan is charged yet/i);
   }
-  assert.match(off, /All features are free during the public beta/);
+  assert.match(off, /there is a free plan with no credit card required/);
+  assert.ok(!off.includes("₹3,000"), "billing off: the landing FAQ names no price");
   assert.ok(on.includes("₹3,000"));
-  assert.doesNotMatch(on, /All features are free during the public beta/);
+});
+
+test("static marketing prerenders never claim the public beta, in either billing state", () => {
+  // /pricing and /faq are billing-gated and keep their payments-off beta copy;
+  // every other page must say something true whether payments are on or off.
+  for (const env of [null, LIVE]) {
+    for (const path of ["/", "/for/d2c", "/for/saas", "/signup", "/product", "/features", "/how-it-works", "/use-cases", "/customers", "/compare"]) {
+      const html = withBillingEnv(env, () => injectSEO(SHELL, path));
+      assert.doesNotMatch(html, /public beta/i, `${path}: claims the public beta`);
+      assert.doesNotMatch(html, /no plan is charged yet/i, `${path}: claims no plan is charged`);
+      assert.doesNotMatch(html, /free during early access|every feature is free/i, `${path}: claims every feature is free`);
+    }
+  }
+  const d2c = textOf(injectSEO(SHELL, "/for/d2c"));
+  assert.match(d2c, /free plan/i);
+  assert.match(d2c, /no credit card/i);
 });

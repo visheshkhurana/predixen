@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, lazy, Suspense, type ReactNode } from "react";
+import { PlanLimitDialog } from "@/components/PlanLimitDialog";
 const ReactMarkdownLazy = lazy(() => import("react-markdown").then(m => ({ default: m.default })));
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient, apiRequest } from "./lib/queryClient";
@@ -1244,6 +1245,7 @@ function App() {
               <Router />
             </AppLayout>
             <Toaster />
+            <PlanLimitDialog />
           </TooltipProvider>
         </ThemeProvider>
       </QueryClientProvider>

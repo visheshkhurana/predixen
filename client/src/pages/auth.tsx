@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { onboardingIndustryPrefill, readStoredIndustry } from '@/lib/industryPicker';
 import { useLocation, type RouteComponentProps } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -376,12 +377,24 @@ export default function AuthPage({
     window.location.assign(`/api/auth/${provider}/start${qs ? `?${qs}` : ''}`);
   };
 
-  const capabilities = [
-    { icon: BarChart3, title: 'Monte Carlo Simulations', desc: 'Run thousands of probabilistic scenarios on real company data' },
-    { icon: Brain, title: 'AI Decision Copilot', desc: 'Ask strategic questions and get data-backed recommendations' },
-    { icon: Target, title: 'Scenario Modeling', desc: 'Compare hiring plans, pricing changes, and fundraising strategies' },
-    { icon: Shield, title: 'Investor-Grade Diligence', desc: 'Truth-scanned metrics with full audit trail and provenance' },
-  ];
+  // A founder arriving from /for/d2c (or who picked D2C on the homepage)
+  // should see the D2C promise they clicked, not the generic SaaS pitch.
+  const signupIndustry =
+    typeof window === 'undefined' ? '' : onboardingIndustryPrefill(window.location.search, readStoredIndustry());
+  const isGoodsSignup = ['d2c', 'ecommerce', 'food'].includes(signupIndustry);
+  const capabilities = isGoodsSignup
+    ? [
+        { icon: BarChart3, title: 'Profit per order', desc: 'CM1, CM2 and CM3 after product cost, shipping, payments and ads' },
+        { icon: Target, title: 'RTO and COD, costed', desc: 'What returns-to-origin and cash on delivery really cost you' },
+        { icon: Brain, title: 'Ad efficiency', desc: "MER from your store's revenue, next to what Meta reports" },
+        { icon: Shield, title: 'Runway after inventory', desc: 'Months of cash left once the next stock buy is paid for' },
+      ]
+    : [
+        { icon: BarChart3, title: 'Monte Carlo Simulations', desc: 'Run thousands of probabilistic scenarios on real company data' },
+        { icon: Brain, title: 'AI Decision Copilot', desc: 'Ask strategic questions and get data-backed recommendations' },
+        { icon: Target, title: 'Scenario Modeling', desc: 'Compare hiring plans, pricing changes, and fundraising strategies' },
+        { icon: Shield, title: 'Investor-Grade Diligence', desc: 'Truth-scanned metrics with full audit trail and provenance' },
+      ];
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -405,18 +418,20 @@ export default function AuthPage({
             <div className="max-w-xl">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-medium text-blue-300 tracking-wide uppercase">Now in Public Beta</span>
+                <span className="text-xs font-medium text-blue-300 tracking-wide uppercase">Free plan available</span>
               </div>
               
               <h1 className="text-4xl xl:text-5xl font-bold text-white leading-[1.1] tracking-tight mb-5">
-                Financial Intelligence
+                {isGoodsSignup ? 'Know which orders' : 'Financial Intelligence'}
                 <br />
                 <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-violet-400 bg-clip-text text-transparent">
-                  for Founders
+                  {isGoodsSignup ? 'actually make you money' : 'for Founders'}
                 </span>
               </h1>
               <p className="text-base xl:text-lg text-white/50 leading-relaxed max-w-md">
-                Simulate decisions before you execute them. Monte Carlo-powered scenario analysis with AI-driven recommendations.
+                {isGoodsSignup
+                  ? 'Contribution margin, RTO, ad efficiency and runway for your brand, in your currency.'
+                  : 'Simulate decisions before you execute them. Monte Carlo-powered scenario analysis with AI-driven recommendations.'}
               </p>
             </div>
           </div>

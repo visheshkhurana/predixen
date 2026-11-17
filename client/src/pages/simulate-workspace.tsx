@@ -1,4 +1,5 @@
 import { currencySymbol } from '@/lib/money';
+import { announcePlanLimit } from '@/lib/planLimit';
 import { formatCurrencyAbbrev, formatCurrencyFull } from '@/lib/utils';
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useSEO } from "@/lib/seo";
@@ -1443,7 +1444,12 @@ function AgentSimulationConsole() {
 
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(errText || `HTTP ${res.status}`);
+        let detail: any = null;
+        try { detail = JSON.parse(errText)?.detail ?? null; } catch { /* not JSON */ }
+        // A Free founder at the monthly limit gets the upgrade dialog, not raw JSON.
+        announcePlanLimit(res.status, detail);
+        const message = (detail && typeof detail === 'object' && detail.message) || (typeof detail === 'string' && detail) || errText;
+        throw new Error(message || `HTTP ${res.status}`);
       }
 
       const reader = res.body?.getReader();

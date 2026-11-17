@@ -684,6 +684,11 @@ def merge_available_metrics(
     the latest financial record filling the gaps. Before this, only the truth
     scan counted, so a company with imported records but no scan had correct
     figures refused."""
+    if isinstance(truth_scan_outputs, dict) and isinstance(truth_scan_outputs.get("metrics"), dict):
+        # Also drops unit economics from scans saved before _estimated_metrics
+        # existed (see server/truth/invented_metrics.py).
+        from server.truth.invented_metrics import strip_invented_from_outputs
+        truth_scan_outputs = strip_invented_from_outputs(truth_scan_outputs)
     merged = extract_available_metrics(truth_scan_outputs)
     for key, value in metrics_from_financial_record(financial_record).items():
         if not metric_is_present(merged, key):

@@ -19,6 +19,7 @@ from server.models.financial import FinancialRecord
 from server.ingest.pdf_extractor import process_termina_pdf, extract_text_from_pdf
 from server.ingest.excel_extractor import process_termina_excel
 from server.core.units import gross_margin_pct as gross_margin_pct_of
+from server.truth.invented_metrics import strip_invented_unit_economics
 
 logger = logging.getLogger(__name__)
 
@@ -734,6 +735,9 @@ async def get_computed_metrics(
         oj = latest_ts.outputs_json
         if isinstance(oj, dict):
             ts_metrics = oj.get('metrics', oj.get('computed_metrics', {}))
+    # Never pass on CAC / LTV / customers the truth scan invented; values from
+    # the founder's own FinancialRecord are read first below and are unaffected.
+    ts_metrics = strip_invented_unit_economics(ts_metrics)
 
     def fr_val(attr, default=0):
         if latest_record is None:
@@ -807,11 +811,17 @@ async def get_computed_metrics(
     gross_margin_pct = gross_margin_pct_of(gross_margin_raw) or 0.0
     gross_margin_dec = gross_margin_pct / 100
 
-    ltv = fr_val('ltv') or ts_val('ltv', 0)
-    cac = fr_val('cac') or ts_val('cac', 0)
-    ltv_cac_ratio = fr_val('ltv_cac_ratio') or ts_val('ltv_cac_ratio', 0)
-    if ltv_cac_ratio <= 0 and ltv > 0 and cac > 0:
-        ltv_cac_ratio = ltv / cac
+    # CAC / LTV / LTV:CAC: the founder's record first, then CAC from the newest
+    # D2C month with marketing spend and new customers (same formula as /profit),
+    # then real truth-scan values. Shared with the board export and realtime.
+    from server.services.d2c_months import latest_d2c_cac
+    from server.truth.invented_metrics import resolve_unit_economics
+    unit_econ = resolve_unit_economics(
+        ts_metrics, latest_record, latest_d2c_cac(db, company_id)
+    )
+    ltv = unit_econ['ltv']
+    cac = unit_econ['cac']
+    ltv_cac_ratio = unit_econ['ltv_cac_ratio']
 
     customers = int(fr_val('customers')) or int(ts_val('customer_count', 0) or ts_val('total_customers', 0) or 0)
     headcount = int(fr_val('headcount')) or int(ts_val('headcount', 0) or 0)
@@ -843,6 +853,11 @@ async def get_computed_metrics(
         'ltv': ltv,
         'cac': cac,
         'ltvCacRatio': round(ltv_cac_ratio, 2) if ltv_cac_ratio else 0,
+        # Where CAC came from: 'reported' (financial record), 'd2c_month'
+        # (marketing spend / new customers for cacPeriod), 'truth_scan', or
+        # None when it is not known.
+        'cacSource': unit_econ['cac_source'],
+        'cacPeriod': unit_econ['cac_period'],
         'totalCustomers': customers,
         'headcount': headcount,
         'arpu': arpu,

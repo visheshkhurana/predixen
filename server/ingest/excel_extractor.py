@@ -886,7 +886,7 @@ def process_termina_excel(
                 raise
             logger.error(f"AI extraction also failed: {e}")
             if not metrics:
-                raise ValueError(f"Could not extract data from Excel. Please ensure the file is a valid financial report. Error: {str(e)}")
+                raise ValueError("We couldn't read this spreadsheet. Save it as .xlsx or .csv with line items in the first column and months across the top, or enter your numbers by hand.")
     
     if not metrics:
         raise ValueError("No financial metrics could be extracted from the spreadsheet.")

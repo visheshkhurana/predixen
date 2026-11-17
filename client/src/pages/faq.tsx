@@ -64,7 +64,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       {
         question: "How many simulations can I run?",
         answer:
-          "Each Monte Carlo simulation runs 100 to 10,000 iterations depending on your settings. While we're in early access you can run unlimited scenarios, compare them side by side, and version your work over time.",
+          "Each Monte Carlo simulation runs 100 to 10,000 iterations depending on your settings. You can compare scenarios side by side and version your work over time. The free plan includes 3 simulations a month; paid plans add more (see /pricing).",
       },
     ],
   },

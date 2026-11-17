@@ -223,20 +223,24 @@ test("no picker markup in the server-rendered HTML a crawler receives", () => {
 test("no planned prices, retired offers, stale counts or invented social proof", () => {
   const forbidden = [
     "$29", "$49", "$99", "30-day", "Start Free Trial", "free trial",
-    "37 data connector", "37 connectors", "37 read-only", "37 integrations",
+    "36 data connector", "36 connectors", "36 read-only", "36 integrations",
     "trusted by", "Trusted by", "testimonial", "loved by", "used by",
   ];
   const copy = JSON.stringify(INDUSTRY_PAGES);
   for (const phrase of forbidden) assert.ok(!copy.includes(phrase), `config contains ${phrase}`);
-  // Any connector count stated is 36.
+  // Any connector count stated is 37.
   for (const m of copy.matchAll(/(\d+)\s+(?:read-only\s+)?(?:data\s+)?connectors/g)) {
-    assert.equal(m[1], "36", `connector count ${m[0]}`);
+    assert.equal(m[1], "37", `connector count ${m[0]}`);
   }
   // No "N founders/brands/companies/customers use ..." style counts.
   assert.doesNotMatch(copy, /\b\d[\d,.]*\+?\s*(founders|brands|companies|customers|startups|teams)\b/i);
-  // Every page states the free beta.
+  // Every page states the Free plan (true with payments on or off) and none
+  // still claims the public beta, which ended when paid plans went live.
   for (const p of INDUSTRY_PAGES) {
-    assert.ok(/free during (the )?public beta/i.test(JSON.stringify(p)), `${p.slug} must state free during beta`);
+    const json = JSON.stringify(p);
+    assert.ok(/free plan/i.test(json), `${p.slug} must state the free plan`);
+    assert.ok(/no credit card/i.test(json), `${p.slug} must say no credit card`);
+    assert.ok(!/public beta/i.test(json), `${p.slug} still claims the public beta`);
   }
   // The config file itself (comments included) carries no planned price.
   assert.ok(!CONFIG_SOURCE.includes("$29"));

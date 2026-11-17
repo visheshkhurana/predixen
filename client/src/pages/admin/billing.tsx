@@ -47,6 +47,17 @@ export default function AdminBilling() {
     },
   });
 
+  // The banner said "free beta, no billing" even with Razorpay live. Ask the
+  // same endpoint /pricing uses.
+  const { data: plansInfo } = useQuery<{ payments_enabled?: boolean; provider?: string }>({
+    queryKey: ['/api/billing/plans', 'admin-banner'],
+    queryFn: async () => {
+      const res = await fetch('/api/billing/plans', { credentials: 'include' });
+      return res.ok ? res.json() : {};
+    },
+  });
+  const paymentsLive = !!plansInfo?.payments_enabled;
+
   const totalMRR = subscriptions?.reduce((sum, s) => sum + (s.status === 'active' ? s.monthly_price : 0), 0) ?? 0;
 
   return (
@@ -56,8 +67,14 @@ export default function AdminBilling() {
           <DollarSign className="h-4 w-4 text-emerald-500" />
         </div>
         <div>
-          <p className="font-medium text-emerald-500">Free Beta — All Features Unlocked</p>
-          <p className="text-sm text-muted-foreground">All features are free for early users during our public beta. No billing required.</p>
+          <p className="font-medium text-emerald-500">
+            {paymentsLive ? `Payments live${plansInfo?.provider ? ` (${plansInfo.provider})` : ''}` : 'Payments off: every feature is free'}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {paymentsLive
+              ? 'Paid plans are on sale and Free-plan limits are enforced.'
+              : 'No billing provider is configured, so nothing is charged and plan limits are not enforced.'}
+          </p>
         </div>
       </div>
 

@@ -97,7 +97,7 @@ class MarketingExperiment:
     budget_usd: float
     duration_weeks: int
     expected_leads: int
-    expected_cac: float
+    expected_cac: Optional[float]
     hypothesis: str
     success_metric: str
 
@@ -235,7 +235,7 @@ class OperationsAgent(BaseAgent):
         self, ckb: CompanyKnowledgeBase, context: Dict[str, Any]
     ) -> Dict[str, Any]:
         fin = ckb.financials or {}
-        truth = context.get("truth_scan", {})
+        truth = context.get("truth_scan") or {}
         return {
             "revenue": fin.get("revenue", truth.get("revenue", 0)),
             "monthly_burn": fin.get("monthly_burn", truth.get("monthly_burn", 50000)),
@@ -244,8 +244,10 @@ class OperationsAgent(BaseAgent):
             "headcount": fin.get("headcount", truth.get("headcount", 10)),
             "payroll": fin.get("payroll", truth.get("payroll_expense", 30000)),
             "growth_rate": fin.get("growth_rate", truth.get("revenue_growth_pct", 10)),
-            "cac": fin.get("cac", truth.get("cac", 500)),
-            "arpu": fin.get("arpu", truth.get("arpu", 100)),
+            # Real CAC only (record > D2C month > real truth scan), never the
+            # old invented 500 default. None = unknown.
+            "cac": fin.get("cac") or ((context.get("unit_economics") or {}).get("cac")),
+            "arpu": fin.get("arpu") or ((context.get("unit_economics") or {}).get("arpu")),
         }
 
     def _generate_tasks(
@@ -434,7 +436,7 @@ class OperationsAgent(BaseAgent):
         if not any(kw in query_lower for kw in ["market", "growth", "acquisition", "leads", "campaign", "gtm"]):
             return []
 
-        cac = financials.get("cac", 500)
+        cac = financials.get("cac")  # None when unknown: no expected CAC is quoted
         experiments = []
 
         experiments.append(MarketingExperiment(
@@ -443,7 +445,7 @@ class OperationsAgent(BaseAgent):
             budget_usd=3000,
             duration_weeks=4,
             expected_leads=30,
-            expected_cac=cac * 0.8,
+            expected_cac=cac * 0.8 if cac else None,
             hypothesis="Targeted LinkedIn outreach to ICP converts better than broad campaigns",
             success_metric="Cost per qualified lead < $100; 3+ demos booked",
         ))
@@ -454,7 +456,7 @@ class OperationsAgent(BaseAgent):
             budget_usd=2000,
             duration_weeks=8,
             expected_leads=50,
-            expected_cac=cac * 0.5,
+            expected_cac=cac * 0.5 if cac else None,
             hypothesis="Problem-aware content captures high-intent organic traffic",
             success_metric="5+ articles ranking page 1; 50+ organic leads/month",
         ))
@@ -482,19 +484,20 @@ class OperationsAgent(BaseAgent):
         if not any(kw in query_lower for kw in ["price", "pricing", "monetiz", "revenue"]):
             return []
 
-        arpu = financials.get("arpu", 100)
+        arpu = financials.get("arpu")  # None when unknown -- never an assumed $100
         revenue = financials.get("revenue", 0)
 
         recs = []
+        arpu_note = f" (current ARPU: ${arpu:,.0f})" if arpu else ""
         recs.append({
             "action": "Introduce Annual Plan Discount",
-            "description": f"Offer 15-20% discount for annual commitment (current ARPU: ${arpu:,.0f})",
+            "description": f"Offer 15-20% discount for annual commitment{arpu_note}",
             "expected_impact": "Improve cash flow by 2-3 months; reduce churn 10-15%",
             "risk": "Lower effective ARPU per month",
             "timeline": "2-3 weeks to implement",
         })
 
-        if arpu < 200:
+        if arpu and arpu < 200:
             recs.append({
                 "action": "Price Increase (10-20%)",
                 "description": f"Raise base price from ${arpu:,.0f} to ${arpu * 1.15:,.0f}",

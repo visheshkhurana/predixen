@@ -51,7 +51,7 @@ export const blogPosts: BlogPost[] = [
       "**Averaging across SKUs.** A blended CM3 can hide a hero SKU that funds three loss-making ones. Once the blended number is right, compute it per category.",
       "## What to do with the number",
       "Fix the layers in order. A CM1 problem is pricing or sourcing. A CM2 problem is usually RTO, COD and shipping rates. A CM3 problem is marketing efficiency, and it is the one most often blamed for problems that actually live in CM2. Then turn CM3 into runway: monthly CM3 minus fixed costs is your operating burn, which is the input to the [free runway calculator](/tools/runway-calculator). For a brand that carries stock, inventory changes that answer; we cover that in [runway for a D2C brand with inventory](/blog/d2c-runway-with-inventory).",
-      "FounderConsole is built to keep these numbers current from your own data instead of a spreadsheet rebuilt every month, and it is free during the public beta. [Start free](/signup) when the spreadsheet stops being worth maintaining.",
+      "FounderConsole is built to keep these numbers current from your own data instead of a spreadsheet rebuilt every month, and it has a free plan with no credit card required. [Start free](/signup) when the spreadsheet stops being worth maintaining.",
     ],
   },
   {
@@ -90,7 +90,7 @@ export const blogPosts: BlogPost[] = [
       "**Count RTO inventory honestly.** Know how many units are in reverse transit and how many come back unsellable; both are cash.",
       "## Put RTO in your runway, not just your margin",
       "RTO changes cash as well as margin: stock spends weeks in reverse transit, and COD remittances only arrive for delivered orders. Once you know your real CM3, subtract fixed costs and use the [free runway calculator](/tools/runway-calculator) to see how many months the business has at today's RTO, and how many it would have at a lower one.",
-      "FounderConsole keeps margin, burn and runway in one place from your own data, and it is free during the public beta. [Start free](/signup).",
+      "FounderConsole keeps margin, burn and runway in one place from your own data, and it has a free plan with no credit card required. [Start free](/signup).",
     ],
   },
   {
@@ -124,7 +124,7 @@ export const blogPosts: BlogPost[] = [
       "## A weekly routine that works",
       "**Every week:** compute MER from net revenue and total spend, compare it with break-even MER, and check RTO rate, because rising RTO quietly lowers real MER while platform ROAS holds. [How RTO and COD eat margins](/blog/rto-cod-d2c-margins) shows the size of that effect.",
       "**Every month:** compute CM1, CM2 and CM3, recompute break-even MER, and turn CM3 minus fixed costs into runway with the [free runway calculator](/tools/runway-calculator).",
-      "FounderConsole is designed to keep these numbers in one place from your own data, and it is free during the public beta. [Start free](/signup).",
+      "FounderConsole is designed to keep these numbers in one place from your own data, and it has a free plan with no credit card required. [Start free](/signup).",
     ],
   },
   {
@@ -167,7 +167,7 @@ export const blogPosts: BlogPost[] = [
       "**Ignoring the festive peak.** The month with the largest stock purchase, not the average month, decides whether you run out.",
       "## Check your number",
       "Enter cash, revenue and costs into the [free runway calculator](/tools/runway-calculator) for a quick figure, then add inventory build and COD float as extra monthly expense to see the D2C version. The [D2C contribution margin calculator](/tools/d2c-contribution-margin) gives you the CM3 to start from.",
-      "FounderConsole connects your financial data and models runway as a range rather than a single date, and it is free during the public beta. [Start free](/signup).",
+      "FounderConsole connects your financial data and models runway as a range rather than a single date, and it has a free plan with no credit card required. [Start free](/signup).",
     ],
   },
   {
@@ -208,7 +208,7 @@ export const blogPosts: BlogPost[] = [
       "**5. Compare month on month,** not against an anonymous industry average. A CM3 that improves for three months running is a better investor story than a number that happens to match a blog post.",
       "## From unit economics to runway",
       "Unit economics tell you whether growth helps. Runway tells you whether you have time for it to. Monthly CM3 minus fixed costs is operating burn; add inventory build for the cash view, as shown in [runway for a D2C brand with inventory](/blog/d2c-runway-with-inventory), and check it with the [free runway calculator](/tools/runway-calculator).",
-      "FounderConsole is free during the public beta. [Start free](/signup) to keep these numbers current from your own data.",
+      "FounderConsole has a free plan with no credit card required. [Start free](/signup) to keep these numbers current from your own data.",
     ],
   },
   {
@@ -244,7 +244,7 @@ export const blogPosts: BlogPost[] = [
       "**1.** Export orders for the month with tax, discount and payment method. **2.** Export your shipping aggregator's status report and mark every RTO. **3.** Export refunds processed in the month and tag which month's sales they relate to. **4.** Build the bridge above, line by line, and compare net revenue with your accounting books. If they differ by more than a few percent, find out why before you report margins to anyone.",
       "## Use the right number in every tool",
       "The [D2C contribution margin calculator](/tools/d2c-contribution-margin) takes AOV ex-GST and applies RTO and returns for you, so it starts from the right base. For runway, use the [free runway calculator](/tools/runway-calculator) with revenue measured as net revenue, not checkout value.",
-      "FounderConsole is free during the public beta. [Start free](/signup) to keep the bridge current from your own data instead of rebuilding it each month.",
+      "FounderConsole has a free plan with no credit card required. [Start free](/signup) to keep the bridge current from your own data instead of rebuilding it each month.",
     ],
   },
   {
@@ -369,7 +369,7 @@ export const blogPosts: BlogPost[] = [
       "FounderConsole connects your actual financial data — 37 production connectors including Stripe, QuickBooks, Xero, Mercury, Brex and Gusto, or a CSV upload if you would rather not connect anything — and runs Monte Carlo simulation over it to produce P10, P50 and P90 runway bands rather than a single date. You can model a decision directly: hire two senior engineers in September at $16k a month, and watch the distribution shift.",
       "There is an AI copilot that answers strategic questions against your own numbers, a Fundraising OS with cap table management, dilution modelling, SAFE conversion and an exit waterfall, and board-deck generation. The design constraint we care most about is the one that is hard to see in a feature list: where your data cannot honestly support a metric, we mark it as an estimate or show N/A rather than printing a plausible-looking number. A financial tool that quietly fills gaps with defaults is worse than no tool.",
       "## The comparison that is left",
-      "On **data**, we connect and refresh automatically; Sturppy is primarily a modelling surface you feed. On **forecasting method**, we produce distributions and Sturppy appears to produce single lines — this is the substantive difference between the two products, and it matters most when you are deciding when to start a raise. On **fundraising**, we include cap table and dilution tooling; with Sturppy you would pair it with Carta or Pulley. On **pricing transparency**, FounderConsole is free during early access with every feature unlocked and no credit card, and our planned post-early-access pricing is published on the [pricing page](/pricing); Sturppy's is not public.",
+      "On **data**, we connect and refresh automatically; Sturppy is primarily a modelling surface you feed. On **forecasting method**, we produce distributions and Sturppy appears to produce single lines — this is the substantive difference between the two products, and it matters most when you are deciding when to start a raise. On **fundraising**, we include cap table and dilution tooling; with Sturppy you would pair it with Carta or Pulley. On **pricing transparency**, FounderConsole has a free plan with no credit card required, and our paid plans are published on the [pricing page](/pricing); Sturppy's is not public.",
       "## Which one to pick",
       "If what you need is a clean investor-ready model built from a template and you are comfortable getting pricing through a sales conversation, Sturppy is a reasonable choice and has been around long enough to be a safe one.",
       "If the question keeping you up is **how confident am I in this number**, you want a range rather than a date, and you want the model tied to live data instead of a snapshot you re-key every month, that is what we built FounderConsole for.",
@@ -551,7 +551,7 @@ export const blogPosts: BlogPost[] = [
       "## 7. Puzzle — Best for Real-Time Bookkeeping",
       "Puzzle automates bookkeeping and categorization using AI. It is not a financial planning tool per se, but it ensures your financial data is accurate and up-to-date, which is essential for any planning tool to work correctly. Clean books are the foundation of accurate forecasting.",
       "## How to Choose the Right Tool",
-      "For pre-seed and seed-stage founders who want one platform that handles forecasting, simulation, fundraising, and AI strategy advice, FounderConsole is the clear choice, and it's free while in early access. For growth-stage companies with a finance team, consider Runway Financial or Jirav. For ad-hoc analysis, use ChatGPT or Claude. The key is to avoid relying solely on spreadsheets, which are error-prone, siloed, and incapable of probabilistic modeling.",
+      "For pre-seed and seed-stage founders who want one platform that handles forecasting, simulation, fundraising, and AI strategy advice, FounderConsole is the clear choice, and it has a free plan with no credit card required. For growth-stage companies with a finance team, consider Runway Financial or Jirav. For ad-hoc analysis, use ChatGPT or Claude. The key is to avoid relying solely on spreadsheets, which are error-prone, siloed, and incapable of probabilistic modeling.",
     ],
   },
   {

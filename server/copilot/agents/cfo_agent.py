@@ -14,6 +14,7 @@ from .base import (
     CompanyKnowledgeBase, ConfidenceLevel
 )
 from server.copilot.prompt_injection_defense import PromptInjectionDefense
+from server.truth.invented_metrics import strip_invented_unit_economics
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,10 @@ class CFOAgent(BaseAgent):
             metrics = self._enrich_from_truth_scan(metrics, truth_scan)
             findings.append("Enriched with Truth Scan data")
         
+        unit_economics = context.get("unit_economics")
+        if isinstance(unit_economics, dict):
+            self._apply_unit_economics(metrics, unit_economics)
+
         if not extracted_data and not truth_scan:
             if ckb.financials:
                 metrics = self._load_from_ckb(ckb.financials)
@@ -325,7 +330,11 @@ class CFOAgent(BaseAgent):
         and produced empty answers for general strategic questions.
         """
 
-        ts_metrics = truth_scan.get("metrics", {}) or {}
+        # Never read the unit economics the truth scan invents (CAC from 30% of
+        # payroll, LTV from a 60-month lifetime, ...): the model would quote
+        # them to the founder as fact. Real ones come from context
+        # ["unit_economics"] in process().
+        ts_metrics = strip_invented_unit_economics(truth_scan.get("metrics", {}) or {})
 
         if metrics.revenue is None:
             metrics.revenue = self._ts_val(ts_metrics, "monthly_revenue", "mrr")
@@ -367,6 +376,15 @@ class CFOAgent(BaseAgent):
 
         return metrics
     
+    @staticmethod
+    def _apply_unit_economics(metrics: FinancialMetrics, ue: Dict[str, Any]) -> None:
+        """Fill CAC / LTV / LTV:CAC / ARPU from the shared rule
+        (``server/copilot/unit_economics.company_unit_economics``) where the
+        documents didn't supply them. Unknown stays None."""
+        for attr in ("cac", "ltv", "ltv_cac_ratio", "arpu"):
+            if getattr(metrics, attr) is None and ue.get(attr):
+                setattr(metrics, attr, float(ue[attr]))
+
     def _load_from_ckb(self, financials: Dict[str, Any]) -> FinancialMetrics:
         """Load metrics from Company Knowledge Base."""
         
@@ -545,6 +563,34 @@ class CFOAgent(BaseAgent):
                 "CFO LLM insight skipped: no numeric metrics available to ground an answer"
             )
             return None
+
+        # Unit economics: CAC / LTV / LTV:CAC above come from the documents or
+        # the shared rule (record > D2C month > real truth scan). Name the CAC
+        # source, add the rest, and spell out every unknown so the model
+        # doesn't fill it in with an invented figure.
+        from server.copilot.unit_economics import NOT_AVAILABLE, format_unit_economics_lines
+        ue = (context or {}).get("unit_economics")
+        ue = ue if isinstance(ue, dict) else {}
+        if self._is_number(metrics.cac) and ue.get("cac_source") == "d2c_month" and ue.get("cac") == metrics.cac:
+            metrics_summary = [
+                line for line in metrics_summary if not line.startswith("CAC: ")
+            ]
+            metrics_summary.extend(
+                line for line in format_unit_economics_lines(ue, metrics.currency_base)
+                if line.startswith("CAC: ")
+            )
+        if self._is_number(metrics.ltv):
+            metrics_summary.append(f"LTV: {self.format_currency(metrics.ltv, metrics.currency_base)}")
+        if metrics_summary:
+            if not self._is_number(metrics.cac):
+                metrics_summary.append(f"CAC: {NOT_AVAILABLE}")
+            if not self._is_number(metrics.ltv):
+                metrics_summary.append(f"LTV: {NOT_AVAILABLE}")
+            if not self._is_number(metrics.ltv_cac_ratio):
+                metrics_summary.append(f"LTV/CAC: {NOT_AVAILABLE}")
+            for line in format_unit_economics_lines(ue, metrics.currency_base):
+                if line.split(":", 1)[0] in ("Customers", "ARPU", "NRR", "CAC payback"):
+                    metrics_summary.append(line)
 
         # Sanitize user-controlled data before inclusion in prompt
         sanitized_company_name = PromptInjectionDefense.sanitize_user_input(

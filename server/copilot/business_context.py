@@ -10,6 +10,21 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from server.utils.survival import format_survival_line
+from server.truth.invented_metrics import strip_invented_from_outputs
+from server.copilot.unit_economics import (
+    company_unit_economics,
+    format_unit_economics_lines,
+)
+
+# financials key -> company_unit_economics key
+_UNIT_ECONOMICS_FIN_KEYS = {
+    "cac": "cac",
+    "ltv": "ltv",
+    "ltv_cac_ratio": "ltv_cac_ratio",
+    "customers": "customers",
+    "arpu": "arpu",
+    "nrr": "net_revenue_retention",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +51,11 @@ def build_business_context(company, db: Session) -> Dict[str, Any]:
     ).order_by(TruthScan.created_at.desc()).first()
 
     if truth_scan and truth_scan.outputs_json:
-        ctx["financials"] = _extract_financial_metrics(truth_scan.outputs_json)
+        # Invented unit economics are stripped here; the real ones are
+        # resolved below from the record / D2C month.
+        ctx["financials"] = _extract_financial_metrics(
+            strip_invented_from_outputs(truth_scan.outputs_json)
+        )
     
     records = db.query(FinancialRecord).filter(
         FinancialRecord.company_id == company.id
@@ -48,6 +67,21 @@ def build_business_context(company, db: Session) -> Dict[str, Any]:
             latest = records[0]
             ctx["financials"].update(_extract_from_record(latest))
         ctx["team"] = _extract_team_data(records)
+
+    # One rule for CAC / LTV / customers (record > D2C month > real truth
+    # scan); every unit-economics key in "financials" comes from it, so a
+    # record-copied or scan-copied value can't disagree with it.
+    ue = company_unit_economics(
+        db,
+        company.id,
+        (truth_scan.outputs_json or {}).get("metrics", {}) if truth_scan else {},
+        records[0] if records else None,
+    )
+    ctx["unit_economics"] = ue
+    for fin_key, ue_key in _UNIT_ECONOMICS_FIN_KEYS.items():
+        ctx["financials"].pop(fin_key, None)
+        if ue.get(ue_key) is not None:
+            ctx["financials"][fin_key] = ue[ue_key]
 
     uploaded = db.query(FinancialMetricPoint).filter(
         FinancialMetricPoint.company_id == company.id
@@ -354,33 +388,34 @@ def format_context_for_prompt(ctx: Dict[str, Any]) -> str:
     parts.append(f"Industry: {company.get('industry', 'Not specified')}")
     parts.append(f"Stage: {company.get('stage', 'Not specified')}")
     parts.append(f"Currency: {company.get('currency', 'USD')}")
+    _cur = str(company.get("currency") or "USD").upper()
+    # Amounts in the company's currency: "$" on an INR company's numbers made
+    # the model answer in dollars.
+    money = {"USD": "$", "INR": "\u20b9", "EUR": "\u20ac", "GBP": "\u00a3"}.get(_cur, f"{_cur} ")
 
     fin = ctx.get("financials", {})
     if fin:
         parts.append(f"\n=== FINANCIAL METRICS ===")
         metric_display = {
-            "revenue": ("Monthly Revenue", "${:,.0f}"),
-            "mrr": ("MRR", "${:,.0f}"),
-            "arr": ("ARR", "${:,.0f}"),
-            "cash_balance": ("Cash Balance", "${:,.0f}"),
-            "net_burn": ("Net Burn", "${:,.0f}/mo"),
+            "revenue": ("Monthly Revenue", money + "{:,.0f}"),
+            "mrr": ("MRR", money + "{:,.0f}"),
+            "arr": ("ARR", money + "{:,.0f}"),
+            "cash_balance": ("Cash Balance", money + "{:,.0f}"),
+            "net_burn": ("Net Burn", money + "{:,.0f}/mo"),
             "runway_months": ("Runway", "{:.1f} months"),
             "gross_margin": ("Gross Margin", "{:.1f}%"),
-            "opex": ("Operating Expenses", "${:,.0f}/mo"),
-            "payroll": ("Payroll", "${:,.0f}/mo"),
-            "cogs": ("COGS", "${:,.0f}/mo"),
+            "opex": ("Operating Expenses", money + "{:,.0f}/mo"),
+            "payroll": ("Payroll", money + "{:,.0f}/mo"),
+            "cogs": ("COGS", money + "{:,.0f}/mo"),
             "headcount": ("Headcount", "{:.0f}"),
-            "customers": ("Customers", "{:.0f}"),
-            "ltv": ("LTV", "${:,.0f}"),
-            "cac": ("CAC", "${:,.0f}"),
-            "ltv_cac_ratio": ("LTV:CAC", "{:.1f}x"),
-            "arpu": ("ARPU", "${:,.0f}"),
             "churn_rate": ("Churn Rate", "{:.1f}%"),
-            "nrr": ("NRR", "{:.1f}%"),
             "mom_growth": ("MoM Growth", "{:.1f}%"),
         }
         for key, (label, fmt) in metric_display.items():
             val = fin.get(key)
+            if key == "net_burn" and isinstance(val, (int, float)) and val < 0:
+                parts.append(f"  Net Burn: none (monthly surplus of {money}{-val:,.0f}; revenue covers costs)")
+                continue
             if val is not None:
                 try:
                     parts.append(f"  {label}: {fmt.format(val)}")
@@ -389,6 +424,12 @@ def format_context_for_prompt(ctx: Dict[str, Any]) -> str:
 
         if fin.get("data_confidence"):
             parts.append(f"  Data Confidence Score: {fin['data_confidence']}/100")
+
+    if "unit_economics" in ctx:
+        # Unknowns are written out so the model doesn't supply its own number.
+        parts.append(f"\n=== UNIT ECONOMICS (only these values are known; never estimate the rest) ===")
+        for line in format_unit_economics_lines(ctx.get("unit_economics"), company.get("currency") or "USD"):
+            parts.append(f"  {line}")
 
     trends = fin.get("trends", {})
     if trends:
@@ -404,7 +445,7 @@ def format_context_for_prompt(ctx: Dict[str, Any]) -> str:
             parts.append(f"  Gross Margin: {mt['direction']} ({mt['change_pp']:+.1f}pp, now {mt['latest']:.1f}%)")
         if trends.get("cac_trend"):
             ct = trends["cac_trend"]
-            parts.append(f"  CAC: {ct['direction']} (${ct['latest']:,.0f} currently)")
+            parts.append(f"  CAC: {ct['direction']} ({money}{ct['latest']:,.0f} currently)")
 
     sim = fin.get("latest_simulation")
     if sim:
@@ -427,7 +468,7 @@ def format_context_for_prompt(ctx: Dict[str, Any]) -> str:
         if team.get("headcount_trend"):
             parts.append(f"  Trend: {team['headcount_trend']} ({team.get('headcount_change', 0):+d})")
         if team.get("avg_cost_per_employee"):
-            parts.append(f"  Avg Cost/Employee: ${team['avg_cost_per_employee']:,.0f}/mo")
+            parts.append(f"  Avg Cost/Employee: {money}{team['avg_cost_per_employee']:,.0f}/mo")
         if team.get("payroll_as_pct_of_revenue"):
             parts.append(f"  Payroll as % of Revenue: {team['payroll_as_pct_of_revenue']:.1f}%")
 

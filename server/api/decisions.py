@@ -681,9 +681,12 @@ def generate_strategic_diagnosis(
 
     def _build_metrics_and_milestones():
         churn_rate = extract_metric_value(metrics.get("churn_rate"), 0)
-        cac_val = extract_metric_value(metrics.get("cac"), 0)
-        ltv_val = extract_metric_value(metrics.get("ltv"), 0)
-        ltv_cac = extract_metric_value(metrics.get("ltv_cac_ratio"), 0)
+        # Never the truth scan's invented CAC / LTV (server/truth/invented_metrics.py).
+        from server.truth.invented_metrics import strip_invented_unit_economics
+        _real = strip_invented_unit_economics(metrics)
+        cac_val = extract_metric_value(_real.get("cac"), 0)
+        ltv_val = extract_metric_value(_real.get("ltv"), 0)
+        ltv_cac = extract_metric_value(_real.get("ltv_cac_ratio"), 0)
         gross_margin_val = extract_metric_value(metrics.get("gross_margin"), 0)
         arr = revenue * 12 * scale_mult
         headcount = extract_metric_value(metrics.get("headcount"), 0)

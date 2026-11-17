@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from server.core.burn import burn_summary, gross_burn, net_burn, runway_months, runway_status
 from server.core.db import Base
 from server.models.company import Company
+from server.models.d2c_month import D2CMonth
 from server.models.dataset import Dataset
 from server.models.financial import FinancialRecord, ImportSession
 from server.models.truth_scan import TruthScan
@@ -77,7 +78,7 @@ def db():
     Base.metadata.create_all(
         engine,
         tables=[Company.__table__, FinancialRecord.__table__, ImportSession.__table__,
-                Dataset.__table__, TruthScan.__table__],
+                Dataset.__table__, TruthScan.__table__, D2CMonth.__table__],
     )
     session = sessionmaker(bind=engine)()
     yield session

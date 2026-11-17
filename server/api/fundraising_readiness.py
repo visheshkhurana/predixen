@@ -90,7 +90,9 @@ def _compute_readiness(
     # 80% and scored it as top-quartile growth.
     growth_pct = ts_growth if ts_growth != 0 else fr_growth
 
-    ts_ltv_cac = extract_metric_value(metrics.get("ltv_cac_ratio"), 0)
+    # Invented LTV:CAC (assumed marketing spend, 150-customer book) never scores.
+    from server.truth.invented_metrics import strip_invented_unit_economics
+    ts_ltv_cac = extract_metric_value(strip_invented_unit_economics(metrics).get("ltv_cac_ratio"), 0)
     fr_ltv_cac = float(latest_record.ltv_cac_ratio) if latest_record and latest_record.ltv_cac_ratio else 0
     ltv_cac = ts_ltv_cac if ts_ltv_cac > 0 else fr_ltv_cac
 

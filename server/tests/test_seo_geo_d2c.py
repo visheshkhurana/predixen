@@ -95,7 +95,11 @@ def test_llms_txt_worked_example_matches_the_calculator_defaults():
         assert fact in text, f"llms.txt lost: {fact!r}"
     # The published-facts guard still holds alongside the new section.
     assert "37 read-only data connectors" in text
-    assert "every feature is free during the public beta" in text.lower()
+    lowered = text.lower()
+    assert "public beta" not in lowered
+    assert "no plan is charged yet" not in lowered
+    assert "there is a free plan" in lowered
+    assert "no credit card required" in lowered
 
 
 def d2c_post_blocks() -> dict[str, str]:

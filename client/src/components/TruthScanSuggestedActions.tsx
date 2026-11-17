@@ -264,15 +264,17 @@ export function OverviewSuggestedActionCard({
   isSample,
   scan,
   companyId,
+  industry,
   track = trackEvent,
 }: {
   enabled: boolean;
   isSample?: boolean;
   scan: { metrics?: unknown; flags?: unknown[] } | null | undefined;
   companyId?: string | number;
+  industry?: string | null;
   track?: TrackFn;
 }) {
-  const action = resolveOverviewSuggestedAction({ enabled, isSample, scan });
+  const action = resolveOverviewSuggestedAction({ enabled, isSample, scan, industry });
   if (!action) return null;
   return (
     <TruthScanSuggestedActions

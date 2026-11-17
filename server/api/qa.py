@@ -174,7 +174,10 @@ def qa_kpi_sanity(
     burn_rate = metrics.get("net_burn") or metrics.get("burn_rate") or metrics.get("monthly_burn")
     cash = metrics.get("cash_balance") or metrics.get("cash_on_hand") or metrics.get("cash")
     runway = metrics.get("runway_months") or metrics.get("runway")
-    nrr = metrics.get("net_revenue_retention") or metrics.get("nrr")
+    # The truth scan's NRR is a 100/108 placeholder unless proven otherwise.
+    from server.truth.invented_metrics import strip_invented_unit_economics
+    _real = strip_invented_unit_economics(metrics) if isinstance(metrics, dict) else {}
+    nrr = _real.get("net_revenue_retention") or _real.get("nrr")
     growth_rate = metrics.get("revenue_growth_mom") or metrics.get("monthly_growth_rate") or metrics.get("growth_rate")
     gross_margin = metrics.get("gross_margin")
 

@@ -2,6 +2,7 @@ import { useMemo, useEffect, useRef } from 'react';
 import { useFounderStore } from '@/store/founderStore';
 import { useQuery } from '@tanstack/react-query';
 import { backoffMsFor429, readBodyRetryAfter } from '@/lib/rateLimitBackoff';
+import { netBurnSource } from '@/lib/overviewDisplay';
 
 export type MetricSource = 'reported' | 'computed' | 'estimated';
 
@@ -196,6 +197,14 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       return 0;
     };
 
+    // The truth scan's own list of values it filled from defaults. Those are
+    // never used as a fallback for unit economics: with no marketing spend or
+    // customer data, CAC / LTV / LTV:CAC / payback are unknown, not invented.
+    const tsEstimated = new Set<string>(
+      Array.isArray(tsMetrics?._estimated_metrics) ? tsMetrics._estimated_metrics : [],
+    );
+    const tsReal = (key: string): number => (tsEstimated.has(key) ? 0 : tsVal(key));
+
     const mrr = vPos(c.mrr, bb?.monthlyRevenue, fb?.monthlyRevenue, tsVal('mrr'));
     const arr = v(c.arr, ext?.arr, tsVal('arr')) || mrr * 12;
     const cashOnHand = vPos(c.cashOnHand, bb?.cashOnHand, fb?.cashOnHand, tsVal('cash_balance'));
@@ -240,9 +249,9 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       runwayDisplay = `${runway.toFixed(1)} mo`;
     }
 
-    const cac = vPos(c.cac, ext?.cac, tsVal('cac'));
-    const ltv = vPos(c.ltv, ext?.ltv, tsVal('ltv'));
-    const ltvCacRatio = v(c.ltvCacRatio, ext?.ltvCacRatio, tsVal('ltv_cac_ratio'))
+    const cac = vPos(c.cac, ext?.cac, tsReal('cac'));
+    const ltv = vPos(c.ltv, ext?.ltv, tsReal('ltv'));
+    const ltvCacRatio = v(c.ltvCacRatio, ext?.ltvCacRatio, tsReal('ltv_cac_ratio'))
       || (cac > 0 && ltv > 0 ? ltv / cac : 0);
     const grossMarginRaw = v(c.grossMarginPct, ext?.grossMargin, tsVal('gross_margin'));
     const grossMarginPct = grossMarginRaw > 0 && grossMarginRaw <= 1 ? grossMarginRaw * 100 : grossMarginRaw;
@@ -252,7 +261,8 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const churnRatePct = churnRaw > 0 && churnRaw <= 1 ? churnRaw * 100 : churnRaw;
     const churnRateDecimal = churnRatePct / 100;
 
-    const totalCustomers = vPos(c.totalCustomers, ext?.customers, tsVal('customer_count'), tsVal('total_customers'));
+    // The truth scan's default 150-customer book must not feed ARPU or payback.
+    const totalCustomers = vPos(c.totalCustomers, ext?.customers, tsReal('customer_count'), tsReal('total_customers'));
     const headcount = v(c.headcount, ext?.headcount, tsVal('headcount'))
       || (currentCompany ? (currentCompany as any).employees || 0 : 0);
     const arpu = v(c.arpu) || (totalCustomers > 0 ? mrr / totalCustomers : 0);
@@ -311,11 +321,25 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     mark('mrr', c.mrr || bb?.monthlyRevenue || fb?.monthlyRevenue, mrr, !!(fb?.monthlyRevenue || bb?.monthlyRevenue || tsVal('mrr')));
     sources['arr'] = tsVal('arr') ? 'reported' : (mrr > 0 ? 'computed' : 'estimated');
     mark('cashOnHand', c.cashOnHand || bb?.cashOnHand || fb?.cashOnHand, cashOnHand, !!(fb?.cashOnHand || bb?.cashOnHand));
-    mark('netBurn', c.netBurn, netBurn, false);
-    sources['runway'] = (netBurn > 0 && cashOnHand > 0) ? 'computed' : 'estimated';
-    mark('cac', c.cac || ext?.cac, cac, !!tsVal('cac'));
-    mark('ltv', c.ltv || ext?.ltv, ltv, !!tsVal('ltv'));
-    sources['ltvCacRatio'] = tsVal('ltv_cac_ratio') ? 'reported' : (cac > 0 && ltv > 0 ? 'computed' : 'estimated');
+    // Net burn is arithmetic on the founder's revenue and expenses, whatever its
+    // sign. mark() treated a negative (surplus) burn as "no value" and badged
+    // it "AI Estimated".
+    sources['netBurn'] = netBurnSource({ netBurn, mrr, totalExpenses: c.totalExpenses || effectiveExpenses || 0 });
+    // Runway follows from cash and burn; "not burning" (surplus) is just as
+    // computed as a month count.
+    sources['runway'] = (netBurn > 0 && cashOnHand > 0) || (netBurn <= 0 && sources['netBurn'] === 'computed')
+      ? 'computed'
+      : 'estimated';
+    mark('cac', c.cac || ext?.cac, cac, !!tsReal('cac'));
+    // The server says where its CAC came from: marketing spend / new customers
+    // from a D2C month is arithmetic on the founder's inputs ("Computed"); a
+    // CAC on the financial record is the founder's own figure ("Verified").
+    if (c.cac > 0 && cac === c.cac) {
+      if (c.cacSource === 'd2c_month') sources['cac'] = 'computed';
+      else if (c.cacSource === 'reported') sources['cac'] = 'reported';
+    }
+    mark('ltv', c.ltv || ext?.ltv, ltv, !!tsReal('ltv'));
+    sources['ltvCacRatio'] = tsReal('ltv_cac_ratio') ? 'reported' : (cac > 0 && ltv > 0 ? 'computed' : 'estimated');
     mark('grossMargin', c.grossMarginPct || ext?.grossMargin, grossMarginPct, !!tsVal('gross_margin'));
     mark('churnRate', c.churnRatePct, churnRatePct, !!tsVal('churn_rate'));
     mark('totalCustomers', c.totalCustomers || ext?.customers, totalCustomers, !!tsVal('total_customers'));
@@ -340,8 +364,17 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     // ordinary numbers, so every rule above happily badged them "Verified" or
     // "Computed". `_estimated_metrics` is the server's own list of what it
     // invented, and it overrides everything else.
+    // CAC / LTV / LTV:CAC / payback already ignore estimated truth-scan values
+    // above, so anything left in them came from the founder's records (via
+    // /metrics/computed or the baseline) and keeps its own badge.
+    // Payback counts as real only when every input is: a reported payback, or CAC
+    // from records with a customer count that isn't the truth scan's default.
+    const paybackReal = (c.paybackPeriod ?? 0) > 0 || (paybackPeriod > 0 && totalCustomers > 0);
+    const fromRecords: Record<string, number> = { cac, ltv, ltvCacRatio, paybackPeriod: paybackReal ? paybackPeriod : 0 };
     for (const [truthKey, clientKey] of Object.entries(TRUTH_TO_METRIC_KEY)) {
-      if (tsEstimatedMap[truthKey]) sources[clientKey] = 'estimated';
+      if (!tsEstimatedMap[truthKey]) continue;
+      if (clientKey in fromRecords && fromRecords[clientKey] > 0) continue;
+      sources[clientKey] = 'estimated';
     }
 
     return {
