@@ -52,7 +52,9 @@ PLAN_DETAILS: Dict[str, dict] = {
         "max_companies": 1,
         "max_simulations_per_month": 3,
         "max_copilot_messages_per_month": 10,
-        "max_connectors": 0,
+        # One connector so a D2C founder can connect Shopify (or a bank or
+        # accounting tool) and see real numbers on the Free plan.
+        "max_connectors": 1,
         "features": [
             Feature.DASHBOARD,
             Feature.BASIC_METRICS,
@@ -61,11 +63,14 @@ PLAN_DETAILS: Dict[str, dict] = {
             Feature.SIMULATIONS,
             Feature.COPILOT,
             Feature.TRUTH_SCAN,
+            # Gated by max_connectors (1), see plan_usage.enforce_connector_limit.
+            Feature.DATA_CONNECTORS,
         ],
         "highlights": [
             "1 company",
             "3 simulations / month",
             "10 copilot messages / month",
+            "1 data connector",
             "CSV upload",
             "Basic dashboard",
         ],
@@ -199,8 +204,9 @@ PLAN_DETAILS: Dict[str, dict] = {
     },
 }
 
-TRIAL_DURATION_DAYS = 30
-TRIAL_PLAN = PlanTier.SCALE
+# Trial the plan that is actually sold (Starter). Scale is a retired tier.
+TRIAL_DURATION_DAYS = 14
+TRIAL_PLAN = PlanTier.STARTER
 
 
 def get_plan_features(plan: str) -> List[str]:

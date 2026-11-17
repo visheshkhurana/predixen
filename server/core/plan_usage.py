@@ -5,7 +5,7 @@ max_copilot_messages_per_month. Nothing counted usage, so the numbers were
 copy only. This reserves one unit of the current calendar month (UTC) when a
 request is accepted.
 
-A negative limit means unlimited (Growth, Scale, and the Scale trial). No
+A negative limit means unlimited (Growth and Scale). No
 Truth Scan quota exists in plans.py; do not invent one.
 
 There was no prior limit response. The refusal is 402 plan_limit_reached,
@@ -165,3 +165,98 @@ def reserve_monthly_quota(
     finally:
         if owned:
             quota_db.close()
+
+
+def release_monthly_quota(
+    db: Session,
+    user: Union[int, object],
+    kind: str,
+    company_id: Optional[int] = None,
+) -> None:
+    """Give back one unit reserved this month by reserve_monthly_quota.
+
+    Used when the request was accepted but the founder got nothing for it,
+    for example Copilot answered with the "AI assistant unavailable" fallback.
+    Removes this month's most recent reservation of ``kind`` for the user.
+    Never raises: a failed refund must not turn a reply into an error.
+    """
+    if kind not in _LIMIT_KEYS or user is None or not _payments_enabled():
+        return
+    user_id = user if isinstance(user, int) else getattr(user, "id", None)
+    if not user_id or int(user_id) < 0:
+        return
+    quota_db, owned = _quota_session(db)
+    try:
+        q = quota_db.query(AnalyticsEvent).filter(
+            AnalyticsEvent.user_id == int(user_id),
+            AnalyticsEvent.event_name == kind,
+            AnalyticsEvent.created_at >= month_start_utc(),
+        )
+        if company_id is not None:
+            q = q.filter(AnalyticsEvent.company_id == company_id)
+        row = q.order_by(AnalyticsEvent.created_at.desc(), AnalyticsEvent.id.desc()).first()
+        if row is not None:
+            quota_db.delete(row)
+            quota_db.commit()
+    except Exception:
+        try:
+            quota_db.rollback()
+        except Exception:
+            pass
+    finally:
+        if owned:
+            quota_db.close()
+
+
+def _connected_providers(company) -> set:
+    connectors = ((getattr(company, "metadata_json", None) or {}).get("connectors") or {})
+    return {
+        pid for pid, cfg in connectors.items()
+        if isinstance(cfg, dict) and cfg.get("connected")
+    }
+
+
+def enforce_connector_limit(db: Session, user: object, company, provider_id: str) -> None:
+    """Raise 402 plan_limit_reached before connecting one connector too many.
+
+    Counts connectors connected on this company. Reconnecting a provider that
+    is already connected never counts as a new one, and nothing already
+    connected is ever cut off: the check runs only when adding a provider.
+    Like the monthly quotas, it applies only while payments are enabled.
+    """
+    if user is None or not _payments_enabled():
+        return
+    from server.core.security import is_master_user
+    if is_master_user(user):
+        return
+    user_id = getattr(user, "id", None)
+    if not user_id or int(user_id) < 0:
+        return
+
+    connected = _connected_providers(company)
+    if provider_id in connected:
+        return
+
+    sub = get_user_subscription(db, int(user_id))
+    plan = sub.get("effective_plan") or PlanTier.FREE
+    limit = get_plan_limit(plan, "max_connectors")
+    if limit is None or int(limit) < 0:
+        return
+    if len(connected) >= int(limit):
+        plan_name = PLAN_DETAILS.get(plan, {}).get("name", str(plan))
+        word = "connector" if int(limit) == 1 else "connectors"
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "plan_limit_reached",
+                "limit": "max_connectors",
+                "used": len(connected),
+                "max": int(limit),
+                "current_plan": plan.value if hasattr(plan, "value") else plan,
+                "message": (
+                    f"The {plan_name} plan includes {int(limit)} data {word}, and "
+                    f"you have {len(connected)} connected. Upgrade your plan to connect "
+                    "more, or disconnect one first."
+                ),
+            },
+        )

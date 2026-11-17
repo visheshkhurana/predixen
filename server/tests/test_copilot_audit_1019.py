@@ -79,7 +79,7 @@ def test_agent_call_sites_and_quick_chat_use_threads():
         assert "await self._acall_llm(" in src, mod.__name__
         assert "= self._call_llm(" not in src, mod.__name__
     assert "asyncio.to_thread(self._merge_responses" in inspect.getsource(router)
-    quick = inspect.getsource(copilot.copilot_quick_chat)
+    quick = inspect.getsource(copilot._copilot_quick_chat_impl)
     assert "asyncio.to_thread(" in quick and "llm_router.chat," in quick
 
 

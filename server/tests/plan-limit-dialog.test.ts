@@ -1,7 +1,7 @@
 // 402 plan_limit_reached must open the upgrade dialog with the server's message;
 // any other error must not.
 import assert from "assert";
-import { planLimitFromError, planLimitNoun } from "../../client/src/lib/planLimit";
+import { planLimitFromError, planLimitNoun, planLimitTitle } from "../../client/src/lib/planLimit";
 
 const detail = {
   error: "plan_limit_reached",
@@ -20,6 +20,8 @@ assert.equal(info.currentPlan, "free");
 assert.equal(info.message, detail.message);
 assert.equal(planLimitNoun(info.limit), "simulations");
 assert.equal(planLimitNoun("max_copilot_messages_per_month"), "Copilot messages");
+assert.equal(planLimitTitle("max_copilot_messages_per_month"), "You've used this month's Copilot messages");
+assert.equal(planLimitTitle("max_connectors"), "You've reached your plan's data connectors");
 
 assert.equal(planLimitFromError(403, detail), null, "403 feature_locked is not a quota");
 assert.equal(planLimitFromError(402, { error: "payment_required" }), null);

@@ -52,8 +52,8 @@ COUNT_FILES = [
 # site said free during early access.
 #
 # Legal text is deliberately absent: client/src/pages/terms.tsx and the Terms
-# block in server/seo-prerender.ts still describe a one-time 30-day trial.
-# Changing legal copy is a separate decision, not a marketing-string fix.
+# block in server/seo-prerender.ts describe the in-app trial (since
+# 2026-11-17 a one-time 14-day Starter trial, plans.TRIAL_*).
 TRIAL_FILES = [
     ROOT / "client" / "src" / "pages" / "landing.tsx",
     ROOT / "client" / "src" / "pages" / "ai-cfo.tsx",

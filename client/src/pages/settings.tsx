@@ -13,6 +13,14 @@ import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/
 import { Settings, Lock, Mail, Bell, LogOut, Loader2, User, Shield, Check } from 'lucide-react';
 import { FadeIn } from '@/components/ui/motion-primitives';
 
+// Deletion is handled on request (privacy policy, "Your rights"). The request
+// goes from the founder's own mail client to the address the policy names.
+const ACCOUNT_DELETION_MAILTO =
+  'mailto:hello@founderconsole.ai?subject=' +
+  encodeURIComponent('Delete my FounderConsole account') +
+  '&body=' +
+  encodeURIComponent('Please permanently delete my FounderConsole account and all associated data. I am writing from the email address I sign in with.');
+
 export default function SettingsPage() {
   const { user, logout } = useFounderStore();
   const [, setLocation] = useLocation();
@@ -256,6 +264,18 @@ export default function SettingsPage() {
             <Button variant="destructive" size="sm" onClick={handleLogout} data-testid="button-logout">
               <LogOut className="h-4 w-4 mr-2" />
               Sign Out
+            </Button>
+          </div>
+          <div className="flex items-center justify-between gap-4 pt-4 mt-4 border-t border-destructive/10">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium text-destructive">Delete Account</p>
+              <p className="text-xs text-muted-foreground">
+                Ask us to permanently delete your account and all its data. We confirm by email and
+                remove your personal data within 30 days, as our privacy policy says.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" asChild data-testid="button-request-account-deletion">
+              <a href={ACCOUNT_DELETION_MAILTO}>Request deletion</a>
             </Button>
           </div>
         </CardContent>

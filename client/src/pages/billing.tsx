@@ -374,7 +374,7 @@ export default function BillingPage() {
               Free trial — {sub.trial_days_remaining} days remaining
             </p>
             <p className="text-xs text-white/40">
-              All Scale features are unlocked. Add a payment method to keep access after your trial ends.
+              All Starter features are unlocked. Upgrade to Starter to keep them after your trial ends.
             </p>
           </div>
         </div>
@@ -405,10 +405,10 @@ export default function BillingPage() {
           <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium text-white/80">
-              Try all features free for 30 days
+              Try Starter free for 14 days
             </p>
             <p className="text-xs text-white/40">
-              No credit card required. Full access to every feature on the Scale plan.
+              No credit card required. 50 simulations, 100 Copilot messages and 2 data connectors.
             </p>
           </div>
           <button
