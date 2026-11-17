@@ -236,7 +236,7 @@ def test_fallback_is_not_cached():
     async def boom(*a, **k):
         raise RuntimeError("no key")
 
-    with patch.object(bs, "search_benchmarks_with_perplexity", boom):
+    with patch.object(bs, "search_benchmarks", boom):
         r1 = asyncio.run(bs.search_industry_benchmarks(bs.BenchmarkSearchRequest(industry="Fintech"), db=None, current_user=_user()))
     assert r1.is_fallback
     assert len(bs.BENCHMARK_CACHE) == 0
@@ -253,12 +253,56 @@ def test_real_result_cached_with_normalized_key():
             sources=[], last_updated="now",
         )
 
-    with patch.object(bs, "search_benchmarks_with_perplexity", ok), \
+    with patch.object(bs, "search_benchmarks", ok), \
          patch.object(bs, "parse_benchmarks_with_ai", parsed):
         asyncio.run(bs.search_industry_benchmarks(bs.BenchmarkSearchRequest(industry=" FinTech "), db=None, current_user=_user()))
         r2 = asyncio.run(bs.search_industry_benchmarks(bs.BenchmarkSearchRequest(industry="fintech"), db=None, current_user=_user()))
     assert r2.is_cached
     assert len(bs.BENCHMARK_CACHE) == 1
+
+
+def test_search_uses_perplexity_when_key_set(monkeypatch):
+    monkeypatch.setenv("PERPLEXITY_API_KEY", "k")
+
+    async def pplx(industry, stage):
+        return _PPLX
+
+    def openai_never(*a, **k):
+        raise AssertionError("OpenAI should not be called when Perplexity is configured")
+
+    with patch.object(bs, "search_benchmarks_with_perplexity", pplx), \
+         patch.object(bs, "search_benchmarks_with_openai", openai_never):
+        assert asyncio.run(bs.search_benchmarks("fintech", "seed")) == _PPLX
+
+
+def test_search_falls_back_to_openai_web_search(monkeypatch):
+    monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
+    sink = []
+    ann = SimpleNamespace(type="url_citation", url="https://example.com/report")
+    resp = SimpleNamespace(
+        output_text="Median gross margin 75%",
+        output=[SimpleNamespace(type="message", content=[SimpleNamespace(annotations=[ann, ann])])],
+    )
+
+    def create(**kw):
+        sink.append(kw)
+        return resp
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _audited(**kw):
+        sink.append({"audited": kw})
+        yield SimpleNamespace(responses=SimpleNamespace(create=create))
+
+    with patch("server.lib.llm.openai_client.open_audited_openai", _audited):
+        out = asyncio.run(bs.search_benchmarks("fintech", "seed", user_id=9))
+    assert out == {"choices": [{"message": {"content": "Median gross margin 75%"}}],
+                   "citations": ["https://example.com/report"]}
+    assert sink[0] == {"audited": {"user_id": 9}}
+    assert sink[1]["tools"] == [{"type": "web_search"}]
+    assert sink[1]["model"] == bs.BENCHMARK_SEARCH_MODELS[0] == "gpt-4.1"
+    assert "fintech" in sink[1]["input"]
 
 
 def test_cache_is_bounded():
@@ -649,7 +693,7 @@ def test_rate_limit_wired_on_llm_routes(monkeypatch):
     async def never(*a, **k):
         raise AssertionError("should be rate limited first")
 
-    with patch.object(bs, "search_benchmarks_with_perplexity", never):
+    with patch.object(bs, "search_benchmarks", never):
         with pytest.raises(HTTPException) as exc:
             asyncio.run(bs.search_industry_benchmarks(bs.BenchmarkSearchRequest(industry="x"), db=None, current_user=_user(5)))
     assert exc.value.status_code == 429
