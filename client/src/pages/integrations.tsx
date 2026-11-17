@@ -32,6 +32,7 @@ import {
   Briefcase,
   Bell,
   Truck,
+  CreditCard,
   Megaphone,
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiHubspot, SiStripe } from "react-icons/si";
@@ -93,6 +94,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   zoho_books: <FileText className="h-6 w-6" />,
   tally: <Database className="h-6 w-6" />,
   shiprocket: <Truck className="h-6 w-6" />,
+  razorpay: <CreditCard className="h-6 w-6" />,
   meta_ads: <Megaphone className="h-6 w-6" />,
   razorpayx: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
@@ -106,6 +108,17 @@ const providerIcons: Record<string, React.ReactNode> = {
 };
 
 const integrationBenefits: Record<string, { dataImported: string[]; permissions: string[] }> = {
+  razorpay: {
+    dataImported: [
+      "Captured payments for the last full month (India time)",
+      "Gateway fees, excluding the GST on them",
+      "Refunds and payment-method mix (UPI, card, netbanking, wallet)",
+    ],
+    permissions: [
+      "Read access to payments with your key id and secret",
+      "FounderConsole only reads payments; it never creates refunds or payouts",
+    ],
+  },
   meta_ads: {
     dataImported: [
       "Monthly ad spend per ad account (last 3 full months)",
@@ -356,6 +369,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   shopify: { setupTime: "~10 min", category: "revenue" },
   woocommerce: { setupTime: "~10 min", category: "revenue" },
   shiprocket: { setupTime: "~5 min", category: "revenue" },
+  razorpay: { setupTime: "~5 min", category: "revenue" },
   meta_ads: { setupTime: "~10 min", category: "analytics" },
   brex: { setupTime: "~5 min", category: "revenue" },
   netsuite: { setupTime: "~15 min", category: "accounting" },
@@ -534,6 +548,12 @@ const paymentsProviders: IntegrationProvider[] = [
     features: ["RTO Rate", "Freight per Order", "COD Share", "Customer Returns"],
   },
   {
+    id: "razorpay",
+    name: "Razorpay",
+    description: "Payment gateway fees for Indian D2C: what Razorpay kept from last month's prepaid orders, for CM2 on the Profit screen",
+    features: ["Gateway Fee %", "Fees ex-GST", "Refunds", "UPI/Card Mix"],
+  },
+  {
     id: "meta_ads",
     name: "Meta Ads",
     description: "Facebook and Instagram ad spend per month, for CM3 and MER on the Profit screen. Meta's own purchase numbers are shown as platform-reported, not as revenue.",
@@ -689,7 +709,7 @@ export default function IntegrationsPage() {
     enabled: !!companyId,
   });
 
-  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
@@ -801,7 +821,7 @@ export default function IntegrationsPage() {
     }
   };
   
-  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -1477,6 +1497,10 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "email", label: "API User Email", placeholder: "Shiprocket > Settings > API > Create API user" },
     { field: "password", label: "API User Password", placeholder: "Password of that API user" },
   ],
+  razorpay: [
+    { field: "key_id", label: "Key ID", placeholder: "rzp_live_... (Razorpay Dashboard > Account & Settings > API Keys)" },
+    { field: "key_secret", label: "Key Secret", placeholder: "Shown once when the key is generated" },
+  ],
   meta_ads: [
     { field: "access_token", label: "Access Token (ads_read)", placeholder: "System user token from Meta Business Settings" },
     { field: "ad_account_ids", label: "Ad Account IDs", placeholder: "act_1234567890, act_2345678901" },
@@ -1559,7 +1583,7 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const connectorBackedProviders = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
+  const connectorBackedProviders = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
   const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {
