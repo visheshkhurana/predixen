@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useSubscription, usePlans, useStartTrial, useSubscribe, useBillingPortal,
@@ -42,6 +42,7 @@ function PlanCard({
   interval,
   annualLabel,
   paymentsEnabled,
+  busy = false,
 }: {
   plan: PlanData;
   currentPlan: string;
@@ -53,6 +54,7 @@ function PlanCard({
   interval: 'monthly' | 'annual';
   annualLabel: string;
   paymentsEnabled: boolean;
+  busy?: boolean;
 }) {
   const isCurrent = isActive && currentPlan === plan.id;
   const isUpgrade = planRank(plan.id) > planRank(isActive ? currentPlan : 'free');
@@ -136,14 +138,16 @@ function PlanCard({
       ) : (
         <button
           onClick={() => onSelect(plan.id)}
-          className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all
+          disabled={busy}
+          aria-busy={busy}
+          className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-60 disabled:cursor-wait
             ${popular
               ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30'
               : 'bg-white/[0.06] border border-white/[0.08] text-white/70 hover:bg-white/[0.1] hover:text-white'
             }`}
           data-testid={`plan-select-${plan.id}`}
         >
-          {isDowngrade ? 'Downgrade' : 'Upgrade'}
+          {busy ? 'Opening checkout…' : isDowngrade ? 'Downgrade' : 'Upgrade'}
           <ArrowRight className="h-3.5 w-3.5" />
         </button>
       )}
@@ -162,6 +166,15 @@ export default function BillingPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  // One checkout at a time: each Upgrade click creates a Razorpay subscription,
+  // so repeat clicks before the modal opens left extra unpaid subscriptions.
+  // A ref, not isPending, because rapid clicks land before the re-render.
+  const checkoutInFlight = useRef(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const endCheckout = () => {
+    checkoutInFlight.current = false;
+    setCheckoutBusy(false);
+  };
   const [interval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
 
   const plans = plansData?.plans || [];
@@ -201,6 +214,9 @@ export default function BillingPage() {
   }, []);
 
   const handleSelectPlan = (planId: string) => {
+    if (checkoutInFlight.current) return;
+    checkoutInFlight.current = true;
+    setCheckoutBusy(true);
     setSelectedPlan(planId);
     subscribe.mutate(
       { planId, interval },
@@ -208,7 +224,10 @@ export default function BillingPage() {
         onSuccess: (data) => {
           if (data.provider === 'razorpay' && data.subscription_id && data.key_id) {
             startRazorpayCheckout(data);
-          } else if (data.checkout_url) {
+            return;
+          }
+          endCheckout();
+          if (data.checkout_url) {
             window.location.href = data.checkout_url;
           } else if (data.portal_url) {
             // Already subscribed: downgrade/cancel or payment fix happens in the portal.
@@ -221,6 +240,7 @@ export default function BillingPage() {
           }
         },
         onError: (err: Error) => {
+          endCheckout();
           toast({ title: 'Could not start checkout', description: err.message, variant: 'destructive' });
         },
       },
@@ -238,6 +258,7 @@ export default function BillingPage() {
       // Only the signed handler response is sent; the server verifies the
       // signature and re-fetches the subscription before granting access.
       handler: (resp) => {
+        endCheckout();
         verifyRazorpay.mutate(resp, {
           onSuccess: (result) => {
             try {
@@ -261,9 +282,13 @@ export default function BillingPage() {
         });
       },
       modal: {
-        ondismiss: () => toast({ title: 'Checkout cancelled', description: 'No charge was made.' }),
+        ondismiss: () => {
+          endCheckout();
+          toast({ title: 'Checkout cancelled', description: 'No charge was made.' });
+        },
       },
     }).catch((err: Error) => {
+      endCheckout();
       toast({ title: 'Could not start checkout', description: err.message, variant: 'destructive' });
     });
   };
@@ -452,6 +477,7 @@ export default function BillingPage() {
             interval={interval}
             annualLabel={annualLabel}
             paymentsEnabled={paymentsEnabled}
+            busy={checkoutBusy}
           />
         ))}
       </div>
