@@ -23,6 +23,29 @@ function handleSessionExpired(method?: string, resUrl?: string) {
   hardRedirectToLogin();
 }
 
+/**
+ * The readable reason in an error body. FastAPI sends `detail` as a plain
+ * string ("Editing requires editor access"), a {message} object, or a list of
+ * validation errors; showing the HTTP status text instead ("Forbidden") tells
+ * the founder nothing.
+ */
+export function errorMessageFromBody(body: any): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const d = body.detail;
+  if (typeof d === 'string' && d.trim()) return d;
+  if (Array.isArray(d)) {
+    const msgs = d.map((e: any) => (typeof e === 'string' ? e : e?.msg)).filter(Boolean);
+    if (msgs.length) return msgs.join('; ');
+  }
+  if (d && typeof d === 'object') {
+    if (typeof d.message === 'string' && d.message) return d.message;
+    if (typeof d.detail === 'string' && d.detail) return d.detail;
+  }
+  if (typeof body.message === 'string' && body.message) return body.message;
+  if (typeof body.error === 'string' && body.error) return body.error;
+  return null;
+}
+
 async function throwIfResNotOk(res: Response, method?: string) {
   if (!res.ok) {
     if (res.status === 401) {
@@ -35,7 +58,7 @@ async function throwIfResNotOk(res: Response, method?: string) {
       const parsedData = await safeParseJSON(res, `Request failed (${res.status})`);
       if (parsedData) {
         detail = parsedData.detail || parsedData;
-        message = detail.message || detail.detail || parsedData.message || message;
+        message = errorMessageFromBody(parsedData) || message;
         if (typeof detail.detail === 'object') {
           detail = detail.detail;
           message = detail.message || message;

@@ -709,6 +709,13 @@ export default function IntegrationsPage() {
     enabled: !!companyId,
   });
 
+  // Only some providers have a sample to preview; offering the button on the
+  // rest ended in a bare "400: Bad Request".
+  const { data: sampleProviders } = useQuery<Array<{ provider_id: string }>>({
+    queryKey: ["/api/connectors/sample-providers"],
+  });
+  const sampleProviderIds = new Set((sampleProviders ?? []).map((p) => p.provider_id));
+
   const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const syncMutation = useMutation({
@@ -948,6 +955,7 @@ export default function IntegrationsPage() {
                 ) : (
                   <ConnectDialog provider={provider} type={type} companyId={companyId} />
                 )}
+                {sampleProviderIds.has(provider.id) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -962,6 +970,7 @@ export default function IntegrationsPage() {
                   )}
                   Test with Sample Data
                 </Button>
+                )}
               </>
             )}
           </div>

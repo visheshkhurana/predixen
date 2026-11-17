@@ -11,6 +11,11 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+# httpx logs every request URL at INFO. Some providers (Meta Graph) take the
+# access token as a query parameter, so those lines would write customers'
+# tokens into the deploy logs. Keep only warnings and errors from the clients.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 print(f"[main.py] Importing FastAPI... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 from fastapi import Depends, FastAPI

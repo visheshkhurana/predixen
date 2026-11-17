@@ -38,6 +38,11 @@ export interface CspOptions {
  * anyone (CSP twin of X-Frame-Options: DENY); embeds keep frame-ancestors *.
  * No plugins, and no <base> pointing scripts at another origin.
  */
+// gtag sends Google Ads conversions (e.g. sign_up) to these hosts; without them
+// the CSP blocked every conversion and paid campaigns could not attribute signups.
+export const GOOGLE_ADS_HOSTS =
+  "https://pagead2.googlesyndication.com https://www.googleadservices.com https://googleads.g.doubleclick.net";
+
 export function CSP_HARDENING(isEmbed: boolean): string[] {
   return [...(isEmbed ? [] : ["frame-ancestors 'none'"]), "object-src 'none'", "base-uri 'self'"];
 }
@@ -63,13 +68,13 @@ export function buildCsp(opts: CspOptions): string {
     "font-src 'self' https://fonts.gstatic.com",
     // X fires its conversion beacons as image/pixel requests to t.co and
     // analytics.twitter.com as well as via fetch.
-    "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com https://t.co https://analytics.twitter.com https://static.ads-twitter.com" + rzp("https://cdn.razorpay.com"),
+    "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com https://t.co https://analytics.twitter.com https://static.ads-twitter.com " + GOOGLE_ADS_HOSTS + rzp("https://cdn.razorpay.com"),
     // GA4 sends /g/collect beacons to analytics.google.com, stats.g.doubleclick.net
     // and www.google.com — not just www.google-analytics.com. Google also routes
     // some traffic through regional endpoints (region1.google-analytics.com /
     // region1.analytics.google.com). Omitting any of them silently drops a
     // share of measurement traffic.
-    `connect-src 'self' ${sockets} https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com https://analytics.twitter.com https://t.co https://static.ads-twitter.com` + rzp("https://api.razorpay.com https://lumberjack.razorpay.com"),
+    `connect-src 'self' ${sockets} https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://stats.g.doubleclick.net ${GOOGLE_ADS_HOSTS} https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com https://analytics.twitter.com https://t.co https://static.ads-twitter.com` + rzp("https://api.razorpay.com https://lumberjack.razorpay.com"),
     opts.isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com" + rzp("https://api.razorpay.com https://checkout.razorpay.com"),
     ...CSP_HARDENING(opts.isEmbed),
   ].join("; ");

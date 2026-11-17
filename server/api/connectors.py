@@ -543,7 +543,9 @@ async def connect_provider(
 
         if not auth_success:
             detail = getattr(connector, "auth_error", None) or "Authentication failed. Check your credentials."
-            raise HTTPException(status_code=401, detail=detail)
+            # 400, not 401: the browser treats 401 as "your session expired" and
+            # signs the founder out over a wrong API key.
+            raise HTTPException(status_code=400, detail=detail)
 
         # Encrypt sensitive credentials before storing in database
         encrypted_creds = encrypt_credentials(creds_to_store)

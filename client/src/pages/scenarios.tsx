@@ -870,7 +870,9 @@ export default function ScenariosPage() {
       params.growth_uplift_pct -= 5;
     }
 
-    if ((q.includes('market') || q.includes('expan')) && !competitorMatch) {
+    // Whole word only: "marketing" (as in "Cut marketing 30%") is a cost lever,
+    // not new-market expansion, and must not pick up its +25% growth.
+    if ((/\bmarkets?\b/.test(q) || q.includes('expan')) && !competitorMatch) {
       if (!matched || !tags.includes('growth')) {
         params.growth_uplift_pct += 25;
         params.burn_reduction_pct = params.burn_reduction_pct || -15;

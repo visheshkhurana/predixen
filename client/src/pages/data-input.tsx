@@ -1438,9 +1438,9 @@ export default function DataInput() {
                           {/* Must stay in step with COLUMN_MAPPINGS in server/api/csv_import.py —
                               cogs and other_costs were missing here even though the importer
                               reads them and uses cogs to derive gross margin. */}
-                          {["date", "revenue", "expenses", "cogs", "other_costs", "cash_balance", "payroll", "mrr", "arr", "customers", "headcount", "burn", "gross_margin", "cac"].map((field) => (
+                          {["date", "revenue", "expenses", "marketing", "cogs", "other_costs", "cash_balance", "payroll", "mrr", "arr", "customers", "headcount", "burn", "gross_margin", "cac"].map((field) => (
                             <div key={field} className="space-y-1">
-                              <Label className="text-xs capitalize">{field.replace("_", " ")}</Label>
+                              <Label className="text-xs capitalize">{field === "marketing" ? "Marketing (added to costs)" : field.replace("_", " ")}</Label>
                               <Select
                                 value={csvMappings[field] || "__none__"}
                                 onValueChange={(v) => setCsvMappings(prev => ({ ...prev, [field]: v === "__none__" ? "" : v }))}
