@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { prefillFromBaseline, type BaselineSuggestion } from "@/lib/profitPrefill";
 import { useFounderStore } from "@/store/founderStore";
 import { formatCurrencyAbbrev } from "@/lib/utils";
 import { Loader2, IndianRupee, Truck, Megaphone, Package, AlertTriangle } from "lucide-react";
@@ -320,15 +321,17 @@ export default function ProfitPage() {
   const currency = (currentCompany?.currency || "USD").toUpperCase();
   const [period, setPeriod] = useState(currentMonth());
 
-  const { data, isLoading } = useQuery<{ months: MonthView[] }>({
+  const { data, isLoading } = useQuery<{ months: MonthView[]; baseline?: BaselineSuggestion | null }>({
     queryKey: ["/api/companies", companyId, "d2c/months"],
     enabled: !!companyId,
   });
   const months = data?.months ?? [];
   const selected = months.find((m) => m.period.startsWith(period));
   const original = useMemo(() => toForm(selected?.inputs), [selected]);
+  const prefill = useMemo(() => prefillFromBaseline(selected?.inputs, data?.baseline), [selected, data?.baseline]);
+  const prefilled = Object.keys(prefill).length > 0;
   const [form, setForm] = useState<Record<string, string>>(original);
-  useEffect(() => setForm(original), [original]);
+  useEffect(() => setForm({ ...original, ...prefill }), [original, prefill]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -416,6 +419,11 @@ export default function ProfitPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {prefilled && (
+                <p className="mb-4 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground" data-testid="profit-prefill-note">
+                  Sales{prefill.cogs ? " and COGS" : ""} are filled in from the monthly numbers you entered for {data?.baseline?.period}. Check they are ex-GST for {period}, add orders, then save.
+                </p>
+              )}
               <form
                 className="space-y-6"
                 onSubmit={(e) => {

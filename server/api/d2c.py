@@ -101,8 +101,36 @@ def list_company_months(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    get_user_company(db, company_id, current_user)
-    return {"months": d2c_months.list_months(db, company_id, limit=max(1, min(limit, 36)))}
+    company = get_user_company(db, company_id, current_user)
+    return {
+        "months": d2c_months.list_months(db, company_id, limit=max(1, min(limit, 36))),
+        "baseline": _baseline_suggestion(db, company),
+    }
+
+
+def _baseline_suggestion(db: Session, company) -> Optional[dict]:
+    """Monthly sales and product cost from the founder's latest financials
+    (onboarding entry or upload), so an empty month can start from numbers
+    they already gave us. Only a suggestion: nothing is saved until they do.
+    """
+    if getattr(company, "is_sample", False):
+        return None
+    from server.models.financial import FinancialRecord
+
+    record = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company.id, FinancialRecord.revenue > 0)
+        .order_by(FinancialRecord.period_start.desc(), FinancialRecord.id.desc())
+        .first()
+    )
+    if record is None:
+        return None
+    cogs = record.cogs if record.cogs and record.cogs > 0 else None
+    return {
+        "gross_sales": round(float(record.revenue), 2),
+        "cogs": round(float(cogs), 2) if cogs is not None else None,
+        "period": record.period_start.strftime("%Y-%m"),
+    }
 
 
 @company_router.put("/companies/{company_id}/d2c/months/{period}")
