@@ -11,7 +11,9 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
-import { useCreateCompany, useManualBaseline, useRunTruthScan, useSeedSample, useTerminaExcelUpload, useTerminaPdfUpload } from '@/api/hooks';
+import { INDUSTRY_OPTIONS, STAGE_OPTIONS } from '@/lib/companyOptions';
+import { apiRequest, errorMessageFromBody } from '@/lib/queryClient';
+import { useCreateCompany, useUpdateCompany, useManualBaseline, useRunTruthScan, useSeedSample, useTerminaExcelUpload, useTerminaPdfUpload } from '@/api/hooks';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { HelpCircle, Sparkles, Check, AlertCircle, Loader2, ArrowRight, ArrowLeft, TrendingDown, DollarSign, Activity, FileUp, FileText, X } from 'lucide-react';
@@ -163,6 +165,7 @@ export default function OnboardingPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [showManualInputs, setShowManualInputs] = useState(false);
   const [baselineSaved, setBaselineSaved] = useState(false);
+  const [isCsvImporting, setIsCsvImporting] = useState(false);
   // Has the founder actually supplied any baseline numbers — typed them,
   // extracted them from an upload, or explicitly accepted the stage defaults?
   // Until they have, the Health Check must say "no data" rather than present
@@ -222,6 +225,11 @@ export default function OnboardingPage() {
   }, [existingCompanies]);
 
   const createCompanyMutation = useCreateCompany();
+  const updateCompanyMutation = useUpdateCompany();
+  // The company this onboarding already created. Going Back to step 1 and
+  // pressing Next again updates it instead of creating a duplicate (which
+  // failed with "A company with this name already exists").
+  const [createdCompanyId, setCreatedCompanyId] = useState<number | null>(null);
   const manualBaselineMutation = useManualBaseline();
   const runTruthScanMutation = useRunTruthScan();
   const seedSampleMutation = useSeedSample();
@@ -292,7 +300,7 @@ export default function OnboardingPage() {
   const handleCompanySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (isSubmitting || createCompanyMutation.isPending) return;
+    if (isSubmitting || createCompanyMutation.isPending || updateCompanyMutation.isPending) return;
 
     const { user } = useFounderStore.getState();
     if (!user) {
@@ -322,7 +330,13 @@ export default function OnboardingPage() {
 
     setIsSubmitting(true);
     try {
-      const company = await createCompanyMutation.mutateAsync(companyData);
+      const company = createdCompanyId
+        ? await updateCompanyMutation.mutateAsync({
+            id: createdCompanyId,
+            data: { name: companyData.name.trim(), industry: companyData.industry, stage: companyData.stage, currency: companyData.currency },
+          })
+        : await createCompanyMutation.mutateAsync(companyData);
+      setCreatedCompanyId(company.id);
       setCurrentCompany(company);
       markStepComplete(1);
 
@@ -376,8 +390,8 @@ export default function OnboardingPage() {
 
   const pickUploadFile = (file: File) => {
     const ext = file.name.toLowerCase().split('.').pop() || '';
-    if (!['xlsx', 'xls', 'pdf'].includes(ext)) {
-      setUploadError('Please choose an .xlsx, .xls or .pdf file. CSV imports live on the Data page after setup.');
+    if (!['xlsx', 'xls', 'pdf', 'csv'].includes(ext)) {
+      setUploadError('Please choose a .csv, .xlsx, .xls or .pdf file.');
       return;
     }
     setUploadError(null);
@@ -398,6 +412,10 @@ export default function OnboardingPage() {
     if (!uploadFile || !currentCompany) return;
     setUploadError(null);
     const ext = uploadFile.name.toLowerCase().split('.').pop() || '';
+    if (ext === 'csv') {
+      await importCsvFromOnboarding(uploadFile, currentCompany.id);
+      return;
+    }
 
     try {
       const result: any = ext === 'pdf'
@@ -445,6 +463,50 @@ export default function OnboardingPage() {
       const message = err instanceof ApiError ? err.message : 'We could not read that file.';
       setUploadError(`${message} You can enter the numbers manually instead.`);
       setShowManualInputs(true);
+    }
+  };
+
+  /**
+   * A monthly CSV (one row per month) is imported as-is, the same way the
+   * Data page does it, using the auto-detected column mapping. If the date or
+   * revenue column can't be recognised, the founder is told to map it on the
+   * Data page rather than guessing.
+   */
+  const importCsvFromOnboarding = async (file: File, companyId: number) => {
+    setIsCsvImporting(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const detectRes = await fetch(`/api/companies/${companyId}/financials/csv-detect`, { method: 'POST', credentials: 'include', body: form });
+      const detected = await detectRes.json().catch(() => ({}));
+      if (!detectRes.ok) {
+        setUploadError(errorMessageFromBody(detected) || 'We could not read that CSV. You can enter the numbers manually instead.');
+        setShowManualInputs(true);
+        return;
+      }
+      const mappings: Record<string, string> = detected.suggested_mappings || {};
+      if (!mappings.date || !mappings.revenue) {
+        setUploadError('We could not tell which columns hold the month and revenue. Finish setup, then import it from the Data page where you can match the columns yourself, or enter the numbers below.');
+        setShowManualInputs(true);
+        return;
+      }
+      const res = await apiRequest('POST', `/api/companies/${companyId}/financials/import-csv`, { mappings, rows: detected.all_rows || [] });
+      const data = await res.json();
+      if (!data.imported) {
+        const firstErr = data.errors?.[0]?.error;
+        setUploadError(`No months were imported${firstErr ? `: ${firstErr}` : ''}. You can enter the numbers manually instead.`);
+        setShowManualInputs(true);
+        return;
+      }
+      setBaselineSaved(true);
+      setShowManualInputs(false);
+      setUploadSummary(`Imported ${data.imported} month${data.imported === 1 ? '' : 's'} from ${file.name}. Your dashboard uses the latest month.`);
+      toast({ title: 'CSV imported', description: `${data.imported} months saved.` });
+    } catch (err) {
+      setUploadError(`${err instanceof Error ? err.message : 'We could not import that CSV.'} You can enter the numbers manually instead.`);
+      setShowManualInputs(true);
+    } finally {
+      setIsCsvImporting(false);
     }
   };
 
@@ -805,23 +867,7 @@ export default function OnboardingPage() {
                         <SelectValue placeholder="Select industry..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="general_saas">SaaS</SelectItem>
-                        <SelectItem value="fintech">Fintech</SelectItem>
-                        <SelectItem value="ecommerce">E-commerce</SelectItem>
-                        <SelectItem value="d2c">D2C / Consumer</SelectItem>
-                        <SelectItem value="marketplace">Marketplace</SelectItem>
-                        <SelectItem value="healthcare">Healthcare / BioTech</SelectItem>
-                        <SelectItem value="edtech">EdTech</SelectItem>
-                        <SelectItem value="agritech">AgriTech</SelectItem>
-                        <SelectItem value="deeptech">DeepTech / Hardware</SelectItem>
-                        <SelectItem value="climate">Climate / CleanTech</SelectItem>
-                        <SelectItem value="media">Media / Entertainment</SelectItem>
-                        <SelectItem value="logistics">Logistics / Supply Chain</SelectItem>
-                        <SelectItem value="real_estate">Real Estate / PropTech</SelectItem>
-                        <SelectItem value="food">Food / CPG</SelectItem>
-                        <SelectItem value="agency">Agency / services</SelectItem>
-                        <SelectItem value="startup">Early-stage / pre-revenue</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        {INDUSTRY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -836,14 +882,7 @@ export default function OnboardingPage() {
                         <SelectValue placeholder="Select stage..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="pre_seed">Pre-seed</SelectItem>
-                        <SelectItem value="seed">Seed</SelectItem>
-                        <SelectItem value="pre_series_a">Pre-Series A</SelectItem>
-                        <SelectItem value="series_a">Series A</SelectItem>
-                        <SelectItem value="series_b">Series B+</SelectItem>
-                        <SelectItem value="growth">Growth Stage</SelectItem>
-                        <SelectItem value="pre_ipo">Pre-IPO</SelectItem>
-                        <SelectItem value="public">Public / Listed</SelectItem>
+                        {STAGE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -927,6 +966,7 @@ export default function OnboardingPage() {
                         <p className="text-sm text-muted-foreground mt-1">
                           Enter your key financial numbers directly. Quick setup in under 2 minutes.
                         </p>
+                        <p className="text-xs text-muted-foreground mt-1">You'll type: monthly revenue, gross margin, monthly costs, cash in the bank and headcount. Rough numbers are fine.</p>
                       </div>
                     </div>
                   </div>
@@ -954,8 +994,9 @@ export default function OnboardingPage() {
                       <div className="flex-1">
                         <h3 className="font-medium">Upload a Statement</h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Upload a PDF or Excel financial statement and we'll pull the numbers out for you to check.
+                          Upload a CSV, Excel or PDF profit &amp; loss and we'll pull the numbers out for you to check.
                         </p>
+                        <p className="text-xs text-muted-foreground mt-1">A CSV with one row per month imports straight away. Excel and PDF figures are shown for you to confirm before saving.</p>
                       </div>
                     </div>
                   </div>
@@ -978,7 +1019,7 @@ export default function OnboardingPage() {
                         <input
                           ref={uploadInputRef}
                           type="file"
-                          accept=".xlsx,.xls,.pdf"
+                          accept=".csv,.xlsx,.xls,.pdf"
                           className="hidden"
                           onChange={(e) => e.target.files?.[0] && pickUploadFile(e.target.files[0])}
                           data-testid="input-onboarding-file"
@@ -1023,7 +1064,7 @@ export default function OnboardingPage() {
                               </Button>
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              .xlsx, .xls or .pdf — CSV imports are available on the Data page once you're set up.
+                              .csv (one row per month), .xlsx, .xls or .pdf
                             </p>
                           </div>
                         )}
@@ -1034,10 +1075,10 @@ export default function OnboardingPage() {
                           <Button
                             type="button"
                             onClick={handleExtractUpload}
-                            disabled={isExtracting}
+                            disabled={isExtracting || isCsvImporting}
                             data-testid="button-extract-onboarding-file"
                           >
-                            {isExtracting ? (
+                            {isExtracting || isCsvImporting ? (
                               <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Reading file...
@@ -1105,11 +1146,12 @@ export default function OnboardingPage() {
                             ? 'Sync Shopify, Shiprocket, Meta Ads, Tally and 30+ more tools for real-time data.'
                             : 'Sync Stripe, QuickBooks, Gusto and 30+ more tools for real-time data.'}
                         </p>
+                        <p className="text-xs text-muted-foreground mt-1">You'll finish setup first, then connect each app from Integrations with its login or API key. Your dashboard fills in after the first sync.</p>
                         {dataSourceChoice === 'connect' && (
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <Badge variant="secondary" className="text-xs">Stripe</Badge>
-                            <Badge variant="secondary" className="text-xs">QuickBooks</Badge>
-                            <Badge variant="secondary" className="text-xs">Gusto</Badge>
+                            {(isGoods ? ['Shopify', 'Shiprocket', 'Razorpay', 'Meta Ads'] : ['Stripe', 'QuickBooks', 'Gusto']).map((n) => (
+                              <Badge key={n} variant="secondary" className="text-xs">{n}</Badge>
+                            ))}
                             <Badge variant="secondary" className="text-xs">+ More</Badge>
                           </div>
                         )}
@@ -1148,6 +1190,18 @@ export default function OnboardingPage() {
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </>
                     )}
+                  </Button>
+                </div>
+                <div className="text-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-muted-foreground"
+                    onClick={() => { markStepComplete(2); setStep(3); }}
+                    disabled={isSubmitting}
+                    data-testid="button-skip-step2"
+                  >
+                    Skip for now, I'll add data later
                   </Button>
                 </div>
               </div>

@@ -1,4 +1,5 @@
 import { useFounderStore } from "@/store/founderStore";
+import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Building2, GitBranch, Play, Clock, Database } from "lucide-react";
@@ -40,18 +41,19 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded hover-elevate cursor-default">
+          <Link href="/settings?tab=company" className="flex items-center gap-1 px-1.5 py-0.5 rounded hover-elevate cursor-pointer" aria-label={`Edit ${currentCompany.name} details`}>
             <Building2 className="h-3 w-3 text-primary" />
             <span className="font-medium truncate max-w-[120px]" data-testid="context-company">
               {currentCompany.name}
             </span>
-          </div>
+          </Link>
         </TooltipTrigger>
         <TooltipContent side="bottom">
           <div className="text-xs">
             <p className="font-medium">{currentCompany.name}</p>
             {currentCompany.industry && <p className="text-muted-foreground">{currentCompany.industry}</p>}
             {currentCompany.stage && <p className="text-muted-foreground">Stage: {currentCompany.stage}</p>}
+            <p className="text-muted-foreground">Click to edit company details</p>
           </div>
         </TooltipContent>
       </Tooltip>

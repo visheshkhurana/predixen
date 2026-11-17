@@ -285,7 +285,11 @@ test("D2C links the calculator and the D2C posts", () => {
 /* -------------------------------- onboarding -------------------------------- */
 
 test("onboarding prefill maps only to values the Industry select offers", () => {
-  const offered = new Set([...ONBOARDING.matchAll(/<SelectItem value="([a-z0-9_]+)">/g)].map((m) => m[1]));
+  // The Industry select renders INDUSTRY_OPTIONS from client/src/lib/companyOptions.ts.
+  assert.match(ONBOARDING, /INDUSTRY_OPTIONS\.map/);
+  const OPTIONS = readFileSync("client/src/lib/companyOptions.ts", "utf8");
+  const industryBlock = OPTIONS.slice(OPTIONS.indexOf("INDUSTRY_OPTIONS"), OPTIONS.indexOf("STAGE_OPTIONS"));
+  const offered = new Set([...industryBlock.matchAll(/value: "([a-z0-9_]+)"/g)].map((m) => m[1]));
   for (const p of INDUSTRY_PAGES) {
     if (p.onboardingIndustry) assert.ok(offered.has(p.onboardingIndustry), `${p.slug} -> ${p.onboardingIndustry}`);
   }
