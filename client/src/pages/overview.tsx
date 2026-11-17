@@ -74,6 +74,8 @@ import {
   Cell,
 } from 'recharts';
 import { useFounderStore } from '@/store/founderStore';
+import { useWorkspaceMembers } from '@/api/workspace';
+import { isViewOnlyMember } from '@/lib/companyRole';
 import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBenchmarkIndustries, useSeedSample } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct, formatRunway } from '@/lib/utils';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
@@ -1114,46 +1116,7 @@ export default function OverviewPage() {
               </div>
             </div>
             <Separator />
-            <div className="flex flex-wrap gap-3">
-              <Button
-                data-testid="button-seed-sample"
-                disabled={seedSampleMutation.isPending}
-                onClick={() => {
-                  seedSampleMutation.mutate(currentCompany.id, {
-                    onSuccess: () => {
-                      toast({
-                        title: 'Sample insight ready',
-                        description: 'These numbers are simulated — not your company.',
-                      });
-                      setTimeout(() => window.location.reload(), 1200);
-                    },
-                    onError: (err: any) => {
-                      const msg = err?.message || '';
-                      if (msg.includes('401') || msg.includes('authentication') || msg.includes('credentials')) {
-                        toast({ title: 'Session expired', description: 'Please sign in again to load sample data.', variant: 'destructive' });
-                      } else {
-                        toast({ title: 'Failed to load sample data', description: msg || 'Please try again.', variant: 'destructive' });
-                      }
-                    },
-                  });
-                }}
-              >
-                {seedSampleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
-                Load labelled sample data
-              </Button>
-              <Link href="/data-input">
-                <Button variant="outline" data-testid="button-upload-financials">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Financials
-                </Button>
-              </Link>
-              <Link href="/settings?tab=integrations">
-                <Button variant="ghost" data-testid="button-connect-sources">
-                  <Rocket className="h-4 w-4 mr-2" />
-                  Connect Data Sources
-                </Button>
-              </Link>
-            </div>
+            <EmptyStateActions companyId={currentCompany.id} seedSampleMutation={seedSampleMutation} toast={toast} />
           </CardContent>
         </Card>
       </div>
@@ -2511,5 +2474,59 @@ export default function OverviewPage() {
 
       <IOLegend position="bottom" defaultOpen={false} />
     </div>
+  );
+}
+
+function EmptyStateActions({ companyId, seedSampleMutation, toast }: { companyId: number; seedSampleMutation: ReturnType<typeof useSeedSample>; toast: ReturnType<typeof useToast>['toast'] }) {
+  const user = useFounderStore((s) => s.user);
+  const { data: members } = useWorkspaceMembers(companyId);
+  if (isViewOnlyMember(members, user?.id)) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="text-view-only-empty">
+        You have view-only access to this company. Once the owner adds financials, they will appear here.
+      </p>
+    );
+  }
+  return (
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  data-testid="button-seed-sample"
+                  disabled={seedSampleMutation.isPending}
+                  onClick={() => {
+                    seedSampleMutation.mutate(companyId, {
+                      onSuccess: () => {
+                        toast({
+                          title: 'Sample insight ready',
+                          description: 'These numbers are simulated — not your company.',
+                        });
+                        setTimeout(() => window.location.reload(), 1200);
+                      },
+                      onError: (err: any) => {
+                        const msg = err?.message || '';
+                        if (msg.includes('401') || msg.includes('authentication') || msg.includes('credentials')) {
+                          toast({ title: 'Session expired', description: 'Please sign in again to load sample data.', variant: 'destructive' });
+                        } else {
+                          toast({ title: 'Failed to load sample data', description: msg || 'Please try again.', variant: 'destructive' });
+                        }
+                      },
+                    });
+                  }}
+                >
+                  {seedSampleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
+                  Load labelled sample data
+                </Button>
+                <Link href="/data-input">
+                  <Button variant="outline" data-testid="button-upload-financials">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Financials
+                  </Button>
+                </Link>
+                <Link href="/settings?tab=integrations">
+                  <Button variant="ghost" data-testid="button-connect-sources">
+                    <Rocket className="h-4 w-4 mr-2" />
+                    Connect Data Sources
+                  </Button>
+                </Link>
+              </div>
   );
 }
