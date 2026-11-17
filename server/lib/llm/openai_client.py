@@ -350,6 +350,56 @@ class AuditedOpenAIClient:
         """
         return _AuditedChatNamespace(self)
 
+    @property
+    def responses(self):
+        """``llm_client.responses.create(...)`` with a string ``input``.
+
+        Same contract as ``chat``: the input is redacted, an llm_audit_logs row
+        is written (endpoint ``responses``), and the raw provider response is
+        returned so callers read ``response.output_text``.
+        """
+        return _AuditedResponses(self)
+
+
+class _AuditedResponses:
+    def __init__(self, audited: AuditedOpenAIClient):
+        self._audited = audited
+
+    def create(self, **kwargs):
+        model = kwargs.get("model", "gpt-5")
+        original_input = kwargs.get("input", "")
+        if not isinstance(original_input, str):
+            raise TypeError("audited responses.create only supports a string input")
+        redaction = redact_text(original_input, self._audited.pii_mode)
+        call_kwargs = dict(kwargs)
+        call_kwargs["input"] = redaction.redacted_text
+
+        start_time = time.time()
+        try:
+            response = self._audited.client.responses.create(**call_kwargs)
+        except Exception as e:
+            self._audited._create_audit_log(
+                endpoint="responses",
+                model=model,
+                original_input=original_input,
+                redaction_result=redaction,
+                output=f"ERROR: {str(e)}",
+                latency_ms=int((time.time() - start_time) * 1000),
+            )
+            raise
+        usage = getattr(response, "usage", None)
+        self._audited._create_audit_log(
+            endpoint="responses",
+            model=model,
+            original_input=original_input,
+            redaction_result=redaction,
+            output=getattr(response, "output_text", "") or "",
+            tokens_in=getattr(usage, "input_tokens", None) if usage else None,
+            tokens_out=getattr(usage, "output_tokens", None) if usage else None,
+            latency_ms=int((time.time() - start_time) * 1000),
+        )
+        return response
+
 
 class _AuditedChatNamespace:
     def __init__(self, audited: AuditedOpenAIClient):

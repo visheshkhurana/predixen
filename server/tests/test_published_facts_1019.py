@@ -71,15 +71,8 @@ RETIRED_OFFER_PHRASES = (
     "Paid plans from $29",
 )
 STALE_COUNT_PHRASES = (
-    "37 data connector",
-    "37 Data Connector",
-    "37 connectors",
-    "37 read-only",
-    "37 integrations",
-    "37 real OAuth",
-    "37 production connector",
-    'value: 37, suffix: "+"',
-    'value="37+"',
+    # 37 was an old overstatement (registry had 34); it is the real count
+    # again since Razorpay, so it is no longer listed here.
     # 34 until Shiprocket became the 35th connector.
     "34 data connector",
     "34 Data Connector",
@@ -102,6 +95,17 @@ STALE_COUNT_PHRASES = (
     'value: 35, suffix: "+"',
     'value="35+"',
     "35+ connect",
+    # 36 until Razorpay (payment gateway) became the 37th connector.
+    "36 data connector",
+    "36 Data Connector",
+    "36 connectors",
+    "36 read-only",
+    "36 integrations",
+    "36 data integrations",
+    "36 real OAuth",
+    "36 production connector",
+    'value: 36, suffix: "+"',
+    'value="36+"',
 )
 
 
@@ -116,16 +120,16 @@ def _registered_module_names() -> list[str]:
     raise AssertionError("_CONNECTOR_MODULES not found")
 
 
-def test_registry_has_36_connectors():
+def test_registry_has_37_connectors():
     names = _registered_module_names()
-    assert len(names) == 36, names
-    assert len(set(names)) == 36
+    assert len(names) == 37, names
+    assert len(set(names)) == 37
     connectors_pkg.load_all_connectors()
     registered = ConnectorRegistry.get_available_providers()
-    assert len(registered) == 36, sorted(registered)
+    assert len(registered) == 37, sorted(registered)
 
 
-def test_llms_txt_prices_the_free_plan_and_counts_36_connectors():
+def test_llms_txt_prices_the_free_plan_and_counts_37_connectors():
     # Paid plans went live 2026-11-15. llms.txt is static (no billing gate),
     # so it states only what is true in both states: the Free plan, no card.
     text = LLMS.read_text()
@@ -139,8 +143,8 @@ def test_llms_txt_prices_the_free_plan_and_counts_36_connectors():
     assert "$29" not in text
     assert "$49" not in text
     assert "$99" not in text
-    assert "36 read-only data connectors" in text
-    assert "37" not in text
+    assert "37 read-only data connectors" in text
+    assert "36 read-only" not in text
 
 
 def test_sameas_does_not_cite_the_missing_github_org():
@@ -181,7 +185,7 @@ def test_landing_frames_the_published_plans_as_planned():
     assert "free during the public beta" in text
 
 
-def test_current_marketing_copy_does_not_claim_37_connectors():
+def test_current_marketing_copy_has_no_stale_connector_count():
     for path in COUNT_FILES:
         text = path.read_text()
         for phrase in STALE_COUNT_PHRASES:

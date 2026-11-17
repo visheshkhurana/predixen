@@ -62,10 +62,10 @@ def test_prerender_reads_the_shared_config():
 
 def test_copy_respects_published_facts():
     text = CONFIG.read_text()
-    for phrase in ("$29", "$49", "$99", "30-day", "Start Free Trial", "37 "):
+    for phrase in ("$29", "$49", "$99", "30-day", "Start Free Trial"):
         assert phrase not in text, phrase
     for count in re.findall(r"(\d+) (?:read-only )?(?:data )?connectors", text):
-        assert count == "36"
+        assert count == "37"
     # Paid plans are live (2026-11-15): the only price claim is the Free plan,
     # which is true whether payments are on or off.
     assert "public beta" not in text.lower()

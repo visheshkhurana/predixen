@@ -78,6 +78,7 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: "typed",
   shopify: "Shopify",
   shiprocket: "Shiprocket",
+  razorpay: "Razorpay",
   meta_ads: "Meta Ads",
   google_ads: "Google Ads",
 };
@@ -411,7 +412,7 @@ export default function ProfitPage() {
             <CardHeader>
               <CardTitle>Inputs for {period}</CardTitle>
               <CardDescription>
-                Numbers from <Link href="/integrations" className="underline">Shopify, Shiprocket and Meta Ads</Link> fill in automatically. Anything you type here is kept, even after the next sync.
+                Numbers from <Link href="/integrations" className="underline">Shopify, Shiprocket, Razorpay and Meta Ads</Link> fill in automatically. Anything you type here is kept, even after the next sync.
               </CardDescription>
             </CardHeader>
             <CardContent>

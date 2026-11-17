@@ -223,14 +223,14 @@ test("no picker markup in the server-rendered HTML a crawler receives", () => {
 test("no planned prices, retired offers, stale counts or invented social proof", () => {
   const forbidden = [
     "$29", "$49", "$99", "30-day", "Start Free Trial", "free trial",
-    "37 data connector", "37 connectors", "37 read-only", "37 integrations",
+    "36 data connector", "36 connectors", "36 read-only", "36 integrations",
     "trusted by", "Trusted by", "testimonial", "loved by", "used by",
   ];
   const copy = JSON.stringify(INDUSTRY_PAGES);
   for (const phrase of forbidden) assert.ok(!copy.includes(phrase), `config contains ${phrase}`);
-  // Any connector count stated is 36.
+  // Any connector count stated is 37.
   for (const m of copy.matchAll(/(\d+)\s+(?:read-only\s+)?(?:data\s+)?connectors/g)) {
-    assert.equal(m[1], "36", `connector count ${m[0]}`);
+    assert.equal(m[1], "37", `connector count ${m[0]}`);
   }
   // No "N founders/brands/companies/customers use ..." style counts.
   assert.doesNotMatch(copy, /\b\d[\d,.]*\+?\s*(founders|brands|companies|customers|startups|teams)\b/i);
