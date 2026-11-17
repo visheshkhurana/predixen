@@ -228,7 +228,7 @@ def free_client(monkeypatch):
         LoginHistory.__table__,
         RevokedAccessToken.__table__,
         UserSessionCutoff.__table__,
-        Company.__table__,
+        Company.__table__, __import__('server.models.workspace', fromlist=['WorkspaceMember']).WorkspaceMember.__table__,
         CompanyState.__table__,
         ImportSession.__table__,
         FinancialRecord.__table__,

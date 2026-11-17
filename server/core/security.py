@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, status, Request, Response, Cookie
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from server.core.company_access import company_access_clause
 from server.core.config import settings
 from server.core.db import get_db
 import json
@@ -415,7 +416,7 @@ def require_company_access(company_id: int):
         # Regular users can only access their own companies
         company = db.query(Company).filter(
             Company.id == company_id,
-            Company.user_id == current_user.id
+            company_access_clause(current_user)
         ).first()
 
         if not company:

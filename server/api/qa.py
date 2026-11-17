@@ -7,6 +7,7 @@ from sqlalchemy import func, text
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.config import settings
@@ -30,7 +31,7 @@ def require_qa_access(current_user: User = Depends(get_current_user)):
 
 @router.get("/whoami")
 def qa_whoami(current_user: User = Depends(require_qa_access), db: Session = Depends(get_db)):
-    owned_companies = db.query(Company).filter(Company.user_id == current_user.id).all()
+    owned_companies = db.query(Company).filter(company_access_clause(current_user)).all()
     owned_ids = [c.id for c in owned_companies]
 
     member_rows = db.query(WorkspaceMember).filter(WorkspaceMember.user_id == current_user.id).all()

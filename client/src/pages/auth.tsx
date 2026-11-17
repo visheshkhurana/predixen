@@ -312,7 +312,13 @@ export default function AuthPage({
       identifyUser(result.user_id);
       trackSignup(result.user_id, result.email);
       toast({ title: 'Account created!' });
-      setLocation('/onboarding');
+      if (inviteToken) {
+        // Invited teammates join an existing company: take them to it, not
+        // to onboarding, which would have them create a second company.
+        await continueAfterLogin(!!result.is_platform_admin);
+      } else {
+        setLocation('/onboarding');
+      }
     } catch (err) {
       let description = 'An unexpected error occurred. Please try again.';
       if (err instanceof ApiError) {

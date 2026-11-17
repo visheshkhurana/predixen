@@ -85,7 +85,7 @@ export function useWorkspaceMembers(companyId: number) {
   });
 }
 
-export function useWorkspaceInvites(companyId: number) {
+export function useWorkspaceInvites(companyId: number, options: { enabled?: boolean } = {}) {
   return useQuery<WorkspaceInvite[]>({
     queryKey: ['/workspace/companies', companyId, 'invites'],
     queryFn: async () => {
@@ -113,7 +113,8 @@ export function useWorkspaceInvites(companyId: number) {
         throw new ApiError(res.status, 'Failed to parse invites response');
       }
     },
-    enabled: !!companyId,
+    // Listing invites needs admin; viewers/editors would just get a 403.
+    enabled: !!companyId && (options.enabled ?? true),
   });
 }
 
@@ -166,9 +167,15 @@ export function useRevokeInvite() {
 }
 
 export function useResendInvite() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ inviteId }: { inviteId: number }) => {
+    mutationFn: async ({ inviteId }: { inviteId: number; companyId?: number }) => {
       return apiRequest('POST', `/api/workspace/invites/${inviteId}/resend`);
+    },
+    onSuccess: (_, { companyId }) => {
+      if (companyId) {
+        queryClient.invalidateQueries({ queryKey: ['/workspace/companies', companyId, 'invites'] });
+      }
     },
   });
 }

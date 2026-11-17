@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models import User, Company
@@ -176,7 +177,7 @@ async def stream_kpi_updates(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -207,7 +208,7 @@ def get_kpi_snapshot(
     
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:
@@ -235,7 +236,7 @@ def get_kpi_history(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
 
     if not company:
@@ -330,7 +331,7 @@ async def push_kpi_update(
     """
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     
     if not company:

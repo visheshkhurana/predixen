@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user, require_company_access, is_master_user
 from server.core.pagination import paginate, create_paginated_response, PaginatedResponse
@@ -160,7 +161,7 @@ def list_companies(
             details={"page": page, "page_size": page_size}
         )
     else:
-        query = db.query(Company).filter(Company.user_id == current_user.id)
+        query = db.query(Company).filter(company_access_clause(current_user))
 
     # Order by created_at descending
     query = query.order_by(Company.created_at.desc())
@@ -260,6 +261,13 @@ def delete_company(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company not found"
         )
+
+    # Team members (even admins) can't delete the owner's company.
+    if company.user_id != current_user.id and not is_master_user(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the company owner can delete this company.",
+        )
     
     try:
         # Every table with a foreign key to companies (directly or through
@@ -287,6 +295,11 @@ def seed_sample(
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    # Sample data replaces real numbers, so only the owner or a company admin may load it.
+    if company.user_id != current_user.id and not is_master_user(current_user):
+        from server.core.company_access import get_user_company_role
+        if get_user_company_role(db, company_id, current_user) not in ("owner", "admin"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the owner or an admin can load sample data.")
     from server.services.sample_data import seed_sample_company
     result = seed_sample_company(db, company_id)
     from server.models.analytics_event import AnalyticsEvent

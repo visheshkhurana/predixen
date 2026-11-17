@@ -45,7 +45,7 @@ def db(monkeypatch):
     Base.metadata.create_all(
         engine,
         tables=[
-            Company.__table__,
+            Company.__table__, __import__('server.models.workspace', fromlist=['WorkspaceMember']).WorkspaceMember.__table__,
             CompanyState.__table__,
             FinancialRecord.__table__,
             TruthScan.__table__,

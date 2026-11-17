@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import uuid as uuid_lib
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -53,7 +54,7 @@ def create_shared_scenario(
 ):
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")

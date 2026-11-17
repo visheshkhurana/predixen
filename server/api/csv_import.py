@@ -6,6 +6,7 @@ from datetime import datetime
 import csv
 import io
 
+from server.core.company_access import company_access_clause
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -108,7 +109,7 @@ async def detect_csv_columns(
 ):
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -145,7 +146,7 @@ def import_csv_data(
 ):
     company = db.query(Company).filter(
         Company.id == company_id,
-        Company.user_id == current_user.id
+        company_access_clause(current_user)
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
