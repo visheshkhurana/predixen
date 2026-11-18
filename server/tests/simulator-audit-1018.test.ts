@@ -102,7 +102,11 @@ test("pages call real routes and drop dead UI", () => {
   assert.doesNotMatch(twin, /simplified model/);
 
   const goals = readFileSync("client/src/pages/goals.tsx", "utf8");
-  assert.doesNotMatch(goals, /button-new-goal/);
+  // The "New goal" button is back now that goals save to a real API
+  // (server/api/goals.py); a create button with nowhere to save is not.
+  if (/button-new-goal/.test(goals)) {
+    assert.match(goals, /apiRequest\("POST", `\/api\/companies\/\$\{companyId\}\/goals`/);
+  }
   assert.doesNotMatch(goals, /Close Series A at \$3M/);
 
   const survival = readFileSync("client/src/pages/survival-simulator.tsx", "utf8");

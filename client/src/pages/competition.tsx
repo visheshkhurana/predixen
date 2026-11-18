@@ -261,16 +261,31 @@ export default function CompetitionPage() {
 
       {competitorsQuery.isLoading ? (
         <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
-      ) : competitors.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Target className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-            <p className="font-medium">No competitors tracked yet</p>
-            <p className="text-sm text-muted-foreground mb-4">Add your first competitor to start tracking their moves.</p>
-            <Button onClick={() => setShowAdd(true)}><Plus className="h-4 w-4 mr-1" /> Add Competitor</Button>
+      ) : competitorsQuery.isError ? (
+        <Card data-testid="card-competition-error">
+          <CardContent className="py-12 text-center space-y-3">
+            <p className="text-sm text-muted-foreground">Couldn't load your competitors.</p>
+            <Button variant="outline" onClick={() => competitorsQuery.refetch()}>Retry</Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : competitors.length === 0 && !showAdd ? (
+        <Card className="border-dashed" data-testid="card-competition-empty">
+          <CardContent className="py-12 text-center max-w-xl mx-auto">
+            <Target className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+            <p className="font-semibold text-lg">No competitors tracked yet</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Add the brands you compete with and FounderConsole scans the web for their news, blog posts and
+              social activity, rates how much each update matters to you, and writes a short digest of what changed.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2 mb-5">
+              Start with one competitor: a name is enough, and a website or Instagram/X handle makes scans more accurate.
+            </p>
+            <Button onClick={() => setShowAdd(true)} data-testid="button-add-first-competitor">
+              <Plus className="h-4 w-4 mr-1" /> Add your first competitor
+            </Button>
+          </CardContent>
+        </Card>
+      ) : competitors.length === 0 ? null : (
         <div className="space-y-3">
           {competitors.map((c) => (
             <Card key={c.id} data-testid={`competitor-${c.id}`}>

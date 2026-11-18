@@ -10,6 +10,12 @@
       // (client/src/lib/consent.ts updates this when they choose).
       var fcConsent = null;
       try { fcConsent = localStorage.getItem('cookie-consent'); } catch (e) {}
+      if (!fcConsent) {
+        try {
+          var fcMatch = document.cookie.match(/(?:^|;\s*)fc_cookie_consent=([^;]*)/);
+          if (fcMatch) fcConsent = fcMatch[1];
+        } catch (e) {}
+      }
       var fcGranted = fcConsent === 'accepted' ? 'granted' : 'denied';
       gtag('consent', 'default', {
         analytics_storage: fcGranted,

@@ -181,7 +181,7 @@ export function generateSuggestedActions(
       description: `With ${runwayP50.toFixed(1)} months of runway, model a $500K bridge in month 3 and run it.`,
       metricIssue: `Runway is ${runwayP50.toFixed(1)} months`,
       actionType: 'runway',
-      scenarioName: 'Truth Scan · Bridge Round',
+      scenarioName: 'Health Check · Bridge Round',
       priority: 'high',
       goal: 'balance',
       strategyId: 'balance_bridge',
@@ -203,7 +203,7 @@ export function generateSuggestedActions(
       description: 'Test a 15% operating-expense cut (conservative cost cutting) to extend runway.',
       metricIssue: `Burn multiple is ${burnMultiple.toFixed(1)}x (target: <1.5x)`,
       actionType: 'burn',
-      scenarioName: 'Truth Scan · Cost Optimization',
+      scenarioName: 'Health Check · Cost Optimization',
       priority: 'high',
       goal: 'extend_runway',
       strategyId: 'extend_conservative',
@@ -222,7 +222,7 @@ export function generateSuggestedActions(
       description: 'Pair the raise with a 15% expense cut so the round lasts longer.',
       metricIssue: `Runway is ${runwayP50.toFixed(1)} months`,
       actionType: 'burn',
-      scenarioName: 'Truth Scan · Cost Optimization',
+      scenarioName: 'Health Check · Cost Optimization',
       priority: 'high',
       goal: 'extend_runway',
       strategyId: 'extend_conservative',
@@ -243,7 +243,7 @@ export function generateSuggestedActions(
       description: 'Model a 12% price increase and +8pp gross margin, then run the scenario.',
       metricIssue: `Gross margin is ${grossMargin.toFixed(0)}% (target: ${marginTarget.targetLabel})`,
       actionType: 'margin',
-      scenarioName: 'Truth Scan · Price Increase',
+      scenarioName: 'Health Check · Price Increase',
       priority: 'high',
       goal: 'extend_runway',
       strategyId: 'extend_pricing',
@@ -266,7 +266,7 @@ export function generateSuggestedActions(
       description: 'Model a 5pp churn reduction (better onboarding / CS) and run it.',
       metricIssue: `Monthly churn is ${(churnRate * 100).toFixed(1)}% (benchmark: 3–5%)`,
       actionType: 'retention',
-      scenarioName: 'Truth Scan · Retention',
+      scenarioName: 'Health Check · Retention',
       priority: 'high',
       goal: 'balance',
       strategyId: 'balance_efficient',
@@ -353,7 +353,7 @@ export function parseSimulatePrefill(search: string): ScenarioPrefill | null {
 
   const actionId = params.get('action') || 'action-unknown';
   const actionType = (params.get('action_type') || 'runway') as SuggestedActionType;
-  const name = params.get('name') || 'Truth Scan Scenario';
+  const name = params.get('name') || 'Health Check Scenario';
 
   return {
     from,

@@ -1,5 +1,5 @@
 import { formatCurrencyAbbrev } from '@/lib/utils';
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTruthScan } from "@/api/hooks";
@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { currentRunwayMonths, runwayAfterHires } from "@/lib/hiringRunway";
 import { formatRunway, survival12mPct } from "@/lib/hiringSimResults";
+import { hiringMarketFor, localSalary, monthlySalaryFor } from "@/lib/hiringMarkets";
 
 interface RoleDefinition {
   id: string;
@@ -72,12 +73,6 @@ const ROLE_LIBRARY: RoleDefinition[] = [
   { id: "head-of-ops", title: "Head of Ops", department: "Customer Success", salaryMin: 130000, salaryMax: 180000 },
 ];
 
-const LOCATIONS = [
-  { id: "sf", label: "San Francisco", multiplier: 1.0 },
-  { id: "ny", label: "New York", multiplier: 0.95 },
-  { id: "remote-us", label: "Remote US", multiplier: 0.85 },
-  { id: "international", label: "International", multiplier: 0.7 },
-];
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i + 1),
@@ -95,20 +90,26 @@ interface PlannedHire {
   monthlySalary: number;
 }
 
-function formatCurrency(value: number): string {
-  return formatCurrencyAbbrev(value);
-}
 
 export default function HiringPlannerPage() {
   const { currentCompany } = useFounderStore();
   const { toast } = useToast();
   const companyId = currentCompany?.id;
+  // Salaries, locations and money formatting follow the company's currency
+  // (an Indian company plans in ₹ for Bengaluru, not in $ for San Francisco).
+  const market = useMemo(() => hiringMarketFor(currentCompany?.currency), [currentCompany?.currency]);
+  const LOCATIONS = market.locations;
+  const formatCurrency = (value: number) => formatCurrencyAbbrev(value, market.currency);
 
   const [hires, setHires] = useState<PlannedHire[]>([]);
   const [selectedRole, setSelectedRole] = useState("");
   const [hireCount, setHireCount] = useState("1");
   const [startMonth, setStartMonth] = useState("1");
-  const [location, setLocation] = useState("sf");
+  const [location, setLocation] = useState(market.locations[0].id);
+  useEffect(() => {
+    // Company switched to another market: reset to its first location.
+    if (!market.locations.some((l) => l.id === location)) setLocation(market.locations[0].id);
+  }, [market, location]);
   const [savedPlanId, setSavedPlanId] = useState<string | null>(null);
   const [simResults, setSimResults] = useState<any>(null);
 
@@ -164,10 +165,7 @@ export default function HiringPlannerPage() {
     if (!selectedRole) return;
     const role = ROLE_LIBRARY.find((r) => r.id === selectedRole);
     if (!role) return;
-    const loc = LOCATIONS.find((l) => l.id === location);
-    const multiplier = loc?.multiplier ?? 1.0;
-    const avgSalary = (role.salaryMin + role.salaryMax) / 2;
-    const monthlySalary = Math.round((avgSalary * multiplier) / 12);
+    const monthlySalary = monthlySalaryFor(role.salaryMin, role.salaryMax, market, location);
 
     const newHire: PlannedHire = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -192,9 +190,9 @@ export default function HiringPlannerPage() {
     const totalMonthly = hires.reduce((sum, h) => sum + h.monthlySalary * h.count, 0);
     const totalAnnual = totalMonthly * 12;
     const totalHeadcount = hires.reduce((sum, h) => sum + h.count, 0);
-    const oneTimeCosts = totalHeadcount * 3000;
+    const oneTimeCosts = totalHeadcount * market.oneTimePerHire;
     return { totalMonthly, totalAnnual, totalHeadcount, oneTimeCosts };
-  }, [hires]);
+  }, [hires, market]);
 
   const currentRunway = useMemo(() => currentRunwayMonths(truthScan), [truthScan]);
 
@@ -211,9 +209,9 @@ export default function HiringPlannerPage() {
     }
 
     const newHires: PlannedHire[] = [];
+    const defaultLoc = market.locations[0].id;
     if (action === "engineers") {
       const role = ROLE_LIBRARY.find((r) => r.id === "senior-engineer")!;
-      const avgSalary = (role.salaryMin + role.salaryMax) / 2;
       newHires.push({
         id: `${Date.now()}-eng`,
         roleId: role.id,
@@ -221,8 +219,8 @@ export default function HiringPlannerPage() {
         department: role.department,
         count: 3,
         startMonth: 4,
-        location: "sf",
-        monthlySalary: Math.round(avgSalary / 12),
+        location: defaultLoc,
+        monthlySalary: monthlySalaryFor(role.salaryMin, role.salaryMax, market, defaultLoc),
       });
     } else if (action === "sales") {
       const sdr = ROLE_LIBRARY.find((r) => r.id === "sdr")!;
@@ -234,8 +232,8 @@ export default function HiringPlannerPage() {
         department: sdr.department,
         count: 2,
         startMonth: 2,
-        location: "sf",
-        monthlySalary: Math.round(((sdr.salaryMin + sdr.salaryMax) / 2) / 12),
+        location: defaultLoc,
+        monthlySalary: monthlySalaryFor(sdr.salaryMin, sdr.salaryMax, market, defaultLoc),
       });
       newHires.push({
         id: `${Date.now()}-ae`,
@@ -244,8 +242,8 @@ export default function HiringPlannerPage() {
         department: ae.department,
         count: 2,
         startMonth: 2,
-        location: "sf",
-        monthlySalary: Math.round(((ae.salaryMin + ae.salaryMax) / 2) / 12),
+        location: defaultLoc,
+        monthlySalary: monthlySalaryFor(ae.salaryMin, ae.salaryMax, market, defaultLoc),
       });
     }
     setHires((prev) => [...prev, ...newHires]);
@@ -313,7 +311,10 @@ export default function HiringPlannerPage() {
           <Card>
             <CardHeader className="pb-4">
               <CardTitle className="text-base">Add Role</CardTitle>
-              <CardDescription>Select a role from the library and configure details.</CardDescription>
+              <CardDescription>
+                Select a role from the library and configure details. Salaries are rough {market.currency} market midpoints
+                {market.fallback ? " (US benchmarks; no local salary data for your currency yet)" : ""}.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -328,7 +329,7 @@ export default function HiringPlannerPage() {
                         <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{dept}</div>
                         {ROLE_LIBRARY.filter((r) => r.department === dept).map((role) => (
                           <SelectItem key={role.id} value={role.id} data-testid={`select-role-${role.id}`}>
-                            {role.title} ({formatCurrency(role.salaryMin)}-{formatCurrency(role.salaryMax)}/yr)
+                            {role.title} ({formatCurrency(localSalary(role.salaryMin, market))}-{formatCurrency(localSalary(role.salaryMax, market))}/yr)
                           </SelectItem>
                         ))}
                       </div>
@@ -488,7 +489,7 @@ export default function HiringPlannerPage() {
                   <p className="text-xl font-bold font-mono" data-testid="text-onetime-cost">
                     {formatCurrency(costSummary.oneTimeCosts)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">Equipment $2K + Onboarding $1K per hire</p>
+                  <p className="text-[10px] text-muted-foreground">{market.oneTimeLabel}</p>
                 </div>
               </div>
             </CardContent>

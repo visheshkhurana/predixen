@@ -204,7 +204,7 @@ function UnknownStatusCard() {
           <h3 className="text-lg font-semibold">Status Unknown</h3>
           <p className="text-muted-foreground max-w-md mx-auto">
             We need financial data to assess your company's health.
-            Complete the Data Input or run a Truth Scan to get started.
+            Complete the Data Input or run a Health Check to get started.
           </p>
         </div>
         <div className="flex items-center justify-center gap-3 flex-wrap">
@@ -217,7 +217,7 @@ function UnknownStatusCard() {
           </Link>
           <Link href="/truth">
             <Button variant="outline" data-testid="button-go-to-truth-scan">
-              Run Truth Scan
+              Run Health Check
             </Button>
           </Link>
         </div>
@@ -878,7 +878,7 @@ export default function AlertsPage() {
                 <p className="font-medium">Data Required for Monitoring</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   To enable alerts and health monitoring, we need your company's financial data.
-                  Upload your data or run a Truth Scan to get personalized insights and alerts.
+                  Upload your data or run a Health Check to get personalized insights and alerts.
                 </p>
               </div>
               <Link href="/data">

@@ -18,6 +18,7 @@ import {
 import { useFounderStore } from '@/store/founderStore';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { getErrorMessage } from '@/lib/errors';
 import {
   Plus,
   LayoutDashboard,
@@ -55,7 +56,7 @@ export default function DashboardsPage() {
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
 
-  const { data: rawDashboards = [], isLoading } = useQuery<Dashboard[]>({
+  const { data: rawDashboards = [], isLoading, isError, refetch } = useQuery<Dashboard[]>({
     queryKey: [`/api/dashboards?company_id=${currentCompany?.id}`],
     enabled: !!currentCompany,
   });
@@ -74,6 +75,8 @@ export default function DashboardsPage() {
       toast({ title: 'Dashboard created', description: 'Your new dashboard is ready.' });
       setLocation(`/dashboard/${data.id}`);
     },
+    onError: (err) =>
+      toast({ title: "Couldn't create dashboard", description: getErrorMessage(err, 'Please try again.'), variant: 'destructive' }),
   });
 
   const deleteMutation = useMutation({
@@ -85,6 +88,8 @@ export default function DashboardsPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/dashboards?company_id=${currentCompany?.id}`] });
       toast({ title: 'Dashboard deleted' });
     },
+    onError: (err) =>
+      toast({ title: "Couldn't delete dashboard", description: getErrorMessage(err, 'Please try again.'), variant: 'destructive' }),
   });
 
   const handleCreate = () => {
@@ -126,16 +131,35 @@ export default function DashboardsPage() {
             <Skeleton key={i} className="h-40" />
           ))}
         </div>
+      ) : isError ? (
+        <Card data-testid="card-dashboards-error">
+          <CardContent className="py-12 text-center space-y-3">
+            <p className="text-muted-foreground">Couldn't load your dashboards.</p>
+            <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
       ) : dashboards.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-12 text-center">
+        <Card className="border-dashed" data-testid="card-dashboards-empty">
+          <CardContent className="py-12 text-center max-w-xl mx-auto">
             <LayoutDashboard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="font-semibold text-lg mb-2">No dashboards yet</h3>
-            <p className="text-muted-foreground mb-4">Create your first dashboard to start tracking KPIs</p>
-            <Button onClick={() => setCreateOpen(true)} data-testid="button-create-first-dashboard">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Dashboard
-            </Button>
+            <p className="text-muted-foreground mb-2">
+              A dashboard is your own board of the numbers you check every week: revenue, burn, runway,
+              contribution margin, CAC, or any metric from your connected data.
+            </p>
+            <p className="text-sm text-muted-foreground mb-5">
+              Start with one (for example "Weekly review"), then add the widgets you want. Connect your
+              store, payments or accounting first so the widgets fill with real numbers.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => setCreateOpen(true)} data-testid="button-create-first-dashboard">
+                <Plus className="h-4 w-4 mr-2" />
+                Create your first dashboard
+              </Button>
+              <Button variant="outline" onClick={() => setLocation('/integrations')} data-testid="button-dashboards-connect">
+                Connect data
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (

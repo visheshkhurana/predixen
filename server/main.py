@@ -107,6 +107,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import cap_table as cap_table_api
     from server.api import hiring_planner as hiring_planner_api
     from server.api import competitors as competitors_api
+    from server.api import goals as goals_api
     from server.api import fundraising_readiness as fundraising_readiness_api
     from server.api import board_export as board_export_api
     from server.api import smart_alerts as smart_alerts_api
@@ -184,6 +185,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(cap_table_api.router)
     app.include_router(hiring_planner_api.router)
     app.include_router(competitors_api.router)
+    app.include_router(goals_api.router)
     app.include_router(fundraising_readiness_api.router)
     app.include_router(board_export_api.router)
     app.include_router(smart_alerts_api.router)
@@ -245,6 +247,13 @@ async def _run_deferred_startup():
             logger.info("Ensured competition-tracking tables exist")
         except Exception as e:
             logger.warning(f"Could not ensure competitor tables: {e}")
+
+        try:
+            from server.models.goal import CompanyGoal
+            CompanyGoal.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured company_goals table exists")
+        except Exception as e:
+            logger.warning(f"Could not ensure company_goals table: {e}")
 
         try:
             # Company access (company_access_clause) reads workspace_members on

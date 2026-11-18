@@ -184,6 +184,32 @@ def test_plans_unchanged_when_env_unset(env):
         assert by_id[tier]["price_annual"] == plans.PLAN_DETAILS[tier]["price_annual"]
 
 
+def test_beta_plans_show_company_currency_for_signed_in_indian_founder(env):
+    # Payments off (public beta): an INR company sees the ₹ price the pricing
+    # page advertises, not $39. Display only; subscribe stays 503.
+    env.q("INSERT INTO companies (user_id, currency) VALUES (1, 'INR')")
+    env.mp.setattr(billing, "_optional_user_id", lambda request: 1)
+    data = env.client.get("/billing/plans").json()
+    assert data["payments_enabled"] is False
+    assert data["currency"] == "INR" and data["currency_symbol"] == "₹"
+    by_id = {p["id"]: p for p in data["plans"]}
+    assert set(by_id) == {"free", "starter"}
+    assert by_id["starter"]["price_monthly"] == 3000
+    assert env.client.post("/billing/subscribe/starter", json={"interval": "monthly"}).status_code == 503
+
+
+def test_beta_plans_aed_and_usd_companies(env):
+    env.q("INSERT INTO companies (user_id, currency) VALUES (1, 'AED')")
+    env.mp.setattr(billing, "_optional_user_id", lambda request: 1)
+    data = env.client.get("/billing/plans").json()
+    assert data["currency"] == "AED"
+    assert {p["id"]: p for p in data["plans"]}["starter"]["price_monthly"] == 149
+    env.q("UPDATE companies SET currency = 'USD' WHERE user_id = 1")
+    data = env.client.get("/billing/plans").json()
+    assert data["currency"] == "USD"
+    assert {p["id"] for p in data["plans"]} == {"free", "starter", "growth", "scale"}
+
+
 def test_subscribe_still_503_when_env_unset(env):
     r = env.client.post("/billing/subscribe/starter", json={"interval": "monthly"})
     assert r.status_code == 503

@@ -165,7 +165,7 @@ export function TruthScanGate({ uploadId, companyId, onComplete, isDialog = fals
     return (
       <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
-        <h2 className="text-lg font-semibold mb-2">Truth Scan Not Found</h2>
+        <h2 className="text-lg font-semibold mb-2">Health Check Not Found</h2>
         <p className="text-muted-foreground">The validation data could not be loaded.</p>
       </div>
     );
@@ -429,7 +429,7 @@ export function TruthScanGate({ uploadId, companyId, onComplete, isDialog = fals
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
-              Truth Scan Gate
+              Health Check Gate
             </DialogTitle>
             <DialogDescription>
               Validate your financial data before running simulations
@@ -446,7 +446,7 @@ export function TruthScanGate({ uploadId, companyId, onComplete, isDialog = fals
       <div className="flex items-center gap-3 mb-6">
         <Shield className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold">Truth Scan Gate</h1>
+          <h1 className="text-2xl font-bold">Health Check Gate</h1>
           <p className="text-muted-foreground">Validate your financial data before running simulations</p>
         </div>
         <Button variant="ghost" size="sm" className="ml-auto" onClick={() => refetch()} data-testid="button-refresh">
@@ -477,7 +477,7 @@ export function TruthScanBlockedModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            Truth Scan Required
+            Health Check Required
           </DialogTitle>
           <DialogDescription>
             Please complete data validation before running simulations

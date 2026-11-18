@@ -1,4 +1,4 @@
-import { onConsentChange } from "./consent";
+import { onConsentChange, readConsent } from "./consent";
 /**
  * Session replay gate.
  *
@@ -122,11 +122,8 @@ export function isCalculatorQueryPath(path: string | null | undefined): boolean 
 
 export function readCookieConsent(): string | null {
   if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage.getItem(COOKIE_CONSENT_KEY);
-  } catch {
-    return null;
-  }
+  // localStorage first, then the shared consent cookie (see lib/consent.ts).
+  return readConsent();
 }
 
 export function hasRecordingConsent(value: string | null | undefined): boolean {

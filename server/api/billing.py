@@ -86,6 +86,15 @@ def get_plans(request: Request, currency: Optional[str] = None):
     if provider == "razorpay":
         display_currency = _display_currency(_optional_user_id(request), currency)
         offered = set(regional_tiers(display_currency))
+    elif not payments_enabled():
+        # Public beta (nothing is charged): show the price that will apply in
+        # the company's currency, the same regional table the pricing page and
+        # Razorpay use, instead of USD for everyone. An Indian founder saw $39
+        # here while /pricing said ₹3,000. Display only; Stripe-enabled
+        # deployments keep charging (and showing) USD.
+        display_currency = _display_currency(_optional_user_id(request), currency)
+        if display_currency != "USD":
+            offered = set(regional_tiers(display_currency))
 
     plans = []
     for tier in [PlanTier.FREE, PlanTier.STARTER, PlanTier.GROWTH, PlanTier.SCALE]:
@@ -150,6 +159,13 @@ def get_subscription(
             result["razorpay_subscription_id"] = rz["razorpay_subscription_id"]
         else:
             result["currency"] = resolve_currency(db, current_user.id)[0]
+    elif not result["payments_enabled"]:
+        # Beta: show the plan's price in the company's currency (display only).
+        cur = resolve_currency(db, current_user.id)[0]
+        regional = get_regional_price(sub["plan"], cur, "monthly") if cur != "USD" else None
+        if regional:
+            result["currency"] = cur
+            result["plan_price"] = regional["amount"]
     return result
 
 

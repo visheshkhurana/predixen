@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   RefreshCw,
   Link2,
@@ -675,7 +676,7 @@ export default function IntegrationsPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
   };
 
-  const { data: availableIntegrations } = useQuery<{
+  const { data: availableIntegrations, isLoading: availableLoading } = useQuery<{
     accounting: IntegrationProvider[];
     crm: IntegrationProvider[];
   }>({
@@ -693,7 +694,7 @@ export default function IntegrationsPage() {
     enabled: !!companyId,
   });
   
-  const { data: connectorStatus } = useQuery<{
+  const { data: connectorStatus, isLoading: connectorStatusLoading } = useQuery<{
     company_id: number;
     connectors: Array<{
       provider_id: string;
@@ -1002,6 +1003,8 @@ export default function IntegrationsPage() {
     return allProviders.filter((p) => shouldShowConnector(p, category));
   };
 
+  const connectorsLoading = availableLoading || (!!companyId && connectorStatusLoading);
+
   const getActiveConnectors = (category: ConnectorCategory) => {
     return getConnectorsByCategory(category).filter((p) => !p.comingSoon);
   };
@@ -1107,12 +1110,31 @@ export default function IntegrationsPage() {
             <p className="text-sm text-muted-foreground">{categoryLabels[selectedConnectorCategory].description}</p>
           </div>
         )}
+        {/* Until the provider list and connection status load, show placeholders:
+            rendering the empty list first flashed "0 connectors" / "No connectors". */}
+        {connectorsLoading ? (
+          <div className="grid md:grid-cols-2 gap-4" data-testid="connectors-loading">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="p-4">
+                <div className="flex items-start gap-4">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                  <Skeleton className="h-9 w-20" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {getActiveConnectors(selectedConnectorCategory).map((provider) =>
             renderProviderCard(provider, getProviderType(provider.id))
           )}
         </div>
-        {getActiveConnectors(selectedConnectorCategory).length === 0 && getUpcomingConnectors(selectedConnectorCategory).length === 0 && (
+        )}
+        {!connectorsLoading && getActiveConnectors(selectedConnectorCategory).length === 0 && getUpcomingConnectors(selectedConnectorCategory).length === 0 && (
           <div className="text-center py-12">
             <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
             <p className="text-muted-foreground">No connectors available in this category</p>

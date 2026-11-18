@@ -14,17 +14,20 @@ export function CookieConsent() {
 
   if (!visible) return null;
 
+  // Compact and bottom-LEFT: the floating Ask AI button lives bottom-right, and
+  // on phones the banner stops short of it (right-20) instead of covering it.
+  // Mobile bottom-24 clears the marketing pages' sticky sign-up bar.
   return (
     <div
-      className="fixed bottom-24 left-4 right-4 z-[9999] rounded-xl border bg-background p-4 shadow-2xl md:bottom-5 md:left-auto md:right-5 md:max-w-[380px]"
-      role="dialog"
+      className="fixed bottom-24 left-3 right-20 z-[9999] rounded-lg border bg-background p-3 shadow-xl md:bottom-4 md:left-4 md:right-auto md:max-w-[340px]"
+      role="region"
       aria-label="Cookie consent"
       data-testid="cookie-consent"
     >
-      <div className="flex items-start gap-3">
-        <Cookie className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground leading-relaxed">
+      <div className="flex items-start gap-2.5">
+        <Cookie className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             We use cookies for analytics and to measure our ads. Nothing is stored until you accept.{' '}
             <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
               Privacy policy

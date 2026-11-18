@@ -7,7 +7,7 @@ import { useLocation } from 'wouter';
 const FEATURE_PLAN_MAP: Record<string, { label: string; minPlan: string; minPlanName: string }> = {
   simulations: { label: 'Monte Carlo Simulations', minPlan: 'starter', minPlanName: 'Starter' },
   copilot: { label: 'AI Copilot', minPlan: 'starter', minPlanName: 'Starter' },
-  truth_scan: { label: 'Truth Scan', minPlan: 'starter', minPlanName: 'Starter' },
+  truth_scan: { label: 'Health Check', minPlan: 'starter', minPlanName: 'Starter' },
   stress_tests: { label: 'Stress Tests', minPlan: 'starter', minPlanName: 'Starter' },
   what_if: { label: 'What-If Analysis', minPlan: 'starter', minPlanName: 'Starter' },
   sensitivity_analysis: { label: 'Sensitivity Analysis', minPlan: 'starter', minPlanName: 'Starter' },

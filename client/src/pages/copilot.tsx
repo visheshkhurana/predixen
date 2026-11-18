@@ -319,7 +319,7 @@ interface Message {
 
 const DATA_SOURCE_CONFIG: Record<DataSource, { label: string; icon: typeof Database; className: string }> = {
   truth_scan: { 
-    label: 'Truth Scan', 
+    label: 'Health Check', 
     icon: Database, 
     className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
   },
@@ -1651,7 +1651,7 @@ Type **help** for a full list of what I can do.`,
           if (errMsg.includes('500')) {
             errorContent = `I'm having trouble connecting to the AI analysis service right now. Here are some things you can do in the meantime:\n\n` +
               `- **Check your Dashboard** for current KPI metrics and trends\n` +
-              `- **Review Truth Scan** results for validated financial data\n` +
+              `- **Review Health Check** results for validated financial data\n` +
               `- **Try a simpler question** like "What is my runway?" or "Show my burn rate"\n\n` +
               `This usually resolves itself within a few moments. Try again shortly.`;
             structuredFallback = {
@@ -1671,7 +1671,7 @@ Type **help** for a full list of what I can do.`,
               ckb_updated: false,
             };
           } else if (errMsg.includes('502') || errMsg.includes('503') || errMsg.includes('504') || errMsg.includes('Backend service unavailable')) {
-            errorContent = `The AI analysis service is temporarily unavailable. This usually resolves within a few minutes.\n\nIn the meantime, you can:\n- **Check the Dashboard** for your current metrics\n- **Use Sensitivity Sliders** on the Simulation page for quick estimates\n- **Review your Truth Scan** for validated data\n\nYour data is safe and will be accessible when the service recovers.`;
+            errorContent = `The AI analysis service is temporarily unavailable. This usually resolves within a few minutes.\n\nIn the meantime, you can:\n- **Check the Dashboard** for your current metrics\n- **Use Sensitivity Sliders** on the Simulation page for quick estimates\n- **Review your Health Check** for validated data\n\nYour data is safe and will be accessible when the service recovers.`;
             structuredFallback = {
               executive_summary: [
                 "The AI service is temporarily unavailable.",
@@ -2574,8 +2574,8 @@ Type **help** for a full list of what I can do.`,
         </ScrollArea>
       </div>
       
-      {/* Floating Action Button */}
-      <div className={`fixed bottom-6 right-6 z-30 transition-all duration-300 ${isPanelOpen ? 'lg:right-[22rem]' : ''}`}>
+      {/* Floating Action Button: sits above the composer so it never covers the question box or Send. */}
+      <div className={`fixed bottom-28 right-4 md:right-6 z-30 transition-all duration-300 ${isPanelOpen ? 'lg:right-[22rem]' : ''}`}>
         <div className="relative">
           {isFabOpen && (
             <div className="absolute bottom-16 right-0 bg-card border border-border rounded-lg shadow-xl p-2 w-48" data-testid="fab-menu">

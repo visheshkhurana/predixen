@@ -8,7 +8,7 @@ interface StepperProps {
 }
 
 const steps = [
-  { id: 'truth', label: 'Know Your Truth', path: '/truth', icon: ShieldCheck },
+  { id: 'truth', label: 'Health Check', path: '/truth', icon: ShieldCheck },
   { id: 'simulation', label: 'Simulate', path: '/simulate', icon: FlaskConical },
   { id: 'decision', label: 'Decide & Act', path: '/decisions', icon: Lightbulb },
 ];
