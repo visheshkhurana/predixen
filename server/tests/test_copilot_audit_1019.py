@@ -168,7 +168,7 @@ def test_chat_failure_runs_twice_then_shows_real_data(monkeypatch):
     assert calls["n"] == 2
     assert db.rollbacks == 1
     text = " ".join(resp.executive_summary)
-    assert "Revenue: $42,000/mo" in text
+    assert "Revenue: $42K/mo" in text  # company currency, short form
     assert "No financial data is available yet" not in text
 
 

@@ -911,11 +911,65 @@ def _real_number(v: Any) -> Optional[float]:
     return float(v)
 
 
+GOODS_INDUSTRIES = {"d2c", "ecommerce", "marketplace", "food", "consumer", "retail", "fmcg"}
+
+D2C_FOLLOWUPS: Dict[str, List[str]] = {
+    "revenue": [
+        "How have orders and average order value moved over the last 3 months?",
+        "What if I raise prices by 10% — how many orders can I lose and still earn more?",
+        "Which channel (website, marketplaces, offline) makes the most contribution margin?",
+        "Simulate a 20% drop in orders — what happens to runway?",
+    ],
+    "churn": [
+        "What's my repeat purchase rate and how does it affect CAC payback?",
+        "What's my blended CAC vs first-order contribution margin?",
+        "How much would a 5-point drop in RTO add to monthly profit?",
+        "What would lifting repeat orders by 10% do to my unit economics?",
+    ],
+    "growth": [
+        "What ROAS do I need for ad spend to pay back on the first order?",
+        "Simulate doubling ad spend at today's ROAS — what happens to cash?",
+        "How does my contribution margin compare to other D2C brands?",
+        "What's holding back order growth: traffic, conversion or AOV?",
+    ],
+    "burn": [
+        "What are shipping, RTO and payment fees costing me per order?",
+        "Which cost per order would move contribution margin the most?",
+        "What if I cut COD orders by half — what changes?",
+        "What if I cut ad spend by 25% — how many orders do I lose?",
+    ],
+    "fundraise": [
+        "Do I need to raise, or can I grow on profits?",
+        "How much working capital will my inventory need for the next season?",
+        "What metrics do D2C investors look at first?",
+        "How long would a raise of my target size last at today's burn?",
+    ],
+    "simulate": [
+        "What if ad costs rise 30% during the festive season?",
+        "What if RTO goes up 10 points for 2 months?",
+        "Simulate a price increase of 10% with 5% fewer orders",
+        "What if a marketplace delays payouts by 30 days?",
+    ],
+    "default": [
+        "What's my contribution margin per order after ads?",
+        "What are the top 3 risks to my brand right now?",
+        "What should I focus on this month?",
+        "Which scenario should I simulate first?",
+    ],
+}
+
+
+from server.core.taxonomy import normalize_industry  # noqa: E402
+
+
 def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
     """Generate contextual follow-up suggestions based on the question asked."""
     import random
     msg_lower = message.lower()
     followups = []
+    branch = "default"
+    industry = ((context.get("company") or {}).get("industry") or "").strip().lower()
+    sells_goods = industry in GOODS_INDUSTRIES or normalize_industry(industry) in GOODS_INDUSTRIES
 
     metrics = context.get("metrics", {}) or {}
     currency = (context.get("company") or {}).get("currency") or "USD"
@@ -929,6 +983,8 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
     churn = metrics.get("churn_rate")
 
     if any(w in msg_lower for w in ["revenue", "mrr", "arr", "sales"]):
+
+        branch = "revenue"
         pool = [
             "How has my revenue trended over the last 6 months?",
             "What if I raise prices by 15%?",
@@ -944,6 +1000,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["payroll", "salary", "team", "headcount", "hiring"]):
+        branch = "team"
         pool = [
             "What percentage of my burn is payroll?",
             "What if I freeze hiring for 6 months?",
@@ -954,6 +1011,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["burn", "expenses", "costs", "spending", "shipping", "logistics"]):
+        branch = "burn"
         pool = [
             "What's my biggest expense category?",
             "What if I cut burn by 25%?",
@@ -965,6 +1023,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["runway", "cash", "survive"]):
+        branch = "runway"
         pool = [
             "What's the biggest risk to my runway?",
             "What if I cut costs by 20% — how much runway do I gain?",
@@ -977,6 +1036,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["fundrais", "raise", "investor", "valuation", "dilution"]):
+        branch = "fundraise"
         pool = [
             "What's my fundraising readiness score?",
             "How much dilution should I expect at my stage?",
@@ -988,6 +1048,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["churn", "retention", "customer", "ltv", "cac"]):
+        branch = "churn"
         pool = [
             "What's my churn rate trend over the last 6 months?",
             "What if churn increases by 50% — what happens to my runway?",
@@ -998,6 +1059,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["growth", "trend", "compare", "benchmark"]):
+        branch = "growth"
         pool = [
             "What's my month-over-month growth rate?",
             "How do I compare to benchmarks for my stage?",
@@ -1008,6 +1070,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["risk", "threat", "danger", "worry", "concern"]):
+        branch = "risk"
         pool = [
             "Simulate my top 3 risk scenarios side by side",
             "What's the probability of running out of cash in 12 months?",
@@ -1018,6 +1081,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["simulate", "scenario", "what if", "projection"]):
+        branch = "simulate"
         pool = [
             "What if we lose our biggest customer?",
             "What if revenue drops 30% for 3 months?",
@@ -1028,6 +1092,7 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         random.shuffle(pool)
         followups = pool[:3]
     else:
+        branch = "default"
         pool = [
             "What's my current financial health summary?",
             "What are the top 3 risks to my business right now?",
@@ -1039,6 +1104,13 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
         ]
         random.shuffle(pool)
         followups = pool[:3]
+
+    # Brands that sell goods get questions in their own language (orders, RTO,
+    # ROAS, contribution margin) instead of SaaS ones (MRR, churn, Series A).
+    if sells_goods and branch in D2C_FOLLOWUPS:
+        d2c_pool = list(D2C_FOLLOWUPS[branch])
+        random.shuffle(d2c_pool)
+        followups = d2c_pool[:3]
 
     if context.get("latest_simulation"):
         sim = context["latest_simulation"]
@@ -1140,16 +1212,16 @@ async def copilot_chat(
             if ts and ts.outputs_json:
                 outputs = ts.outputs_json
                 if outputs.get("revenue"):
-                    financial_snapshot.append(f"Revenue: ${outputs['revenue']:,.0f}/mo")
+                    financial_snapshot.append(f"Revenue: {_followup_money(outputs['revenue'], getattr(company, "currency", None))}/mo")
                 if outputs.get("mrr"):
-                    financial_snapshot.append(f"MRR: ${outputs['mrr']:,.0f}")
+                    financial_snapshot.append(f"MRR: {_followup_money(outputs['mrr'], getattr(company, "currency", None))}")
                 if outputs.get("cash_balance"):
-                    financial_snapshot.append(f"Cash Balance: ${outputs['cash_balance']:,.0f}")
+                    financial_snapshot.append(f"Cash Balance: {_followup_money(outputs['cash_balance'], getattr(company, "currency", None))}")
                 _nb = outputs.get("net_burn")
                 if isinstance(_nb, (int, float)) and _nb < 0:
-                    financial_snapshot.append(f"Profitable: net cash inflow ${abs(_nb):,.0f}/mo (no runway limit)")
+                    financial_snapshot.append(f"Profitable: net cash inflow {_followup_money(abs(_nb), getattr(company, "currency", None))}/mo (no runway limit)")
                 elif _nb:
-                    financial_snapshot.append(f"Net Burn: ${_nb:,.0f}/mo")
+                    financial_snapshot.append(f"Net Burn: {_followup_money(_nb, getattr(company, "currency", None))}/mo")
                 if outputs.get("runway_months") and not (isinstance(_nb, (int, float)) and _nb < 0):
                     financial_snapshot.append(f"Runway: {outputs['runway_months']:.1f} months")
                 if outputs.get("gross_margin"):
@@ -1163,10 +1235,10 @@ async def copilot_chat(
                 FinancialRecord.company_id == company_id
             ).order_by(FinancialRecord.period_end.desc()).first()
             if latest_fin and not financial_snapshot:
-                if latest_fin.revenue: financial_snapshot.append(f"Revenue: ${latest_fin.revenue:,.0f}/mo")
-                if latest_fin.mrr: financial_snapshot.append(f"MRR: ${latest_fin.mrr:,.0f}")
-                if latest_fin.cash_balance: financial_snapshot.append(f"Cash Balance: ${latest_fin.cash_balance:,.0f}")
-                if latest_fin.net_burn: financial_snapshot.append(f"Net Burn: ${latest_fin.net_burn:,.0f}/mo")
+                if latest_fin.revenue: financial_snapshot.append(f"Revenue: {_followup_money(latest_fin.revenue, getattr(company, "currency", None))}/mo")
+                if latest_fin.mrr: financial_snapshot.append(f"MRR: {_followup_money(latest_fin.mrr, getattr(company, "currency", None))}")
+                if latest_fin.cash_balance: financial_snapshot.append(f"Cash Balance: {_followup_money(latest_fin.cash_balance, getattr(company, "currency", None))}")
+                if latest_fin.net_burn: financial_snapshot.append(f"Net Burn: {_followup_money(latest_fin.net_burn, getattr(company, "currency", None))}/mo")
                 if latest_fin.runway_months: financial_snapshot.append(f"Runway: {latest_fin.runway_months:.1f} months")
         except Exception:
             pass
