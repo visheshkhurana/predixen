@@ -441,6 +441,11 @@ export default function OnboardingPage() {
       };
 
       const found = Object.entries(extracted).filter(([, v]) => v !== undefined);
+      if (found.length === 0 && ext !== 'pdf') {
+        // Not a one-page summary: most founders' sheets have one row per month.
+        await importCsvFromOnboarding(uploadFile, currentCompany.id);
+        return;
+      }
       if (found.length === 0) {
         setUploadError("We couldn't find financial figures in that file. Enter the numbers manually below, or try a different export.");
         setShowManualInputs(true);
@@ -458,6 +463,11 @@ export default function OnboardingPage() {
       if (err instanceof ApiError && err.status === 401) {
         toast({ title: 'Session expired', description: 'Please log in again.', variant: 'destructive' });
         setLocation('/auth');
+        return;
+      }
+      if (ext !== 'pdf') {
+        // The summary extractor failed; try the sheet as one row per month.
+        await importCsvFromOnboarding(uploadFile, currentCompany.id);
         return;
       }
       const message = err instanceof ApiError ? err.message : 'We could not read that file.';

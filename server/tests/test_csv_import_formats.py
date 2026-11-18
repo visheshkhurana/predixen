@@ -63,3 +63,42 @@ def test_headers_with_currency_and_symbols_map():
 def test_plain_headers_still_map():
     m = detect_columns(["month", "revenue", "cogs", "marketing", "payroll", "opex", "other_costs", "cash_balance", "headcount"])
     assert m["marketing"] == "marketing" and m["expenses"] == "opex" and m["date"] == "month"
+
+
+def _xlsx(rows):
+    import io
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    for r in rows:
+        ws.append(r)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_month_per_row_excel_reads_like_a_csv():
+    from server.api.csv_import import spreadsheet_rows, detect_columns
+    content = _xlsx([
+        ["Monthly P&L FY26"],
+        [],
+        ["Month", "Revenue (₹)", "COGS", "Ad spend", "Cash"],
+        [datetime(2026, 9, 1), 1200000, 480000, 300000, 9000000],
+        ["Oct-2026", "13,50,000", 520000, 310000, 8600000],
+    ])
+    headers, rows = spreadsheet_rows(content, "pl.xlsx")
+    assert headers == ["Month", "Revenue (₹)", "COGS", "Ad spend", "Cash"]
+    assert rows[0]["Month"] == "2026-09-01" and rows[0]["Revenue (₹)"] == "1200000"
+    assert len(rows) == 2
+    mapping = detect_columns(headers)
+    assert mapping.get("date") == "Month" and mapping.get("revenue") == "Revenue (₹)"
+    assert parse_period(rows[1]["Month"]) is not None
+    assert parse_amount(rows[1]["Revenue (₹)"]) == 1_350_000
+
+
+def test_unreadable_spreadsheet_is_a_clear_400():
+    from fastapi import HTTPException
+    from server.api.csv_import import spreadsheet_rows
+    with pytest.raises(HTTPException) as e:
+        spreadsheet_rows(b"not a spreadsheet", "x.xlsx")
+    assert e.value.status_code == 400

@@ -912,7 +912,7 @@ export default function IntegrationsPage() {
           )}
 
           <div className="flex gap-2 flex-wrap">
-            {provider.comingSoon ? (
+            {provider.comingSoon || !CONNECTOR_BACKED_PROVIDERS.has(provider.id) ? (
               <Button size="sm" variant="outline" disabled data-testid={`button-coming-soon-${provider.id}`}>
                 <Clock className="h-4 w-4 mr-2" />
                 Coming Soon
@@ -1591,6 +1591,25 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
   ],
 };
 
+
+// Providers with a real server-side connector. Anything else has no backend to
+// connect to, so its card says "Coming Soon" instead of playing a fake
+// "authorizing" animation and accepting any key.
+export const CONNECTOR_BACKED_PROVIDERS = new Set(["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"]);
+
+const providerSetupHelp: Record<string, string> = {
+  meta_ads:
+    "In Meta Business Settings, open Users → System users, add a system user, assign it your ad accounts, then Generate token with the ads_read permission. Ad account IDs (act_…) are in Ads Manager's account menu.",
+  shopify:
+    "In Shopify admin, open Settings → Apps and sales channels → Develop apps, create an app with read_orders access, install it and copy the Admin API access token.",
+  razorpay:
+    "In the Razorpay Dashboard, open Account & Settings → API Keys and generate a key. FounderConsole only reads payments and settlements with it.",
+};
+
+function isSecretField(field: string): boolean {
+  return /secret|key|password|token/i.test(field);
+}
+
 function ConnectDialog({
   provider,
   type,
@@ -1614,8 +1633,6 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const connectorBackedProviders = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
-  const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {
     dataImported: ["Financial data", "Transaction history"],
@@ -1624,17 +1641,9 @@ function ConnectDialog({
 
   const connectMutation = useMutation({
     mutationFn: async () => {
-      if (isPayrollOrErp) {
-        const creds = credentialFields.length > 1 ? credentials : { api_key: apiKey };
-        const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/connect`, {
-          provider_id: provider.id,
-          credentials: creds,
-        });
-        return res.json();
-      }
-      const res = await apiRequest("POST", `/api/integrations/companies/${companyId}/${type}/connect`, {
-        provider: provider.id,
-        credentials: { access_token: apiKey },
+      const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/connect`, {
+        provider_id: provider.id,
+        credentials,
       });
       return res.json();
     },
@@ -1659,25 +1668,7 @@ function ConnectDialog({
     },
   });
 
-  const handleOAuthSimulation = () => {
-    if (isPayrollOrErp) {
-      setStep("credentials");
-      return;
-    }
-    setStep("oauth");
-    setOauthProgress(0);
-    
-    const interval = setInterval(() => {
-      setOauthProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setStep("credentials");
-          return 100;
-        }
-        return prev + 20;
-      });
-    }, 500);
-  };
+  const handleContinue = () => setStep("credentials");
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
@@ -1755,67 +1746,11 @@ function ConnectDialog({
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleOAuthSimulation} data-testid="button-continue-connect">
+              <Button onClick={handleContinue} data-testid="button-continue-connect">
                 Continue
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </DialogFooter>
-          </>
-        )}
-
-        {step === "oauth" && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                {providerIcons[provider.id]}
-                Authorizing with {provider.name}
-              </DialogTitle>
-              <DialogDescription>
-                Simulating OAuth authorization flow...
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-6 py-8">
-              <div className="space-y-4">
-                <div className="flex items-center justify-center">
-                  <div className="p-4 bg-muted rounded-full">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                </div>
-                
-                <div className="text-center space-y-2">
-                  <p className="text-sm font-medium">Connecting to {provider.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    In production, you would be redirected to {provider.name} to authorize access
-                  </p>
-                </div>
-
-                <Progress value={oauthProgress} className="h-2" />
-                
-                <div className="space-y-2 text-sm">
-                  <div className={`flex items-center gap-2 ${oauthProgress >= 20 ? "text-foreground" : "text-muted-foreground"}`}>
-                    {oauthProgress >= 20 ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Clock className="h-4 w-4" />}
-                    Opening authorization window...
-                  </div>
-                  <div className={`flex items-center gap-2 ${oauthProgress >= 40 ? "text-foreground" : "text-muted-foreground"}`}>
-                    {oauthProgress >= 40 ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Clock className="h-4 w-4" />}
-                    Waiting for user authorization...
-                  </div>
-                  <div className={`flex items-center gap-2 ${oauthProgress >= 60 ? "text-foreground" : "text-muted-foreground"}`}>
-                    {oauthProgress >= 60 ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Clock className="h-4 w-4" />}
-                    Exchanging authorization code...
-                  </div>
-                  <div className={`flex items-center gap-2 ${oauthProgress >= 80 ? "text-foreground" : "text-muted-foreground"}`}>
-                    {oauthProgress >= 80 ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Clock className="h-4 w-4" />}
-                    Storing secure credentials...
-                  </div>
-                  <div className={`flex items-center gap-2 ${oauthProgress >= 100 ? "text-foreground" : "text-muted-foreground"}`}>
-                    {oauthProgress >= 100 ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Clock className="h-4 w-4" />}
-                    Authorization complete!
-                  </div>
-                </div>
-              </div>
-            </div>
           </>
         )}
 
@@ -1827,53 +1762,33 @@ function ConnectDialog({
                 Complete Connection
               </DialogTitle>
               <DialogDescription>
-                Enter your API credentials to finalize the connection
+                Paste the credentials from your {provider.name} account. We check them with {provider.name} before saving.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <p className="text-sm text-green-600 dark:text-green-400">
-                  Authorization successful! Complete the setup below.
-                </p>
-              </div>
-
-              {isPayrollOrErp && credentialFields.length > 1 ? (
-                <div className="space-y-4">
-                  {credentialFields.map((cf) => (
-                    <div key={cf.field} className="space-y-2">
-                      <Label htmlFor={cf.field}>{cf.label}</Label>
-                      <Input
-                        id={cf.field}
-                        type={cf.field.includes("secret") || cf.field.includes("key") || cf.field.includes("password") ? "password" : "text"}
-                        placeholder={cf.placeholder}
-                        value={credentials[cf.field] || ""}
-                        onChange={(e) => setCredentials(prev => ({ ...prev, [cf.field]: e.target.value }))}
-                        data-testid={`input-${cf.field}`}
-                      />
-                    </div>
-                  ))}
-                  <p className="text-xs text-muted-foreground">
-                    Credentials are stored encrypted and used only to read your data.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="api-key">API Key / Access Token</Label>
-                  <Input
-                    id="api-key"
-                    type="password"
-                    placeholder="Enter your API key (demo: any value)"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    data-testid="input-api-key"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    For demo purposes, enter any value to simulate a connection.
-                  </p>
+              {providerSetupHelp[provider.id] && (
+                <div className="p-3 bg-muted/60 border rounded-lg text-sm text-muted-foreground" data-testid="text-setup-help">
+                  {providerSetupHelp[provider.id]}
                 </div>
               )}
+
+              <div className="space-y-4">
+                {credentialFields.map((cf) => (
+                  <div key={cf.field} className="space-y-2">
+                    <Label htmlFor={cf.field}>{cf.label}</Label>
+                    <Input
+                      id={cf.field}
+                      type={isSecretField(cf.field) ? "password" : "text"}
+                      autoComplete="off"
+                      placeholder={cf.placeholder}
+                      value={credentials[cf.field] || ""}
+                      onChange={(e) => setCredentials(prev => ({ ...prev, [cf.field]: e.target.value }))}
+                      data-testid={`input-${cf.field}`}
+                    />
+                  </div>
+                ))}
+              </div>
 
               <div className="flex items-start gap-2 p-3 bg-muted rounded-lg">
                 <Shield className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -1889,9 +1804,7 @@ function ConnectDialog({
               </Button>
               <Button
                 onClick={() => connectMutation.mutate()}
-                disabled={(isPayrollOrErp && credentialFields.length > 1 
-                  ? !credentialFields.every(cf => credentials[cf.field])
-                  : !apiKey) || connectMutation.isPending}
+                disabled={!credentialFields.every(cf => (credentials[cf.field] || "").trim()) || connectMutation.isPending}
                 data-testid="button-confirm-connect"
               >
                 {connectMutation.isPending ? (
