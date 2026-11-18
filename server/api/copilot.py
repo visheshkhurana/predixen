@@ -1204,6 +1204,7 @@ async def copilot_chat(
 
         truth_scan_summary = []
         financial_snapshot = []
+        _snap_cur = getattr(company, "currency", None)
         try:
             from server.models.financial import FinancialRecord
             ts = db.query(TruthScan).filter(
@@ -1212,16 +1213,16 @@ async def copilot_chat(
             if ts and ts.outputs_json:
                 outputs = ts.outputs_json
                 if outputs.get("revenue"):
-                    financial_snapshot.append(f"Revenue: {_followup_money(outputs['revenue'], getattr(company, "currency", None))}/mo")
+                    financial_snapshot.append(f"Revenue: {_followup_money(outputs['revenue'], _snap_cur)}/mo")
                 if outputs.get("mrr"):
-                    financial_snapshot.append(f"MRR: {_followup_money(outputs['mrr'], getattr(company, "currency", None))}")
+                    financial_snapshot.append(f"MRR: {_followup_money(outputs['mrr'], _snap_cur)}")
                 if outputs.get("cash_balance"):
-                    financial_snapshot.append(f"Cash Balance: {_followup_money(outputs['cash_balance'], getattr(company, "currency", None))}")
+                    financial_snapshot.append(f"Cash Balance: {_followup_money(outputs['cash_balance'], _snap_cur)}")
                 _nb = outputs.get("net_burn")
                 if isinstance(_nb, (int, float)) and _nb < 0:
-                    financial_snapshot.append(f"Profitable: net cash inflow {_followup_money(abs(_nb), getattr(company, "currency", None))}/mo (no runway limit)")
+                    financial_snapshot.append(f"Profitable: net cash inflow {_followup_money(abs(_nb), _snap_cur)}/mo (no runway limit)")
                 elif _nb:
-                    financial_snapshot.append(f"Net Burn: {_followup_money(_nb, getattr(company, "currency", None))}/mo")
+                    financial_snapshot.append(f"Net Burn: {_followup_money(_nb, _snap_cur)}/mo")
                 if outputs.get("runway_months") and not (isinstance(_nb, (int, float)) and _nb < 0):
                     financial_snapshot.append(f"Runway: {outputs['runway_months']:.1f} months")
                 if outputs.get("gross_margin"):
@@ -1235,10 +1236,10 @@ async def copilot_chat(
                 FinancialRecord.company_id == company_id
             ).order_by(FinancialRecord.period_end.desc()).first()
             if latest_fin and not financial_snapshot:
-                if latest_fin.revenue: financial_snapshot.append(f"Revenue: {_followup_money(latest_fin.revenue, getattr(company, "currency", None))}/mo")
-                if latest_fin.mrr: financial_snapshot.append(f"MRR: {_followup_money(latest_fin.mrr, getattr(company, "currency", None))}")
-                if latest_fin.cash_balance: financial_snapshot.append(f"Cash Balance: {_followup_money(latest_fin.cash_balance, getattr(company, "currency", None))}")
-                if latest_fin.net_burn: financial_snapshot.append(f"Net Burn: {_followup_money(latest_fin.net_burn, getattr(company, "currency", None))}/mo")
+                if latest_fin.revenue: financial_snapshot.append(f"Revenue: {_followup_money(latest_fin.revenue, _snap_cur)}/mo")
+                if latest_fin.mrr: financial_snapshot.append(f"MRR: {_followup_money(latest_fin.mrr, _snap_cur)}")
+                if latest_fin.cash_balance: financial_snapshot.append(f"Cash Balance: {_followup_money(latest_fin.cash_balance, _snap_cur)}")
+                if latest_fin.net_burn: financial_snapshot.append(f"Net Burn: {_followup_money(latest_fin.net_burn, _snap_cur)}/mo")
                 if latest_fin.runway_months: financial_snapshot.append(f"Runway: {latest_fin.runway_months:.1f} months")
         except Exception:
             pass
