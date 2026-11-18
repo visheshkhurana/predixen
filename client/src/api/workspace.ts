@@ -180,6 +180,17 @@ export function useResendInvite() {
   });
 }
 
+/**
+ * GET /api/workspace/invites/{id}/link (owner/admin only). The token is not in
+ * the invite list, so "Copy link" fetches it for one invite at a time.
+ */
+export async function fetchInviteLink(inviteId: number): Promise<string> {
+  const res = await apiRequest('GET', `/api/workspace/invites/${inviteId}/link`);
+  const body = (await res.json()) as { invite_url?: string };
+  if (!body?.invite_url) throw new Error('No invite link returned');
+  return body.invite_url;
+}
+
 export function useNotificationPreferences() {
   return useQuery<NotificationSettings>({
     queryKey: ['/workspace/notifications/preferences'],

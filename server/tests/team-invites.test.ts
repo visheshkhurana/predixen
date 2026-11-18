@@ -60,3 +60,32 @@ assert.equal(parseServerDate("2026-11-17T03:00:00.5").toISOString(), "2026-11-17
 assert.equal(parseServerDate("2026-11-17T03:00:00Z").toISOString(), "2026-11-17T03:00:00.000Z");
 assert.equal(parseServerDate("2026-11-17T07:00:00+04:00").toISOString(), "2026-11-17T03:00:00.000Z");
 console.log("team-invites dates: ok");
+
+// Copy invite link + honest status lines (tester findings 2026-11-18).
+import {
+  formatTeamDate,
+  inviteLinkCopiedCopy,
+  inviteStatusLine,
+  memberStatusLine,
+} from "../../client/src/lib/teamInvites";
+assert.ok(/copy the invite link/i.test(inviteCreatedCopy("a@b.co", false).description), "no-email invite points at Copy link");
+assert.ok(inviteLinkCopiedCopy("a@b.co").description.includes("a@b.co"));
+assert.equal(formatTeamDate(null), null);
+assert.equal(formatTeamDate("not a date"), null);
+assert.ok(/2026/.test(formatTeamDate("2026-11-17T12:00:00")!), "absolute date, not relative");
+const pendingMember = memberStatusLine({ status: "pending", invited_at: "2026-11-17T12:00:00", joined_at: "2026-11-18T12:00:00" });
+assert.ok(pendingMember!.startsWith("Invited ") && pendingMember!.endsWith("· pending"), "pending never reads as joined");
+assert.ok(!/joined|ago/i.test(pendingMember!));
+const activeMember = memberStatusLine({ status: "active", invited_at: "2026-11-01T12:00:00", joined_at: "2026-11-17T12:00:00" });
+assert.ok(activeMember!.startsWith("Joined ") && !/ago/.test(activeMember!), "members show their join date");
+assert.equal(memberStatusLine({ status: "active", joined_at: undefined }), null);
+const inviteLine = inviteStatusLine({ invited_at: "2026-11-17T12:00:00", expires_at: "2026-11-24T12:00:00" });
+assert.ok(/^Invited .+ · pending · expires .+2026$/.test(inviteLine), inviteLine);
+assert.equal(inviteStatusLine({}), "Pending");
+
+const team = readFileSync(new URL("../../client/src/components/TeamWorkspace.tsx", import.meta.url), "utf8");
+assert.ok(team.includes("button-copy-invite-link-"), "each pending invite has Copy link");
+assert.ok(team.includes("button-copy-new-invite-link"), "a new invite offers its link right away");
+assert.ok(!team.includes("formatDistanceToNow"), "no relative 'x minutes ago' join times");
+assert.ok(settings.includes("fetchInviteLink("), "Copy link fetches the link from the owner/admin endpoint");
+console.log("team-invites copy-link: ok");

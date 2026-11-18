@@ -467,9 +467,11 @@ def login(
     
     log_login_attempt(db, user.email, user.id, success=True, request=request)
 
-    from server.core.invites import accept_invite_quietly
+    from server.core.invites import accept_invite_quietly, accept_pending_invites_for_user
     accept_invite_quietly(db, user, req.invite)
-    
+    # Invited but signed up without the link: join now (verified addresses only).
+    accept_pending_invites_for_user(db, user)
+
     if user.email == "demo@founderconsole.ai" and settings.should_seed_demo_data:
         try:
             from server.seed.seed_demo import seed_demo_data
@@ -813,6 +815,10 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     user.is_email_verified = True
     token_record.used = True
     db.commit()
+
+    # The address is now proven: join any workspace that invited it.
+    from server.core.invites import accept_pending_invites_for_user
+    accept_pending_invites_for_user(db, user)
     
     return {"message": "Email verified successfully. You can now use all features."}
 

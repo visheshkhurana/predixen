@@ -241,7 +241,45 @@ async def invite_member(
     except Exception as e:
         logger.warning(f"Workspace invite email failed for invite {invite.id}: {e}")
 
-    return {"status": "invited", "invite_id": invite.id, "email_sent": email_sent}
+    from server.core.invites import invite_url
+    # Only admins and owners reach this point, so the link can go back to them
+    # for "Copy invite link" (e.g. when email is not configured).
+    return {
+        "status": "invited",
+        "invite_id": invite.id,
+        "email_sent": email_sent,
+        "invite_url": invite_url(invite.token),
+    }
+
+
+@router.get("/invites/{invite_id}/link")
+def get_invite_link(
+    invite_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """The accept link for a pending invite, for owners and admins to copy.
+
+    The link is a bearer credential for joining (though it only works for the
+    invited address), so it is never included in the member-visible invite
+    list; it is fetched here, one invite at a time, by an admin or the owner.
+    """
+    from server.core.invites import invite_url
+
+    invite = db.query(WorkspaceInvite).filter(WorkspaceInvite.id == invite_id).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    require_workspace_access(invite.company_id, current_user, db, min_role="admin")
+    if invite.status != "pending":
+        raise HTTPException(status_code=400, detail="This invite is no longer pending")
+    if invite.expires_at and invite.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="This invite has expired. Resend it to get a new link.")
+    return {
+        "invite_id": invite.id,
+        "email": invite.email,
+        "invite_url": invite_url(invite.token),
+        "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+    }
 
 
 class AcceptInviteRequest(BaseModel):
@@ -374,8 +412,10 @@ def resend_invite(
     db.commit()
     
     # TODO: Send email notification
-    
-    return {"status": "resent"}
+
+    from server.core.invites import invite_url
+    # The token changed, so any link copied earlier stops working; hand back the new one.
+    return {"status": "resent", "invite_url": invite_url(invite.token)}
 
 
 # Notification preferences endpoints
