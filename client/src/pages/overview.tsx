@@ -92,7 +92,7 @@ import { IOLegend } from '@/components/ui/io-legend';
 import { getFieldHelp } from '@/lib/field-help-data';
 import { BoardExportButton } from '@/components/board-export/ExportButton';
 import { SampleInsightExplainer } from '@/components/sample-data/SampleInsightExplainer';
-import { deriveSampleInsight, isSampleCompany } from '@/lib/sampleCompany';
+import { isSampleCompany, sampleInsightFor } from '@/lib/sampleCompany';
 import { FEATURE_FLAGS } from '@/config/features';
 import { OverviewSuggestedActionCard } from '@/components/TruthScanSuggestedActions';
 
@@ -1111,7 +1111,7 @@ export default function OverviewPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
-            <SampleInsightExplainer />
+            <SampleInsightExplainer insight={sampleInsightFor(currentCompany?.currency)} currency={currentCompany?.currency || 'USD'} />
             <div className="flex flex-col gap-2 mb-2">
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -1338,7 +1338,7 @@ export default function OverviewPage() {
                       : null,
                   },
                 }
-              : deriveSampleInsight()
+              : sampleInsightFor(currentCompany.currency)
           }
           currency={currentCompany.currency || 'USD'}
         />

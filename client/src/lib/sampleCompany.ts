@@ -66,6 +66,30 @@ export function deriveSampleInsight(
   };
 }
 
+/** Keep in lockstep with SAMPLE_CURRENCY_SCALE in server/services/sample_data.py. */
+const SAMPLE_CURRENCY_SCALE: Record<string, number> = { INR: 20, AED: 3.5, SGD: 1.3, GBP: 0.8, EUR: 0.9 };
+
+export function sampleScale(currency?: string | null): number {
+  return SAMPLE_CURRENCY_SCALE[(currency || 'USD').trim().toUpperCase()] ?? 1;
+}
+
+/**
+ * The sample insight as it would load into a company with this currency:
+ * same ratios and runway, amounts sized for the currency (a rupee company
+ * sees ₹9L/mo revenue, not ₹45K).
+ */
+export function sampleInsightFor(currency?: string | null): SampleInsight {
+  const k = sampleScale(currency);
+  return deriveSampleInsight({
+    ...SAMPLE_FINANCIALS,
+    monthly_revenue: SAMPLE_FINANCIALS.monthly_revenue * k,
+    opex: SAMPLE_FINANCIALS.opex * k,
+    payroll: SAMPLE_FINANCIALS.payroll * k,
+    other_costs: SAMPLE_FINANCIALS.other_costs * k,
+    cash_balance: SAMPLE_FINANCIALS.cash_balance * k,
+  });
+}
+
 export function isSampleCompany(
   company?: { is_sample?: boolean } | null,
 ): boolean {

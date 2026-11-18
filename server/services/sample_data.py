@@ -37,6 +37,18 @@ SAMPLE_FINANCIALS = {
 }
 
 
+# Sample data loaded into a founder's own company is in that company's
+# currency. Loading the dollar figures as-is gave a rupee company ₹45,000 of
+# monthly revenue and ₹7.5L of cash. Scales keep every ratio (and so the
+# runway) the same; they are sizing choices, not exchange rates.
+SAMPLE_CURRENCY_SCALE = {"INR": 20.0, "AED": 3.5, "SGD": 1.3, "GBP": 0.8, "EUR": 0.9}
+_MONEY_FIELDS = ("monthly_revenue", "opex", "payroll", "other_costs", "cogs", "marketing_expense", "cash_balance")
+
+
+def sample_scale(currency: str | None) -> float:
+    return SAMPLE_CURRENCY_SCALE.get((currency or "USD").strip().upper(), 1.0)
+
+
 def sample_monthly_expenses(fin: dict | None = None) -> float:
     snap = fin or SAMPLE_FINANCIALS
     return (
@@ -87,9 +99,9 @@ def insight_from_record(record: Any) -> dict:
     return derive_sample_insight(revenue, expenses, cash)
 
 
-def build_sample_months(n: int = 12) -> list[dict]:
+def build_sample_months(n: int = 12, scale: float = 1.0) -> list[dict]:
     """Oldest-first monthly rows. The last row is the canonical snapshot."""
-    snap = SAMPLE_FINANCIALS
+    snap = {k: (v * scale if k in _MONEY_FIELDS else v) for k, v in SAMPLE_FINANCIALS.items()}
     months: list[dict] = []
     for i in range(n):
         steps_from_latest = n - 1 - i
@@ -253,7 +265,8 @@ def seed_sample_company(db, company_id: int, template: str = "saas_seed"):
             **insight,
         }
 
-    months = build_sample_months(12)
+    scale = sample_scale(getattr(company, "currency", None))
+    months = build_sample_months(12, scale)
     base_date = datetime.now() - timedelta(days=30 * 11)
 
     for i, row in enumerate(months):
@@ -284,8 +297,8 @@ def seed_sample_company(db, company_id: int, template: str = "saas_seed"):
             net_burn=round(net_burn, 2),
             runway_months=round(cash / net_burn, 1) if net_burn > 0 else None,
             mom_growth=8.0 if i else 0.0,
-            ltv=4800.0,
-            cac=1500.0,
+            ltv=4800.0 * scale,
+            cac=1500.0 * scale,
             ltv_cac_ratio=3.2,
             source_type=SAMPLE_SOURCE_TYPE,
             extraction_summary="Seeded sample data — not the founder's company.",
@@ -296,7 +309,8 @@ def seed_sample_company(db, company_id: int, template: str = "saas_seed"):
         _mark_company_sample(db, company)
 
     db.commit()
-    insight = derive_sample_insight()
+    latest = months[-1]
+    insight = derive_sample_insight(latest["monthly_revenue"], sample_monthly_expenses(latest), latest["cash_balance"])
     logger.info(f"Seeded 12 sample financial records for company {company_id}")
     return {
         "already_seeded": False,

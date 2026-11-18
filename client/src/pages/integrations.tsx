@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { trackEvent } from "@/lib/posthog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,6 +97,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   shiprocket: <Truck className="h-6 w-6" />,
   razorpay: <CreditCard className="h-6 w-6" />,
   meta_ads: <Megaphone className="h-6 w-6" />,
+  google_ads: <Megaphone className="h-6 w-6" />,
   razorpayx: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
   keka: <Users className="h-6 w-6" />,
@@ -129,6 +130,17 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
     permissions: [
       "ads_read on the ad accounts you list",
       "Read-only: cannot create, change or pause ads",
+    ],
+  },
+  google_ads: {
+    dataImported: [
+      "Monthly ad spend per Google Ads account (last 3 full months)",
+      "Impressions and clicks",
+      "Conversions and conversion value as Google reports them (shown as platform-reported, not revenue)",
+    ],
+    permissions: [
+      "Google's Google Ads access (it has no read-only option)",
+      "FounderConsole only reads reports: it never creates, changes or pauses campaigns",
     ],
   },
   quickbooks: {
@@ -372,6 +384,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   shiprocket: { setupTime: "~5 min", category: "revenue" },
   razorpay: { setupTime: "~5 min", category: "revenue" },
   meta_ads: { setupTime: "~10 min", category: "analytics" },
+  google_ads: { setupTime: "~5 min", category: "analytics" },
   brex: { setupTime: "~5 min", category: "revenue" },
   netsuite: { setupTime: "~15 min", category: "accounting" },
   wave: { setupTime: "~10 min", category: "accounting" },
@@ -560,6 +573,12 @@ const paymentsProviders: IntegrationProvider[] = [
     description: "Facebook and Instagram ad spend per month, for CM3 and MER on the Profit screen. Meta's own purchase numbers are shown as platform-reported, not as revenue.",
     features: ["Monthly Ad Spend", "MER vs Platform ROAS", "Multiple Ad Accounts", "Read-only"],
   },
+  {
+    id: "google_ads",
+    name: "Google Ads",
+    description: "Search, Shopping, Performance Max and YouTube ad spend per month, for CM3 and MER. Google's own conversion numbers are shown as platform-reported, not as revenue.",
+    features: ["Monthly Ad Spend", "All Accounts You Can Access", "Sign in with Google", "Read-only"],
+  },
 ];
 
 const capTableProviders: IntegrationProvider[] = [
@@ -633,6 +652,42 @@ export default function IntegrationsPage() {
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationConfig | null>(null);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [stripeModalOpen, setStripeModalOpen] = useState(false);
+  const [googleAdsStarting, setGoogleAdsStarting] = useState(false);
+
+  // Google Ads connects through Google sign-in, not a pasted key, and only
+  // once the server has its developer token and OAuth client.
+  const { data: googleAdsConfig } = useQuery<{ configured: boolean }>({
+    queryKey: ["/api/connectors/google-ads/config"],
+    staleTime: 5 * 60_000,
+  });
+  const googleAdsConfigured = !!googleAdsConfig?.configured;
+
+  const startGoogleAds = async () => {
+    if (!companyId) return;
+    setGoogleAdsStarting(true);
+    try {
+      const res = await apiRequest("GET", `/api/connectors/companies/${companyId}/google-ads/oauth-url`);
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch (error) {
+      setGoogleAdsStarting(false);
+      toast({ title: "Couldn't start Google sign-in", description: getErrorMessage(error, "Try again"), variant: "destructive" });
+    }
+  };
+
+  // Back from Google: say what happened, then tidy the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("connected");
+    const gError = params.get("google_ads_error");
+    if (connected === "google_ads") {
+      toast({ title: "Google Ads connected", description: "Run a sync to pull the last 3 months of spend." });
+      queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
+    } else if (gError) {
+      toast({ title: "Google Ads not connected", description: gError, variant: "destructive" });
+    }
+    if (connected || gError) window.history.replaceState(null, "", window.location.pathname);
+  }, [companyId]);
 
   const spreadsheetIntegrations = getIntegrationsByCategory('spreadsheets');
   const analyticsIntegrations = getIntegrationsByCategory('analytics');
@@ -912,14 +967,19 @@ export default function IntegrationsPage() {
           )}
 
           <div className="flex gap-2 flex-wrap">
-            {provider.comingSoon || !CONNECTOR_BACKED_PROVIDERS.has(provider.id) ? (
+            {provider.comingSoon || !CONNECTOR_BACKED_PROVIDERS.has(provider.id) || (provider.id === "google_ads" && !googleAdsConfigured) ? (
               <Button size="sm" variant="outline" disabled data-testid={`button-coming-soon-${provider.id}`}>
                 <Clock className="h-4 w-4 mr-2" />
                 Coming Soon
               </Button>
             ) : isConnected ? (
               <>
-                {connectorInfo?.needs_reauth && (
+                {connectorInfo?.needs_reauth && provider.id === "google_ads" && (
+                  <Button size="sm" variant="outline" onClick={startGoogleAds} disabled={googleAdsStarting} data-testid="button-reconnect-google_ads">
+                    Reconnect
+                  </Button>
+                )}
+                {connectorInfo?.needs_reauth && provider.id !== "google_ads" && (
                   <ConnectDialog provider={provider} type={type as React.ComponentProps<typeof ConnectDialog>["type"]} companyId={companyId} triggerLabel="Reconnect" />
                 )}
                 <Button
@@ -952,6 +1012,11 @@ export default function IntegrationsPage() {
                   <Button size="sm" onClick={() => setStripeModalOpen(true)} data-testid={`button-connect-${provider.id}`}>
                     <Link2 className="h-4 w-4 mr-2" />
                     Connect
+                  </Button>
+                ) : provider.id === 'google_ads' ? (
+                  <Button size="sm" onClick={startGoogleAds} disabled={googleAdsStarting} data-testid="button-connect-google_ads">
+                    {googleAdsStarting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
+                    Connect with Google
                   </Button>
                 ) : (
                   <ConnectDialog provider={provider} type={type} companyId={companyId} />
@@ -1595,7 +1660,7 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
 // Providers with a real server-side connector. Anything else has no backend to
 // connect to, so its card says "Coming Soon" instead of playing a fake
 // "authorizing" animation and accepting any key.
-export const CONNECTOR_BACKED_PROVIDERS = new Set(["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"]);
+export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"]);
 
 const providerSetupHelp: Record<string, string> = {
   meta_ads:

@@ -98,3 +98,16 @@ test("in-app labels call the page Health Check, and Marketplace and Billing are 
   const docs = readFileSync("client/src/pages/docs.tsx", "utf8");
   assert.doesNotMatch(docs, /Coming Soon<\/Badge>\s*<\/Button>/);
 });
+
+test("INR hiring uses per-role Indian bands, not US x 18", async () => {
+  const { hiringMarketFor, roleBand, monthlyCostForRole } = await import("../../client/src/lib/hiringMarkets");
+  const inr = hiringMarketFor("INR");
+  const sdr = { id: "sdr", salaryMin: 50_000, salaryMax: 70_000 };
+  const [min, max] = roleBand(sdr, inr);
+  assert.ok(min >= 300_000 && max <= 800_000, `SDR band ${min}-${max} should be ₹3–8L, not ₹9–12.6L`);
+  assert.equal(monthlyCostForRole(sdr, inr, "bengaluru"), Math.round(550_000 / 12));
+  const unknown = { id: "astronaut", salaryMin: 100_000, salaryMax: 100_000 };
+  assert.equal(roleBand(unknown, inr)[0], 1_800_000, "roles without a band fall back to the factor");
+  const usd = hiringMarketFor("USD");
+  assert.deepEqual(roleBand(sdr, usd), [50_000, 70_000]);
+});
