@@ -35,7 +35,8 @@ interface ScenarioResult {
 
 interface ScenarioComparisonViewProps {
   scenarios: ScenarioResult[];
-  baselineScenarioName?: string;
+  /** Name of the no-change scenario to compare against; null when there is none. */
+  baselineScenarioName?: string | null;
   onSelectScenario?: (name: string) => void;
   selectedScenario?: string;
   currency?: string;
@@ -77,14 +78,16 @@ function getSurvivalBadge(probability: number) {
 
 export function ScenarioComparisonView({ 
   scenarios, 
-  baselineScenarioName = 'Baseline',
+  baselineScenarioName = null,
   onSelectScenario,
   selectedScenario,
   currency = 'USD',
   testId = 'scenario-comparison' 
 }: ScenarioComparisonViewProps) {
   const formatCurrency = makeFormatCurrency(currency);
-  const baseline = scenarios.find(s => s.name.toLowerCase().includes('baseline')) || scenarios[0];
+  // Only a real no-change scenario is a baseline; comparing against whichever
+  // scenario happened to be first produced meaningless deltas.
+  const baseline = baselineScenarioName ? scenarios.find(s => s.name === baselineScenarioName) ?? null : null;
   
   const sortedScenarios = [...scenarios].sort((a, b) => {
     if (a.score !== undefined && b.score !== undefined) return b.score - a.score;
@@ -116,7 +119,9 @@ export function ScenarioComparisonView({
               Scenario Comparison
             </CardTitle>
             <CardDescription>
-              Compare {scenarios.length} scenarios against baseline
+              {baseline
+                ? `Compare ${scenarios.length} scenarios against "${baseline.name}"`
+                : `Comparing ${scenarios.length} scenarios. Add a scenario named "Baseline" with no changes to see each one's difference from today.`}
             </CardDescription>
           </div>
           {bestScenario && (
@@ -148,10 +153,12 @@ export function ScenarioComparisonView({
             </TableHeader>
             <TableBody>
               {sortedScenarios.map((scenario, index) => {
-                const runwayDelta = getDeltaIndicator(scenario.runway_p50, baseline.runway_p50, true);
-                const survivalDelta = getDeltaIndicator(scenario.survival_18m, baseline.survival_18m, true);
+                const runwayDelta = getDeltaIndicator(scenario.runway_p50, baseline?.runway_p50, true);
+                const survivalDelta = getDeltaIndicator(scenario.survival_18m, baseline?.survival_18m, true);
                 const isBest = scenario.name === bestScenario?.name;
-                const isBaseline = scenario.name === baseline.name;
+                const isBaselineRow = !!baseline && scenario.name === baseline.name;
+                // With no baseline there is nothing to diff against: show "—".
+                const isBaseline = !baseline || isBaselineRow;
                 const isSelected = scenario.name === selectedScenario;
                 
                 return (
@@ -172,7 +179,7 @@ export function ScenarioComparisonView({
                             Best
                           </Badge>
                         )}
-                        {isBaseline && (
+                        {isBaselineRow && (
                           <Badge variant="outline" className="text-xs">Baseline</Badge>
                         )}
                       </div>
@@ -229,8 +236,8 @@ export function ScenarioComparisonView({
                           <span className="font-mono font-semibold">
                             {scenario.end_cash !== undefined ? formatCurrency(scenario.end_cash) : '—'}
                           </span>
-                          {!isBaseline && scenario.end_cash !== undefined && baseline.end_cash !== undefined && (() => {
-                            const cashDelta = getDeltaIndicator(scenario.end_cash, baseline.end_cash, true);
+                          {!isBaseline && scenario.end_cash !== undefined && baseline?.end_cash !== undefined && (() => {
+                            const cashDelta = getDeltaIndicator(scenario.end_cash, baseline?.end_cash, true);
                             return (
                               <span className={cn("text-xs", cashDelta.color)}>
                                 {cashDelta.label}

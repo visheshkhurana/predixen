@@ -40,7 +40,7 @@ import { AIDecisionSummary } from '@/components/AIDecisionSummary';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
-import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, FundraiseDilutionModel, DecisionScoreCard, getBaselineSimulation } from '@/components/ScenarioDeltas';
+import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, FundraiseDilutionModel, DecisionScoreCard, getBaselineSimulation, findBaselineScenario } from '@/components/ScenarioDeltas';
 import { ScenarioComparePicker, ScenarioCompareMode } from '@/components/ScenarioCompareMode';
 import { SensitivitySliders } from '@/components/SensitivitySliders';
 import { isTruthScanRequired, getTruthScanUploadId, getErrorMessage } from '@/lib/errors';
@@ -546,6 +546,16 @@ export default function ScenariosPage() {
 
   const runScenario = async (scenarioData: any, overwrite: boolean, existingId?: number) => {
     setDuplicateDialog({ open: false });
+    if (isUsingDemoData) {
+      // With no cash, revenue or costs every projection is zero, which read as a
+      // "60-month runway" with "no significant risks". Ask for the numbers instead.
+      toast({
+        title: 'Add your numbers first',
+        description: 'Scenarios project from your cash, revenue and costs. Add them on the Data page, then run this again.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setIsCreating(true);
     try {
       const scenario = await createScenarioMutation.mutateAsync({
@@ -1655,37 +1665,37 @@ export default function ScenariosPage() {
                 <div>
                   <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Cash</p>
                   <p className="text-xs font-semibold font-mono" data-testid="text-context-cash">
-                    {formatCurrency(baseMetrics.cashOnHand)}
+                    {isUsingDemoData ? '—' : formatCurrency(baseMetrics.cashOnHand)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Burn</p>
                   <p className="text-xs font-semibold font-mono" data-testid="text-context-burn">
-                    {formatCurrency(netBurn)}
+                    {isUsingDemoData ? '—' : formatCurrency(netBurn)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Runway</p>
                   <p className="text-xs font-semibold font-mono" data-testid="text-context-runway">
-                    {formatRunway(Number(baseMetrics.currentRunway))}
+                    {isUsingDemoData ? '—' : formatRunway(Number(baseMetrics.currentRunway))}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">MRR</p>
                   <p className="text-xs font-semibold font-mono" data-testid="text-context-mrr">
-                    {formatCurrency(baseMetrics.monthlyRevenue)}
+                    {isUsingDemoData ? '—' : formatCurrency(baseMetrics.monthlyRevenue)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Growth</p>
                   <p className="text-xs font-semibold font-mono" data-testid="text-context-growth">
-                    {Number(baseMetrics.growthRate).toFixed(1)}%
+                    {isUsingDemoData ? '—' : `${Number(baseMetrics.growthRate).toFixed(1)}%`}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">LTV:CAC</p>
                   <p className="text-xs font-semibold font-mono" data-testid="text-context-ltvcac">
-                    {Number(sharedMetrics.ltvCacRatio).toFixed(1)}x
+                    {isUsingDemoData || !sharedMetrics.ltvCacRatio ? '—' : `${Number(sharedMetrics.ltvCacRatio).toFixed(1)}x`}
                   </p>
                 </div>
               </div>
@@ -1697,9 +1707,9 @@ export default function ScenariosPage() {
             <CardContent className="flex items-start gap-3 p-4">
               <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h4 className="font-medium text-amber-800 dark:text-amber-200 text-sm">Using Demo Data</h4>
+                <h4 className="font-medium text-amber-800 dark:text-amber-200 text-sm">No financial data yet</h4>
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                  For accurate projections, connect your actual financial data.
+                  Scenarios project from your cash, revenue and costs. Add them first, otherwise every result would be zero.
                 </p>
                 <Button
                   variant="outline"
@@ -1709,7 +1719,7 @@ export default function ScenariosPage() {
                   data-testid="button-connect-financials"
                 >
                   <ExternalLink className="h-3 w-3 mr-1.5" />
-                  Connect Financials
+                  Add your numbers
                 </Button>
               </div>
             </CardContent>
@@ -2392,9 +2402,10 @@ export default function ScenariosPage() {
                 />
               )}
 
-              {scenarios && scenarios.length > 1 && (
+              {scenarios && scenarios.filter((s: any) => s.latest_simulation).length > 1 && (
                 <ScenarioComparisonView
-                  scenarios={scenarios.map((s: any) => ({
+                  baselineScenarioName={findBaselineScenario(scenarios)?.name ?? null}
+                  scenarios={scenarios.filter((s: any) => s.latest_simulation).map((s: any) => ({
                     name: s.name,
                     runway_p50: s.latest_simulation?.runway?.p50 ?? 0,
                     runway_p10: s.latest_simulation?.runway?.p10,

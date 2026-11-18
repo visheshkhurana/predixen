@@ -108,6 +108,8 @@ jobs:
         run: npx tsx --test server/tests/simulation-consistency.test.ts
       - name: fundraising pipeline board is the company's own data
         run: npx tsx --test server/tests/fundraising-pipeline.test.ts
+      - name: What-If quick estimate is like-for-like and uses growth/churn
+        run: npx tsx --test server/tests/whatif-quick-estimate.test.ts
 
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
