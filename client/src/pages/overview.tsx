@@ -872,6 +872,7 @@ export default function OverviewPage() {
     return dynamicBenchmarks.benchmarks.find(b => b.metric_name === metricName);
   };
   
+  const growthUnknown = !assumptions.growthRate && sharedMetrics.sources?.monthlyGrowthRate !== 'reported';
   const benchmarkComparison = useMemo(() => {
     const growthBenchmark = getDynamicBenchmark('revenue_growth_mom') || { p25: INDUSTRY_BENCHMARKS.revenueGrowth.p25, p50: INDUSTRY_BENCHMARKS.revenueGrowth.p50, p75: INDUSTRY_BENCHMARKS.revenueGrowth.p75, direction: 'higher_is_better' };
     const grossMarginBenchmark = getDynamicBenchmark('gross_margin') || { p25: INDUSTRY_BENCHMARKS.grossMargin.p25, p50: INDUSTRY_BENCHMARKS.grossMargin.p50, p75: INDUSTRY_BENCHMARKS.grossMargin.p75, direction: 'higher_is_better' };
@@ -882,17 +883,20 @@ export default function OverviewPage() {
     
     const rows: Array<{
       metric: string; value: number; display?: string; p25: number; p50: number; p75: number;
-      unit: string; direction: string; status: 'above' | 'median' | 'below';
+      unit: string; direction: string; status: 'above' | 'median' | 'below' | 'unknown';
     }> = [
-      { 
-        metric: 'Growth Rate', 
-        value: assumptions.growthRate, 
-        p25: growthBenchmark.p25, 
-        p50: growthBenchmark.p50, 
+      {
+        metric: 'Growth Rate',
+        value: assumptions.growthRate,
+        // Growth needs two months of revenue. With one month the value is a
+        // placeholder 0, which used to rank the company "Below P25".
+        ...(growthUnknown ? { display: 'Needs 2+ months' } : {}),
+        p25: growthBenchmark.p25,
+        p50: growthBenchmark.p50,
         p75: growthBenchmark.p75,
         unit: '%',
         direction: growthBenchmark.direction,
-        status: getBenchmarkStatus(assumptions.growthRate, growthBenchmark),
+        status: growthUnknown ? 'unknown' : getBenchmarkStatus(assumptions.growthRate, growthBenchmark),
       },
       // The static fallback margins are software numbers (70%+). A goods
       // business only gets a margin benchmark when a live one loaded.
@@ -2215,7 +2219,12 @@ export default function OverviewPage() {
                         <span className="font-mono text-sm font-semibold">
                           {item.display ?? `${safeToFixed(item.value)}${item.unit}`}
                         </span>
-                        <Badge 
+                        {item.status === 'unknown' ? (
+                          <Badge variant="outline" className="text-muted-foreground" data-testid={`benchmark-${index}-status`}>
+                            Not enough history
+                          </Badge>
+                        ) : (
+                        <Badge
                           variant={item.status === 'above' ? 'secondary' : item.status === 'median' ? 'secondary' : 'destructive'}
                           data-testid={`benchmark-${index}-status`}
                         >
@@ -2228,6 +2237,7 @@ export default function OverviewPage() {
                           )}
                           {getBenchmarkBadgeLabel(item.status, item.direction, item.p50, item.unit)}
                         </Badge>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">

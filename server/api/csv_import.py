@@ -147,6 +147,69 @@ def with_csv_import_provenance(field_values: Dict[str, Any], provided_fields: Li
     return stamped
 
 
+
+def is_spreadsheet_filename(name: Optional[str]) -> bool:
+    return (name or "").lower().endswith((".xlsx", ".xls"))
+
+
+def csv_rows(content: bytes):
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+    reader = csv.DictReader(io.StringIO(text))
+    headers = reader.fieldnames or []
+    rows = []
+    for row in reader:
+        rows.append(dict(row))
+        if len(rows) > MAX_CSV_ROWS:
+            break
+    return headers, rows
+
+
+def _cell_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def spreadsheet_rows(content: bytes, filename: str):
+    """First sheet of an Excel file as CSV-style rows.
+
+    A month-per-row P&L (Month, Revenue, Expenses, ...) saved as .xlsx used to
+    go to the Termina extractor, which only understands its own export and
+    quietly saved nothing. The header row is the first row with at least two
+    non-empty text cells, so a title row above the table is skipped.
+    """
+    try:
+        import pandas as pd
+        engine = "xlrd" if filename.lower().endswith(".xls") else "openpyxl"
+        frame = pd.read_excel(io.BytesIO(content), sheet_name=0, header=None, engine=engine, dtype=object)
+    except Exception:
+        raise HTTPException(status_code=400, detail="We couldn't open this spreadsheet. Save it as .xlsx or .csv and try again.")
+    grid = [[_cell_text(v) if not (isinstance(v, float) and v != v) else "" for v in row] for row in frame.itertuples(index=False)]
+    header_idx = next(
+        (i for i, row in enumerate(grid[:20]) if sum(1 for c in row if c and not re.fullmatch(r"[-\d.,()₹$%\s]+", c)) >= 2),
+        None,
+    )
+    if header_idx is None:
+        return [], []
+    raw_headers = grid[header_idx]
+    keep = [i for i, h in enumerate(raw_headers) if h]
+    headers = [raw_headers[i] for i in keep]
+    rows = []
+    for row in grid[header_idx + 1:]:
+        values = {headers[n]: (row[i] if i < len(row) else "") for n, i in enumerate(keep)}
+        if any(values.values()):
+            rows.append(values)
+        if len(rows) > MAX_CSV_ROWS:
+            break
+    return headers, rows
+
 @router.post("/companies/{company_id}/financials/csv-detect")
 async def detect_csv_columns(
     company_id: int,
@@ -163,20 +226,18 @@ async def detect_csv_columns(
 
     content = await file.read()
     if len(content) > MAX_CSV_SIZE:
-        raise HTTPException(status_code=413, detail=f"CSV file exceeds {MAX_CSV_SIZE // (1024*1024)}MB limit")
-    text = content.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text))
-    headers = reader.fieldnames or []
-    rows = []
-    for row in reader:
-        if len(rows) >= MAX_CSV_ROWS:
-            raise HTTPException(status_code=413, detail=f"CSV exceeds {MAX_CSV_ROWS} row limit")
-        rows.append(dict(row))
+        raise HTTPException(status_code=413, detail=f"File exceeds {MAX_CSV_SIZE // (1024*1024)}MB limit")
+    if is_spreadsheet_filename(file.filename):
+        headers, rows = spreadsheet_rows(content, file.filename or "")
+    else:
+        headers, rows = csv_rows(content)
+    if len(rows) > MAX_CSV_ROWS:
+        raise HTTPException(status_code=413, detail=f"File exceeds {MAX_CSV_ROWS} row limit")
 
     if not headers or not rows:
         raise HTTPException(
             status_code=400,
-            detail="This CSV has no rows to import. Check it has a header row and at least one month of numbers.",
+            detail="This file has no rows to import. Check it has a header row and at least one month of numbers.",
         )
 
     suggested = detect_columns(headers)

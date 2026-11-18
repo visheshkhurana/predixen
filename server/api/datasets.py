@@ -448,7 +448,8 @@ async def upload_termina_excel(
         
         baseline = result.get("baseline_data", {})
         monthly_revenue = baseline.get("monthly_revenue")
-        
+        saved = False
+
         if save_as_baseline and baseline and monthly_revenue and monthly_revenue > 0:
             from datetime import date
             today = date.today()
@@ -485,6 +486,17 @@ async def upload_termina_excel(
             from server.services.sample_data import on_real_financials_written
             on_real_financials_written(db, company_id, commit=False)
             db.commit()
+            saved = True
+        elif save_as_baseline:
+            # Nothing usable was found. This used to answer success with
+            # baseline_saved=true while saving nothing.
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "We couldn't find revenue in this sheet. If it has one row per month "
+                    "(Month, Revenue, Costs...), use Import CSV or Excel on the Data page instead."
+                ),
+            )
         
         return {
             "success": True,
@@ -492,10 +504,12 @@ async def upload_termina_excel(
             "report_date": result.get("report_date"),
             "summary": result.get("summary"),
             "metrics": result.get("raw_metrics"),
-            "baseline_saved": save_as_baseline,
+            "baseline_saved": saved,
             "extracted_fields": len(result.get("baseline_data", {}))
         }
         
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

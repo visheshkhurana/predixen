@@ -1377,7 +1377,7 @@ export default function DataInput() {
                         data-testid="csv-drop-zone"
                       >
                         <FileUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                        <p className="font-medium mb-1">Drag and drop your CSV file here</p>
+                        <p className="font-medium mb-1">Drag and drop your CSV or Excel file here (one row per month)</p>
                         <p className="text-sm text-muted-foreground mb-4">or click to browse</p>
                         <Button variant="outline" onClick={() => document.getElementById('csv-smart-input')?.click()} data-testid="button-browse-csv">
                           Browse Files
@@ -1385,7 +1385,7 @@ export default function DataInput() {
                         <input
                           id="csv-smart-input"
                           type="file"
-                          accept=".csv"
+                          accept=".csv,.xlsx,.xls"
                           className="hidden"
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
