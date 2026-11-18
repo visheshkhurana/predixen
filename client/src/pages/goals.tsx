@@ -179,6 +179,7 @@ export default function GoalsPage() {
               }}
             >
               <Input
+                aria-label="Goal"
                 placeholder="e.g. Reach ₹50L monthly revenue"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -188,9 +189,9 @@ export default function GoalsPage() {
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Measured in</label>
+                  <label htmlFor="goal-unit" className="text-xs font-medium text-muted-foreground">Measured in</label>
                   <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v as Unit })}>
-                    <SelectTrigger data-testid="select-goal-unit">
+                    <SelectTrigger id="goal-unit" data-testid="select-goal-unit">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -205,8 +206,9 @@ export default function GoalsPage() {
                 {form.unit !== "none" && (
                   <>
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Target</label>
+                      <label htmlFor="goal-target" className="text-xs font-medium text-muted-foreground">Target</label>
                       <Input
+                        id="goal-target"
                         inputMode="decimal"
                         value={form.target_value}
                         onChange={(e) => setForm({ ...form, target_value: e.target.value })}
@@ -214,8 +216,9 @@ export default function GoalsPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Current</label>
+                      <label htmlFor="goal-current" className="text-xs font-medium text-muted-foreground">Current</label>
                       <Input
+                        id="goal-current"
                         inputMode="decimal"
                         value={form.current_value}
                         onChange={(e) => setForm({ ...form, current_value: e.target.value })}
@@ -225,8 +228,9 @@ export default function GoalsPage() {
                   </>
                 )}
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Deadline</label>
+                  <label htmlFor="goal-deadline" className="text-xs font-medium text-muted-foreground">Deadline</label>
                   <Input
+                    id="goal-deadline"
                     type="date"
                     value={form.deadline}
                     onChange={(e) => setForm({ ...form, deadline: e.target.value })}
@@ -235,6 +239,7 @@ export default function GoalsPage() {
                 </div>
               </div>
               <Textarea
+                aria-label="Notes"
                 placeholder="Notes (optional)"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -365,7 +370,7 @@ export default function GoalsPage() {
                         if (input) input.value = "";
                       }}
                     >
-                      <Input name="current" inputMode="decimal" placeholder="Update current value" className="h-8 max-w-[200px]" />
+                      <Input name="current" aria-label="Current value" inputMode="decimal" placeholder="Update current value" className="h-8 max-w-[200px]" />
                       <Button type="submit" size="sm" variant="outline" className="h-8">
                         Update
                       </Button>

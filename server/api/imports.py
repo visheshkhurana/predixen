@@ -240,7 +240,12 @@ async def upload_excel(
         raise
     except Exception as e:
         logger.error(f"Error processing Excel file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")
+        # Not a server fault: the layout wasn't recognised (or the AI reader is
+        # unavailable). Don't leak internals like a missing API key.
+        raise HTTPException(
+            status_code=422,
+            detail="We couldn't read this spreadsheet's layout automatically. If it has one row per month, use the CSV tab, which also accepts Excel files.",
+        )
 
 
 @router.post("/pdf", response_model=ImportSessionResponse)

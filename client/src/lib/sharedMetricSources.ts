@@ -109,9 +109,9 @@ export function alignTruthMetrics(
 
   // The scan's own list of values it filled from defaults: never shown as facts.
   const estimated = new Set<string>(Array.isArray(m._estimated_metrics) ? m._estimated_metrics : []);
-  for (const key of ['cac', 'ltv', 'ltv_cac_ratio', 'payback_months']) {
-    if (estimated.has(key)) m[key] = null;
-  }
+  // Every value the scan filled from a default (NRR 108%, headcount, margin...)
+  // is blanked, not just unit economics; real numbers from `shared` refill below.
+  estimated.forEach((key) => { m[key] = null; });
 
   if (!shared || !shared.hasData) return m;
 

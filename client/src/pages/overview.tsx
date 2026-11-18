@@ -485,15 +485,17 @@ const formatSignedPct = (value: number | null | undefined): string => {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 };
 
-const getKpiStatus = (value: number | null, metric: string): 'green' | 'yellow' | 'red' => {
+// `goods`: brands selling physical products. Their margins and growth are
+// judged on goods ranges (50%+ margin is healthy), not software ones (70%+).
+const getKpiStatus = (value: number | null, metric: string, goods = false): 'green' | 'yellow' | 'red' => {
   if (value === null || value === undefined) return 'yellow';
   
   switch (metric) {
     case 'runway':
       return runwayKpiStatus(runwayBand(value));
     case 'grossMargin':
-      if (value >= 70) return 'green';
-      if (value >= 50) return 'yellow';
+      if (value >= (goods ? 50 : 70)) return 'green';
+      if (value >= (goods ? 40 : 50)) return 'yellow';
       return 'red';
     case 'churnRate':
       if (value <= 3) return 'green';
@@ -504,8 +506,8 @@ const getKpiStatus = (value: number | null, metric: string): 'green' | 'yellow' 
       if (value >= 2) return 'yellow';
       return 'red';
     case 'growthRate':
-      if (value >= 15) return 'green';
-      if (value >= 5) return 'yellow';
+      if (value >= (goods ? 8 : 15)) return 'green';
+      if (value >= (goods ? 3 : 5)) return 'yellow';
       return 'red';
     case 'paybackPeriod':
       if (value <= 12) return 'green';
@@ -1230,7 +1232,7 @@ export default function OverviewPage() {
     { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: goodsLabels ? '50%+' : '70%+', badRange: goodsLabels ? '< 40%' : '< 50%' } },
     { name: terms.churn.charAt(0).toUpperCase() + terms.churn.slice(1), value: sharedMetrics.sources['churnRate'] === 'estimated' || (!sharedMetrics.sources['churnRate'] && sharedMetrics.churnRatePct === 0) ? null : baseData.churnRate, metric: 'churnRate', tooltip: { formula: `Lost ${terms.customers} / Total ${terms.customers}`, goodRange: '< 3%', badRange: '> 7%' } },
     { name: 'LTV/CAC', value: baseData.ltvCacRatio > 0 ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
-    { name: 'Growth Rate', value: isNaN(sharedMetrics.monthlyGrowthRate) ? null : sharedMetrics.monthlyGrowthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
+    { name: 'Growth Rate', value: isNaN(sharedMetrics.monthlyGrowthRate) ? null : sharedMetrics.monthlyGrowthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: goodsLabels ? '8%+ MoM' : '15%+ MoM', badRange: goodsLabels ? '< 3%' : '< 5%' } },
     { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   
@@ -1264,7 +1266,7 @@ export default function OverviewPage() {
     kpis: kpiHealthData.map((k) => ({
       name: k.name,
       metric: k.metric,
-      status: k.value == null ? null : getKpiStatus(k.value, k.metric),
+      status: k.value == null ? null : getKpiStatus(k.value, k.metric, !!goodsLabels),
     })),
   });
   const briefingStatusText = dashboardStatusSentence(briefingStatus);
@@ -1987,7 +1989,7 @@ export default function OverviewPage() {
                         </TooltipContent>
                       </Tooltip>
                     </div>
-                    <KpiStatusIcon status={getKpiStatus(item.value, item.metric)} />
+                    <KpiStatusIcon status={getKpiStatus(item.value, item.metric, !!goodsLabels)} />
                   </div>
                   <div className="flex items-baseline space-x-2">
                     <span className="text-2xl font-bold">
@@ -2005,8 +2007,8 @@ export default function OverviewPage() {
                   <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
                     <div 
                       className={`h-full transition-all ${
-                        getKpiStatus(item.value, item.metric) === 'green' ? 'bg-emerald-500' :
-                        getKpiStatus(item.value, item.metric) === 'yellow' ? 'bg-amber-500' : 'bg-red-500'
+                        getKpiStatus(item.value, item.metric, !!goodsLabels) === 'green' ? 'bg-emerald-500' :
+                        getKpiStatus(item.value, item.metric, !!goodsLabels) === 'yellow' ? 'bg-amber-500' : 'bg-red-500'
                       }`}
                       style={{ width: `${Math.min(100, Math.max(10, item.value == null ? 0 : (item.metric === 'churnRate' ? 100 - item.value * 5 : item.value * 1.5)))}%` }}
                     />
@@ -2103,7 +2105,7 @@ export default function OverviewPage() {
                 <Users className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">Total Customers</span>
               </div>
-              <span className="font-mono font-medium">{projectedMetrics.totalCustomers}</span>
+              <span className="font-mono font-medium">{projectedMetrics.totalCustomers > 0 ? projectedMetrics.totalCustomers : <span className="text-muted-foreground font-sans text-xs">Not tracked</span>}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

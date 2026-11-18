@@ -933,6 +933,10 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     if (!truthScan) return null;
     const badgeClass = "text-xs whitespace-nowrap shrink-0 cursor-pointer hidden sm:inline-flex";
     const handleClick = () => navigate('/data');
+    if (confidence <= 0) {
+      // Nothing entered yet: an invitation, not a red failing grade.
+      return <Badge variant="outline" className={`text-muted-foreground ${badgeClass}`} onClick={handleClick} data-testid="badge-confidence">Add your numbers</Badge>;
+    }
     if (confidence < 60) {
       return <Badge variant="destructive" className={badgeClass} onClick={handleClick} data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
     } else if (confidence < 80) {

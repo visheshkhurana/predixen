@@ -80,7 +80,9 @@ export function scoreDisplay(
   if (typeof score !== 'number' || !Number.isFinite(score)) {
     return { scored: false, label: NOT_SCORED_LABEL };
   }
-  if (score <= 0 && !opts.hasData) {
+  // Without data any score is a default, not a judgement (an empty company
+  // used to show "Quality of Growth 45/100").
+  if (!opts.hasData) {
     return { scored: false, label: NOT_SCORED_LABEL };
   }
   return { scored: true, value: Math.round(score) };

@@ -122,7 +122,8 @@ function HealthScoreCard() {
 
   // A 0 quality index with low confidence means "no data", not a failing
   // business: show a muted "Not scored yet" instead of a red 0/100.
-  const notScored = healthScore !== null && healthScore <= 0 && confidence < 20;
+  // Below 20% confidence there is too little data for any score to mean anything.
+  const notScored = healthScore !== null && confidence < 20;
 
   const getHealthColor = (score: number) => {
     if (score >= 70) return "text-emerald-400";
