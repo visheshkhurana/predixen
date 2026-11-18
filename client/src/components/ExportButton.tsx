@@ -80,7 +80,7 @@ export function ExportButton({
           description: 'Your investor report has been saved.',
         });
       } else {
-        downloadPDF(data, filename, pdfTitle || 'Truth Scan Report');
+        downloadPDF(data, filename, pdfTitle || 'Health Check Report');
         toast({
           title: 'PDF opened',
           description: 'Use your browser print dialog to save as PDF.',

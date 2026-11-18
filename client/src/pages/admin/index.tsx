@@ -343,7 +343,7 @@ export default function AdminDashboard() {
           isLoading={metricsLoading} 
         />
         <StatCard 
-          title="Truth Scans" 
+          title="Health Checks" 
           value={metrics?.truth_scans_today ?? 0} 
           icon={BarChart3} 
           description="Today"

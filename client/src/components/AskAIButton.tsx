@@ -18,8 +18,11 @@ export function AskAIButton() {
   const [location] = useLocation();
   const [isHovering, setIsHovering] = useState(false);
 
-  // Hide on auth, onboarding, and admin pages
+  // Hide on auth, onboarding, and admin pages, and on Copilot itself: the
+  // button only links to /copilot, and there it sat on top of the question box.
   const shouldHide =
+    location === "/copilot" ||
+    location.startsWith("/copilot/") ||
     location === "/auth" ||
     location === "/onboarding" ||
     location.startsWith("/admin") ||
@@ -39,7 +42,8 @@ export function AskAIButton() {
           onClick={() => {
             window.location.href = "/copilot";
           }}
-          className="fixed bottom-6 right-6 rounded-full shadow-lg h-14 w-14 p-0 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+          aria-label="Ask AI"
+          className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-40 rounded-full shadow-lg h-12 w-12 md:h-14 md:w-14 p-0 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
           onMouseEnter={() => setIsHovering(true)}
           onMouseLeave={() => setIsHovering(false)}
           data-testid="button-ask-ai"

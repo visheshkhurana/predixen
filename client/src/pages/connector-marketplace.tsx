@@ -33,7 +33,12 @@ export default function ConnectorMarketplace() {
   const [selectedConnector, setSelectedConnector] = useState<CatalogConnector | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   
-  const { data: connectors = [], isLoading: connectorsLoading } = useQuery({
+  const {
+    data: connectors = [],
+    isLoading: connectorsLoading,
+    isError: connectorsError,
+    refetch: refetchConnectors,
+  } = useQuery({
     queryKey: ["/api/connectors/catalog", currentCompany?.id],
     queryFn: () => fetchConnectorCatalog({ companyId: currentCompany?.id }),
     staleTime: 5 * 60 * 1000,
@@ -88,6 +93,12 @@ export default function ConnectorMarketplace() {
     c.installStatus?.status === "active" || c.installStatus?.status === "paused"
   ).length;
   
+  // Until the catalog has loaded, counts are unknown, not zero: a "0
+  // connectors" flash read as "nothing works here".
+  const countsPending = connectorsLoading || connectorsError;
+  const stat = (value: number) =>
+    countsPending ? <Skeleton className="h-8 w-12" data-testid="skeleton-connector-count" /> : value;
+
   const handleConnect = (_connectorId: string) => {
     // Real connect flow (credentials verified server-side) lives on Integrations.
     setLocation(`/integrations`);
@@ -130,7 +141,7 @@ export default function ConnectorMarketplace() {
                 <Database className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{connectors.length}</p>
+                <div className="text-2xl font-bold">{stat(connectors.length)}</div>
                 <p className="text-sm text-muted-foreground">Available Connectors</p>
               </div>
             </div>
@@ -144,7 +155,7 @@ export default function ConnectorMarketplace() {
                 <TrendingUp className="h-5 w-5 text-emerald-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{installedCount}</p>
+                <div className="text-2xl font-bold">{stat(installedCount)}</div>
                 <p className="text-sm text-muted-foreground">Connected Sources</p>
               </div>
             </div>
@@ -158,7 +169,7 @@ export default function ConnectorMarketplace() {
                 <Sparkles className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{connectors.filter(c => c.native).length}</p>
+                <div className="text-2xl font-bold">{stat(connectors.filter(c => c.native).length)}</div>
                 <p className="text-sm text-muted-foreground">Native Integrations</p>
               </div>
             </div>
@@ -189,7 +200,11 @@ export default function ConnectorMarketplace() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {filteredConnectors.length} of {connectors.length} connectors
+            {connectorsLoading
+              ? "Loading connectors…"
+              : connectorsError
+                ? ""
+                : `Showing ${filteredConnectors.length} of ${connectors.length} connectors`}
           </p>
         </div>
         
@@ -209,6 +224,13 @@ export default function ConnectorMarketplace() {
               </Card>
             ))}
           </div>
+        ) : connectorsError ? (
+          <Card className="p-8 text-center" data-testid="card-connectors-error">
+            <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="font-semibold mb-2">Couldn't load connectors</h3>
+            <p className="text-sm text-muted-foreground mb-4">Check your connection and try again.</p>
+            <Button variant="outline" onClick={() => refetchConnectors()}>Retry</Button>
+          </Card>
         ) : filteredConnectors.length === 0 ? (
           <Card className="p-8 text-center">
             <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

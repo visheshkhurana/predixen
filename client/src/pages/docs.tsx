@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'wouter';
+import { useFounderStore } from '@/store/founderStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +47,7 @@ function SubSection({ title, children }: { title: string; children: React.ReactN
 }
 
 export default function DocsPage() {
+  const user = useFounderStore((s) => s.user);
   return (
     <div className="min-h-screen bg-background p-4 sm:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -188,10 +191,14 @@ export default function DocsPage() {
                 Email Support
               </a>
             </Button>
-            <Button variant="outline" disabled data-testid="button-live-chat">
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Live Chat
-              <Badge variant="secondary" className="ml-2 text-[10px]">Coming Soon</Badge>
+            {/* Was a disabled "Live Chat (Coming Soon)" button that did nothing.
+                Docs is a signed-in page, so this opens the in-app assistant;
+                signed-out visitors get the contact page. */}
+            <Button variant="outline" asChild data-testid="button-live-chat">
+              <Link href={user ? "/copilot" : "/contact"}>
+                <MessageCircle className="h-4 w-4 mr-2" />
+                {user ? "Ask Copilot" : "Contact us"}
+              </Link>
             </Button>
           </CardContent>
         </Card>

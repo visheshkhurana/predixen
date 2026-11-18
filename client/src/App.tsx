@@ -1197,7 +1197,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           </Dialog>
           <CopilotDrawer open={copilotOpen} onOpenChange={setCopilotOpen} />
           <Breadcrumbs />
-          <main className="flex-1 overflow-auto bg-background">
+          {/* Bottom padding so the floating Ask AI button never sits on top of the
+              last form field or button on a page; content can scroll past it. */}
+          <main className={`flex-1 overflow-auto bg-background ${location.startsWith("/copilot") ? "" : "pb-24"}`}>
             <AnimatedRouteWrapper>
               {children}
             </AnimatedRouteWrapper>

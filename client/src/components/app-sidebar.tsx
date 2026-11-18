@@ -219,7 +219,7 @@ function SettingsDrawer() {
                     data-testid={`settings-nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
-                    <span>{item.title}</span>
+                    <span className="min-w-0 truncate">{item.title}</span>
                   </Button>
                 ))}
               </div>
@@ -245,7 +245,7 @@ function SettingsDrawer() {
                     data-testid={`settings-nav-admin-${item.title.toLowerCase().replace(/\s/g, "-")}`}
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
-                    <span>{item.title}</span>
+                    <span className="min-w-0 truncate">{item.title}</span>
                   </Button>
                 ))}
                 <Button
@@ -383,9 +383,9 @@ export function AppSidebar() {
           <div className="transition-transform duration-300 ease-out group-hover:scale-110">
             <FCLogo size="md" />
           </div>
-          <div>
-            <span className="font-semibold text-sm bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">FounderConsole</span>
-            <p className="text-xs text-muted-foreground">Intelligence OS</p>
+          <div className="min-w-0">
+            <span className="block truncate font-semibold text-sm bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">FounderConsole</span>
+            <p className="truncate text-xs text-muted-foreground">Intelligence OS</p>
           </div>
         </div>
       </SidebarHeader>
@@ -463,9 +463,9 @@ export function AppSidebar() {
                 >
                   <Link href="/simulate">
                     <FlaskConical className="h-4 w-4" />
-                    <span className="flex-1">Simulate</span>
+                    <span className="flex-1 min-w-0 truncate">Simulate</span>
                     {scenarioCount > 0 && (
-                      <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0" data-testid="badge-scenario-count">
+                      <Badge variant="secondary" className="ml-auto shrink-0 text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0" data-testid="badge-scenario-count">
                         {scenarioCount}
                       </Badge>
                     )}
@@ -480,9 +480,9 @@ export function AppSidebar() {
                 >
                   <Link href="/decisions">
                     <Target className="h-4 w-4" />
-                    <span className="flex-1">Decisions</span>
+                    <span className="flex-1 min-w-0 truncate">Decisions</span>
                     {pendingDecisionCount > 0 && (
-                      <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-decision-count">
+                      <Badge variant="destructive" className="ml-auto shrink-0 text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-decision-count">
                         {pendingDecisionCount}
                       </Badge>
                     )}
@@ -497,9 +497,9 @@ export function AppSidebar() {
                 >
                   <Link href="/alerts">
                     <AlertTriangle className="h-4 w-4" />
-                    <span className="flex-1">Alerts</span>
+                    <span className="flex-1 min-w-0 truncate">Alerts</span>
                     {unreadAlertCount > 0 && (
-                      <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-alert-count">
+                      <Badge variant="destructive" className="ml-auto shrink-0 text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-alert-count">
                         {unreadAlertCount}
                       </Badge>
                     )}
@@ -666,12 +666,38 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/marketplace"}
+                  data-testid="nav-marketplace"
+                >
+                  <Link href="/marketplace">
+                    <Database className="h-4 w-4" />
+                    <span>Marketplace</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="px-2 pb-3 space-y-1 border-t border-border/30">
+        <Link href="/billing">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "w-full justify-start gap-2",
+              location === "/billing" && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+            )}
+            data-testid="nav-billing"
+          >
+            <CreditCard className="h-4 w-4" />
+            <span className="flex-1 text-left truncate">Plans & Billing</span>
+          </Button>
+        </Link>
         <SettingsDrawer />
         <div className="flex items-center justify-between px-3 py-1">
           <ThemeToggle />

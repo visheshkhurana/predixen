@@ -23,7 +23,7 @@ interface KPIProvenanceProps {
 }
 
 const sourceConfig = {
-  truth_scan: { label: 'Truth Scan', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
+  truth_scan: { label: 'Health Check', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
   simulation: { label: 'Simulation', color: 'text-blue-400', bgColor: 'bg-blue-500/10' },
   manual: { label: 'Manual Entry', color: 'text-amber-400', bgColor: 'bg-amber-500/10' },
   computed: { label: 'Computed', color: 'text-purple-400', bgColor: 'bg-purple-500/10' },

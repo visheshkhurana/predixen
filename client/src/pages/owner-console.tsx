@@ -346,7 +346,7 @@ export default function OwnerConsole() {
             color="rose"
           />
           <StatCard 
-            title="Truth Scans" 
+            title="Health Checks" 
             value={dashboard?.truth_scans_today || 0} 
             icon={Target} 
             loading={dashLoading}

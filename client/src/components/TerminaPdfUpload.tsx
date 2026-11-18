@@ -271,7 +271,7 @@ export function TerminaPdfUpload({ companyId, onSuccess }: TerminaPdfUploadProps
       
       toast({
         title: "Financials saved successfully",
-        description: "Your data has been applied. Run Truth Scan to see updated metrics.",
+        description: "Your data has been applied. Run a Health Check to see updated metrics.",
       });
 
       if (onSuccess) {

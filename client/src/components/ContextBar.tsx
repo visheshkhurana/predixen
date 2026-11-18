@@ -148,7 +148,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
             </TooltipTrigger>
             <TooltipContent side="bottom">
               <div className="text-xs">
-                <p className="font-medium">{runTimestamp ? 'Last Simulation Run' : 'Last Truth Scan'}</p>
+                <p className="font-medium">{runTimestamp ? 'Last Simulation Run' : 'Last Health Check'}</p>
                 <p>{new Date(runTimestamp || truthTimestamp!).toLocaleString()}</p>
                 {runTimestamp && runFreshness && <p className="text-muted-foreground">{runFreshness}</p>}
                 {!runTimestamp && dataFreshness && <p className="text-muted-foreground">Data {dataFreshness}</p>}

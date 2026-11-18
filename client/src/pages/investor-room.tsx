@@ -1,5 +1,6 @@
 import { formatCurrencyAbbrev, formatCurrencyFull } from '@/lib/utils';
 import { useState } from 'react';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +18,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { 
   FileText, CheckSquare, HelpCircle, BarChart3, 
   Play, Building2, RefreshCw, Copy, Download,
-  Upload, FolderOpen, File, Trash2
+  Upload, FolderOpen, File, Trash2, Rocket
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
@@ -57,6 +58,7 @@ export default function InvestorRoomPage() {
   const { currentCompany: selectedCompany } = useFounderStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   
   const [activeTab, setActiveTab] = useState('memo');
   const [selectedRoundId, setSelectedRoundId] = useState<string>('');
@@ -210,6 +212,34 @@ export default function InvestorRoomPage() {
           </div>
         </div>
       </div>
+
+      {!roundsLoading && rounds.length === 0 && (
+        <Card className="border-dashed" data-testid="card-investor-room-empty">
+          <CardContent className="py-10 text-center max-w-xl mx-auto">
+            <Rocket className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+            <h3 className="text-lg font-semibold mb-2">Set up a fundraising round first</h3>
+            <p className="text-muted-foreground mb-2">
+              The Investor Room turns a fundraising round into the pack investors ask for: an investor memo,
+              a due-diligence checklist, a KPI snapshot from your live numbers, and answers to the usual
+              investor questions.
+            </p>
+            <p className="text-sm text-muted-foreground mb-5">
+              Add the round you are raising (amount and instrument) on the Fundraising page, then come back
+              and generate the materials. You can start collecting documents in the Data Room now.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => navigate('/fundraising')} data-testid="button-investor-room-create-round">
+                <Rocket className="h-4 w-4 mr-2" />
+                Create a fundraising round
+              </Button>
+              <Button variant="outline" onClick={() => setActiveTab('dataroom')} data-testid="button-investor-room-open-dataroom">
+                <FolderOpen className="h-4 w-4 mr-2" />
+                Open Data Room
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -563,7 +593,7 @@ export default function InvestorRoomPage() {
         </Tabs>
       )}
 
-      {!investorRoomData && !generateMutation.isPending && activeTab !== 'dataroom' && (
+      {!investorRoomData && !generateMutation.isPending && activeTab !== 'dataroom' && rounds.length > 0 && (
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

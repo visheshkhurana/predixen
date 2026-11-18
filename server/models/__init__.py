@@ -85,6 +85,7 @@ from server.models.agent_simulation import AgentSimulationRun
 from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
 from server.models.stripe_reconciliation import StripeReconciliationEvent
 from server.models.razorpay_billing import RazorpaySubscription, RazorpayWebhookEvent
+from server.models.goal import CompanyGoal
 
 __all__ = [
     "RazorpaySubscription",
@@ -189,4 +190,5 @@ __all__ = [
     "RevokedAccessToken",
     "UserSessionCutoff",
     "StripeReconciliationEvent",
+    "CompanyGoal",
 ]
