@@ -140,8 +140,9 @@ export function calculateStressedRunway(
   for (let m = 0; m < maxProjection; m++) {
     const grossProfit = revenue * grossMargin;
     const netBurn = totalExpenses - grossProfit;
+    // Fractional month: cash that covers half of this month's burn is m + 0.5.
+    if (netBurn > 0 && cash - netBurn <= 0) return m + Math.max(0, cash) / netBurn;
     cash -= netBurn;
-    if (cash <= 0) return m;
     revenue *= (1 + growthRate - churnRate);
     if (revenue < 0) revenue = 0;
   }
@@ -244,19 +245,51 @@ export function sensitivityBarsFromResults(results: SensitivityResult[]): Sensit
 export interface WhatIfResults {
   runway: number;
   runwayChange: number;
+  /** Runway of the unadjusted numbers under the same quick model. */
+  baselineRunway: number;
   survival18m: number;
   survivalChange: number;
   cashAt18m: number;
   cashChange: number;
+  monthlyBurn: number;
+  burnChange: number;
 }
 
+/** Cash left after `months` of the deterministic projection (floored at 0). */
+export function projectCashAfter(state: FinancialState, months: number): number {
+  let cash = state.cashBalance;
+  let revenue = state.monthlyRevenue;
+  const growthRate = (state.growthRate || 0) / 100;
+  const churnRate = (state.churnRate || 0) / 100;
+  const grossMargin = state.grossMargin / 100;
+  const totalExpenses = state.opex + state.payroll + state.otherCosts;
+  for (let m = 0; m < months; m++) {
+    cash -= totalExpenses - revenue * grossMargin;
+    if (cash <= 0) return 0;
+    revenue = Math.max(0, revenue * (1 + growthRate - churnRate));
+  }
+  return cash;
+}
+
+function netBurnOf(state: FinancialState): number {
+  return state.opex + state.payroll + state.otherCosts - state.monthlyRevenue * (state.grossMargin / 100);
+}
+
+/**
+ * Quick, deterministic what-if. Baseline and adjusted numbers both go through
+ * the same month-by-month projection (growth and churn compound), so the
+ * deltas are like-for-like. It used to compare a simulation baseline against a
+ * cash/burn division that ignored the growth and churn sliders entirely, so
+ * those sliders did nothing and the numbers disagreed with Monte Carlo.
+ * `_baselineResults` is kept for call-site compatibility only.
+ */
 export function calculateWhatIfImpact(
   baseState: FinancialState,
   adjustments: Record<string, number>,
-  baselineResults: { runway: number; survival18m: number; cashAt18m: number }
+  _baselineResults?: { runway: number; survival18m: number; cashAt18m: number }
 ): WhatIfResults {
   const adjustedState = { ...baseState };
-  
+
   if (adjustments.revenueGrowth !== undefined) {
     adjustedState.growthRate = adjustments.revenueGrowth;
   }
@@ -275,23 +308,23 @@ export function calculateWhatIfImpact(
     adjustedState.cashBalance += adjustments.fundraising;
   }
 
-  const newRunway = calculateRunway(adjustedState);
-  
-  // Simplified survival calculation based on runway
-  const survival18m = Math.min(100, Math.max(0, (newRunway / 18) * 100));
-  
-  // Calculate ending cash at 18 months
-  const monthlyGrossProfit = adjustedState.monthlyRevenue * (adjustedState.grossMargin / 100);
-  const totalExpenses = adjustedState.opex + adjustedState.payroll + adjustedState.otherCosts;
-  const netBurn = totalExpenses - monthlyGrossProfit;
-  const cashAt18m = Math.max(0, adjustedState.cashBalance - (netBurn * 18));
+  const baselineRunway = calculateStressedRunway(baseState, 24);
+  const runway = calculateStressedRunway(adjustedState, 24);
+  // Deterministic: you either still have cash at month 18 or you don't.
+  const survives = (r: number) => (r >= 18 ? 100 : 0);
+  const baseCash = projectCashAfter(baseState, 18);
+  const cashAt18m = projectCashAfter(adjustedState, 18);
+  const monthlyBurn = netBurnOf(adjustedState);
 
   return {
-    runway: newRunway,
-    runwayChange: newRunway - baselineResults.runway,
-    survival18m,
-    survivalChange: survival18m - baselineResults.survival18m,
+    runway,
+    runwayChange: isSustainable(runway) || isSustainable(baselineRunway) ? 0 : runway - baselineRunway,
+    baselineRunway,
+    survival18m: survives(runway),
+    survivalChange: survives(runway) - survives(baselineRunway),
     cashAt18m,
-    cashChange: cashAt18m - baselineResults.cashAt18m,
+    cashChange: cashAt18m - baseCash,
+    monthlyBurn,
+    burnChange: monthlyBurn - netBurnOf(baseState),
   };
 }

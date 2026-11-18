@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { SlidersHorizontal, TrendingUp, TrendingDown, Percent, DollarSign, Flame, RotateCcw, Play } from 'lucide-react';
 import { cn, formatCurrencyAbbrev } from '@/lib/utils';
-import { formatRunwayDisplay, isSustainable } from '@/lib/simulation/sensitivityAnalysis';
+import { isSustainable, type WhatIfResults } from '@/lib/simulation/sensitivityAnalysis';
+import { formatRunwayShort } from '@/lib/simulationConsistency';
 import { grossMarginSliderMin, normalizeGrossMarginPct } from '@/lib/finance';
 
 interface SliderConfig {
@@ -17,15 +18,6 @@ interface SliderConfig {
   defaultValue: number;
   unit: string;
   format?: (value: number) => string;
-}
-
-interface WhatIfResults {
-  runway: number;
-  runwayChange: number;
-  survival18m: number;
-  survivalChange: number;
-  cashAt18m: number;
-  cashChange: number;
 }
 
 interface WhatIfExplorerProps {
@@ -144,9 +136,13 @@ export function WhatIfExplorer({
 
         <div className="border-t pt-6">
           <h4 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
-            INSTANT IMPACT
+            QUICK ESTIMATE
             {isCalculating && <span className="animate-pulse text-primary text-xs">calculating...</span>}
           </h4>
+          <p className="text-xs text-muted-foreground -mt-2 mb-4" data-testid="text-quick-estimate-note">
+            A straight-line projection of your numbers with these changes, growth and churn included, over 24 months.
+            The full Monte Carlo adds month-to-month uncertainty, so its middle (P50) result will be close but not identical.
+          </p>
           
           {results && (
             <div className="grid grid-cols-3 gap-4 mb-6">
@@ -158,17 +154,17 @@ export function WhatIfExplorer({
                 'border-border bg-muted/30'
               )}>
                 <div className="text-muted-foreground text-xs mb-1">Runway</div>
-                <div className="text-xl font-semibold font-mono tracking-tight">{formatRunwayDisplay(results.runway)}</div>
+                <div className="text-xl font-semibold font-mono tracking-tight">{formatRunwayShort(results.runway)}</div>
                 <div className={cn("text-sm flex items-center gap-1", 
                   isSustainable(results.runway) ? 'text-green-500' : 
-                  isSustainable(baselineResults.runway) ? 'text-red-500' :
+                  isSustainable(results.baselineRunway) ? 'text-red-500' :
                   getChangeColor(results.runwayChange)
                 )}>
-                  {isSustainable(results.runway) && isSustainable(baselineResults.runway) 
+                  {isSustainable(results.runway) && isSustainable(results.baselineRunway) 
                     ? 'Cash-flow positive' 
                     : isSustainable(results.runway) 
                     ? <><TrendingUp className="h-3 w-3" /> Now sustainable</>
-                    : isSustainable(baselineResults.runway)
+                    : isSustainable(results.baselineRunway)
                     ? <><TrendingDown className="h-3 w-3" /> No longer sustainable</>
                     : <>{getChangeIcon(results.runwayChange)} {results.runwayChange > 0 ? '+' : ''}{results.runwayChange.toFixed(1).replace(/\.0$/, '')} months</>}
                 </div>
@@ -176,18 +172,20 @@ export function WhatIfExplorer({
               
               <div className={cn(
                 "rounded-lg p-4 border transition-all",
-                results.survivalChange > 5 ? 'border-green-500/30 bg-green-500/5' : 
-                results.survivalChange < -5 ? 'border-red-500/30 bg-red-500/5' : 
+                results.burnChange < -1 ? 'border-green-500/30 bg-green-500/5' :
+                results.burnChange > 1 ? 'border-red-500/30 bg-red-500/5' :
                 'border-border bg-muted/30'
               )}>
-                <div className="text-muted-foreground text-xs mb-1">Survival (18m)</div>
-                <div className="text-xl font-semibold font-mono tracking-tight">{results.survival18m.toFixed(0)}%</div>
-                <div className={cn("text-sm flex items-center gap-1", getChangeColor(results.survivalChange))}>
-                  {getChangeIcon(results.survivalChange)}
-                  {results.survivalChange > 0 ? '+' : ''}{results.survivalChange.toFixed(0)}%
+                <div className="text-muted-foreground text-xs mb-1">Monthly burn now</div>
+                <div className="text-xl font-semibold font-mono tracking-tight">
+                  {results.monthlyBurn <= 0 ? 'Not burning' : formatCurrencyAbbrev(results.monthlyBurn)}
+                </div>
+                <div className={cn("text-sm flex items-center gap-1", getChangeColor(results.burnChange, false))}>
+                  {getChangeIcon(results.burnChange, false)}
+                  {results.burnChange > 0 ? '+' : ''}{formatCurrencyAbbrev(results.burnChange)}
                 </div>
               </div>
-              
+
               <div className={cn(
                 "rounded-lg p-4 border transition-all",
                 results.cashChange > 10000 ? 'border-green-500/30 bg-green-500/5' : 
