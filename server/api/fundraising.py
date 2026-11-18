@@ -732,3 +732,162 @@ def _format_use_of_funds(use_of_funds: Dict[str, Any]) -> str:
             lines.append(f"- **{category}**: {amount}")
     
     return "\n".join(lines) if lines else "- To be specified"
+
+
+# ---------------------------------------------------------------------------
+# Company-level pipeline board. The Fundraising page's kanban used to be a
+# hard-coded list of 15 real investor names; it now reads and writes these rows.
+# ---------------------------------------------------------------------------
+
+PIPELINE_BOARD_STAGES = [
+    "sourced", "contacted", "meeting", "partner_meeting",
+    "dd", "term_sheet", "committed", "closed", "passed",
+]
+
+
+class PipelineBoardCreate(BaseModel):
+    firm: str
+    partner: Optional[str] = None
+    check_size: Optional[str] = None
+    stage: str = "sourced"
+    warm_intro: bool = False
+
+
+class PipelineBoardUpdate(BaseModel):
+    stage: Optional[str] = None
+    notes: Optional[str] = None
+
+
+def _board_entry(entry: InvestorPipeline) -> Dict[str, Any]:
+    investor = entry.investor
+    contact = (investor.contact_json or {}) if investor else {}
+    return {
+        "id": str(entry.id),
+        "round_id": str(entry.round_id),
+        "firm": investor.name if investor else "",
+        "partner": contact.get("partner") or "",
+        "check_size": contact.get("check_size") or "",
+        "warm_intro": bool(contact.get("warm_intro")),
+        "stage": entry.stage if entry.stage in PIPELINE_BOARD_STAGES else "sourced",
+        "notes": entry.notes,
+        "last_activity_at": (entry.last_contacted_at or entry.updated_at or entry.created_at).isoformat()
+        if (entry.last_contacted_at or entry.updated_at or entry.created_at) else None,
+    }
+
+
+def _current_round(db: Session, company_id: int, create: bool) -> Optional[FundraisingRound]:
+    rounds = db.query(FundraisingRound).filter(
+        FundraisingRound.company_id == company_id
+    ).order_by(FundraisingRound.created_at.desc()).all()
+    for status in (RoundStatus.ACTIVE.value, RoundStatus.PLANNED.value):
+        for r in rounds:
+            if r.status == status:
+                return r
+    if rounds or not create:
+        return rounds[0] if rounds else None
+    round_obj = FundraisingRound(company_id=company_id, name="Current round", status=RoundStatus.ACTIVE.value)
+    db.add(round_obj)
+    db.flush()
+    db.add(RoundTerms(round_id=round_obj.id, terms_json={}))
+    return round_obj
+
+
+def _company_entry(db: Session, company_id: int, entry_id: str) -> InvestorPipeline:
+    try:
+        entry_uuid = UUID(entry_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Pipeline entry not found")
+    entry = db.query(InvestorPipeline).join(
+        FundraisingRound, FundraisingRound.id == InvestorPipeline.round_id
+    ).filter(
+        InvestorPipeline.id == entry_uuid,
+        FundraisingRound.company_id == company_id,
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Pipeline entry not found")
+    return entry
+
+
+@router.get("/companies/{company_id}/fundraising/pipeline")
+def list_pipeline_board(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    get_user_company(db, company_id, current_user)
+    entries = db.query(InvestorPipeline).join(
+        FundraisingRound, FundraisingRound.id == InvestorPipeline.round_id
+    ).filter(FundraisingRound.company_id == company_id).order_by(InvestorPipeline.created_at.asc()).all()
+    return {"entries": [_board_entry(e) for e in entries], "stages": PIPELINE_BOARD_STAGES}
+
+
+@router.post("/companies/{company_id}/fundraising/pipeline")
+def add_pipeline_board_entry(
+    company_id: int,
+    data: PipelineBoardCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    get_user_company(db, company_id, current_user)
+    firm = data.firm.strip()
+    if not firm:
+        raise HTTPException(status_code=422, detail="Firm name is required")
+    if data.stage not in PIPELINE_BOARD_STAGES:
+        raise HTTPException(status_code=422, detail="Unknown pipeline stage")
+    round_obj = _current_round(db, company_id, create=True)
+    investor = Investor(
+        company_id=company_id,
+        name=firm[:200],
+        contact_json={
+            "partner": (data.partner or "").strip()[:200],
+            "check_size": (data.check_size or "").strip()[:100],
+            "warm_intro": bool(data.warm_intro),
+        },
+    )
+    db.add(investor)
+    db.flush()
+    entry = InvestorPipeline(round_id=round_obj.id, investor_id=investor.id, stage=data.stage)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return _board_entry(entry)
+
+
+@router.patch("/companies/{company_id}/fundraising/pipeline-board/{entry_id}")
+def update_pipeline_board_entry(
+    company_id: int,
+    entry_id: str,
+    data: PipelineBoardUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    get_user_company(db, company_id, current_user)
+    entry = _company_entry(db, company_id, entry_id)
+    if data.stage is not None:
+        if data.stage not in PIPELINE_BOARD_STAGES:
+            raise HTTPException(status_code=422, detail="Unknown pipeline stage")
+        entry.stage = data.stage
+        entry.last_contacted_at = datetime.utcnow()
+    if data.notes is not None:
+        entry.notes = data.notes
+    entry.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(entry)
+    return _board_entry(entry)
+
+
+@router.delete("/companies/{company_id}/fundraising/pipeline-board/{entry_id}")
+def delete_pipeline_board_entry(
+    company_id: int,
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    get_user_company(db, company_id, current_user)
+    entry = _company_entry(db, company_id, entry_id)
+    investor = entry.investor
+    db.delete(entry)
+    if investor is not None and len(investor.pipeline_entries or []) <= 1:
+        db.delete(investor)
+    db.commit()
+    return {"deleted": True}
