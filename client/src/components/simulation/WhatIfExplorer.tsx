@@ -31,7 +31,8 @@ interface WhatIfResults {
 interface WhatIfExplorerProps {
   baselineState: any;
   baselineResults: { runway: number; survival18m: number; cashAt18m: number };
-  onRunFullSimulation: (adjustments: Record<string, number>) => void;
+  /** `defaults` are each slider's baseline value, so callers can turn levels into deltas. */
+  onRunFullSimulation: (adjustments: Record<string, number>, defaults: Record<string, number>) => void;
   calculateQuickImpact: (adjustments: Record<string, number>) => WhatIfResults;
   testId?: string;
 }
@@ -214,7 +215,7 @@ export function WhatIfExplorer({
               Reset to Baseline
             </Button>
             <Button
-              onClick={() => onRunFullSimulation(values)}
+              onClick={() => onRunFullSimulation(values, Object.fromEntries(sliderConfigs.map((c) => [c.key, c.defaultValue])))}
               data-testid="button-run-monte-carlo"
             >
               <Play className="h-4 w-4 mr-2" />

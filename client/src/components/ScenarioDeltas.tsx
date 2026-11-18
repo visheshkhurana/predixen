@@ -7,6 +7,7 @@ import {
   DollarSign, PieChart, Fuel, Shield, Target, Mail, X
 } from 'lucide-react';
 import { formatCurrencyAbbrev, isRunwaySustainable } from '@/lib/utils';
+import { formatRunwayShort, runwayChange, runwayDeltaForScoring, runwaySentence, SIM_HORIZON_MONTHS } from '@/lib/simulationConsistency';
 
 function fmtRunway(v: number): string {
   return isRunwaySustainable(v) ? 'Sustainable' : v.toFixed(1);
@@ -433,7 +434,7 @@ export function DataDrivenRecommendation({
         );
       }
 
-      if (Math.abs(runwayDelta) > 0.5 && !isRunwaySustainable(bRunway)) {
+      if (Math.abs(runwayDelta) > 0.5 && !isRunwaySustainable(bRunway) && !isRunwaySustainable(runwayP50)) {
         sentences.push(
           `Runway ${runwayDelta > 0 ? 'extends' : 'shrinks'} by ${Math.abs(runwayDelta).toFixed(1)} months (${fmtRunway(bRunway)} to ${fmtRunway(runwayP50)}).`
         );
@@ -467,7 +468,7 @@ export function DataDrivenRecommendation({
 
     if (sentences.length === 0) {
       if (survival18m >= 80) {
-        sentences.push(`Strong position: ${survival18m.toFixed(0)}% survival probability with ${fmtRunway(runwayP50)} months of runway.`);
+        sentences.push(`Strong position: ${survival18m.toFixed(0)}% survival probability with ${runwaySentence(runwayP50)}.`);
       } else if (survival18m >= 50) {
         sentences.push(`Moderate position: ${survival18m.toFixed(0)}% survival at 18 months suggests manageable risk, but improvements should be explored.`);
       } else {
@@ -486,7 +487,7 @@ export function DataDrivenRecommendation({
       else if (survival18m < 40) verdict = 'no-go';
     }
 
-    const spread = runwayP90 - runwayP10;
+    const spread = Math.min(runwayP90, SIM_HORIZON_MONTHS) - Math.min(runwayP10, SIM_HORIZON_MONTHS);
     let confidence: 'high' | 'medium' | 'low' = 'medium';
     if (spread < 6) confidence = 'high';
     else if (spread > 15) confidence = 'low';
@@ -870,8 +871,18 @@ export function findBaselineScenario(scenarios: any[]): any | null {
       s.name?.toLowerCase().includes('baseline') && s.latest_simulation
   );
   if (byName) return byName;
-  const first = scenarios.find((s: any) => s.latest_simulation);
-  return first || null;
+  // Only a scenario with no changes is a baseline. Falling back to "the first
+  // scenario with a run" compared new runs against an arbitrary other
+  // scenario (e.g. an older, worse hire plan) and called that "baseline".
+  const unchanged = scenarios.find((s: any) => s.latest_simulation && isUnchangedScenario(s));
+  return unchanged || null;
+}
+
+function isUnchangedScenario(s: any): boolean {
+  const inp = s?.inputs || s?.inputs_json || s?.overrides_json || s?.overrides || {};
+  const keys = ['pricing_change_pct', 'growth_uplift_pct', 'burn_reduction_pct', 'gross_margin_delta_pct', 'churn_change_pct', 'cac_change_pct', 'fundraise_amount'];
+  const hires = Array.isArray(inp.hiring_plan) ? inp.hiring_plan.length : 0;
+  return hires === 0 && keys.every((k) => !Number(inp[k] || 0));
 }
 
 interface CounterMoveResult {
@@ -910,7 +921,9 @@ function CounterMoveCard({
   const moveRunway = move.runway?.p50 ?? 0;
   const moveSurvival = (move.survivalProbability?.['18m'] ?? move.survival?.['18m']) ?? 0;
 
-  const runwayDelta = moveRunway - referenceRunway;
+  // Sentinel-safe (999 = never ran out): "999.0mo +971" was the raw sentinel.
+  const moveChange = runwayChange(referenceRunway, moveRunway);
+  const runwayDelta = runwayDeltaForScoring(moveChange);
   const survivalDelta = moveSurvival - referenceSurvival;
 
   const isPositiveRunway = runwayDelta > 0.2;
@@ -950,10 +963,12 @@ function CounterMoveCard({
               <div className="p-2 rounded-md bg-muted/40">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Runway</p>
                 <div className="flex items-center gap-1 mt-0.5">
-                  <span className="text-sm font-semibold font-mono">{moveRunway.toFixed(1)}mo</span>
-                  <span className={`text-xs font-mono ${deltaColor(runwayDelta, true)}`}>
-                    {runwayDelta > 0 ? '+' : ''}{runwayDelta.toFixed(1)}
-                  </span>
+                  <span className="text-sm font-semibold font-mono">{formatRunwayShort(moveRunway)}</span>
+                  {moveChange.kind === 'months' && (
+                    <span className={`text-xs font-mono ${deltaColor(runwayDelta, true)}`}>
+                      {runwayDelta > 0 ? '+' : ''}{runwayDelta.toFixed(1)}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="p-2 rounded-md bg-muted/40">
@@ -1132,7 +1147,7 @@ function computeDecisionScores(
   const runwayP50 = scenario.runway?.p50 ?? 0;
   const runwayP10 = scenario.runway?.p10 ?? 0;
   const runwayP90 = scenario.runway?.p90 ?? 0;
-  const spread = runwayP90 - runwayP10;
+  const spread = Math.min(runwayP90, SIM_HORIZON_MONTHS) - Math.min(runwayP10, SIM_HORIZON_MONTHS);
 
   let riskScore: number;
   if (survival18m >= 90 && runwayP50 >= 18) riskScore = 9;
@@ -1153,7 +1168,7 @@ function computeDecisionScores(
     const sRevenue24 = getMetricAtMonth(scenario.metrics?.revenue, 23, 'p50');
     const revGrowthPct = bRevenue24 > 0 ? ((sRevenue24 - bRevenue24) / bRevenue24) * 100 : 0;
     const bRunway = baseline.runway?.p50 ?? 0;
-    const runwayGain = runwayP50 - bRunway;
+    const runwayGain = runwayDeltaForScoring(runwayChange(bRunway, runwayP50));
 
     if (revGrowthPct > 30 && runwayGain > 3) rewardScore = 10;
     else if (revGrowthPct > 20 || runwayGain > 5) rewardScore = 9;
@@ -1220,14 +1235,6 @@ export function DecisionScoreCard({
     [scenarioSimulation, baselineSimulation]
   );
 
-  const overallScore = Math.round(
-    (scores[0].value + scores[1].value + scores[2].value) / 3
-  );
-  const overallColor = overallScore >= 7
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : overallScore >= 5
-      ? 'text-amber-600 dark:text-amber-400'
-      : 'text-red-600 dark:text-red-400';
 
   return (
     <Card data-testid="card-decision-score">
@@ -1239,12 +1246,8 @@ export function DecisionScoreCard({
               Decision Score
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">Overall</span>
-            <span className={`text-lg font-bold font-mono ${overallColor}`} data-testid="text-overall-score">
-              {overallScore}/10
-            </span>
-          </div>
+          {/* No separate "Overall" here: it disagreed with the score in
+              "Your Answer" (6/10 vs 7/10). These are its components. */}
         </div>
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">

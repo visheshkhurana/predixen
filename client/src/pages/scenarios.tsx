@@ -61,7 +61,8 @@ import { useFounderStore } from '@/store/founderStore';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { formatCurrencyAbbrev, formatRunway, isRunwaySustainable, formatRunwayInline } from '@/lib/utils';
-import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
+import { formatRunwayShort, scenarioConsistency, SIM_HORIZON_MONTHS, type ScenarioInputs } from '@/lib/simulationConsistency';
+import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { api } from '@/api/client';
 import { ScenarioComments } from '@/components/ScenarioComments';
 import { DistributionView } from '@/components/DistributionView';
@@ -140,12 +141,42 @@ function getCashBands(simulation: any): { p10: number[]; p50: number[]; p90: num
   return { p10: [], p50: [], p90: [] };
 }
 
-const SUGGESTION_CHIPS = [
+/**
+ * Rough fully loaded monthly cost of one hire, in the company's currency.
+ * Shown as part of the scenario inputs (as a burn change), never as data.
+ */
+function monthlyCostPerHire(currency: string | undefined): number {
+  switch ((currency || 'USD').toUpperCase()) {
+    case 'INR': return 150_000;
+    case 'AED': return 30_000;
+    case 'SGD': return 10_000;
+    case 'GBP': return 7_000;
+    case 'EUR': return 7_500;
+    default: return 12_000;
+  }
+}
+
+const PERCENTILE_EXPLAINER =
+  'We simulate hundreds of possible futures. P10 is a bad case (9 in 10 futures do better), P50 is the middle outcome, and P90 is a good case (only 1 in 10 does better).';
+
+/** A typical seed/Series A size in the company's currency, for the chip label. */
+function raiseChipLabel(currency: string | undefined): string {
+  switch ((currency || 'USD').toUpperCase()) {
+    case 'INR': return 'Raise ₹15Cr';
+    case 'AED': return 'Raise AED 7M';
+    case 'SGD': return 'Raise S$2.5M';
+    case 'GBP': return 'Raise £1.5M';
+    case 'EUR': return 'Raise €2M';
+    default: return 'Raise $2M Series A';
+  }
+}
+
+const SUGGESTION_CHIPS: Array<{ label: string; icon: any; raise?: boolean }> = [
   { label: 'Cut marketing 30%', icon: TrendingUp },
   { label: 'Raise prices 20%', icon: DollarSign },
   { label: 'Hire 5 engineers', icon: Users },
   { label: 'Churn hits 5%', icon: AlertTriangle },
-  { label: 'Raise $2M Series A', icon: ArrowUpRight },
+  { label: 'Raise $2M Series A', icon: ArrowUpRight, raise: true },
   { label: 'New market expansion', icon: Target },
 ];
 
@@ -190,7 +221,10 @@ export default function ScenariosPage() {
     }
   }, [params.id, scenarios]);
 
-  const { data: simulation, isLoading: simLoading, isError: simError } = useSimulation(selectedScenarioId);
+  const { data: simulation, isLoading: simLoading, isError: simQueryError, error: simQueryErrorObj } = useSimulation(selectedScenarioId);
+  // A 404 means this scenario has never been run, not that the engine is down.
+  const simError = simQueryError && !((simQueryErrorObj as any)?.status === 404 || String((simQueryErrorObj as any)?.message || '').includes('404'));
+  const runTruthScanMutation = useRunTruthScan();
   const { data: timeseriesData, isLoading: timeseriesLoading } = useScenarioTimeseries(selectedScenarioId);
 
   useEffect(() => {
@@ -498,6 +532,18 @@ export default function ScenariosPage() {
     await runScenario(scenarioData, false);
   };
 
+  // Simulations start from the Health Check. A founder who skipped it got
+  // "engine temporarily unavailable"; run it from their data and retry once.
+  const simulateWithHealthCheck = async (scenarioId: number) => {
+    try {
+      return await runSimulationMutation.mutateAsync({ scenarioId, nSims: simIterations, seed: simSeed ?? undefined });
+    } catch (simErr: any) {
+      if (!currentCompany || !/truth scan first/i.test(String(simErr?.message || simErr?.detail || ''))) throw simErr;
+      await runTruthScanMutation.mutateAsync(currentCompany.id);
+      return await runSimulationMutation.mutateAsync({ scenarioId, nSims: simIterations, seed: simSeed ?? undefined });
+    }
+  };
+
   const runScenario = async (scenarioData: any, overwrite: boolean, existingId?: number) => {
     setDuplicateDialog({ open: false });
     setIsCreating(true);
@@ -508,7 +554,7 @@ export default function ScenariosPage() {
       });
       setSelectedScenarioId(scenario.id);
       setIsRunning(true);
-      await runSimulationMutation.mutateAsync({ scenarioId: scenario.id, nSims: simIterations, seed: simSeed ?? undefined });
+      await simulateWithHealthCheck(scenario.id);
       setCurrentStep('simulation');
       toast({ title: 'Simulation complete!' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
@@ -534,7 +580,7 @@ export default function ScenariosPage() {
     setSelectedScenarioId(scenarioId);
     setIsRunning(true);
     try {
-      await runSimulationMutation.mutateAsync({ scenarioId, nSims: simIterations, seed: simSeed ?? undefined });
+      await simulateWithHealthCheck(scenarioId);
       setCurrentStep('simulation');
       toast({ title: 'Simulation complete!' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
@@ -675,13 +721,15 @@ export default function ScenariosPage() {
     const tags: string[] = [];
     let matched = false;
 
-    const fundraiseMatch = q.match(/(?:(?:raise|fundrais\w*|series\s*[a-z]?)\s+\$?([\d,.]+)\s*(m|mm|million|k|thousand)?)/i);
+    const fundraiseMatch = q.match(/(?:(?:raise|fundrais\w*|series\s*[a-z]?)\s+(?:\$|₹|s\$|£|€|aed\s*|rs\.?\s*|inr\s*)?([\d,.]+)\s*(m|mm|million|k|thousand|cr|crore|crores|l|lakh|lakhs|lac)?\b)/i);
     const isRaisePrices = q.match(/raise\s+price/i);
     if (fundraiseMatch && !isRaisePrices) {
       let amount = parseFloat(fundraiseMatch[1].replace(/,/g, ''));
       const unit = (fundraiseMatch[2] || '').toLowerCase();
       if (unit === 'm' || unit === 'mm' || unit === 'million') amount *= 1_000_000;
       else if (unit === 'k' || unit === 'thousand') amount *= 1_000;
+      else if (unit.startsWith('cr')) amount *= 10_000_000;
+      else if (unit === 'l' || unit.startsWith('la')) amount *= 100_000;
       else if (amount < 1000) amount *= 1_000_000;
       params.fundraise_amount = amount;
       params.fundraise_month = 3;
@@ -694,9 +742,15 @@ export default function ScenariosPage() {
       /hire\s+(\d+)\s*(?:engineer|dev|developer|people|employee|person|staff|member)?s?/gi,
       /(\d+)\s+(?:new\s+)?(?:engineer|dev|developer|sales|marketing|designer|pm|product\s+manager|analyst|hire|staff|member|people|employee)s?/gi,
     ];
+    // Count each number once: "hire 5 engineers" matches both patterns and
+    // used to become 10 hires.
+    const seenHireAt = new Set<number>();
     for (const pattern of hirePatterns) {
       let m;
       while ((m = pattern.exec(q)) !== null) {
+        const numAt = m.index + m[0].indexOf(m[1]);
+        if (seenHireAt.has(numAt)) continue;
+        seenHireAt.add(numAt);
         totalHires += parseInt(m[1]);
       }
     }
@@ -704,15 +758,18 @@ export default function ScenariosPage() {
       totalHires = parseInt(q.match(/hire\s+(\d+)/i)![1]);
     }
     if (totalHires > 0) {
-      const salaryEstimate = 12000;
-      params.burn_reduction_pct = Math.round(-(totalHires * salaryEstimate) / (baseMetrics?.monthlyExpenses || 50000) * 100);
-      params.growth_uplift_pct += Math.min(totalHires * 1.5, 15);
-      tags.push('growth');
+      // Hiring is modelled as cost only. It used to add up to +15 points of
+      // MONTHLY growth per the hire count, which compounded over 24 months
+      // into "doubling burn makes runway sustainable". If hires will drive
+      // revenue, say so in the scenario ("hire 5 and grow 3%").
+      // Sent as a hiring plan (count × monthly cost from month 1), which the
+      // engine adds to payroll exactly. As a % of costs it hit the 100% cap.
+      params.hiring_plan = [{ role: 'New hires', count: totalHires, start_month: 1, monthly_cost: monthlyCostPerHire(currentCompany?.currency) }];
+      tags.push('hiring');
       matched = true;
     } else if (q.includes('hire') || q.includes('engineer') || q.includes('team')) {
       params.burn_reduction_pct = -15;
-      params.growth_uplift_pct += 9;
-      tags.push('growth');
+      tags.push('hiring');
       matched = true;
     }
 
@@ -874,7 +931,9 @@ export default function ScenariosPage() {
     // not new-market expansion, and must not pick up its +25% growth.
     if ((/\bmarkets?\b/.test(q) || q.includes('expan')) && !competitorMatch) {
       if (!matched || !tags.includes('growth')) {
-        params.growth_uplift_pct += 25;
+        // Was +25 points of monthly growth: a 24-month revenue multiple in
+        // the hundreds. A modest, visible assumption the founder can edit.
+        params.growth_uplift_pct += 3;
         params.burn_reduction_pct = params.burn_reduction_pct || -15;
         tags.push('growth');
         matched = true;
@@ -996,6 +1055,36 @@ export default function ScenariosPage() {
 
     setDualPathMode({ active: false });
     handleWizardComplete(scenarioData);
+  };
+
+  const selectedScenarioInputs = useMemo(() => {
+    const sel = scenarios?.find((s: any) => s.id === selectedScenarioId);
+    return (sel?.inputs || sel?.overrides_json || sel?.overrides || null) as ScenarioInputs | null;
+  }, [scenarios, selectedScenarioId]);
+
+  // What-If sliders hold levels (growth 8%, churn 3%); scenarios take changes
+  // from baseline. This used to only show a toast saying it was running.
+  const runWhatIfAsScenario = (values: Record<string, number>, defaults: Record<string, number>) => {
+    const d = (k: string) => (values[k] ?? 0) - (defaults[k] ?? 0);
+    const fundraise = Math.max(0, values.fundraising ?? 0);
+    const params = {
+      pricing_change_pct: 0,
+      growth_uplift_pct: Math.round(d('revenueGrowth') * 10) / 10,
+      burn_reduction_pct: -(values.burnChange ?? 0),
+      gross_margin_delta_pct: Math.round(d('grossMargin') * 10) / 10,
+      churn_change_pct: Math.round(d('churnRate') * 10) / 10,
+      cac_change_pct: 0,
+      fundraise_amount: fundraise,
+      fundraise_month: fundraise > 0 ? 3 : null,
+    };
+    const parts: string[] = [];
+    if (params.growth_uplift_pct) parts.push(`growth ${params.growth_uplift_pct > 0 ? '+' : ''}${params.growth_uplift_pct}pt`);
+    if (params.burn_reduction_pct) parts.push(`burn ${params.burn_reduction_pct > 0 ? '-' : '+'}${Math.abs(params.burn_reduction_pct)}%`);
+    if (params.churn_change_pct) parts.push(`churn ${params.churn_change_pct > 0 ? '+' : ''}${params.churn_change_pct}pt`);
+    if (params.gross_margin_delta_pct) parts.push(`margin ${params.gross_margin_delta_pct > 0 ? '+' : ''}${params.gross_margin_delta_pct}pt`);
+    if (fundraise) parts.push(`raise ${formatCurrencyAbbrev(fundraise, currentCompany?.currency || 'USD')}`);
+    const name = parts.length ? `What-if: ${parts.join(', ')}` : 'What-if: baseline';
+    handleWizardComplete({ name, ...params, tags: ['what-if'] });
   };
 
   const handleChipClick = (label: string) => {
@@ -1480,7 +1569,7 @@ export default function ScenariosPage() {
         )}
 
         <div className="flex flex-wrap justify-center gap-1.5 mb-6 max-w-3xl mx-auto">
-          {SUGGESTION_CHIPS.map((chip) => (
+          {SUGGESTION_CHIPS.map((c) => (c.raise ? { ...c, label: raiseChipLabel(currentCompany?.currency) } : c)).map((chip) => (
             <button
               key={chip.label}
               onClick={() => handleChipClick(chip.label)}
@@ -1784,10 +1873,24 @@ export default function ScenariosPage() {
                 const inp = sel?.inputs || sel?.overrides_json || sel?.overrides || {};
                 return inp.burn_reduction_pct || 0;
               })();
-              const modifiedBurn = simBurn > 0 ? simBurn : (baseMetrics ? (baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue) * (1 - burnPctInput / 100) : 0);
+              // Planned hires add payroll on top of the % change; leaving them
+              // out made the simple math show the baseline burn for "Hire 5".
+              const hireCost = (Array.isArray(selectedScenarioInputs?.hiring_plan) ? selectedScenarioInputs!.hiring_plan as Array<{ count?: number; monthly_cost?: number }> : [])
+                .reduce((sum, h) => sum + (Number(h.count ?? 1) || 0) * (Number(h.monthly_cost) || 0), 0);
+              const modifiedBurn = simBurn > 0 ? simBurn : (baseMetrics ? (baseMetrics.monthlyExpenses * (1 - burnPctInput / 100) + hireCost - baseMetrics.monthlyRevenue) : 0);
               const modifiedRunway = modifiedBurn > 0 ? simCash / modifiedBurn : 0;
 
-              const hasContradiction = burnPctInput < -20 && simRunwayP50 > dashboardRunway + 3;
+              // Same rule as the verdict (lib/simulationConsistency): a scenario
+              // that only adds cost or risk cannot beat the baseline.
+              const scenarioOutcome = { runwayP50: simRunwayP50, survival18m: simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] };
+              const consistency = baselineComparison.simulation
+                ? scenarioConsistency(
+                    selectedScenarioInputs,
+                    { runwayP50: baselineComparison.simulation.runway?.p50, survival18m: baselineComparison.simulation.survivalProbability?.['18m'] ?? baselineComparison.simulation.survival?.['18m'] },
+                    scenarioOutcome,
+                  )
+                : scenarioConsistency(selectedScenarioInputs, { runwayP50: dashboardRunway }, scenarioOutcome, { approximate: true });
+              const hasContradiction = !consistency.consistent;
               const cacInput = (() => {
                 const sel = scenarios?.find((s: any) => s.id === selectedScenarioId);
                 const inp = sel?.inputs || sel?.overrides_json || sel?.overrides || {};
@@ -1804,9 +1907,11 @@ export default function ScenariosPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-muted-foreground">Simple Math</span>
+                        <span className="text-muted-foreground">Simple math (scenario burn)</span>
                         <span className="font-mono font-medium" data-testid="text-math-simple">
-                          {formatCurrencyAbbrev(simCash)} &divide; {formatCurrencyAbbrev(Math.abs(modifiedBurn))}/mo = {modifiedBurn > 0 ? `${modifiedRunway.toFixed(1)} mo` : 'N/A'}
+                          {modifiedBurn > 0
+                            ? `${formatCurrencyAbbrev(simCash)} ÷ ${formatCurrencyAbbrev(modifiedBurn)}/mo = ${modifiedRunway.toFixed(1)} mo`
+                            : 'Not burning: revenue covers costs'}
                         </span>
                       </div>
                       <div className="flex flex-col gap-0.5">
@@ -1818,8 +1923,8 @@ export default function ScenariosPage() {
                       <div className="flex flex-col gap-0.5">
                         <span className="text-muted-foreground">Simulation P50</span>
                         <span className="font-mono font-medium" data-testid="text-math-sim-p50">
-                          {isRunwaySustainable(simRunwayP50) ? 'Sustainable' : `${simRunwayP50.toFixed(1)} months`}
-                          {runwayDiff > 5 && !isRunwaySustainable(simRunwayP50) && !isRunwaySustainable(dashboardRunway) && (
+                          {formatRunwayShort(simRunwayP50)}
+                          {runwayDiff > 5 && simRunwayP50 <= SIM_HORIZON_MONTHS && !isRunwaySustainable(dashboardRunway) && (
                             <span className="text-amber-600 dark:text-amber-400 ml-1">
                               ({simRunwayP50 > dashboardRunway ? '+' : ''}{(simRunwayP50 - dashboardRunway).toFixed(1)} vs dashboard)
                             </span>
@@ -1836,7 +1941,7 @@ export default function ScenariosPage() {
                     {hasContradiction && (
                       <p className="text-[11px] text-red-600 dark:text-red-400 mt-2 flex items-start gap-1.5" data-testid="text-math-contradiction">
                         <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-                        This adverse scenario shows improved runway — review assumptions. Burn increase of {Math.abs(burnPctInput)}% should typically reduce runway.
+                        This scenario only adds cost or risk, but the simulation shows a better runway than the baseline. Treat this result as wrong and check the inputs; no verdict is given.
                       </p>
                     )}
                     {hasEfficiencyContradiction && (
@@ -1862,6 +1967,8 @@ export default function ScenariosPage() {
                 scenarioName={currentScenarioName}
                 baselineSimulation={baselineComparison.simulation}
                 counterMoves={simulation.counter_moves}
+                scenarioInputs={selectedScenarioInputs}
+                dashboardRunway={baseMetrics?.currentRunway ?? null}
               />
               <div className="absolute top-3 right-3 no-print">
                 <Button
@@ -2112,7 +2219,8 @@ export default function ScenariosPage() {
                 const gmPct = inp.gross_margin_delta_pct || 0;
                 const churnPct = inp.churn_change_pct || 0;
                 const fundraise = inp.fundraise_amount || 0;
-                const hasChanges = pricingPct !== 0 || growthPct !== 0 || burnPct !== 0 || gmPct !== 0 || churnPct !== 0 || fundraise > 0;
+                const hires: Array<{ count?: number; monthly_cost?: number }> = Array.isArray(inp.hiring_plan) ? inp.hiring_plan : [];
+                const hasChanges = pricingPct !== 0 || growthPct !== 0 || burnPct !== 0 || gmPct !== 0 || churnPct !== 0 || fundraise > 0 || hires.length > 0;
                 return (
                   <Card className="overflow-visible" data-testid="card-input-changes">
                     <CardContent className="p-4">
@@ -2148,9 +2256,14 @@ export default function ScenariosPage() {
                         )}
                         {fundraise > 0 && (
                           <Badge variant="outline" className="font-mono text-xs">
-                            Fundraise: {currencySymbol}{(fundraise / 1000).toFixed(0)}K
+                            Fundraise: {formatCurrencyAbbrev(fundraise, currentCompany?.currency || 'USD')}
                           </Badge>
                         )}
+                        {hires.map((h, i) => (
+                          <Badge key={i} variant="outline" className="font-mono text-xs border-red-500/50 text-red-400" data-testid={`badge-hires-${i}`}>
+                            Hires: {h.count ?? 1} × {formatCurrencyAbbrev(h.monthly_cost ?? 0, currentCompany?.currency || 'USD')}/mo (assumed cost)
+                          </Badge>
+                        ))}
                         {!hasChanges && (
                           <span className="text-xs text-muted-foreground">No changes from baseline</span>
                         )}
@@ -2333,7 +2446,7 @@ export default function ScenariosPage() {
               {stressTestAvailable && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} />
-                <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
+                <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={runWhatIfAsScenario} />
               </div>
               )}
 
@@ -2358,6 +2471,7 @@ export default function ScenariosPage() {
                 currencySymbol={currencySymbol}
               />
 
+              <p className="text-xs text-muted-foreground mb-2" data-testid="text-case-explainer">{PERCENTILE_EXPLAINER}</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10" data-testid="card-scenario-p90">
                   <CardContent className="pt-4 pb-4 px-4">
@@ -2619,7 +2733,7 @@ export default function ScenariosPage() {
                                 )}
                                 {s.latest_simulation && (
                                   <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-                                    <span>Runway: {s.latest_simulation.runway?.p50 != null ? (s.latest_simulation.runway.p50 >= 900 ? 'Sustainable' : `${s.latest_simulation.runway.p50.toFixed(1)} mo`) : '?'}</span>
+                                    <span>Runway: {formatRunwayShort(s.latest_simulation.runway?.p50)}</span>
                                     <span>Survival: {(s.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%</span>
                                   </div>
                                 )}
@@ -2816,10 +2930,13 @@ export default function ScenariosPage() {
                     <Card><CardHeader><CardTitle className="text-lg">Runway Distribution</CardTitle><CardDescription>Distribution of runway outcomes across all simulations</CardDescription></CardHeader>
                       <CardContent>
                         <div className="grid grid-cols-3 gap-4 text-center">
-                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">10th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p10 != null ? (simulation.runway.p10 >= 900 ? 'Sustainable' : `${simulation.runway.p10.toFixed(1)} mo`) : '?'}</p><p className="text-xs text-muted-foreground">Worst case</p></div>
-                          <div className="p-4 bg-primary/10 rounded-lg"><p className="text-xs text-muted-foreground">50th Percentile</p><p className="text-2xl font-mono font-bold text-primary">{simulation.runway?.p50 != null ? (simulation.runway.p50 >= 900 ? 'Sustainable' : `${simulation.runway.p50.toFixed(1)} mo`) : '?'}</p><p className="text-xs text-muted-foreground">Most likely</p></div>
-                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">90th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p90 != null ? (simulation.runway.p90 >= 900 ? 'Sustainable' : `${simulation.runway.p90.toFixed(1)} mo`) : '?'}</p><p className="text-xs text-muted-foreground">Best case</p></div>
+                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">10th Percentile</p><p className="text-2xl font-mono font-bold">{formatRunwayShort(simulation.runway?.p10)}</p><p className="text-xs text-muted-foreground">Worst case</p></div>
+                          <div className="p-4 bg-primary/10 rounded-lg"><p className="text-xs text-muted-foreground">50th Percentile</p><p className="text-2xl font-mono font-bold text-primary">{formatRunwayShort(simulation.runway?.p50)}</p><p className="text-xs text-muted-foreground">Most likely</p></div>
+                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">90th Percentile</p><p className="text-2xl font-mono font-bold">{formatRunwayShort(simulation.runway?.p90)}</p><p className="text-xs text-muted-foreground">Best case</p></div>
                         </div>
+                        <p className="text-xs text-muted-foreground mt-3" data-testid="text-percentile-explainer">
+                          {PERCENTILE_EXPLAINER}
+                        </p>
                       </CardContent>
                     </Card>
                   </>
@@ -2910,7 +3027,7 @@ export default function ScenariosPage() {
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] text-muted-foreground">Runway</span>
                           <span className="text-xs font-mono font-semibold" data-testid={`text-recent-runway-${s.id}`}>
-                            {s.latest_simulation.runway?.p50 != null ? (s.latest_simulation.runway.p50 >= 900 ? 'Sustainable' : `${s.latest_simulation.runway.p50.toFixed(1)} mo`) : '?'}
+                            {formatRunwayShort(s.latest_simulation.runway?.p50)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between gap-2">

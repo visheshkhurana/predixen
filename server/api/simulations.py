@@ -174,7 +174,8 @@ class ScenarioCreate(BaseModel):
 
     @validator('fundraise_amount')
     def validate_fundraise_amount(cls, v):
-        return max(0, min(v, 100000000))
+        # Company currency, same ceiling as INPUT_GUARDRAILS (₹1000Cr / $10B).
+        return max(0, min(v, INPUT_GUARDRAILS["fundraise_amount"]["max"]))
 
     @validator('burn_reduction_pct')
     def validate_burn_reduction(cls, v):
@@ -325,7 +326,9 @@ INPUT_GUARDRAILS = {
     "gross_margin_delta_pct": {"min": -85, "max": 85, "label": "Gross margin change", "unit": "%"},
     "cac": {"min": 0, "max": 50000, "label": "Customer acquisition cost", "unit": "$"},
     "cac_change_pct": {"min": -50, "max": 200, "label": "CAC change", "unit": "%"},
-    "fundraise_amount": {"min": 0, "max": 100000000, "label": "Fundraise amount", "unit": "$"},
+    # In the company's currency: 100M was $100M but only ₹10Cr, so a ₹15Cr
+    # raise was silently cut to ₹10Cr.
+    "fundraise_amount": {"min": 0, "max": 10_000_000_000, "label": "Fundraise amount", "unit": ""},
     "fundraise_month": {"min": 1, "max": 24, "label": "Fundraise month", "unit": ""},
     "hiring_count": {"min": 0, "max": 500, "label": "Hiring count per role", "unit": ""},
     "hiring_monthly_cost": {"min": 0, "max": 1000000, "label": "Monthly cost per hire", "unit": "$"},
