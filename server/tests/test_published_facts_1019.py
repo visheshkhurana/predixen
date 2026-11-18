@@ -120,12 +120,18 @@ def _registered_module_names() -> list[str]:
     raise AssertionError("_CONNECTOR_MODULES not found")
 
 
+# Registered but not counted publicly until the production server has its app
+# credentials (Google Ads needs a developer token): see docs/connectors/google-ads.md.
+# Move a connector out of here (and bump the published number) when it goes live.
+PENDING_SETUP = {"google_ads"}
+
+
 def test_registry_has_37_connectors():
-    names = _registered_module_names()
+    names = [n for n in _registered_module_names() if n not in PENDING_SETUP]
     assert len(names) == 37, names
     assert len(set(names)) == 37
     connectors_pkg.load_all_connectors()
-    registered = ConnectorRegistry.get_available_providers()
+    registered = [p for p in ConnectorRegistry.get_available_providers() if p not in PENDING_SETUP]
     assert len(registered) == 37, sorted(registered)
 
 

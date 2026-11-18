@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { currentRunwayMonths, runwayAfterHires } from "@/lib/hiringRunway";
 import { formatRunway, survival12mPct } from "@/lib/hiringSimResults";
-import { hiringMarketFor, localSalary, monthlySalaryFor } from "@/lib/hiringMarkets";
+import { hiringMarketFor, roleBand, monthlyCostForRole } from "@/lib/hiringMarkets";
 
 interface RoleDefinition {
   id: string;
@@ -71,6 +71,13 @@ const ROLE_LIBRARY: RoleDefinition[] = [
   { id: "support-rep", title: "Support Rep", department: "Customer Success", salaryMin: 40000, salaryMax: 60000 },
   { id: "vp-cs", title: "VP Customer Success", department: "Customer Success", salaryMin: 150000, salaryMax: 200000 },
   { id: "head-of-ops", title: "Head of Ops", department: "Customer Success", salaryMin: 130000, salaryMax: 180000 },
+  // Roles a D2C brand hires that a software company usually doesn't.
+  { id: "performance-marketer", title: "Performance Marketer (Meta/Google)", department: "Marketing", salaryMin: 70000, salaryMax: 110000 },
+  { id: "creative-designer", title: "Creative / Content Designer", department: "Marketing", salaryMin: 60000, salaryMax: 90000 },
+  { id: "category-manager", title: "Category Manager", department: "Product", salaryMin: 80000, salaryMax: 120000 },
+  { id: "supply-chain-manager", title: "Supply Chain Manager", department: "Operations", salaryMin: 85000, salaryMax: 125000 },
+  { id: "warehouse-associate", title: "Warehouse Associate", department: "Operations", salaryMin: 35000, salaryMax: 45000 },
+  { id: "cx-executive", title: "Customer Support Executive", department: "Customer Success", salaryMin: 38000, salaryMax: 50000 },
 ];
 
 
@@ -165,7 +172,7 @@ export default function HiringPlannerPage() {
     if (!selectedRole) return;
     const role = ROLE_LIBRARY.find((r) => r.id === selectedRole);
     if (!role) return;
-    const monthlySalary = monthlySalaryFor(role.salaryMin, role.salaryMax, market, location);
+    const monthlySalary = monthlyCostForRole(role, market, location);
 
     const newHire: PlannedHire = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -220,7 +227,7 @@ export default function HiringPlannerPage() {
         count: 3,
         startMonth: 4,
         location: defaultLoc,
-        monthlySalary: monthlySalaryFor(role.salaryMin, role.salaryMax, market, defaultLoc),
+        monthlySalary: monthlyCostForRole(role, market, defaultLoc),
       });
     } else if (action === "sales") {
       const sdr = ROLE_LIBRARY.find((r) => r.id === "sdr")!;
@@ -233,7 +240,7 @@ export default function HiringPlannerPage() {
         count: 2,
         startMonth: 2,
         location: defaultLoc,
-        monthlySalary: monthlySalaryFor(sdr.salaryMin, sdr.salaryMax, market, defaultLoc),
+        monthlySalary: monthlyCostForRole(sdr, market, defaultLoc),
       });
       newHires.push({
         id: `${Date.now()}-ae`,
@@ -243,7 +250,7 @@ export default function HiringPlannerPage() {
         count: 2,
         startMonth: 2,
         location: defaultLoc,
-        monthlySalary: monthlySalaryFor(ae.salaryMin, ae.salaryMax, market, defaultLoc),
+        monthlySalary: monthlyCostForRole(ae, market, defaultLoc),
       });
     }
     setHires((prev) => [...prev, ...newHires]);
@@ -312,8 +319,8 @@ export default function HiringPlannerPage() {
             <CardHeader className="pb-4">
               <CardTitle className="text-base">Add Role</CardTitle>
               <CardDescription>
-                Select a role from the library and configure details. Salaries are rough {market.currency} market midpoints
-                {market.fallback ? " (US benchmarks; no local salary data for your currency yet)" : ""}.
+                Select a role from the library and configure details.{" "}
+                {market.bandsNote ?? `Salaries are rough ${market.currency} market midpoints${market.fallback ? " (US benchmarks; no local salary data for your currency yet)" : ""}.`}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -329,7 +336,7 @@ export default function HiringPlannerPage() {
                         <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{dept}</div>
                         {ROLE_LIBRARY.filter((r) => r.department === dept).map((role) => (
                           <SelectItem key={role.id} value={role.id} data-testid={`select-role-${role.id}`}>
-                            {role.title} ({formatCurrency(localSalary(role.salaryMin, market))}-{formatCurrency(localSalary(role.salaryMax, market))}/yr)
+                            {role.title} ({formatCurrency(roleBand(role, market)[0])}-{formatCurrency(roleBand(role, market)[1])}/yr)
                           </SelectItem>
                         ))}
                       </div>

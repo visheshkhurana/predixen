@@ -115,6 +115,8 @@ jobs:
         run: npx tsx --test server/tests/fundraising-pipeline.test.ts
       - name: What-If quick estimate is like-for-like and uses growth/churn
         run: npx tsx --test server/tests/whatif-quick-estimate.test.ts
+      - name: sample data is sized for the company currency
+        run: npx tsx --test server/tests/sample-currency.test.ts
 
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts

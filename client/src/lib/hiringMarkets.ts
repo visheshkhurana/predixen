@@ -28,7 +28,50 @@ export interface HiringMarket {
   locations: HiringLocation[];
   /** True when the company's currency had no market and the US one is shown. */
   fallback?: boolean;
+  /**
+   * Annual pay bands per role id in this market's currency, where we have
+   * them. Used instead of `salaryFactor`, which overstates junior roles
+   * (a US SDR × 18 is ₹10.8L; Indian SDRs are typically ₹4–7L).
+   */
+  roleBands?: Record<string, [number, number]>;
+  /** Short note on where the bands come from, shown in the planner. */
+  bandsNote?: string;
 }
+
+const L = 100_000; // one lakh
+
+/**
+ * Indicative annual CTC at Indian startups (Bengaluru, 2026), from public
+ * salary reports and job postings. Ranges, not offers: the planner says so.
+ */
+const INR_ROLE_BANDS: Record<string, [number, number]> = {
+  "senior-engineer": [25 * L, 40 * L],
+  "staff-engineer": [40 * L, 65 * L],
+  "engineering-manager": [40 * L, 60 * L],
+  cto: [60 * L, 100 * L],
+  sdr: [4 * L, 7 * L],
+  ae: [8 * L, 15 * L],
+  "sales-manager": [15 * L, 25 * L],
+  "vp-sales": [40 * L, 70 * L],
+  "marketing-manager": [15 * L, 25 * L],
+  "content-marketer": [5 * L, 9 * L],
+  "growth-marketer": [10 * L, 18 * L],
+  "performance-marketer": [8 * L, 16 * L],
+  "creative-designer": [5 * L, 10 * L],
+  pm: [20 * L, 35 * L],
+  "product-designer": [12 * L, 24 * L],
+  "category-manager": [10 * L, 18 * L],
+  "office-manager": [4 * L, 7 * L],
+  "hr-manager": [10 * L, 18 * L],
+  "finance-manager": [12 * L, 22 * L],
+  "supply-chain-manager": [12 * L, 20 * L],
+  "warehouse-associate": [2.4 * L, 3.6 * L],
+  csm: [6 * L, 10 * L],
+  "support-rep": [3 * L, 4.5 * L],
+  "cx-executive": [2.8 * L, 4 * L],
+  "vp-cs": [30 * L, 50 * L],
+  "head-of-ops": [25 * L, 40 * L],
+};
 
 const US: HiringMarket = {
   currency: "USD",
@@ -47,8 +90,10 @@ const MARKETS: Record<string, HiringMarket> = {
   USD: US,
   INR: {
     currency: "INR",
-    // Senior engineer US midpoint $175K -> about ₹31.5L in Bengaluru.
+    // Only used for a role with no band below.
     salaryFactor: 18,
+    roleBands: INR_ROLE_BANDS,
+    bandsNote: "Indicative Bengaluru startup CTC ranges for 2026, not offers. Edit the monthly cost if you know the real figure.",
     oneTimePerHire: 150000,
     oneTimeLabel: "Laptop ₹1L + onboarding ₹50K per hire",
     locations: [
@@ -127,4 +172,24 @@ export function monthlySalaryFor(
   const loc = market.locations.find((l) => l.id === locationId) ?? market.locations[0];
   const avg = localSalary((usdMin + usdMax) / 2, market);
   return Math.round((avg * loc.multiplier) / 12);
+}
+
+export interface RoleLike {
+  id: string;
+  salaryMin: number;
+  salaryMax: number;
+}
+
+/** Annual band for a role in the market: a local band when we have one, else the US band scaled. */
+export function roleBand(role: RoleLike, market: HiringMarket): [number, number] {
+  const local = market.roleBands?.[role.id];
+  if (local) return [Math.round(local[0]), Math.round(local[1])];
+  return [localSalary(role.salaryMin, market), localSalary(role.salaryMax, market)];
+}
+
+/** Monthly cost of one hire of `role` at a location in the market. */
+export function monthlyCostForRole(role: RoleLike, market: HiringMarket, locationId: string): number {
+  const loc = market.locations.find((l) => l.id === locationId) ?? market.locations[0];
+  const [min, max] = roleBand(role, market);
+  return Math.round((((min + max) / 2) * loc.multiplier) / 12);
 }

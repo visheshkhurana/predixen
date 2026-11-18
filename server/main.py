@@ -76,6 +76,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import fundraising as fundraising_api
     from server.api import dashboard_kpis as dashboard_kpis_api
     from server.api import connectors as connectors_api
+    from server.api import google_ads_oauth as google_ads_oauth_api
     from server.api import notifications as notifications_api
     from server.api import assumptions as assumptions_api
     from server.api import advanced_simulation as advanced_simulation_api
@@ -153,6 +154,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(fundraising_api.router)
     app.include_router(dashboard_kpis_api.router)
     app.include_router(connectors_api.router)
+    app.include_router(google_ads_oauth_api.router)
     app.include_router(notifications_api.router)
     app.include_router(assumptions_api.router)
     app.include_router(advanced_simulation_api.router)
