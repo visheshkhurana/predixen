@@ -106,6 +106,8 @@ jobs:
         run: npx tsx --test server/tests/error-message.test.ts
       - name: simulator consistency and runway display
         run: npx tsx --test server/tests/simulation-consistency.test.ts
+      - name: empty-company honesty (journal, health verdicts, scores)
+        run: npx tsx --test server/tests/empty-states-honesty.test.ts
 
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts

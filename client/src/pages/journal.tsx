@@ -16,17 +16,9 @@ import {
 import { useFounderStore } from "@/store/founderStore";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-
-interface JournalEntry {
-  id: number;
-  title: string;
-  decision: string;
-  reasoning: string;
-  outcome?: string;
-  status: "pending" | "resolved" | "revisit";
-  date: string;
-  impact: "high" | "medium" | "low";
-}
+import { isSampleCompany } from "@/lib/sampleCompany";
+import { isDemoEmail } from "@/lib/demo";
+import { journalEntriesToShow, stripSampleJournalEntries, type JournalEntry } from "@/lib/journalSample";
 
 interface ApiDecision {
   id: string;
@@ -53,47 +45,6 @@ interface MetricDelta {
   percent_change: number;
 }
 
-const demoEntries: JournalEntry[] = [
-  {
-    id: 1,
-    title: "Expand to Enterprise Tier",
-    decision: "Launch enterprise pricing tier at $499/mo with dedicated support",
-    reasoning: "Top 5 customers requested SLAs and priority support. Enterprise deal pipeline shows 8 qualified leads worth $47K ARR.",
-    outcome: "Closed 3 enterprise deals in first month, +$18K MRR",
-    status: "resolved",
-    date: "2026-01-15",
-    impact: "high",
-  },
-  {
-    id: 2,
-    title: "Reduce CAC via Content Marketing",
-    decision: "Shift 30% of paid ad budget to SEO content and webinars",
-    reasoning: "CAC trending up to $1,800. Organic leads convert 2.3x better and have 40% lower churn. Content has 6-month compounding effect.",
-    status: "pending",
-    date: "2026-02-01",
-    impact: "high",
-  },
-  {
-    id: 3,
-    title: "Hire Senior Backend Engineer",
-    decision: "Prioritize hiring a senior backend engineer over a second sales rep",
-    reasoning: "API reliability is at 99.2%, below target. Churn exit surveys cite performance issues. Engineering bottleneck blocks 3 feature releases.",
-    outcome: "Hired in Feb. API uptime improved to 99.8%, unblocked Q2 roadmap.",
-    status: "resolved",
-    date: "2026-01-22",
-    impact: "medium",
-  },
-  {
-    id: 4,
-    title: "Extend Runway Decision",
-    decision: "Cut discretionary spend by 15% to extend runway from 18 to 21+ months",
-    reasoning: "Fundraising market tightening. Current burn gives 18mo runway. Need buffer to hit Series A metrics without pressure.",
-    status: "revisit",
-    date: "2026-02-05",
-    impact: "high",
-  },
-];
-
 const statusConfig = {
   pending: { label: "In Progress", variant: "secondary" as const, icon: Calendar },
   resolved: { label: "Resolved", variant: "secondary" as const, icon: CheckCircle2 },
@@ -108,21 +59,23 @@ const impactColors = {
 
 const STORAGE_KEY = "founderconsole-journal";
 
-function loadEntries(companyId: number | null): JournalEntry[] {
-  if (!companyId) return demoEntries;
-  try {
-    const raw = localStorage.getItem(`${STORAGE_KEY}-${companyId}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {}
-  return demoEntries;
+function loadEntries(companyId: number | null, isSample: boolean): JournalEntry[] {
+  let stored: unknown = [];
+  if (companyId) {
+    try {
+      const raw = localStorage.getItem(`${STORAGE_KEY}-${companyId}`);
+      if (raw) stored = JSON.parse(raw);
+    } catch {}
+  }
+  return journalEntriesToShow({ stored, isSample });
 }
 
 function saveEntries(companyId: number | null, entries: JournalEntry[]) {
   if (!companyId) return;
-  localStorage.setItem(`${STORAGE_KEY}-${companyId}`, JSON.stringify(entries));
+  try {
+    // Only the founder's own entries are saved; sample entries never are.
+    localStorage.setItem(`${STORAGE_KEY}-${companyId}`, JSON.stringify(stripSampleJournalEntries(entries)));
+  } catch {}
 }
 
 const METRIC_LABELS: Record<string, string> = {
@@ -280,9 +233,11 @@ function OutcomeTrackingCard({ decision, onUpdateFollowupDays }: { decision: Api
 }
 
 export default function JournalPage() {
-  const { currentCompany } = useFounderStore();
+  const { currentCompany, user } = useFounderStore();
   const { toast } = useToast();
-  const [entries, setEntries] = useState<JournalEntry[]>(() => loadEntries(currentCompany?.id ?? null));
+  // Illustrative entries only for sample/demo companies, and always labelled.
+  const showSamples = isSampleCompany(currentCompany) || isDemoEmail(user?.email);
+  const [entries, setEntries] = useState<JournalEntry[]>(() => loadEntries(currentCompany?.id ?? null, showSamples));
   const [dialogOpen, setDialogOpen] = useState(false);
   const [expandedDecision, setExpandedDecision] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -341,8 +296,14 @@ export default function JournalPage() {
   };
 
   useEffect(() => {
-    setEntries(loadEntries(currentCompany?.id ?? null));
-  }, [currentCompany?.id]);
+    setEntries(loadEntries(currentCompany?.id ?? null, showSamples));
+  }, [currentCompany?.id, showSamples]);
+
+  // Stats count only what the founder logged, never the sample entries.
+  const ownEntries = entries.filter((e) => !e.sample);
+  const showingSamples = entries.length > 0 && ownEntries.length === 0;
+  const totalLogged = ownEntries.length + apiDecisions.length;
+  const isEmpty = totalLogged === 0 && !showingSamples && !(isLoadingDecisions && companyId);
 
   const handleCreate = () => {
     if (!newTitle.trim() || !newDecision.trim()) {
@@ -360,7 +321,7 @@ export default function JournalPage() {
       impact: newImpact,
     };
 
-    const updated = [entry, ...entries];
+    const updated = [entry, ...stripSampleJournalEntries(entries)];
     setEntries(updated);
     saveEntries(currentCompany?.id ?? null, updated);
     setDialogOpen(false);
@@ -392,14 +353,14 @@ export default function JournalPage() {
       <div className="grid grid-cols-3 gap-3">
         <Card>
           <CardContent className="pt-4 pb-3 text-center">
-            <p className="text-2xl font-bold font-mono" data-testid="text-total-decisions">{entries.length}</p>
+            <p className="text-2xl font-bold font-mono" data-testid="text-total-decisions">{totalLogged}</p>
             <p className="text-xs text-muted-foreground">Total Decisions</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-2xl font-bold font-mono text-emerald-500" data-testid="text-resolved-count">
-              {entries.filter(e => e.status === "resolved").length}
+              {ownEntries.filter(e => e.status === "resolved").length + apiDecisions.filter(d => d.status === "implemented").length}
             </p>
             <p className="text-xs text-muted-foreground">Resolved</p>
           </CardContent>
@@ -407,7 +368,7 @@ export default function JournalPage() {
         <Card>
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-2xl font-bold font-mono text-amber-500" data-testid="text-pending-count">
-              {entries.filter(e => e.status === "pending" || e.status === "revisit").length}
+              {ownEntries.filter(e => e.status === "pending" || e.status === "revisit").length + trackedDecisions.length}
             </p>
             <p className="text-xs text-muted-foreground">Open</p>
           </CardContent>
@@ -553,10 +514,32 @@ export default function JournalPage() {
         </div>
       )}
 
+      {isEmpty && (
+        <Card data-testid="card-journal-empty">
+          <CardContent className="py-12 text-center">
+            <BookOpen className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+            <p className="text-sm font-medium text-foreground mb-1" data-testid="text-journal-empty">No decisions logged yet</p>
+            <p className="text-xs text-muted-foreground mb-5 max-w-sm mx-auto">
+              Write down a decision, why you made it and what you expect to happen. Coming back to it later is how decisions get better.
+            </p>
+            <Button onClick={() => setDialogOpen(true)} data-testid="button-journal-empty-add">
+              <Plus className="h-4 w-4 mr-2" />
+              Log your first decision
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {entries.length > 0 && (
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
           Journal Entries
         </h2>
+        {showingSamples && (
+          <p className="text-xs text-muted-foreground" data-testid="text-journal-sample-note">
+            These are sample entries to show how the journal works. They are not your decisions and disappear once you add your own.
+          </p>
+        )}
         {entries.map((entry) => {
           const config = statusConfig[entry.status];
           const StatusIcon = config.icon;
@@ -567,6 +550,11 @@ export default function JournalPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-sm" data-testid={`text-journal-title-${entry.id}`}>{entry.title}</h3>
+                      {entry.sample && (
+                        <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400" data-testid={`badge-journal-sample-${entry.id}`}>
+                          Sample
+                        </Badge>
+                      )}
                       <Badge variant={config.variant} className="text-[10px]" data-testid={`badge-journal-status-${entry.id}`}>
                         <StatusIcon className="h-3 w-3 mr-1" />
                         {config.label}
@@ -594,6 +582,7 @@ export default function JournalPage() {
           );
         })}
       </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg" data-testid="dialog-new-entry">

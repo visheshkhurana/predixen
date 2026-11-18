@@ -58,7 +58,49 @@ Validation checks:
 """ + get_grounding_prompt_addition()
 
 
-@dataclass 
+_GAP_LABELS = {
+    "revenue": "monthly revenue",
+    "mrr": "monthly revenue",
+    "gross_margin": "gross margin",
+    "cash_balance": "cash balance",
+    "burn_rate": "monthly burn",
+    "cac": "customer acquisition cost",
+    "ltv": "customer lifetime value",
+    "churn_rate": "churn rate",
+    "headcount": "headcount",
+}
+
+
+def data_gap_question(data_gaps: List[str]) -> str:
+    """Turn data-gap entries into one natural follow-up sentence.
+
+    Gaps are either raw field keys ("cash_balance") or full sentences
+    ("No financial data available - ..."); pasting them into a template
+    produced "Can you provide: No financial data available - ...?".
+    """
+    labels: List[str] = []
+    no_data = False
+    for gap in data_gaps or []:
+        if not isinstance(gap, str) or not gap.strip():
+            continue
+        key = gap.strip()
+        if key.lower().startswith("no financial data"):
+            no_data = True
+            continue
+        label = _GAP_LABELS.get(key.lower(), key.replace("_", " ").lower())
+        if label not in labels:
+            labels.append(label)
+    if no_data or not labels:
+        return "Can you add your monthly revenue, expenses and cash balance on Data Input so I can use your real numbers?"
+    labels = labels[:3]
+    if len(labels) == 1:
+        listed = labels[0]
+    else:
+        listed = ", ".join(labels[:-1]) + " and " + labels[-1]
+    return f"Can you share your {listed}?"
+
+
+@dataclass
 class FinancialMetrics:
     """Extracted and computed financial metrics."""
     currency_base: str = "USD"
@@ -210,7 +252,7 @@ class CFOAgent(BaseAgent):
         
         next_questions = []
         if metrics.data_gaps:
-            next_questions.append(f"Can you provide: {', '.join(metrics.data_gaps[:3])}?")
+            next_questions.append(data_gap_question(metrics.data_gaps))
         if isinstance(metrics.runway_months, (int, float)) and metrics.runway_months < 12:
             next_questions.append("What are your fundraising plans?")
         if not metrics.cac or not metrics.ltv:

@@ -531,6 +531,45 @@ def _is_diagnosis_stale(saved, current_metrics):
     return False
 
 
+_FIGURE_FIELDS = ("revenue", "mrr", "cogs", "opex", "payroll", "other_costs", "cash_balance", "net_burn")
+
+
+def record_has_figures(record: Any) -> bool:
+    """True when a FinancialRecord carries at least one non-zero figure."""
+    if record is None:
+        return False
+    for field in _FIGURE_FIELDS:
+        v = getattr(record, field, None)
+        if isinstance(v, (int, float)) and v != 0:
+            return True
+    return False
+
+
+def _company_has_financial_data(company: Company, db: Session) -> bool:
+    """Sample companies always have data; otherwise any record with a real figure."""
+    if getattr(company, "is_sample", False):
+        return True
+    records = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company.id)
+        .order_by(FinancialRecord.period_end.desc())
+        .limit(24)
+        .all()
+    )
+    return any(record_has_figures(r) for r in records)
+
+
+NO_DATA_DIAGNOSIS = {
+    "status": "no_data",
+    "situation": None,
+    "recommendations": [],
+    "consequences_of_inaction": None,
+    "execution_playbook": [],
+    "key_risks": [],
+    "message": "No financial data yet. Add your revenue, expenses and cash on Data Input to generate a briefing.",
+}
+
+
 @router.get("/companies/{company_id}/strategic-diagnosis")
 def get_strategic_diagnosis(
     company_id: int,
@@ -559,6 +598,8 @@ def get_strategic_diagnosis(
         return saved
 
     if auto_generate:
+        if not _company_has_financial_data(company, db):
+            return dict(NO_DATA_DIAGNOSIS)
         return generate_strategic_diagnosis(company_id, db, current_user)
 
     return {
@@ -579,7 +620,11 @@ def generate_strategic_diagnosis(
     current_user: User = Depends(get_current_user)
 ):
     company = get_user_company(db, company_id, current_user)
-    
+
+    # Nothing to analyse: never spend an AI call writing a briefing about zeros.
+    if not _company_has_financial_data(company, db):
+        return dict(NO_DATA_DIAGNOSIS)
+
     revenue = 0.0
     total_expenses = 0.0
     cash = 0.0

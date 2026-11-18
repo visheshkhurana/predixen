@@ -39,6 +39,16 @@ import { apiRequest } from '@/lib/queryClient';
 import { api } from '@/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/posthog';
+import { Link } from 'wouter';
+import {
+  canJudgeHealth,
+  hasFinancialData,
+  joinWithAnd,
+  missingDataHints,
+  runwayKind,
+  scoreDisplay,
+  NOT_SCORED_LABEL,
+} from '@/lib/dataSufficiency';
 
 const STATUS_EXPLANATIONS = {
   critical: {
@@ -102,7 +112,7 @@ function getScoreActions(score: number, explanationData: typeof QUALITY_OF_GROWT
 }
 
 interface Recommendation {
-  type: 'critical' | 'warning' | 'opportunity' | 'success';
+  type: 'critical' | 'warning' | 'opportunity' | 'success' | 'info';
   title: string;
   description: string;
   action?: string;
@@ -197,7 +207,20 @@ function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
   return risks.slice(0, 3);
 }
 
-function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
+/** Shown instead of any verdict when there is no data, or confidence is too low to judge. */
+function notEnoughDataRecommendation(hints: string[]): Recommendation {
+  return {
+    type: 'info',
+    title: 'Not enough data to judge yet',
+    description: hints.length
+      ? `Add your ${joinWithAnd(hints)} so the health check can say something real about your business.`
+      : 'Add a few months of revenue, expenses and cash so the health check can say something real about your business.',
+    action: 'Go to Data Input to enter your numbers, or upload a P&L or bank statement, then refresh the scan.',
+  };
+}
+
+function generateRecommendations(metrics: any, flags: any[], judge?: { canJudge: boolean; hints: string[] }): Recommendation[] {
+  if (judge && !judge.canJudge) return [notEnoughDataRecommendation(judge.hints)];
   const recommendations: Recommendation[] = [];
 
   // Extract numeric values (some metrics may be objects with value/benchmark_percentile)
@@ -298,12 +321,13 @@ function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
   return recommendations.slice(0, 5); // Limit to 5 recommendations
 }
 
-function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v: any) => number | null, formatCurrency: (v: any) => string, formatPercent: (v: any) => string) {
+function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v: any) => number | null, formatCurrency: (v: any) => string, formatPercent: (v: any) => string, runwayUnknown = false) {
   const keyMetrics = [
     {
       id: 'runway',
       label: 'Runway (P50)',
       value: (() => {
+        if (runwayUnknown) return 'Not enough data';
         if (metrics.runway_sustainable || sharedMetrics.runway === Infinity) return 'Sustainable';
         const tsRunway = extractValue(metrics.runway_p50);
         const runway = tsRunway && tsRunway > 0 ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
@@ -314,6 +338,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       trendValue: undefined,
       benchmark: 'Benchmark: 12+ months',
       status: (() => {
+        if (runwayUnknown) return 'warning';
         if (metrics.runway_sustainable || sharedMetrics.runway === Infinity) return 'healthy';
         const tsRunway = extractValue(metrics.runway_p50);
         const runway = tsRunway && tsRunway > 0 ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
@@ -692,6 +717,28 @@ export default function TruthScanPage() {
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
 
+  // Honesty gate: with no revenue/expenses/cash on file, or a confidence score
+  // under 20, the page shows "Not enough data to judge yet" instead of any
+  // verdict, and 0 scores read "Not scored yet" rather than a red 0.
+  const companyHasData =
+    sharedMetrics.hasData ||
+    hasFinancialData(sharedMetrics) ||
+    (getMetricValue(rawMetrics.monthly_revenue) ?? 0) > 0 ||
+    (getMetricValue(rawMetrics.cash_balance) ?? 0) > 0;
+  const canJudge = canJudgeHealth({ hasData: companyHasData, confidence: truthScan ? confidence : null });
+  const dataHints = missingDataHints(sharedMetrics);
+  const confidenceDisplay = scoreDisplay(confidence, { hasData: companyHasData && !!truthScan });
+  const qualityDisplay = scoreDisplay(qualityOfGrowth, { hasData: canJudge });
+  const runwayUnknown =
+    !companyHasData ||
+    runwayKind({
+      sustainableFlag: metrics.runway_sustainable === true,
+      runway: sharedMetrics.runway,
+      revenue: sharedMetrics.mrr,
+      expenses: sharedMetrics.totalMonthlyExpenses,
+      cash: sharedMetrics.cashOnHand,
+    }) === 'unknown';
+
   // Sparklines come from real per-period FinancialRecord history (dashboard KPIs
   // endpoint). A metric with fewer than 2 real points gets no sparkline.
   const { data: kpiHistory } = useQuery({
@@ -902,6 +949,12 @@ export default function TruthScanPage() {
                 <Skeleton className="h-20 w-32" />
               ) : (
                 <>
+                  {!qualityDisplay.scored ? (
+                    <div className="text-2xl font-semibold text-muted-foreground py-3" data-testid="text-quality-index">
+                      {NOT_SCORED_LABEL}
+                    </div>
+                  ) : (
+                  <>
                   <div className="text-5xl font-bold font-mono" data-testid="text-quality-index">
                     {qualityOfGrowth}
                     <span className="text-xl text-muted-foreground">/100</span>
@@ -916,6 +969,8 @@ export default function TruthScanPage() {
                       style={{ width: `${qualityOfGrowth}%` }}
                     />
                   </div>
+                  </>
+                  )}
                   <CollapsibleContent className="mt-4 space-y-4">
                     <div>
                       <p className="text-sm font-medium mb-2">How this score is calculated:</p>
@@ -980,6 +1035,12 @@ export default function TruthScanPage() {
                 <Skeleton className="h-20 w-32" />
               ) : (
                 <>
+                  {!confidenceDisplay.scored ? (
+                    <div className="text-2xl font-semibold text-muted-foreground py-3" data-testid="text-confidence">
+                      {NOT_SCORED_LABEL}
+                    </div>
+                  ) : (
+                  <>
                   <div className="text-5xl font-bold font-mono" data-testid="text-confidence">
                     {confidence}
                     <span className="text-xl text-muted-foreground">/100</span>
@@ -993,8 +1054,13 @@ export default function TruthScanPage() {
                       style={{ width: `${confidence}%` }}
                     />
                   </div>
+                  </>
+                  )}
                   <div className="flex items-center gap-2 mt-2">
-                    {confidence < 60 && (
+                    {!confidenceDisplay.scored && (
+                      <Badge variant="outline" className="text-muted-foreground">Add your numbers to get a score</Badge>
+                    )}
+                    {confidenceDisplay.scored && confidence < 60 && (
                       <Badge variant="destructive">Upload more data to improve</Badge>
                     )}
                     {confidence >= 60 && confidence < 80 && (
@@ -1043,8 +1109,12 @@ export default function TruthScanPage() {
       <Tier1ScoreCards
         dataConfidenceScore={confidence}
         qualityOfGrowthIndex={qualityOfGrowth}
+        confidenceScored={confidenceDisplay.scored}
+        qualityScored={qualityDisplay.scored}
         overallRiskLevel={
-          runwayP50Value !== null && runwayP50Value < 6
+          !canJudge
+            ? 'unknown'
+            : runwayP50Value !== null && runwayP50Value < 6
             ? 'critical'
             : flags.filter((f: any) => f.severity === 'high').length > 0
               ? 'warning'
@@ -1202,8 +1272,8 @@ export default function TruthScanPage() {
       {/* Tier 2: Key Metrics */}
       <TruthScanTier2KeyMetrics
         metrics={useMemo(
-          () => buildTier2KeyMetrics(metrics, sharedMetrics, extractValue, formatCurrency, formatPercent),
-          [metrics, sharedMetrics]
+          () => buildTier2KeyMetrics(metrics, sharedMetrics, extractValue, formatCurrency, formatPercent, runwayUnknown),
+          [metrics, sharedMetrics, runwayUnknown]
         )}
         isLoading={isLoading}
       />
@@ -1272,15 +1342,17 @@ export default function TruthScanPage() {
               <MetricCard 
                 title="Runway (P50)" 
                 value={(() => {
+                  if (runwayUnknown) return "Not enough data";
                   if (metrics.runway_sustainable) return "Sustainable";
                   const tsRunway = extractValue(metrics.runway_p50);
                   const runway = (tsRunway && tsRunway > 0) ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
                   return `${runway.toFixed(1)} months`;
                 })()} 
                 testId="metric-runway"
-                tooltip={metrics.runway_sustainable ? "Company is cash-flow positive and self-sustaining" : METRIC_DEFINITIONS.runway_months?.shortDescription}
+                tooltip={runwayUnknown ? "Runway needs your cash balance and monthly expenses." : metrics.runway_sustainable ? "Company is cash-flow positive and self-sustaining" : METRIC_DEFINITIONS.runway_months?.shortDescription}
                 metricSource={sharedMetrics.sources?.['runway']}
                 variant={(() => {
+                  if (runwayUnknown) return "default" as const;
                   if (metrics.runway_sustainable) return "success" as const;
                   const tsRunway = extractValue(metrics.runway_p50);
                   const runway = (tsRunway && tsRunway > 0) ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
@@ -1289,7 +1361,8 @@ export default function TruthScanPage() {
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('runway_months') || null, 
                   value: (() => {
-                    if (metrics.runway_sustainable) return "Sustainable";
+                    if (runwayUnknown) return "Not enough data";
+                  if (metrics.runway_sustainable) return "Sustainable";
                     const tsRunway = extractValue(metrics.runway_p50);
                     const runway = (tsRunway && tsRunway > 0) ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
                     return `${runway.toFixed(1)} months`;
@@ -1432,7 +1505,7 @@ export default function TruthScanPage() {
       <div className="space-y-4" data-testid="insights-section">
         <h2 className="text-xl font-semibold">Insights & Recommendations</h2>
         <div className="space-y-3">
-          {generateRecommendations(metrics, flags).map((rec, i) => (
+          {generateRecommendations(metrics, flags, { canJudge, hints: dataHints }).map((rec, i) => (
             <Card key={i} className="overflow-visible">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
@@ -1440,6 +1513,7 @@ export default function TruthScanPage() {
                   {rec.type === 'warning' && <AlertTriangle className="h-5 w-5 mt-0.5 text-amber-500 shrink-0" />}
                   {rec.type === 'opportunity' && <Lightbulb className="h-5 w-5 mt-0.5 text-primary shrink-0" />}
                   {rec.type === 'success' && <CheckCircle className="h-5 w-5 mt-0.5 text-emerald-500 shrink-0" />}
+                  {rec.type === 'info' && <Info className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />}
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{rec.title}</p>
@@ -1454,6 +1528,11 @@ export default function TruthScanPage() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+                    {rec.type === 'info' && (
+                      <Button asChild size="sm" variant="outline" className="mt-2" data-testid="button-truth-add-data">
+                        <Link href="/data-input">Add your numbers</Link>
+                      </Button>
+                    )}
                     {rec.action && (
                       <div className="mt-2 p-2 bg-secondary/50 rounded-md">
                         <p className="text-xs text-muted-foreground">

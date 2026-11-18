@@ -1,13 +1,28 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, CheckCircle, AlertTriangle } from 'lucide-react';
+import { AlertCircle, CheckCircle, AlertTriangle, HelpCircle } from 'lucide-react';
+import { NOT_SCORED_LABEL } from '@/lib/dataSufficiency';
+
+type RiskLevel = 'critical' | 'warning' | 'healthy' | 'unknown';
+const NEUTRAL_CARD = 'bg-muted/30 border-border';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Tier1ScoreCardsProps {
   dataConfidenceScore: number;
   qualityOfGrowthIndex: number;
-  overallRiskLevel: 'critical' | 'warning' | 'healthy';
+  overallRiskLevel: RiskLevel;
   isLoading: boolean;
+  /** False when the score is 0 only because there is no data: shown as "Not scored yet". */
+  confidenceScored?: boolean;
+  qualityScored?: boolean;
+}
+
+function NotScored() {
+  return (
+    <div className="text-xl font-semibold text-muted-foreground py-2" data-testid="text-not-scored">
+      {NOT_SCORED_LABEL}
+    </div>
+  );
 }
 
 export function Tier1ScoreCards({
@@ -15,6 +30,8 @@ export function Tier1ScoreCards({
   qualityOfGrowthIndex,
   overallRiskLevel,
   isLoading,
+  confidenceScored = true,
+  qualityScored = true,
 }: Tier1ScoreCardsProps) {
   const getConfidenceColor = (score: number) => {
     if (score >= 80) return 'bg-emerald-500/10 border-emerald-500/30';
@@ -42,7 +59,7 @@ export function Tier1ScoreCards({
     return 'text-red-600 dark:text-red-400';
   };
 
-  const getRiskColor = (level: 'critical' | 'warning' | 'healthy') => {
+  const getRiskColor = (level: RiskLevel) => {
     switch (level) {
       case 'critical':
         return 'bg-red-500/10 border-red-500/30';
@@ -50,10 +67,12 @@ export function Tier1ScoreCards({
         return 'bg-amber-500/10 border-amber-500/30';
       case 'healthy':
         return 'bg-emerald-500/10 border-emerald-500/30';
+      case 'unknown':
+        return NEUTRAL_CARD;
     }
   };
 
-  const getRiskIcon = (level: 'critical' | 'warning' | 'healthy') => {
+  const getRiskIcon = (level: RiskLevel) => {
     switch (level) {
       case 'critical':
         return <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />;
@@ -61,10 +80,12 @@ export function Tier1ScoreCards({
         return <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />;
       case 'healthy':
         return <CheckCircle className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />;
+      case 'unknown':
+        return <HelpCircle className="h-6 w-6 text-muted-foreground" />;
     }
   };
 
-  const getRiskLabel = (level: 'critical' | 'warning' | 'healthy') => {
+  const getRiskLabel = (level: RiskLevel) => {
     switch (level) {
       case 'critical':
         return 'Critical';
@@ -72,6 +93,8 @@ export function Tier1ScoreCards({
         return 'Warning';
       case 'healthy':
         return 'Healthy';
+      case 'unknown':
+        return 'Not enough data';
     }
   };
 
@@ -80,7 +103,7 @@ export function Tier1ScoreCards({
       {/* Data Confidence Score Card */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <Card className={`border-2 ${getConfidenceColor(dataConfidenceScore)} cursor-help`}>
+          <Card className={`border-2 ${confidenceScored ? getConfidenceColor(dataConfidenceScore) : NEUTRAL_CARD} cursor-help`}>
             <CardContent className="p-6">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -91,6 +114,8 @@ export function Tier1ScoreCards({
                     <Skeleton className="h-12 w-20" />
                     <Skeleton className="h-2 w-full" />
                   </>
+                ) : !confidenceScored ? (
+                  <NotScored />
                 ) : (
                   <>
                     <div className="flex items-baseline gap-2">
@@ -128,7 +153,7 @@ export function Tier1ScoreCards({
       {/* Quality of Growth Index Card */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <Card className={`border-2 ${getQualityColor(qualityOfGrowthIndex)} cursor-help`}>
+          <Card className={`border-2 ${qualityScored ? getQualityColor(qualityOfGrowthIndex) : NEUTRAL_CARD} cursor-help`}>
             <CardContent className="p-6">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -139,6 +164,8 @@ export function Tier1ScoreCards({
                     <Skeleton className="h-12 w-20" />
                     <Skeleton className="h-2 w-full" />
                   </>
+                ) : !qualityScored ? (
+                  <NotScored />
                 ) : (
                   <>
                     <div className="flex items-baseline gap-2">

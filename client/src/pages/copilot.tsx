@@ -6,6 +6,7 @@ import { PageTransition } from "@/components/motion/page-transition-wrapper";
 import { useLocation } from 'wouter';
 import { isRunwaySustainable, formatCurrencyAbbrev, formatCurrencyFull } from '@/lib/utils';
 import { trackEvent } from '@/lib/posthog';
+import { scoreDisplay, NOT_SCORED_LABEL } from '@/lib/dataSufficiency';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1762,101 +1763,41 @@ Type **help** for a full list of what I can do.`,
       };
     }
     
-    const METRIC_MAP: Record<string, { key: string; format: (v: any) => string; label: string }> = {
-      'burn rate': { key: 'net_burn', format: (v) => `${formatCurrencyFull(v || 15000)}/month`, label: 'Net Burn Rate' },
-      'burn': { key: 'net_burn', format: (v) => `${formatCurrencyFull(v || 15000)}/month`, label: 'Net Burn Rate' },
-      'mrr': { key: 'mrr', format: (v) => formatCurrencyFull(v || 45000), label: 'Monthly Recurring Revenue' },
-      'revenue': { key: 'mrr', format: (v) => formatCurrencyFull(v || 45000), label: 'Monthly Revenue' },
-      'arr': { key: 'mrr', format: (v) => formatCurrencyFull((v || 45000) * 12), label: 'Annual Recurring Revenue' },
-      'margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
-      'gross margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
-      'runway': { key: 'runway_months', format: (v) => v != null && isRunwaySustainable(v) ? 'Sustainable' : `${v?.toFixed(1) || '16.5'} months`, label: 'Runway' },
-      'cash': { key: 'cash_balance', format: (v) => formatCurrencyFull(v || 500000), label: 'Cash Balance' },
-      'cac': { key: 'cac', format: (v) => v != null && v > 0 ? formatCurrencyFull(v) : 'N/A', label: 'Customer Acquisition Cost' },
-      'ltv': { key: 'ltv', format: (v) => v != null && v > 0 ? formatCurrencyFull(v) : 'N/A', label: 'Lifetime Value' },
-      'churn': { key: 'churn_rate', format: (v) => v != null ? `${Number(v).toFixed(1)}%` : 'N/A', label: 'Churn Rate' },
-      'growth': { key: 'revenue_growth_mom', format: (v) => `${v || 5}% MoM`, label: 'Revenue Growth' },
+    // Offline answers quote only figures that are actually on file. Earlier
+    // versions filled gaps with invented defaults (45,000 MRR, 16.5 months
+    // runway, 108% NRR), which read as real numbers for an empty company.
+    const METRIC_MAP: Record<string, { key: string; format: (v: number) => string; label: string }> = {
+      'burn rate': { key: 'net_burn', format: (v) => `${formatCurrencyFull(v)}/month`, label: 'net burn' },
+      'burn': { key: 'net_burn', format: (v) => `${formatCurrencyFull(v)}/month`, label: 'net burn' },
+      'mrr': { key: 'mrr', format: (v) => formatCurrencyFull(v), label: 'monthly recurring revenue' },
+      'revenue': { key: 'mrr', format: (v) => formatCurrencyFull(v), label: 'monthly revenue' },
+      'arr': { key: 'mrr', format: (v) => formatCurrencyFull(v * 12), label: 'annual recurring revenue' },
+      'gross margin': { key: 'gross_margin', format: (v) => `${v.toFixed(1)}%`, label: 'gross margin' },
+      'margin': { key: 'gross_margin', format: (v) => `${v.toFixed(1)}%`, label: 'gross margin' },
+      'runway': { key: 'runway_months', format: (v) => isRunwaySustainable(v) ? 'not limited (revenue covers costs)' : `${v.toFixed(1)} months`, label: 'runway' },
+      'cash': { key: 'cash_balance', format: (v) => formatCurrencyFull(v), label: 'cash balance' },
+      'cac': { key: 'cac', format: (v) => formatCurrencyFull(v), label: 'customer acquisition cost' },
+      'ltv': { key: 'ltv', format: (v) => formatCurrencyFull(v), label: 'customer lifetime value' },
+      'churn': { key: 'churn_rate', format: (v) => `${v.toFixed(1)}%`, label: 'churn rate' },
+      'growth': { key: 'revenue_growth_mom', format: (v) => `${v.toFixed(1)}% a month`, label: 'revenue growth' },
     };
-    
-    const SPECIFIC_METRIC_PATTERN = /what('?s| is| are)?\s+(our|my|the|current)?\s*/i;
-    if (SPECIFIC_METRIC_PATTERN.test(lowerQuery)) {
-      for (const [keyword, config] of Object.entries(METRIC_MAP)) {
-        if (lowerQuery.includes(keyword)) {
-          const value = metrics[config.key]?.value;
-          return {
-            role: 'assistant',
-            content: `Your current **${config.label}** is **${config.format(value)}**.\n\nWould you like me to analyze trends or run a simulation around this metric?`,
-            metrics: [config.key],
-            dataSources: ['truth_scan'],
-            timestamp: new Date(),
-          };
-        }
-      }
-    }
-    
-    if (lowerQuery.includes('runway') || lowerQuery.includes('extend')) {
-      return {
-        role: 'assistant',
-        content: `Based on your current metrics, your runway is **${metrics.runway_months?.value != null && isRunwaySustainable(metrics.runway_months.value) ? 'Sustainable' : (metrics.runway_months?.value?.toFixed(1) || 16.5) + ' months'}** (P50). To extend by 6 months, I recommend:\n\n1. **Reduce burn by 15%** - This alone could add 3-4 months\n2. **Implement 10% price increase** - With your strong NRR of ${metrics.net_revenue_retention?.value || 108}%, churn risk is minimal\n3. **Defer non-critical hires** - Push Q2 hires to Q3\n\nWould you like me to run a simulation with these changes?`,
-        metrics: ['runway_months', 'net_burn', 'net_revenue_retention'],
-        dataSources: ['truth_scan', 'simulation'],
-        suggestion: { label: 'Run burn cut scenario', action: 'burn_cut_15' },
-        timestamp: new Date(),
-      };
-    }
-    
-    if (lowerQuery.includes('risk') || lowerQuery.includes('assumption')) {
-      return {
-        role: 'assistant',
-        content: `Your riskiest assumption is **revenue concentration**. Your top 5 customers represent ${metrics.concentration_top5?.value || 32}% of revenue.\n\nIf you lose your largest customer, runway drops from ${metrics.runway_months?.value != null && isRunwaySustainable(metrics.runway_months.value) ? 'Sustainable' : (metrics.runway_months?.value?.toFixed(1) || 16.5)} to approximately 11 months.\n\nRecommendation: Prioritize customer diversification and increase logo count before your next fundraise.`,
-        metrics: ['concentration_top5', 'customer_count', 'runway_months'],
-        dataSources: ['truth_scan', 'benchmark'],
-        timestamp: new Date(),
-      };
-    }
-    
-    if (lowerQuery.includes('fundraise') || lowerQuery.includes('slip') || lowerQuery.includes('raise') || lowerQuery.includes('dilution') || lowerQuery.includes('valuation')) {
-      return {
-        role: 'assistant',
-        content: `If your fundraise slips 3 months:\n\n- Current runway: **${metrics.runway_months?.value != null && isRunwaySustainable(metrics.runway_months.value) ? 'Sustainable' : (metrics.runway_months?.value?.toFixed(1) || 16.5) + ' months'}**\n- Survival probability at 18m: **${simulation?.survival?.['18m'] || 65}%**\n- Post-slip survival: **~52%**\n\nMitigation options:\n1. Secure a bridge round now ($500K-750K)\n2. Implement immediate burn reduction (15-20%)\n3. Accelerate revenue with pricing optimization\n\nThe confidence in these projections is ${confidence >= 80 ? 'high' : confidence >= 60 ? 'moderate' : 'low'} based on your data quality.`,
-        metrics: ['runway_months', 'survival_18m', 'cash_balance'],
-        dataSources: ['truth_scan', 'simulation', 'scenario'],
-        suggestion: { label: 'Run bridge scenario', action: 'bridge_round' },
-        timestamp: new Date(),
-      };
-    }
-    
-    if (lowerQuery.includes('competitor') || lowerQuery.includes('differentiate') || lowerQuery.includes('compete') || lowerQuery.includes('market')) {
-      return {
-        role: 'assistant',
-        content: `**Competitive Positioning Analysis**\n\nBased on your SaaS profile, here's how to differentiate:\n\n**Key Differentiators:**\n1. **Superior UX** - Focus on intuitive interface and faster time-to-value\n2. **Integration Ecosystem** - Build stronger API and partner integrations\n3. **Customer Success** - Invest in proactive support and onboarding\n\nWould you like me to help create a detailed competitive analysis?`,
-        metrics: ['market_position', 'competitive_advantage'],
-        dataSources: ['market_agent', 'strategy_agent'],
-        timestamp: new Date(),
-      };
-    }
-    
-    if (lowerQuery.includes('simulat') || lowerQuery.includes('what if') || lowerQuery.includes('what happens') || lowerQuery.includes('model') || lowerQuery.includes('scenario')) {
-      return {
-        role: 'assistant',
-        content: "I'd like to run that simulation for you, but I'm currently in offline mode. Please try again when the AI service is available.\n\nIn the meantime, you can use the **Scenario Runner** panel (click the sliders icon on the right) to adjust parameters and run quick projections.",
-        timestamp: new Date(),
-      };
-    }
-    
+
     for (const [keyword, config] of Object.entries(METRIC_MAP)) {
       if (lowerQuery.includes(keyword)) {
-        const value = metrics[config.key]?.value;
+        const raw = metrics?.[config.key]?.value ?? metrics?.[config.key];
+        const value = typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : null;
         return {
           role: 'assistant',
-          content: `Your current **${config.label}** is **${config.format(value)}**.\n\nWould you like me to analyze this further or run a scenario around it?`,
-          metrics: [config.key],
-          dataSources: ['truth_scan'],
+          content: value != null
+            ? `Your ${config.label} is ${config.format(value)}. I'm offline right now, so I can't dig into it further, but you can try again in a few minutes.`
+            : `I don't have your ${config.label} on file yet. Add it on the Data Input page and I can work with it.`,
+          metrics: value != null ? [config.key] : undefined,
+          dataSources: value != null ? ['truth_scan'] : undefined,
           timestamp: new Date(),
         };
       }
     }
-    
+
     return {
       role: 'assistant',
       content: "I'm not sure how to help with that specific question in offline mode. Here are some things I can help with:\n\n- **\"What is our burn rate?\"** - Get specific metric values\n- **\"How can I extend runway?\"** - Strategic recommendations\n- **\"What if we cut burn by 20%?\"** - Run simulations\n- **\"Who are our competitors?\"** - Market analysis\n\nOr type `/help` to see all available commands.",
@@ -2325,15 +2266,23 @@ Type **help** for a full list of what I can do.`,
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold font-mono" data-testid="text-context-confidence">
-                      {confidence}/100
-                    </div>
-                    <Badge
-                      variant={confidence < 60 ? 'destructive' : 'secondary'}
-                      className={confidence >= 80 ? 'bg-emerald-500/20 text-emerald-400' : confidence >= 60 ? 'bg-amber-500/20 text-amber-400' : ''}
-                    >
-                      {confidence < 60 ? 'Low' : confidence < 80 ? 'Medium' : 'High'}
-                    </Badge>
+                    {!scoreDisplay(confidence, { hasData: !!truthScan && confidence > 0 }).scored ? (
+                      <div className="text-base font-semibold text-muted-foreground" data-testid="text-context-confidence">
+                        {NOT_SCORED_LABEL}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-2xl font-bold font-mono" data-testid="text-context-confidence">
+                          {confidence}/100
+                        </div>
+                        <Badge
+                          variant={confidence < 60 ? 'destructive' : 'secondary'}
+                          className={confidence >= 80 ? 'bg-emerald-500/20 text-emerald-400' : confidence >= 60 ? 'bg-amber-500/20 text-amber-400' : ''}
+                        >
+                          {confidence < 60 ? 'Low' : confidence < 80 ? 'Medium' : 'High'}
+                        </Badge>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
                 
@@ -2345,9 +2294,15 @@ Type **help** for a full list of what I can do.`,
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold font-mono" data-testid="text-context-qog">
-                      {qualityOfGrowth}/100
-                    </div>
+                    {scoreDisplay(qualityOfGrowth, { hasData: confidence >= 20 }).scored ? (
+                      <div className="text-2xl font-bold font-mono" data-testid="text-context-qog">
+                        {qualityOfGrowth}/100
+                      </div>
+                    ) : (
+                      <div className="text-base font-semibold text-muted-foreground" data-testid="text-context-qog">
+                        {NOT_SCORED_LABEL}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
                 

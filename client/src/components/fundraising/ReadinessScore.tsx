@@ -51,11 +51,14 @@ function getStatusVariant(status: string): 'destructive' | 'outline' | 'default'
   }
 }
 
-function CircularProgress({ score }: { score: number }) {
+// A 0 overall score with nothing behind it is "no data", not a red verdict.
+const NEUTRAL_SCORE_COLOR = 'hsl(var(--muted-foreground))';
+
+function CircularProgress({ score, scored = true }: { score: number; scored?: boolean }) {
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-  const color = getScoreColor(score);
+  const offset = circumference - ((scored ? score : 0) / 100) * circumference;
+  const color = scored ? getScoreColor(score) : NEUTRAL_SCORE_COLOR;
 
   return (
     <div className="relative inline-flex items-center justify-center" data-testid="display-readiness-score-circle">
@@ -84,10 +87,18 @@ function CircularProgress({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute flex flex-col items-center">
-        <span className="text-4xl font-bold" style={{ color }} data-testid="text-readiness-score-value">
-          {Math.round(score)}
-        </span>
-        <span className="text-xs text-muted-foreground">/100</span>
+        {scored ? (
+          <>
+            <span className="text-4xl font-bold" style={{ color }} data-testid="text-readiness-score-value">
+              {Math.round(score)}
+            </span>
+            <span className="text-xs text-muted-foreground">/100</span>
+          </>
+        ) : (
+          <span className="text-sm font-semibold text-muted-foreground" data-testid="text-readiness-score-value">
+            Not scored yet
+          </span>
+        )}
       </div>
     </div>
   );
@@ -108,6 +119,7 @@ function safeScore(item: BreakdownItem | number | undefined): number {
 }
 
 export function ReadinessScore({ data }: { data: ReadinessData }) {
+  const scored = Number.isFinite(data.overall) && data.overall > 0;
   const radarData = [
     { metric: 'Runway', value: safeScore(data.breakdown.runway) },
     { metric: 'Growth', value: safeScore(data.breakdown.growth) },
@@ -125,10 +137,16 @@ export function ReadinessScore({ data }: { data: ReadinessData }) {
         <CardContent>
           <div className="grid gap-6 md:grid-cols-2">
             <div className="flex flex-col items-center gap-3">
-              <CircularProgress score={data.overall} />
-              <Badge variant={getStatusVariant(data.status)} data-testid="badge-readiness-status">
-                {getStatusLabel(data.status)}
-              </Badge>
+              <CircularProgress score={data.overall} scored={scored} />
+              {scored ? (
+                <Badge variant={getStatusVariant(data.status)} data-testid="badge-readiness-status">
+                  {getStatusLabel(data.status)}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground" data-testid="badge-readiness-status">
+                  Add your numbers to get a score
+                </Badge>
+              )}
             </div>
 
             <div className="space-y-3" data-testid="display-readiness-breakdown">

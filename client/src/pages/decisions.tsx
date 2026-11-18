@@ -17,6 +17,10 @@ import { apiRequest } from '@/lib/queryClient';
 import { api } from '@/api/client';
 import { ShareModal, type ShareModalData } from '@/components/ShareModal';
 import { trackEvent } from '@/lib/posthog';
+import { Link } from 'wouter';
+import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
+import { hasFinancialData } from '@/lib/dataSufficiency';
+import { isSampleCompany } from '@/lib/sampleCompany';
 
 const LOADING_STEPS = [
   { label: 'Analyzing financial data', duration: 8000 },
@@ -249,20 +253,28 @@ export default function DecisionsPage() {
 
   const hasBriefing = rawRecommendations.length > 0;
 
+  // A company with no revenue, expenses or cash on file has nothing to
+  // analyse. Do not fetch-with-auto-generate (which calls the AI and spends
+  // credits) and do not claim to be "analysing financial data" — point the
+  // founder at adding data instead.
+  const { metrics: financialMetrics, isLoading: isFinancialsLoading } = useFinancialMetrics();
+  const companyHasData = isSampleCompany(currentCompany) || financialMetrics.hasData || hasFinancialData(financialMetrics);
+  const noFinancialData = !!currentCompany?.id && !isFinancialsLoading && !companyHasData;
+
   const {
     data: diagnosisData,
     isLoading: isDiagnosisLoading,
     isError: diagnosisError,
     isFetching: isDiagnosisFetching,
     refetch: refetchDiagnosisQuery,
-  } = useStrategicDiagnosisQuery(currentCompany?.id || null, !!currentCompany?.id);
+  } = useStrategicDiagnosisQuery(currentCompany?.id || null, !!currentCompany?.id && !isFinancialsLoading && companyHasData);
 
   const isAnalyzing = isDiagnosisLoading && !diagnosisData;
   const isUpdating = isDiagnosisFetching && !!diagnosisData;
 
   const handleGenerateDecisions = useCallback(async () => {
+    if (!currentCompany || noFinancialData) return;
     trackEvent('decision_generated', { company_id: currentCompany?.id });
-    if (!currentCompany) return;
     setIsGenerating(true);
     setGenerationError(null);
 
@@ -324,12 +336,14 @@ export default function DecisionsPage() {
         setIsGenerating(false);
       }
     }
-  }, [currentCompany, latestScenarioId, createScenarioMutation, runSimulationMutation, generateDecisionsMutation, refetch, queryClient, setCurrentStep, toast]);
+  }, [currentCompany, noFinancialData, latestScenarioId, createScenarioMutation, runSimulationMutation, generateDecisionsMutation, refetch, queryClient, setCurrentStep, toast]);
 
   const [autoGenTriggered, setAutoGenTriggered] = useState(false);
   useEffect(() => {
     if (
       currentCompany?.id &&
+      companyHasData &&
+      !isFinancialsLoading &&
       !isLoading &&
       !isDiagnosisLoading &&
       !isGenerating &&
@@ -341,7 +355,7 @@ export default function DecisionsPage() {
       setAutoGenTriggered(true);
       handleGenerateDecisions();
     }
-  }, [currentCompany?.id, isLoading, isDiagnosisLoading, isGenerating, autoGenTriggered, diagnosisData, hasBriefing, generationError, handleGenerateDecisions]);
+  }, [currentCompany?.id, companyHasData, isFinancialsLoading, isLoading, isDiagnosisLoading, isGenerating, autoGenTriggered, diagnosisData, hasBriefing, generationError, handleGenerateDecisions]);
 
   useEffect(() => {
     const sectionIds = TOC_SECTIONS.map((s) => s.id);
@@ -629,6 +643,7 @@ export default function DecisionsPage() {
                 </Button>
               </>
             )}
+            {!noFinancialData && (
             <Button
               onClick={handleGenerateDecisions}
               disabled={isGenerating}
@@ -646,6 +661,7 @@ export default function DecisionsPage() {
                 </>
               )}
             </Button>
+            )}
           </div>
         </div>
         {(hasMeaningfulDiagnosis || hasBriefing) && (
@@ -654,7 +670,25 @@ export default function DecisionsPage() {
       </header>
       </FadeIn>
 
-      {generationError ? (
+      {noFinancialData && !hasBriefing && !hasMeaningfulDiagnosis ? (
+        <Card data-testid="section-no-financial-data">
+          <CardContent className="py-12 text-center">
+            <Brain className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+            <p className="text-sm font-medium text-foreground mb-1">No financial data to analyse yet</p>
+            <p className="text-xs text-muted-foreground mb-5 max-w-sm mx-auto">
+              A strategic briefing is built from your revenue, expenses and cash. Add those first and the briefing can be generated from your real numbers.
+            </p>
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <Button asChild data-testid="button-add-data-decisions">
+                <Link href="/data-input">Add your numbers</Link>
+              </Button>
+              <Button asChild variant="outline" data-testid="button-upload-decisions">
+                <Link href="/onboarding">Upload a file</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : generationError ? (
         <Card className="border-destructive/30" data-testid="section-generation-error">
           <CardContent className="py-8 text-center">
             <XCircle className="h-8 w-8 text-destructive mx-auto mb-3" />

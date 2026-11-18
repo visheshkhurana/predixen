@@ -866,7 +866,10 @@ async def _copilot_quick_chat_impl(
     except Exception as e:
         _logger.error(f"Quick chat error for company {company_id}: {e}", exc_info=True)
         return QuickChatResponse(
-            response=f"I'm having trouble processing your question right now. Here's what I know about {company.name or 'your company'}: check the Dashboard for current metrics, or try asking a more specific question.",
+            response=(
+                "I couldn't answer that just now. Your latest numbers are on the "
+                "Dashboard, and a shorter, more specific question often works better."
+            ),
             sources_used=[],
             suggested_followups=[
                 "What are my key metrics?",
@@ -876,16 +879,52 @@ async def _copilot_quick_chat_impl(
         )
 
 
+def _followup_money(amount: float, currency: Optional[str]) -> str:
+    """Short money string in the company's own currency (e.g. ₹4.5L, $45K)."""
+    from server.services.currency import CURRENCY_SYMBOLS
+
+    code = (currency or "USD").upper()
+    sym = CURRENCY_SYMBOLS.get(code, code)
+    if sym.isalpha():
+        sym = sym + " "
+    v = abs(float(amount))
+    if code == "INR":
+        if v >= 1e7:
+            return f"{sym}{v / 1e7:.1f}Cr"
+        if v >= 1e5:
+            return f"{sym}{v / 1e5:.1f}L"
+    if v >= 1e6:
+        return f"{sym}{v / 1e6:.1f}M"
+    if v >= 1e3:
+        return f"{sym}{v / 1e3:.0f}K"
+    return f"{sym}{v:,.0f}"
+
+
+def _real_number(v: Any) -> Optional[float]:
+    """A metric value usable in a sentence: numeric, finite and > 0, else None."""
+    if isinstance(v, dict):
+        v = v.get("value")
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    if v != v or v <= 0:  # NaN or non-positive
+        return None
+    return float(v)
+
+
 def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
     """Generate contextual follow-up suggestions based on the question asked."""
     import random
     msg_lower = message.lower()
     followups = []
 
-    metrics = context.get("metrics", {})
-    runway = metrics.get("runway_months") or metrics.get("runway_p50")
-    mrr = metrics.get("monthly_revenue") or metrics.get("mrr")
-    burn = metrics.get("net_burn") or metrics.get("monthly_burn")
+    metrics = context.get("metrics", {}) or {}
+    currency = (context.get("company") or {}).get("currency") or "USD"
+    runway = _real_number(metrics.get("runway_months") or metrics.get("runway_p50"))
+    # 999 / 120+ are "no limit" sentinels, not a number of months to quote.
+    if runway is not None and runway >= 120:
+        runway = None
+    mrr = _real_number(metrics.get("monthly_revenue") or metrics.get("mrr"))
+    burn = _real_number(metrics.get("net_burn") or metrics.get("monthly_burn"))
     gm = metrics.get("gross_margin")
     churn = metrics.get("churn_rate")
 
@@ -897,8 +936,11 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
             "Which revenue segments are growing fastest?",
             "Simulate a 20% revenue decline — what's the impact on runway?",
         ]
-        if mrr and burn and isinstance(mrr, (int, float)):
-            pool.append(f"My MRR is ${mrr:,.0f} and burn is ${burn:,.0f} — when do I break even?")
+        if mrr is not None and burn is not None:
+            pool.append(
+                f"With revenue at {_followup_money(mrr, currency)} a month and burn at "
+                f"{_followup_money(burn, currency)}, when do I break even?"
+            )
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["payroll", "salary", "team", "headcount", "hiring"]):
@@ -930,8 +972,8 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
             "Simulate losing my largest customer — how does runway change?",
             "What's the break-even timeline for my business?",
         ]
-        if runway and isinstance(runway, (int, float)):
-            pool.append(f"My runway is {runway:.0f} months — what specific actions extend it the most?")
+        if runway is not None:
+            pool.append(f"With about {runway:.0f} months of runway, which actions would extend it the most?")
         random.shuffle(pool)
         followups = pool[:3]
     elif any(w in msg_lower for w in ["fundrais", "raise", "investor", "valuation", "dilution"]):

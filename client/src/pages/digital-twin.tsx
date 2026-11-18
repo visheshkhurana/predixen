@@ -76,9 +76,13 @@ function TwinHealthScore({ health }: { health: any }) {
     <div className="space-y-2" data-testid="twin-health-score">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Twin Health</span>
-        <span className={`text-sm font-bold font-mono ${colors[health.status] || "text-muted-foreground"}`}>
-          {health.score}/100
-        </span>
+        {typeof health.score === "number" && health.score > 0 ? (
+          <span className={`text-sm font-bold font-mono ${colors[health.status] || "text-muted-foreground"}`}>
+            {health.score}/100
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-muted-foreground">Not scored yet</span>
+        )}
       </div>
       <Progress value={health.score} className={`h-1.5 bg-muted/40 ${progressColors[health.status] || ""}`} />
       <div className="flex flex-wrap gap-1">
