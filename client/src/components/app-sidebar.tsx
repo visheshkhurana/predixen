@@ -120,6 +120,10 @@ function HealthScoreCard() {
   const isNonDataPage = NON_DATA_PATHS.some((p) => location.startsWith(p));
   if (!hasData || isNonDataPage) return null;
 
+  // A 0 quality index with low confidence means "no data", not a failing
+  // business: show a muted "Not scored yet" instead of a red 0/100.
+  const notScored = healthScore !== null && healthScore <= 0 && confidence < 20;
+
   const getHealthColor = (score: number) => {
     if (score >= 70) return "text-emerald-400";
     if (score >= 50) return "text-amber-400";
@@ -140,20 +144,20 @@ function HealthScoreCard() {
       <Link href="/truth">
         <div className="flex items-center justify-between gap-2 mb-1.5 cursor-pointer hover:opacity-80 transition-opacity">
           <span className="text-xs font-medium text-muted-foreground">Business Health</span>
-          <span className={cn("text-sm font-bold font-mono", healthScore !== null ? getHealthColor(healthScore) : "text-muted-foreground")} data-testid="text-health-score">
-            {healthScore !== null ? `${healthScore}/100` : "N/A"}
+          <span className={cn("text-sm font-bold font-mono", healthScore !== null && !notScored ? getHealthColor(healthScore) : "text-muted-foreground font-medium font-sans text-xs")} data-testid="text-health-score">
+            {notScored ? "Not scored yet" : healthScore !== null ? `${healthScore}/100` : "N/A"}
           </span>
         </div>
         <Progress
           value={healthScore ?? 0}
-          className={cn("h-1.5 bg-muted/40", healthScore !== null ? getProgressColor(healthScore) : "")}
+          className={cn("h-1.5 bg-muted/40", healthScore !== null && !notScored ? getProgressColor(healthScore) : "")}
         />
       </Link>
       <Link href="/data">
         <div className="flex items-center justify-between gap-2 mt-2 cursor-pointer hover:opacity-80 transition-opacity">
           <span className="text-[11px] text-muted-foreground">Data Confidence</span>
           <span className="text-[11px] font-medium text-muted-foreground font-mono" data-testid="text-data-confidence">
-            {hasData ? `${confidence}%` : "N/A"}
+            {hasData && confidence > 0 ? `${confidence}%` : "Not scored yet"}
           </span>
         </div>
       </Link>
