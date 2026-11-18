@@ -467,9 +467,12 @@ export default function KPIBoardPage() {
       runway_unknown: runwayUnknown,
       gross_margin: pick(latestSnapshot?.gross_margin, latestHistory?.gross_margin, sharedMetrics.grossMargin),
       churn_rate: normalizeChurn(rawChurn),
-      cac: pick(latestSnapshot?.cac, latestHistory?.cac, sharedMetrics.cac),
-      ltv: pick(latestSnapshot?.ltv, latestHistory?.ltv, sharedMetrics.ltv),
-      ltv_cac_ratio: pick(latestSnapshot?.ltv_cac_ratio, latestHistory?.ltv_cac_ratio, sharedMetrics.ltvCacRatio),
+      // Unit economics come from the same source as the dashboard and Health
+      // Check (useFinancialMetrics -> /metrics/computed) so all pages agree;
+      // snapshots only fill in when that source has no value.
+      cac: pick(sharedMetrics.cac, latestSnapshot?.cac, latestHistory?.cac ?? 0),
+      ltv: pick(sharedMetrics.ltv, latestSnapshot?.ltv, latestHistory?.ltv ?? 0),
+      ltv_cac_ratio: pick(sharedMetrics.ltvCacRatio, latestSnapshot?.ltv_cac_ratio, latestHistory?.ltv_cac_ratio ?? 0),
       headcount: pick(latestSnapshot?.headcount, latestHistory?.headcount, sharedMetrics.headcount),
       revenue_per_employee: pick(latestSnapshot?.revenue_per_employee, latestHistory?.revenue_per_employee, sharedMetrics.revenuePerEmployee),
     };
@@ -697,7 +700,7 @@ export default function KPIBoardPage() {
           subtitle={(metrics.ltv > 0 && metrics.cac > 0 && metrics.ltv_cac_ratio >= 3) ? 'Healthy' : (metrics.ltv > 0 && metrics.cac > 0 && metrics.ltv_cac_ratio > 0 && metrics.ltv_cac_ratio < 2) ? 'Needs improvement' : undefined}
           isLive={isConnected}
           isLoading={isLoading}
-          hoverDetail="LTV to CAC ratio. 3x+ is considered healthy for SaaS businesses."
+          hoverDetail="Customer lifetime value divided by the cost to acquire a customer. 3x or more is generally considered healthy."
           testId="kpi-card-ltv-cac"
         />
       </div>
