@@ -12,8 +12,8 @@ interface KeyMetric {
   trend?: 'up' | 'down' | 'stable';
   trendValue?: string;
   benchmark?: string; // e.g., "Top Quartile" or "Above Median"
-  status: 'healthy' | 'warning' | 'critical';
-  source: 'manual' | 'calculated' | 'stripe' | 'quickbooks';
+  status: 'healthy' | 'warning' | 'critical' | 'unknown';
+  source: 'manual' | 'calculated' | 'stripe' | 'quickbooks' | 'none';
   tooltip?: string;
 }
 

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Building2, GitBranch, Play, Clock, Database } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { parseServerDate } from "@/lib/serverDate";
 
 interface ContextBarProps {
   scenarioName?: string;
@@ -17,18 +18,20 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
   
   if (!currentCompany) return null;
   
-  const truthTimestamp = truthScan?.computed_at;
+  // A Health Check run on no data has nothing to be "fresh" about.
+  const hasScoredData = (truthScan?.data_confidence_score ?? 0) > 0;
+  const truthTimestamp = hasScoredData ? truthScan?.computed_at : null;
   const dataFreshness = truthTimestamp 
-    ? formatDistanceToNow(new Date(truthTimestamp), { addSuffix: true })
+    ? formatDistanceToNow(parseServerDate(truthTimestamp), { addSuffix: true })
     : null;
   
   const runFreshness = runTimestamp
-    ? formatDistanceToNow(new Date(runTimestamp), { addSuffix: true })
+    ? formatDistanceToNow(parseServerDate(runTimestamp), { addSuffix: true })
     : null;
 
   const getDataFreshnessColor = () => {
     if (!truthTimestamp) return "text-muted-foreground";
-    const hoursSince = (Date.now() - new Date(truthTimestamp).getTime()) / (1000 * 60 * 60);
+    const hoursSince = (Date.now() - parseServerDate(truthTimestamp).getTime()) / (1000 * 60 * 60);
     if (hoursSince < 24) return "text-emerald-400";
     if (hoursSince < 72) return "text-amber-400";
     return "text-red-400";
@@ -108,7 +111,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
           <div className="flex items-center gap-1 px-1.5 py-0.5 rounded hover-elevate cursor-default">
             <Database className={`h-3 w-3 ${getDataFreshnessColor()}`} />
             <span className={`${getDataFreshnessColor()} truncate max-w-[120px]`} data-testid="context-data-freshness">
-              {dataFreshness ? `Data ${dataFreshness}` : "No Data"}
+              {dataFreshness ? `Data ${dataFreshness}` : "No data yet"}
             </span>
           </div>
         </TooltipTrigger>
@@ -117,7 +120,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
             <p className="font-medium">Data Freshness</p>
             {truthTimestamp ? (
               <>
-                <p>Last validated: {new Date(truthTimestamp).toLocaleString()}</p>
+                <p>Last validated: {parseServerDate(truthTimestamp).toLocaleString()}</p>
                 <p className="text-muted-foreground">
                   Confidence: {truthScan?.data_confidence_score || 0}%
                 </p>
@@ -137,7 +140,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
               <div className="flex items-center gap-1 px-1.5 py-0.5 rounded hover-elevate cursor-default">
                 <Clock className={`h-3 w-3 ${runTimestamp ? 'text-amber-400' : 'text-emerald-400'}`} />
                 <span className="text-[10px] font-mono truncate" data-testid="context-timestamp">
-                  {new Date(runTimestamp || truthTimestamp!).toLocaleString(undefined, { 
+                  {parseServerDate(runTimestamp || truthTimestamp!).toLocaleString(undefined, { 
                     month: 'short', 
                     day: 'numeric', 
                     hour: '2-digit', 
@@ -149,7 +152,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
             <TooltipContent side="bottom">
               <div className="text-xs">
                 <p className="font-medium">{runTimestamp ? 'Last Simulation Run' : 'Last Health Check'}</p>
-                <p>{new Date(runTimestamp || truthTimestamp!).toLocaleString()}</p>
+                <p>{parseServerDate(runTimestamp || truthTimestamp!).toLocaleString()}</p>
                 {runTimestamp && runFreshness && <p className="text-muted-foreground">{runFreshness}</p>}
                 {!runTimestamp && dataFreshness && <p className="text-muted-foreground">Data {dataFreshness}</p>}
               </div>
@@ -158,7 +161,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
         </>
       )}
       
-      {truthScan && (
+      {truthScan && hasScoredData && (
         <>
           <span className="text-muted-foreground">•</span>
           <Tooltip>

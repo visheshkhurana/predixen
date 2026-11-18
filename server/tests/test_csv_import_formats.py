@@ -102,3 +102,9 @@ def test_unreadable_spreadsheet_is_a_clear_400():
     with pytest.raises(HTTPException) as e:
         spreadsheet_rows(b"not a spreadsheet", "x.xlsx")
     assert e.value.status_code == 400
+
+
+def test_cash_in_bank_header_maps_to_cash():
+    from server.api.csv_import import detect_columns
+    assert detect_columns(["Month", "Cash in bank"]).get("cash_balance") == "Cash in bank"
+    assert detect_columns(["Month", "Cash at Bank (₹)"]).get("cash_balance") == "Cash at Bank (₹)"

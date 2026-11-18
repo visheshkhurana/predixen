@@ -33,7 +33,7 @@ COLUMN_MAPPINGS = {
              "product_cost", "landed_cost"],
     "other_costs": ["other_costs", "other_expenses", "misc_costs", "misc", "miscellaneous", "other"],
     "cash_balance": ["cash", "cash_balance", "cash_on_hand", "bank_balance", "ending_cash",
-                     "closing_balance", "closing_cash"],
+                     "closing_balance", "closing_cash", "cash_in_bank", "cash_at_bank", "bank", "cash_in_hand"],
     "payroll": ["payroll", "salaries", "salary", "wages", "personnel", "staff_costs", "employee_costs"],
     "mrr": ["mrr", "monthly_recurring_revenue"],
     "arr": ["arr", "annual_recurring_revenue"],

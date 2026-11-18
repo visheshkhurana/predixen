@@ -549,6 +549,15 @@ export default function DataInput() {
       setSelectedFile(null);
 
     } catch (error: unknown) {
+      if (type === 'excel') {
+        // Most founders' sheets have one row per month (Month, Revenue, Costs...),
+        // which the statement extractor can't read. Read it like a CSV instead
+        // and show the column mapping, rather than failing with nothing on screen.
+        setActiveTab('csv-upload');
+        toast({ title: 'Reading your sheet as one row per month', description: 'Check the column mapping, then import.' });
+        await handleCsvDetect(file);
+        return;
+      }
       toast({
         title: "Extraction failed",
         description: getErrorMessage(error, "Failed to process the file"),
@@ -1137,7 +1146,7 @@ export default function DataInput() {
         setCsvDetection(data);
         setCsvMappings(data.suggested_mappings || {});
         setCsvRawRows(data.all_rows || data.preview_rows || []);
-        toast({ title: 'CSV analyzed', description: `${data.total_rows} rows detected, ${Object.keys(data.suggested_mappings || {}).length} columns auto-mapped` });
+        toast({ title: 'File analyzed', description: `${data.total_rows} rows detected, ${Object.keys(data.suggested_mappings || {}).length} columns auto-mapped` });
       } else {
         const err = await res.json();
         toast({ title: 'Detection failed', description: err.detail || 'Invalid CSV file', variant: 'destructive' });

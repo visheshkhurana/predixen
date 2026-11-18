@@ -606,6 +606,11 @@ def compute_data_confidence(metrics: Dict, has_financials: bool, has_transaction
     return min(100, score)
 
 def compute_quality_of_growth(metrics: Dict, confidence: int) -> int:
+    # No financial data at all (confidence 0): there is nothing to score. The
+    # defaults below used to add up to 45/100, shown as "Business Health" on a
+    # company that had entered no numbers.
+    if confidence <= 0:
+        return 0
     score = 50
     
     growth = metrics.get("revenue_growth_mom", 0)

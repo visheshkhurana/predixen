@@ -45,7 +45,9 @@ test('a 0 score with no data is "Not scored yet", a real score is kept', () => {
   assert.deepEqual(scoreDisplay(0, { hasData: false }), { scored: false, label: 'Not scored yet' });
   assert.deepEqual(scoreDisplay(null, { hasData: true }), { scored: false, label: 'Not scored yet' });
   assert.deepEqual(scoreDisplay(0, { hasData: true }), { scored: true, value: 0 });
-  assert.deepEqual(scoreDisplay(42.4, { hasData: false }), { scored: true, value: 42 });
+  assert.deepEqual(scoreDisplay(42.4, { hasData: true }), { scored: true, value: 42 });
+  // A default score on an empty company (the old 45/100) is not a judgement.
+  assert.deepEqual(scoreDisplay(45, { hasData: false }), { scored: false, label: 'Not scored yet' });
 });
 
 test('zero burn from zero figures is never "Sustainable"', () => {

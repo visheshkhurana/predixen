@@ -1671,13 +1671,13 @@ export default function ScenariosPage() {
                 <div>
                   <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Burn</p>
                   <p className="text-xs font-semibold font-mono" data-testid="text-context-burn">
-                    {isUsingDemoData ? '—' : formatCurrency(netBurn)}
+                    {isUsingDemoData ? '—' : netBurn <= 0 ? 'Not burning' : formatCurrency(netBurn)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Runway</p>
                   <p className="text-xs font-semibold font-mono" data-testid="text-context-runway">
-                    {isUsingDemoData ? '—' : formatRunway(Number(baseMetrics.currentRunway))}
+                    {isUsingDemoData ? '—' : netBurn <= 0 ? 'Profitable' : formatRunway(Number(baseMetrics.currentRunway))}
                   </p>
                 </div>
                 <div>
@@ -1766,7 +1766,7 @@ export default function ScenariosPage() {
                 Run Monte Carlo simulations to see projected runway, survival probability, and cash flow.
               </p>
               <p className="text-muted-foreground text-xs text-center max-w-sm mb-6">
-                Use the scenario builder above to type a natural language question like "What if we raise $2M?" or start with a baseline.
+                Use the scenario builder above to type a question like "What if we {raiseChipLabel(currentCompany?.currency).toLowerCase()}?" or start with a baseline.
               </p>
               <div className="flex items-center gap-3 flex-wrap justify-center">
                 <Button

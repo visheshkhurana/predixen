@@ -322,7 +322,7 @@ function generateRecommendations(metrics: any, flags: any[], judge?: { canJudge:
   return recommendations.slice(0, 5); // Limit to 5 recommendations
 }
 
-function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v: any) => number | null, formatCurrency: (v: any) => string, formatPercent: (v: any) => string, runwayUnknown = false) {
+function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v: any) => number | null, formatCurrency: (v: any) => string, formatPercent: (v: any) => string, runwayUnknown = false, noData = false) {
   const keyMetrics = [
     {
       id: 'runway',
@@ -475,6 +475,11 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
     },
   ];
 
+  // No numbers on file: every tile is "N/A" with no colour, not "₹0 Calculated"
+  // in red or a default like NRR 108%.
+  if (noData) {
+    return keyMetrics.map((m) => ({ ...m, value: 'N/A', trend: undefined, trendValue: undefined, status: 'unknown' as any, source: 'none' as any }));
+  }
   return keyMetrics;
 }
 
@@ -779,8 +784,10 @@ export default function TruthScanPage() {
   }, [kpiHistory]);
 
   const suggestedActions = useMemo(
-    () => generateSuggestedActions(metrics, flags, { industry: currentCompany?.industry }),
-    [metrics, flags, currentCompany?.industry],
+    // No data: "Runway is 0.0 months, model a bridge round" is advice about
+    // zeros. Suggest nothing until there are real numbers.
+    () => (canJudge ? generateSuggestedActions(metrics, flags, { industry: currentCompany?.industry }) : []),
+    [canJudge, metrics, flags, currentCompany?.industry],
   );
   
   if (!currentCompany) {
@@ -1276,8 +1283,8 @@ export default function TruthScanPage() {
       {/* Tier 2: Key Metrics */}
       <TruthScanTier2KeyMetrics
         metrics={useMemo(
-          () => buildTier2KeyMetrics(metrics, sharedMetrics, extractValue, formatCurrency, formatPercent, runwayUnknown),
-          [metrics, sharedMetrics, runwayUnknown]
+          () => buildTier2KeyMetrics(metrics, sharedMetrics, extractValue, formatCurrency, formatPercent, runwayUnknown, !companyHasData),
+          [metrics, sharedMetrics, runwayUnknown, companyHasData]
         )}
         isLoading={isLoading}
       />
@@ -1292,7 +1299,8 @@ export default function TruthScanPage() {
       />
 
       {/* Legacy Detailed Metrics - hidden by default but kept for backward compatibility */}
-      <div className="space-y-4">
+      {/* Without data these cards only repeat ₹0 under an "AI Estimated" badge. */}
+      <div className={companyHasData ? "space-y-4" : "hidden"} data-testid="legacy-metrics">
         <h2 className="text-xl font-semibold">Legacy Metrics Detail</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {isLoading ? (
