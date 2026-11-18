@@ -470,6 +470,11 @@ def _seed_company_body(db: Session, demo_company, demo_user):
     truth_outputs = {
         "metrics": {
             "mrr": {"value": 43949, "benchmark_percentile": 65},
+            # The keys a real truth scan writes (server/truth/truth_scan.py);
+            # /truth reads these, so the sample company's scan carries them too.
+            "monthly_revenue": {"value": 43949, "benchmark_percentile": 65},
+            "runway_p50": {"value": 21.3, "benchmark_percentile": 55},
+            "payback_months": {"value": 8, "benchmark_percentile": 55},
             "arr": {"value": 527388, "benchmark_percentile": 60},
             "revenue_growth_mom": {"value": 10.0, "benchmark_percentile": 72},
             "gross_margin": {"value": 75.0, "benchmark_percentile": 68},

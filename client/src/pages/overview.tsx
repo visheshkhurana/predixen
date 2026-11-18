@@ -80,6 +80,7 @@ import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBen
 import { formatCurrencyAbbrev, formatPercent as formatPct, formatRunway } from '@/lib/utils';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { burnCardDisplay, briefingBurnSentence, briefingRunwaySentence, unitEconomicsAvailability } from '@/lib/overviewDisplay';
+import { runwayBand, runwayCardVariant, runwayKpiStatus, dashboardStatus, dashboardStatusSentence, RUNWAY_CRITICAL_MONTHS, RUNWAY_WARNING_MONTHS } from '@/lib/dashboardStatus';
 import { useIndustryTerms } from '@/hooks/useIndustryTerms';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useToast } from '@/hooks/use-toast';
@@ -170,23 +171,25 @@ interface RiskAlert {
 const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAlert[] => {
   const alerts: RiskAlert[] = [];
   
-  if (metrics.runway < 6) {
+  // Thresholds shared with the cash card, KPI grid and briefing (lib/dashboardStatus).
+  const band = runwayBand(metrics.runway);
+  if (band === 'critical') {
     alerts.push({
       id: 'runway-critical',
       type: 'critical',
       title: 'Cash Runway Critical',
       description: `Only ${formatRunway(metrics.runway)} of runway remaining. Immediate action required.`,
       metric: 'runway',
-      threshold: '< 6 months',
+      threshold: `< ${RUNWAY_CRITICAL_MONTHS} months`,
     });
-  } else if (metrics.runway < 12) {
+  } else if (band === 'warning') {
     alerts.push({
       id: 'runway-warning',
       type: 'warning',
       title: 'Low Runway Warning',
       description: `${formatRunway(metrics.runway)} of runway. Consider fundraising or reducing burn.`,
       metric: 'runway',
-      threshold: '< 12 months',
+      threshold: `< ${RUNWAY_WARNING_MONTHS} months`,
     });
   }
   
@@ -487,9 +490,7 @@ const getKpiStatus = (value: number | null, metric: string): 'green' | 'yellow' 
   
   switch (metric) {
     case 'runway':
-      if (value >= 18) return 'green';
-      if (value >= 12) return 'yellow';
-      return 'red';
+      return runwayKpiStatus(runwayBand(value));
     case 'grossMargin':
       if (value >= 70) return 'green';
       if (value >= 50) return 'yellow';
@@ -636,9 +637,13 @@ export default function OverviewPage() {
   // Profitable (net burn <= 0) means runway is not a month count. baseData.runway
   // keeps the 60 used by the projection math, but it must never be *shown* as
   // "60.0 mo" -- every display goes through runwayText.
-  const isRunwayProfitable = sharedMetrics.runway === Infinity;
+  // Revenue or expenses are needed before anything can be scored. With only a
+  // cash balance, net burn is 0 and runway would read as "Profitable".
+  const hasScoreableData = sharedMetrics.mrr > 0 || sharedMetrics.totalMonthlyExpenses > 0 || sharedMetrics.netBurn > 0;
+  const isRunwayProfitable = sharedMetrics.runway === Infinity && hasScoreableData;
+  const statusRunwayMonths = hasScoreableData ? sharedMetrics.runway : NaN;
   const runwayText = (months: number, maxDisplay?: number) =>
-    isRunwayProfitable ? 'Profitable' : formatRunway(months, maxDisplay);
+    !hasScoreableData ? 'N/A' : isRunwayProfitable ? 'Profitable' : formatRunway(months, maxDisplay);
 
   const projectedMetrics = useMemo(() => {
     return computeProjectedMetrics(baseData, assumptions);
@@ -1141,6 +1146,16 @@ export default function OverviewPage() {
   };
 
   const getConfidenceBadge = () => {
+    // Nothing scanned or nothing to score: a red "Low Confidence (0%)" reads
+    // as a verdict on the company. Say it has not been scored yet.
+    if (!truthScan || !hasScoreableData) {
+      return (
+        <Badge variant="secondary" data-testid="badge-confidence">
+          <AlertCircle className="h-3 w-3 mr-1 text-muted-foreground" />
+          Not scored yet
+        </Badge>
+      );
+    }
     const badgeContent = confidence < 60 ? (
       <Badge variant="destructive" data-testid="badge-confidence" className="cursor-pointer">
         <XCircle className="h-3 w-3 mr-1" />
@@ -1207,7 +1222,7 @@ export default function OverviewPage() {
   };
 
   const kpiHealthData = [
-    { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
+    { name: 'Runway', value: hasScoreableData && !Number.isNaN(baseData.runway) ? baseData.runway : null, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
     { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: goodsLabels ? '50%+' : '70%+', badRange: goodsLabels ? '< 40%' : '< 50%' } },
     { name: terms.churn.charAt(0).toUpperCase() + terms.churn.slice(1), value: sharedMetrics.sources['churnRate'] === 'estimated' || (!sharedMetrics.sources['churnRate'] && sharedMetrics.churnRatePct === 0) ? null : baseData.churnRate, metric: 'churnRate', tooltip: { formula: `Lost ${terms.customers} / Total ${terms.customers}`, goodRange: '< 3%', badRange: '> 7%' } },
     { name: 'LTV/CAC', value: baseData.ltvCacRatio > 0 ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
@@ -1223,7 +1238,7 @@ export default function OverviewPage() {
   // Burn and runway come from the founder's own figures: say what they are in
   // plain words. A surplus is "not burning cash", never a negative burn.
   const briefingBurnText = briefingBurnSentence(baseData.burnRate, baseData.mrr, formatCurrency);
-  const briefingRunwayText = briefingRunwaySentence(sharedMetrics.runway, (m) => formatRunway(m));
+  const briefingRunwayText = briefingRunwaySentence(statusRunwayMonths, (m) => formatRunway(m));
   const burnCard = burnCardDisplay(baseData.burnRate);
   // CAC / LTV / LTV:CAC are only shown when they come from real inputs. With no
   // marketing spend or customer data the truth scan fills them from defaults
@@ -1234,8 +1249,21 @@ export default function OverviewPage() {
     ltvCacRatio: baseData.ltvCacRatio,
     sources: sharedMetrics.sources,
   });
-  const briefingCriticalCount = riskAlerts.filter(a => a.type === 'critical').length;
-  const briefingWarningCount = riskAlerts.filter(a => a.type === 'warning').length;
+  // One verdict for the whole page: risk alerts, truth-scan critical flags,
+  // the runway band and every KPI tile shown. Never "All clear" while a shown
+  // metric is amber/red, and never for a company with nothing to score.
+  const briefingStatus = dashboardStatus({
+    hasData: hasScoreableData,
+    runwayMonths: statusRunwayMonths,
+    alerts: riskAlerts,
+    highSeverityFlagCount: flags.filter((f: any) => f.severity === 'high').length,
+    kpis: kpiHealthData.map((k) => ({
+      name: k.name,
+      metric: k.metric,
+      status: k.value == null ? null : getKpiStatus(k.value, k.metric),
+    })),
+  });
+  const briefingStatusText = dashboardStatusSentence(briefingStatus);
 
   const briefingAiSuggestion = baseData.runway < 12
     ? `Your runway is ${formatRunway(baseData.runway)}. Try simulating "What if we reduce burn by 20%?" to find an optimal path.`
@@ -1243,7 +1271,9 @@ export default function OverviewPage() {
     ? `Burn multiple is high at ${(baseData.burnRate / Math.max(baseData.mrr, 1)).toFixed(1)}x. Simulate "What if we cut hiring by 30%?" to see the impact.`
     : baseData.ltvCacRatio > 0 && baseData.ltvCacRatio < 3
     ? `LTV:CAC is ${safeToFixed(baseData.ltvCacRatio, 1)}x. Simulate "What if we improve CAC by 25%?" to boost unit economics.`
-    : `Your metrics look healthy. Try: "What if we cut burn 20% and grow revenue 15%?" to model your path to profitability.`;
+    : briefingStatus.kind === 'all_clear'
+    ? `Your metrics look healthy. Try: "What if we cut burn 20% and grow revenue 15%?" to model your path to profitability.`
+    : `Try: "What if we cut burn 20% and grow revenue 15%?" to see how the flagged metrics move.`;
 
   return (
     <div className="p-6 md:p-10 lg:p-12 max-w-[1400px] mx-auto space-y-10">
@@ -1308,7 +1338,7 @@ export default function OverviewPage() {
         />
       )}
 
-      {!briefingDismissed && (
+      {!briefingDismissed && !metricsLoading && !truthLoading && (
         <FadeIn delay={0.05}>
         <div className="relative rounded-xl border border-primary/10 bg-gradient-to-r from-primary/[0.04] via-transparent to-violet-500/[0.04] p-5 backdrop-blur-sm" data-testid="card-morning-briefing">
           <Button
@@ -1337,15 +1367,15 @@ export default function OverviewPage() {
                 <span className="font-medium text-foreground">{safeToFixed(briefingMrrGrowth, 1)}%</span> growth.
                 {' '}{briefingBurnText}{' '}
                 {briefingRunwayText}
-                {briefingCriticalCount > 0 && (
-                  <span className="text-red-400 font-medium"> {briefingCriticalCount} critical alert{briefingCriticalCount > 1 ? 's' : ''} detected.</span>
-                )}
-                {briefingCriticalCount === 0 && briefingWarningCount > 0 && (
-                  <span className="text-amber-400 font-medium"> {briefingWarningCount} warning{briefingWarningCount > 1 ? 's' : ''} to review.</span>
-                )}
-                {briefingCriticalCount === 0 && briefingWarningCount === 0 && (
-                  <span className="text-emerald-400 font-medium"> All clear.</span>
-                )}
+                <span
+                  className={`font-medium ${
+                    briefingStatus.kind === 'critical' ? 'text-red-400'
+                    : briefingStatus.kind === 'warning' || briefingStatus.kind === 'watch' ? 'text-amber-400'
+                    : briefingStatus.kind === 'all_clear' ? 'text-emerald-400'
+                    : 'text-muted-foreground'
+                  }`}
+                  data-testid="text-briefing-status"
+                > {briefingStatusText}</span>
               </p>
               <p className="text-sm text-primary/80 font-medium" data-testid="text-briefing-ai-suggestion">
                 {briefingAiSuggestion}
@@ -1430,7 +1460,7 @@ export default function OverviewPage() {
                   title="Cash on Hand"
                   value={formatCurrency(baseData.cash)}
                   subtitle={`Runway: ${runwayText(baseData.runway)}`}
-                  variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
+                  variant={runwayCardVariant(runwayBand(statusRunwayMonths))}
                   metricSource={sharedMetrics.sources['cashOnHand']}
                   lastUpdated={truthScan?.computed_at}
                   testId="metric-cash"
@@ -2024,15 +2054,28 @@ export default function OverviewPage() {
           <CardContent>
             {truthLoading ? (
               <Skeleton className="h-16 w-24" />
+            ) : !truthScan || !hasScoreableData ? (
+              <div data-testid="text-quality-index-unscored">
+                <div className="text-2xl font-semibold text-muted-foreground" data-testid="text-quality-index">Not scored yet</div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Add your revenue, expenses and cash balance, then refresh to get a score.
+                </p>
+                <Button variant="outline" size="sm" className="mt-3 h-7 text-xs" onClick={() => setLocation('/data')} data-testid="button-qog-add-data">
+                  <Upload className="h-3 w-3 mr-1" />
+                  Add data
+                </Button>
+              </div>
             ) : (
               <div className="text-4xl font-bold font-mono" data-testid="text-quality-index">
                 {qualityOfGrowth}
                 <span className="text-lg text-muted-foreground">/100</span>
               </div>
             )}
-            <p className="text-sm text-muted-foreground mt-1">
-              Composite score based on growth, efficiency, and risk factors
-            </p>
+            {truthScan && hasScoreableData && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Composite score based on growth, efficiency, and risk factors
+              </p>
+            )}
           </CardContent>
         </Card>
         

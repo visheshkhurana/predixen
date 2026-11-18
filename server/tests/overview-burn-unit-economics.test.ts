@@ -76,7 +76,7 @@ test("runway sentence reads correctly in every band", () => {
   assert.doesNotMatch(profitable, /at Profitable/);
   assert.equal(briefingRunwaySentence(24, months), "Runway is comfortably above 18 months at 24.0 months.");
   assert.equal(briefingRunwaySentence(18, months), "Runway is comfortably above 18 months at 18.0 months.");
-  assert.equal(briefingRunwaySentence(14.2, months), "Runway is in the safe zone at 14.2 months.");
+  assert.equal(briefingRunwaySentence(14.2, months), "Runway is worth watching at 14.2 months — 12–18 months is when to plan the next raise.");
   assert.equal(briefingRunwaySentence(8, months), "Runway is getting tight at 8.0 months — consider extending.");
   assert.equal(briefingRunwaySentence(3.5, months), "Runway is critically low at 3.5 months — immediate action needed.");
   assert.match(briefingRunwaySentence(NaN, months), /unknown/);
@@ -166,7 +166,8 @@ test("overview and truth scan pass the industry; overview drops the AI-estimated
 
 test("metrics hook never falls back to estimated truth-scan unit economics", () => {
   const hook = readFileSync("client/src/hooks/useFinancialMetrics.ts", "utf8");
-  assert.match(hook, /vPos\(c\.cac, ext\?\.cac, tsReal\('cac'\)\)/);
-  assert.match(hook, /vPos\(c\.ltv, ext\?\.ltv, tsReal\('ltv'\)\)/);
+  // Unit economics go through pickUnitEconomics (truth fallback = tsReal,
+  // which drops estimated values); see dashboard-consistency.test.ts.
+  assert.match(hook, /pickUnitEconomics\(\{[\s\S]*?truthReal: tsReal,/);
   assert.match(hook, /sources\['netBurn'\] = netBurnSource\(/);
 });
