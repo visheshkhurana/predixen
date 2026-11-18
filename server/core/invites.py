@@ -100,3 +100,52 @@ def accept_invite_quietly(db: Session, user, token: Optional[str]) -> Optional[d
         db.rollback()
         logger.warning("Invite acceptance failed for user %s: %s", getattr(user, "id", None), e)
     return None
+
+
+def invite_url(token: str) -> str:
+    """The accept link for an invite token: the same URL the invite email holds."""
+    import os
+
+    base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai").rstrip("/")
+    return f"{base_url}/auth?invite={token}"
+
+
+def accept_pending_invites_for_user(db: Session, user) -> list:
+    """Accept every pending, unexpired workspace invite sent to the user's address.
+
+    Covers the invited person who signs up or signs in without using the link.
+    The match is on email alone, so it only runs once the address is proven:
+    an email-verified account, or a Google sign-in (which marks the user
+    verified). Without that, anyone could register an unverified account for
+    an invited address and walk into the workspace. Platform (admin) invites
+    are never applied this way; they still need the token. Commits its own
+    changes and never raises.
+    """
+    from sqlalchemy import func
+    from server.models.workspace import WorkspaceInvite
+
+    if getattr(user, "is_email_verified", False) is not True:
+        return []
+    email = (getattr(user, "email", None) or "").strip().lower()
+    if not email or getattr(user, "id", None) in (None, -1):
+        return []
+    try:
+        pending = db.query(WorkspaceInvite).filter(
+            func.lower(WorkspaceInvite.email) == email,
+            WorkspaceInvite.status == "pending",
+        ).order_by(WorkspaceInvite.id.asc()).all()
+        accepted = []
+        for invite in pending:
+            try:
+                accepted.append(accept_invite(db, user, invite.token))
+                db.flush()  # autoflush is off; the next invite must see this member
+            except InviteError as e:  # expired: accept_invite flipped the status
+                logger.info("Pending invite %s not auto-accepted: %s", invite.id, e)
+        db.commit()
+        if accepted:
+            logger.info("Auto-accepted %d invite(s) for user %s", len(accepted), user.id)
+        return accepted
+    except Exception as e:  # pragma: no cover - defensive, never block sign-in
+        db.rollback()
+        logger.warning("Auto-accepting invites failed for user %s: %s", getattr(user, "id", None), e)
+        return []

@@ -19,6 +19,7 @@ import {
   useRemoveMember,
   useRevokeInvite,
   useResendInvite,
+  fetchInviteLink,
 } from '@/api/workspace';
 import { Lock, Bell, LogOut, Loader2, User, Shield, Check, Users } from 'lucide-react';
 import { FadeIn } from '@/components/ui/motion-primitives';
@@ -27,7 +28,9 @@ import { TeamWorkspace } from '@/components/TeamWorkspace';
 import { CompanySettings } from '@/components/CompanySettings';
 import {
   canManageTeam,
+  copyToClipboard,
   inviteCreatedCopy,
+  inviteLinkCopiedCopy,
   inviteRenewedCopy,
   roleForEmail,
   teamErrorMessage,
@@ -94,12 +97,17 @@ function TeamSettingsTab() {
     try {
       const res = await inviteMember.mutateAsync({ companyId, email: trimmed, role: inviteRole });
       let emailSent: boolean | undefined;
+      let inviteUrl: string | undefined;
       try {
-        emailSent = (await res.json())?.email_sent;
+        const body = await res.json();
+        emailSent = body?.email_sent;
+        inviteUrl = typeof body?.invite_url === 'string' ? body.invite_url : undefined;
       } catch {
         emailSent = undefined;
       }
       toast(inviteCreatedCopy(trimmed, emailSent === true));
+      // The dialog shows this link with a Copy button.
+      return inviteUrl;
     } catch (err) {
       fail("Couldn't create the invite", err);
       // Keep the dialog open with the same message inline.
@@ -144,6 +152,20 @@ function TeamSettingsTab() {
     }
   };
 
+  const handleCopyInviteLink = async (inviteId: number) => {
+    const email = invitesQuery.data?.find((i) => i.id === inviteId)?.email ?? 'your teammate';
+    try {
+      const url = await fetchInviteLink(inviteId);
+      if (await copyToClipboard(url)) {
+        toast(inviteLinkCopiedCopy(email));
+      } else {
+        toast({ title: "Couldn't copy automatically", description: url });
+      }
+    } catch (err) {
+      fail("Couldn't get the invite link", err);
+    }
+  };
+
   if (membersQuery.isError) {
     return (
       <Card data-testid="card-team-error">
@@ -168,6 +190,7 @@ function TeamSettingsTab() {
       onRemoveMember={handleRemoveMember}
       onRevokeInvite={handleRevokeInvite}
       onResendInvite={handleResendInvite}
+      onCopyInviteLink={handleCopyInviteLink}
     />
   );
 }
