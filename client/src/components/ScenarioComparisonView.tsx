@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatRunwayShort, isSustainable } from '@/lib/simulationConsistency';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrencyAbbrev } from '@/lib/utils';
@@ -180,7 +181,7 @@ export function ScenarioComparisonView({
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <span className="font-mono font-semibold">
-                          {scenario.runway_p50.toFixed(1)} mo
+                          {formatRunwayShort(scenario.runway_p50)}
                         </span>
                         <Badge {...getRunwayBadge(scenario.runway_p50)} className="text-xs">
                           {getRunwayBadge(scenario.runway_p50).label}
@@ -189,7 +190,10 @@ export function ScenarioComparisonView({
                     </TableCell>
                     
                     <TableCell className="text-right">
-                      {!isBaseline && (
+                      {!isBaseline && (isSustainable(scenario.runway_p50) || isSustainable(baseline?.runway_p50)) && (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                      {!isBaseline && !isSustainable(scenario.runway_p50) && !isSustainable(baseline?.runway_p50) && (
                         <span className={cn("flex items-center justify-end gap-1 text-sm", runwayDelta.color)}>
                           <runwayDelta.icon className="h-3 w-3" />
                           {runwayDelta.label}
