@@ -308,6 +308,9 @@ def google_callback(request: Request, background_tasks: BackgroundTasks, code: s
     except OAuthLinkError as e:
         logger.warning(f"Google OAuth link refused: {e}")
         return RedirectResponse(url=f"{base}/auth?error=google_account_mismatch", status_code=302)
+    # Google verified this address, so join any workspace that invited it.
+    from server.core.invites import accept_pending_invites_for_user
+    accept_pending_invites_for_user(db, user)
     if is_new_user:
         # Same follow-ups as the email signup path. This route is sync, so the
         # old get_event_loop().create_task() had no running loop and the Slack

@@ -3,6 +3,7 @@ import { useFounderStore } from '@/store/founderStore';
 import { useQuery } from '@tanstack/react-query';
 import { backoffMsFor429, readBodyRetryAfter } from '@/lib/rateLimitBackoff';
 import { netBurnSource } from '@/lib/overviewDisplay';
+import { pickUnitEconomics } from '@/lib/sharedMetricSources';
 
 export type MetricSource = 'reported' | 'computed' | 'estimated';
 
@@ -249,10 +250,13 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       runwayDisplay = `${runway.toFixed(1)} mo`;
     }
 
-    const cac = vPos(c.cac, ext?.cac, tsReal('cac'));
-    const ltv = vPos(c.ltv, ext?.ltv, tsReal('ltv'));
-    const ltvCacRatio = v(c.ltvCacRatio, ext?.ltvCacRatio, tsReal('ltv_cac_ratio'))
-      || (cac > 0 && ltv > 0 ? ltv / cac : 0);
+    // CAC / LTV / LTV:CAC: /metrics/computed is final when it answered (0 =
+    // unknown). See client/src/lib/sharedMetricSources.ts for why.
+    const { cac, ltv, ltvCacRatio } = pickUnitEconomics({
+      computed: computed && !computedError ? c : null,
+      baselineExt: ext,
+      truthReal: tsReal,
+    });
     const grossMarginRaw = v(c.grossMarginPct, ext?.grossMargin, tsVal('gross_margin'));
     const grossMarginPct = grossMarginRaw > 0 && grossMarginRaw <= 1 ? grossMarginRaw * 100 : grossMarginRaw;
     const grossMarginDecimal = c.grossMarginDecimal || grossMarginPct / 100;
@@ -330,7 +334,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     sources['runway'] = (netBurn > 0 && cashOnHand > 0) || (netBurn <= 0 && sources['netBurn'] === 'computed')
       ? 'computed'
       : 'estimated';
-    mark('cac', c.cac || ext?.cac, cac, !!tsReal('cac'));
+    mark('cac', cac, cac, !!tsReal('cac'));
     // The server says where its CAC came from: marketing spend / new customers
     // from a D2C month is arithmetic on the founder's inputs ("Computed"); a
     // CAC on the financial record is the founder's own figure ("Verified").
@@ -338,7 +342,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       if (c.cacSource === 'd2c_month') sources['cac'] = 'computed';
       else if (c.cacSource === 'reported') sources['cac'] = 'reported';
     }
-    mark('ltv', c.ltv || ext?.ltv, ltv, !!tsReal('ltv'));
+    mark('ltv', ltv, ltv, !!tsReal('ltv'));
     sources['ltvCacRatio'] = tsReal('ltv_cac_ratio') ? 'reported' : (cac > 0 && ltv > 0 ? 'computed' : 'estimated');
     mark('grossMargin', c.grossMarginPct || ext?.grossMargin, grossMarginPct, !!tsVal('gross_margin'));
     mark('churnRate', c.churnRatePct, churnRatePct, !!tsVal('churn_rate'));
@@ -386,7 +390,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       burnMultiple, revenuePerEmployee, monthlyGrowthRate, ndr,
       isProfitable, hasData, sources, warnings,
     };
-  }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
+  }, [computed, computedError, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 
   useEffect(() => {
     if (companyId && (metrics.hasData || metrics.mrr > 0 || metrics.cashOnHand > 0) && !allQueriesFailed) {

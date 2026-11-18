@@ -29,6 +29,7 @@ import { useFounderStore } from '@/store/founderStore';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
+import { alignTruthMetrics } from '@/lib/sharedMetricSources';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -682,7 +683,10 @@ export default function TruthScanPage() {
 
   const rawMetrics = truthScan?.metrics || {};
   const enhancedMetrics = useMemo(() => {
-    const m = { ...rawMetrics } as Record<string, any>;
+    // Same figures as the dashboard: revenue, cash, burn, runway and unit
+    // economics come from useFinancialMetrics (GET /metrics/computed), with
+    // alias keys normalised and invented unit economics removed.
+    const m = alignTruthMetrics(rawMetrics, sharedMetrics) as Record<string, any>;
     if (financialBaseline) {
       const revenue = Number(financialBaseline.monthlyRevenue) || 0;
       const expenses = Number(financialBaseline.totalMonthlyExpenses) || 0;
@@ -711,7 +715,7 @@ export default function TruthScanPage() {
         m.gross_margin = Math.round(m.gross_margin * 100) / 100;
       }
     return m;
-  }, [rawMetrics, financialBaseline]);
+  }, [rawMetrics, financialBaseline, sharedMetrics]);
   const metrics = enhancedMetrics;
   const flags = truthScan?.flags || [];
   const confidence = truthScan?.data_confidence_score || 0;

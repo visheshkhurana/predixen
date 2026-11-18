@@ -438,8 +438,8 @@ async def send_invite_email(
     """
     from server.email.templates import render_invite_template
     
-    base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
-    invite_url = f"{base_url}/auth?invite={invite_token}"
+    from server.core.invites import invite_url as _invite_url
+    invite_url = _invite_url(invite_token)  # same link "Copy invite link" gives
     
     html_content = template_html or render_invite_template(
         invite_url=invite_url,

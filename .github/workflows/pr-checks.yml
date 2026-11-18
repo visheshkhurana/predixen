@@ -108,6 +108,10 @@ jobs:
         run: npx tsx --test server/tests/simulation-consistency.test.ts
       - name: empty-company honesty (journal, health verdicts, scores)
         run: npx tsx --test server/tests/empty-states-honesty.test.ts
+      - name: fundraising pipeline board is the company's own data
+        run: npx tsx --test server/tests/fundraising-pipeline.test.ts
+      - name: What-If quick estimate is like-for-like and uses growth/churn
+        run: npx tsx --test server/tests/whatif-quick-estimate.test.ts
 
       - name: geoRestrict tests
         run: npx tsx --test server/tests/geoRestrict.test.ts
@@ -161,6 +165,9 @@ jobs:
 
       - name: overview burn / unit economics honesty tests
         run: npx tsx server/tests/overview-burn-unit-economics.test.ts
+
+      - name: dashboard / truth consistency tests
+        run: npx tsx server/tests/dashboard-consistency.test.ts
 
       - name: entry-bundle no framer-motion on critical path
         run: npx tsx server/tests/entry-no-framer-motion.test.ts

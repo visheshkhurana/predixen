@@ -29,6 +29,7 @@ import { SimSkeleton } from '@/components/ui/sim-skeleton';
 import { SimBackgroundOrbs } from '@/components/ui/sim-background-orbs';
 import { SimEventCard } from '@/components/ui/sim-event-card';
 import { SimulationInputsPanel } from '@/components/simulation-inputs-panel';
+import { DemoSignupCTA } from '@/components/DemoSignupCTA';
 import { buildSimulationV2Payload } from '@/lib/simulation/v2Request';
 import { valuesFromSimulationResult, type InputProvenanceMap } from '@/lib/simulation/inputProvenance';
 
@@ -1826,6 +1827,8 @@ function AgentSimulationConsole() {
                   </SimGlassCard>
                 )}
 
+                <DemoSignupCTA placement="flight-simulator" />
+
                 {report.recommendation && (
                   <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Recommendation</h3>
@@ -1869,6 +1872,7 @@ export default function SimulateWorkspace() {
   const currentCompany = useFounderStore((s) => s.currentCompany);
   const { data: scenarios } = useScenarios(currentCompany?.id || null);
   const scenarioCount = scenarios?.length ?? 0;
+  const latestRun = useFounderStore((s) => s.latestRun);
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -1904,6 +1908,8 @@ export default function SimulateWorkspace() {
         </div>
 
         <TabsContent value="scenarios" className="mt-0">
+          {/* Demo sessions only: a simulation result is on screen. */}
+          <DemoSignupCTA show={!!latestRun} placement="scenarios" className="mb-4" />
           <Suspense fallback={<WorkspaceLoading />}>
             <ScenariosPage />
           </Suspense>

@@ -95,7 +95,7 @@ export function briefingRunwaySentence(
   }
   const m = fmt(runwayMonths);
   if (runwayMonths >= 18) return `Runway is comfortably above 18 months at ${m}.`;
-  if (runwayMonths >= 12) return `Runway is in the safe zone at ${m}.`;
+  if (runwayMonths >= 12) return `Runway is worth watching at ${m} — 12–18 months is when to plan the next raise.`;
   if (runwayMonths >= 6) return `Runway is getting tight at ${m} — consider extending.`;
   return `Runway is critically low at ${m} — immediate action needed.`;
 }

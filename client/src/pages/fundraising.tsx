@@ -1,4 +1,8 @@
-import { formatCurrencyFull } from '@/lib/utils';
+import { formatCurrencyFull, formatCurrencyAbbrev } from '@/lib/utils';
+import {
+  BOARD_STAGES, groupByStage, pipelineSummary, currentRound, relativeActivity, stageLabel,
+  type BoardEntry, type BoardStage,
+} from '@/lib/fundraisingPipeline';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSEO } from "@/lib/seo";
@@ -100,58 +104,6 @@ const STATUS_COLORS: Record<string, string> = {
   closed: 'bg-green-500/20 text-green-600',
 };
 
-const PIPELINE_COLUMNS = [
-  'Researching', 'Reached Out', 'Intro Meeting', 'Partner Meeting',
-  'Due Diligence', 'Term Sheet', 'Committed', 'Closed', 'Passed'
-];
-
-const COLUMN_COLORS: Record<string, string> = {
-  'Researching': 'border-t-slate-400',
-  'Reached Out': 'border-t-blue-400',
-  'Intro Meeting': 'border-t-cyan-400',
-  'Partner Meeting': 'border-t-indigo-400',
-  'Due Diligence': 'border-t-purple-400',
-  'Term Sheet': 'border-t-amber-400',
-  'Committed': 'border-t-emerald-400',
-  'Closed': 'border-t-green-500',
-  'Passed': 'border-t-red-400',
-};
-
-const DEMO_PIPELINE: Record<string, PipelineInvestor[]> = {
-  'Researching': [
-    { id: '1', firm: 'Elevation Capital', partner: 'Ravi Adusumalli', checkSize: '$5-15M', lastActivity: '2 days ago', sentiment: 'green', warmIntro: true, stage: 'Series A-B' },
-    { id: '2', firm: 'Kalaari Capital', partner: 'Vani Kola', checkSize: '$2-8M', lastActivity: '4 days ago', sentiment: 'yellow', warmIntro: false, stage: 'Seed-A' },
-    { id: '3', firm: 'Initialized Capital', partner: 'Garry Tan', checkSize: '$500K-2M', lastActivity: '1 day ago', sentiment: 'green', warmIntro: false, stage: 'Pre-Seed' },
-  ],
-  'Reached Out': [
-    { id: '4', firm: 'Blume Ventures', partner: 'Karthik Reddy', checkSize: '$1-5M', lastActivity: '1 day ago', sentiment: 'green', warmIntro: true, stage: 'Seed-A' },
-    { id: '5', firm: 'Peak XV', partner: 'Shailendra Singh', checkSize: '$10-25M', lastActivity: '3 days ago', sentiment: 'yellow', warmIntro: true, stage: 'Series A-C' },
-  ],
-  'Intro Meeting': [
-    { id: '6', firm: 'Accel India', partner: 'Prashanth Prakash', checkSize: '$5-20M', lastActivity: '1 day ago', sentiment: 'green', warmIntro: true, stage: 'Series A-B' },
-    { id: '7', firm: 'Matrix Partners India', partner: 'Tarun Davda', checkSize: '$3-10M', lastActivity: '2 days ago', sentiment: 'green', warmIntro: false, stage: 'Series A' },
-  ],
-  'Partner Meeting': [
-    { id: '8', firm: 'Stellaris VP', partner: 'Alok Goyal', checkSize: '$2-8M', lastActivity: 'Today', sentiment: 'green', warmIntro: true, stage: 'Series A' },
-    { id: '9', firm: 'Together Fund', partner: 'Manav Garg', checkSize: '$500K-3M', lastActivity: '1 day ago', sentiment: 'yellow', warmIntro: false, stage: 'Seed' },
-  ],
-  'Due Diligence': [
-    { id: '10', firm: '3one4 Capital', partner: 'Siddarth Pai', checkSize: '$2-8M', lastActivity: 'Today', sentiment: 'green', warmIntro: true, stage: 'Seed-A' },
-    { id: '11', firm: 'Nexus Venture Partners', partner: 'Pratik Poddar', checkSize: '$3-12M', lastActivity: '1 day ago', sentiment: 'green', warmIntro: true, stage: 'Series A' },
-  ],
-  'Term Sheet': [
-    { id: '12', firm: 'Lightspeed India', partner: 'Dev Khare', checkSize: '$5-15M', lastActivity: 'Today', sentiment: 'green', warmIntro: true, stage: 'Series A-B' },
-  ],
-  'Committed': [
-    { id: '13', firm: 'Surge (Peak XV)', partner: 'Rajan Anandan', checkSize: '$1-2M', lastActivity: '3 days ago', sentiment: 'green', warmIntro: true, stage: 'Seed' },
-  ],
-  'Closed': [],
-  'Passed': [
-    { id: '14', firm: 'Venture Highway', partner: 'Neeraj Arora', checkSize: '$500K-2M', lastActivity: '1 week ago', sentiment: 'red', warmIntro: false, stage: 'Seed' },
-    { id: '15', firm: 'GV', partner: 'M.G. Siegler', checkSize: '$1-5M', lastActivity: '2 weeks ago', sentiment: 'red', warmIntro: false, stage: 'Seed-A' },
-  ],
-};
-
 const INVESTOR_DB: InvestorDBEntry[] = investorDatabaseRaw as InvestorDBEntry[];
 
 const INVESTOR_REGIONS = ['All Regions', 'USA', 'India', 'Korea', 'Japan', 'Global'] as const;
@@ -179,27 +131,104 @@ function getFitScoreBarColor(score: number): string {
   return 'bg-red-500';
 }
 
-function getSentimentColor(sentiment: string): string {
-  if (sentiment === 'green') return 'bg-emerald-500';
-  if (sentiment === 'yellow') return 'bg-yellow-500';
-  return 'bg-red-500';
+const STAGE_COLORS: Record<BoardStage, string> = {
+  sourced: 'border-t-slate-400',
+  contacted: 'border-t-blue-400',
+  meeting: 'border-t-cyan-400',
+  partner_meeting: 'border-t-indigo-400',
+  dd: 'border-t-purple-400',
+  term_sheet: 'border-t-amber-400',
+  committed: 'border-t-emerald-400',
+  closed: 'border-t-green-500',
+  passed: 'border-t-red-400',
+};
+
+function pipelineKey(companyId: number | undefined) {
+  return ['/api/companies', companyId, 'fundraising', 'pipeline-board'];
 }
 
-function DashboardBanner() {
+function usePipelineBoard(companyId: number | undefined) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const key = pipelineKey(companyId);
+  const query = useQuery<{ entries: BoardEntry[] }>({
+    queryKey: key,
+    queryFn: async () => (await apiRequest('GET', `/api/companies/${companyId}/fundraising/pipeline`)).json(),
+    enabled: !!companyId,
+  });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: key });
+    queryClient.invalidateQueries({ queryKey: ['/api/companies', companyId, 'fundraising/rounds'] });
+  };
+  const onError = (error: unknown) =>
+    toast({ title: 'Could not save', description: getErrorMessage(error), variant: 'destructive' });
+
+  const add = useMutation({
+    mutationFn: async (body: { firm: string; partner?: string; check_size?: string; stage?: BoardStage; warm_intro?: boolean }) =>
+      (await apiRequest('POST', `/api/companies/${companyId}/fundraising/pipeline`, body)).json(),
+    onSuccess: (entry: BoardEntry) => {
+      refresh();
+      toast({ title: 'Added to pipeline', description: `${entry.firm} added to ${stageLabel(entry.stage)}` });
+    },
+    onError,
+  });
+  const move = useMutation({
+    mutationFn: async ({ id, stage }: { id: string; stage: BoardStage }) =>
+      (await apiRequest('PATCH', `/api/companies/${companyId}/fundraising/pipeline-board/${id}`, { stage })).json(),
+    onMutate: async ({ id, stage }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<{ entries: BoardEntry[] }>(key);
+      if (previous) {
+        queryClient.setQueryData(key, { ...previous, entries: previous.entries.map(e => (e.id === id ? { ...e, stage } : e)) });
+      }
+      return { previous };
+    },
+    onError: (error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+      onError(error);
+    },
+    onSettled: refresh,
+  });
+  const remove = useMutation({
+    mutationFn: async (id: string) => (await apiRequest('DELETE', `/api/companies/${companyId}/fundraising/pipeline-board/${id}`)).json(),
+    onSuccess: refresh,
+    onError,
+  });
+  return { entries: query.data?.entries ?? [], isLoading: query.isLoading, add, move, remove };
+}
+
+function DashboardBanner({ entries, rounds, currency, isLoading }: {
+  entries: BoardEntry[];
+  rounds: any[];
+  currency?: string;
+  isLoading: boolean;
+}) {
+  const summary = pipelineSummary(entries);
+  const round = currentRound(rounds);
+  if (isLoading) {
+    return <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-24" />)}</div>;
+  }
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="dashboard-banner">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="dashboard-banner">
       <Card className="border-border/50" data-testid="banner-card-raised">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Round</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Current Round</span>
             <DollarSign className="h-4 w-4 text-emerald-500" />
           </div>
-          <div className="flex items-baseline gap-1.5 mb-2">
-            <span className="text-xl font-bold" data-testid="text-amount-raised">$850K</span>
-            <span className="text-sm text-muted-foreground">/ $1.5M</span>
-          </div>
-          <Progress value={56} className="h-2 mb-1" data-testid="progress-round" />
-          <span className="text-xs text-muted-foreground">56% raised</span>
+          {round ? (
+            <>
+              <div className="text-base font-semibold truncate" data-testid="text-round-name">{round.name}</div>
+              <div className="text-sm text-muted-foreground" data-testid="text-amount-raised">
+                {round.target_raise ? `Target ${formatCurrencyAbbrev(round.target_raise, currency)}` : 'No target set yet'}
+                {' · '}{summary.committed} committed
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-muted-foreground" data-testid="text-amount-raised">
+              No round yet. Add one in the Rounds tab, or add an investor below to start.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -209,58 +238,38 @@ function DashboardBanner() {
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pipeline</span>
             <Kanban className="h-4 w-4 text-blue-500" />
           </div>
-          <div className="flex items-center gap-1 text-sm" data-testid="text-pipeline-funnel">
-            <span className="font-bold text-base">12</span>
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            <span className="font-semibold">8</span>
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            <span className="font-semibold">4</span>
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            <span className="font-semibold">2</span>
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            <span className="font-bold text-emerald-500">1</span>
-          </div>
-          <div className="flex gap-1.5 mt-2 text-[10px] text-muted-foreground">
-            <span>Research</span><span>·</span><span>Outreach</span><span>·</span><span>Meeting</span><span>·</span><span>DD</span><span>·</span><span>Term</span>
-          </div>
+          {summary.total === 0 ? (
+            <div className="text-sm text-muted-foreground" data-testid="text-pipeline-funnel">No investors tracked yet</div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 text-sm flex-wrap" data-testid="text-pipeline-funnel">
+                {summary.funnel.map((step, i) => (
+                  <span key={step.label} className="flex items-center gap-1">
+                    {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                    <span className={i === summary.funnel.length - 1 ? 'font-bold text-emerald-500' : 'font-semibold'}>{step.count}</span>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-1.5 mt-2 text-[10px] text-muted-foreground flex-wrap">
+                {summary.funnel.map((step, i) => (
+                  <span key={step.label}>{i > 0 && '· '}{step.label}</span>
+                ))}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
-      <Card className="border-border/50" data-testid="banner-card-tasks">
+      <Card className="border-border/50" data-testid="banner-card-warm">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">This Week</span>
-            <Calendar className="h-4 w-4 text-amber-500" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Investors</span>
+            <Star className="h-4 w-4 text-amber-500" />
           </div>
-          <div className="space-y-1" data-testid="text-weekly-tasks">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-bold text-base">3</span>
-              <span className="text-muted-foreground">follow-ups due</span>
-            </div>
-            <div className="flex gap-3 text-xs text-muted-foreground">
-              <span>1 meeting</span>
-              <span>·</span>
-              <span>2 intros</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/50" data-testid="banner-card-outreach">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Outreach Health</span>
-            <Mail className="h-4 w-4 text-purple-500" />
-          </div>
-          <div className="flex items-center gap-4" data-testid="text-outreach-health">
-            <div>
-              <span className="text-xl font-bold">42%</span>
-              <span className="text-xs text-muted-foreground ml-1">open</span>
-            </div>
-            <div>
-              <span className="text-xl font-bold">18%</span>
-              <span className="text-xs text-muted-foreground ml-1">reply</span>
-            </div>
+          <div className="flex items-baseline gap-3 text-sm">
+            <span><span className="text-xl font-bold">{summary.active}</span> <span className="text-muted-foreground">active</span></span>
+            <span><span className="font-semibold">{summary.warmIntros}</span> <span className="text-muted-foreground">warm intros</span></span>
+            <span><span className="font-semibold">{summary.passed}</span> <span className="text-muted-foreground">passed</span></span>
           </div>
         </CardContent>
       </Card>
@@ -268,10 +277,14 @@ function DashboardBanner() {
   );
 }
 
-function PipelineCard({ investor, onDragStart }: { investor: PipelineInvestor; onDragStart: (investorId: string) => void }) {
+function PipelineCard({ investor, onDragStart, onRemove }: {
+  investor: BoardEntry;
+  onDragStart: (investorId: string) => void;
+  onRemove: (investorId: string) => void;
+}) {
   return (
     <Card
-      className="mb-2 cursor-grab active:cursor-grabbing hover:border-primary/40 transition-colors"
+      className="mb-2 cursor-grab active:cursor-grabbing hover:border-primary/40 transition-colors group"
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', investor.id);
@@ -285,65 +298,56 @@ function PipelineCard({ investor, onDragStart }: { investor: PipelineInvestor; o
           <GripVertical className="h-4 w-4 text-muted-foreground/40 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 mb-1">
-              <div className={`h-2 w-2 rounded-full shrink-0 ${getSentimentColor(investor.sentiment)}`} />
               <span className="font-medium text-sm truncate" data-testid={`text-pipeline-firm-${investor.id}`}>
                 {investor.firm}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground truncate">{investor.partner}</p>
+            {investor.partner && <p className="text-xs text-muted-foreground truncate">{investor.partner}</p>}
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">{investor.checkSize}</Badge>
-              {investor.warmIntro && (
+              {investor.check_size && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{investor.check_size}</Badge>}
+              {investor.warm_intro && (
                 <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/15 text-amber-600 border-transparent">
                   <Star className="h-2.5 w-2.5 mr-0.5" />Warm
                 </Badge>
               )}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5">{investor.lastActivity}</p>
+            <p className="text-[10px] text-muted-foreground mt-1.5">{relativeActivity(investor.last_activity_at)}</p>
           </div>
+          <button
+            type="button"
+            className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-destructive"
+            onClick={() => onRemove(investor.id)}
+            aria-label={`Remove ${investor.firm}`}
+            data-testid={`button-remove-pipeline-${investor.id}`}
+          >
+            Remove
+          </button>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function PipelineTab() {
-  const { toast } = useToast();
+function PipelineTab({ board }: { board: ReturnType<typeof usePipelineBoard> }) {
   const [viewMode, setViewMode] = useState<'board' | 'table'>('board');
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [pipelineData, setPipelineData] = useState(DEMO_PIPELINE);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<BoardStage | null>(null);
+  const grouped = groupByStage(board.entries);
 
-  const handleDrop = (targetColumn: string) => {
-    if (!draggingId) return;
-    const sourceColumn = Object.keys(pipelineData).find(col =>
-      pipelineData[col].some(inv => inv.id === draggingId)
-    );
-    if (!sourceColumn || sourceColumn === targetColumn) {
-      setDraggingId(null);
-      setDragOverColumn(null);
-      return;
-    }
-    const investor = pipelineData[sourceColumn].find(inv => inv.id === draggingId);
-    if (!investor) return;
-    setPipelineData(prev => ({
-      ...prev,
-      [sourceColumn]: prev[sourceColumn].filter(inv => inv.id !== draggingId),
-      [targetColumn]: [...prev[targetColumn], investor],
-    }));
-    toast({ title: 'Investor Moved', description: `${investor.firm} moved to ${targetColumn}` });
+  const handleDrop = (target: BoardStage) => {
+    const investor = board.entries.find(e => e.id === draggingId);
     setDraggingId(null);
     setDragOverColumn(null);
+    if (!investor || investor.stage === target) return;
+    board.move.mutate({ id: investor.id, stage: target });
   };
 
-  const totalInvestors = Object.values(pipelineData).reduce((sum, col) => sum + col.length, 0);
-
   const headerBar = (isBoardActive: boolean) => (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between flex-wrap gap-2">
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-semibold">Pipeline</h2>
-        <Badge variant="outline">{totalInvestors} investors</Badge>
+        <Badge variant="outline">{board.entries.length} investors</Badge>
       </div>
       <div className="flex items-center gap-2">
         <Button variant={isBoardActive ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('board')} data-testid="button-board-view">
@@ -359,10 +363,35 @@ function PipelineTab() {
     </div>
   );
 
-  if (viewMode === 'table') {
-    const allInvestors = Object.entries(pipelineData).flatMap(([stage, investors]) =>
-      investors.map(inv => ({ ...inv, currentStage: stage }))
+  const dialog = (
+    <AddInvestorDialog
+      open={showAddDialog}
+      onClose={() => setShowAddDialog(false)}
+      onAdd={(body) => board.add.mutate(body, { onSuccess: () => setShowAddDialog(false) })}
+      saving={board.add.isPending}
+    />
+  );
+
+  if (board.isLoading) {
+    return <div className="space-y-4">{headerBar(viewMode === 'board')}<Skeleton className="h-64 w-full" /></div>;
+  }
+
+  if (board.entries.length === 0) {
+    return (
+      <div className="space-y-4">
+        {headerBar(viewMode === 'board')}
+        <EmptyStateCard
+          icon={Kanban}
+          title="No investors in your pipeline yet"
+          description="Add the funds and angels you're talking to, then drag them across stages as conversations move. You can also add investors from the Investor Database tab."
+          action={{ label: 'Add your first investor', onClick: () => setShowAddDialog(true), icon: Plus }}
+        />
+        {dialog}
+      </div>
     );
+  }
+
+  if (viewMode === 'table') {
     return (
       <div className="space-y-4">
         {headerBar(false)}
@@ -375,28 +404,26 @@ function PipelineTab() {
                   <TableHead>Partner</TableHead>
                   <TableHead>Stage</TableHead>
                   <TableHead>Check Size</TableHead>
-                  <TableHead>Sentiment</TableHead>
+                  <TableHead>Warm intro</TableHead>
                   <TableHead>Last Activity</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {allInvestors.map(inv => (
+                {board.entries.map(inv => (
                   <TableRow key={inv.id} data-testid={`table-row-${inv.id}`}>
                     <TableCell className="font-medium">{inv.firm}</TableCell>
-                    <TableCell className="text-muted-foreground">{inv.partner}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{inv.currentStage}</Badge></TableCell>
-                    <TableCell>{inv.checkSize}</TableCell>
-                    <TableCell>
-                      <div className={`h-2.5 w-2.5 rounded-full ${getSentimentColor(inv.sentiment)}`} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{inv.lastActivity}</TableCell>
+                    <TableCell className="text-muted-foreground">{inv.partner || '—'}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{stageLabel(inv.stage)}</Badge></TableCell>
+                    <TableCell>{inv.check_size || '—'}</TableCell>
+                    <TableCell>{inv.warm_intro ? 'Yes' : 'No'}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{relativeActivity(inv.last_activity_at)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
         </Card>
-        <AddInvestorDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} />
+        {dialog}
       </div>
     );
   }
@@ -404,38 +431,35 @@ function PipelineTab() {
   return (
     <div className="space-y-4">
       {headerBar(true)}
-
       <div className="overflow-x-auto pb-4 -mx-4 px-4" data-testid="pipeline-kanban">
-        <div className="flex gap-3" style={{ minWidth: `${PIPELINE_COLUMNS.length * 240}px` }}>
-          {PIPELINE_COLUMNS.map(column => (
+        <div className="flex gap-3" style={{ minWidth: `${BOARD_STAGES.length * 240}px` }}>
+          {BOARD_STAGES.map(({ key, label }) => (
             <div
-              key={column}
-              className={`flex-1 min-w-[220px] max-w-[280px] rounded-lg border border-border/50 border-t-2 ${COLUMN_COLORS[column]} p-3 transition-colors ${
-                dragOverColumn === column ? 'bg-primary/10 border-primary/40' : 'bg-muted/30'
+              key={key}
+              className={`flex-1 min-w-[220px] max-w-[280px] rounded-lg border border-border/50 border-t-2 ${STAGE_COLORS[key]} p-3 transition-colors ${
+                dragOverColumn === key ? 'bg-primary/10 border-primary/40' : 'bg-muted/30'
               }`}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
-                setDragOverColumn(column);
+                setDragOverColumn(key);
               }}
               onDragLeave={() => setDragOverColumn(null)}
               onDrop={(e) => {
                 e.preventDefault();
-                handleDrop(column);
+                handleDrop(key);
               }}
-              data-testid={`pipeline-column-${column.toLowerCase().replace(/\s/g, '-')}`}
+              data-testid={`pipeline-column-${label.toLowerCase().replace(/\s/g, '-')}`}
             >
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{column}</span>
-                <Badge variant="outline" className="text-[10px] h-5 px-1.5">
-                  {pipelineData[column]?.length || 0}
-                </Badge>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+                <Badge variant="outline" className="text-[10px] h-5 px-1.5">{grouped[key].length}</Badge>
               </div>
               <div className="space-y-0 min-h-[120px]">
-                {(pipelineData[column] || []).map(investor => (
-                  <PipelineCard key={investor.id} investor={investor} onDragStart={setDraggingId} />
+                {grouped[key].map(investor => (
+                  <PipelineCard key={investor.id} investor={investor} onDragStart={setDraggingId} onRemove={(id) => board.remove.mutate(id)} />
                 ))}
-                {(!pipelineData[column] || pipelineData[column].length === 0) && (
+                {grouped[key].length === 0 && (
                   <div className="flex items-center justify-center h-[100px] border border-dashed border-border/50 rounded-lg">
                     <span className="text-xs text-muted-foreground">Drop here</span>
                   </div>
@@ -445,71 +469,80 @@ function PipelineTab() {
           ))}
         </div>
       </div>
-      <AddInvestorDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} />
+      {dialog}
     </div>
   );
 }
 
-function AddInvestorDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddInvestorDialog({ open, onClose, onAdd, saving }: {
+  open: boolean;
+  onClose: () => void;
+  onAdd: (body: { firm: string; partner: string; check_size: string; stage: BoardStage; warm_intro: boolean }) => void;
+  saving: boolean;
+}) {
   const { toast } = useToast();
-  const [form, setForm] = useState({ firm: '', partner: '', checkSize: '', stage: 'Researching' });
+  const blank = { firm: '', partner: '', check_size: '', stage: 'sourced' as BoardStage, warm_intro: false };
+  const [form, setForm] = useState(blank);
 
   const handleAdd = () => {
-    if (!form.firm) {
-      toast({ title: 'Error', description: 'Firm name is required', variant: 'destructive' });
+    if (!form.firm.trim()) {
+      toast({ title: 'Firm name is required', variant: 'destructive' });
       return;
     }
-    toast({ title: 'Investor Added', description: `${form.firm} added to ${form.stage}` });
-    onClose();
-    setForm({ firm: '', partner: '', checkSize: '', stage: 'Researching' });
+    onAdd(form);
+    setForm(blank);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Investor to Pipeline</DialogTitle>
-          <DialogDescription>Add a new investor to track in your fundraising pipeline.</DialogDescription>
+          <DialogDescription>Track a fund or angel you're talking to. Only your team can see this.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="fundraising-firm-name">Firm Name</Label>
-            <Input id="fundraising-firm-name" value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} placeholder="e.g. Sequoia Capital" data-testid="input-add-firm" />
+            <Label htmlFor="fundraising-firm-name">Firm or angel name</Label>
+            <Input id="fundraising-firm-name" value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} data-testid="input-add-firm" />
           </div>
           <div className="grid gap-4 grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="fundraising-key-partner">Key Partner</Label>
-              <Input id="fundraising-key-partner" value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })} placeholder="e.g. Alfred Lin" data-testid="input-add-partner" />
+              <Label htmlFor="fundraising-key-partner">Contact person</Label>
+              <Input id="fundraising-key-partner" value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })} data-testid="input-add-partner" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="fundraising-check-size">Check Size</Label>
-              <Input id="fundraising-check-size" value={form.checkSize} onChange={e => setForm({ ...form, checkSize: e.target.value })} placeholder="e.g. $5-10M" data-testid="input-add-check-size" />
+              <Input id="fundraising-check-size" value={form.check_size} onChange={e => setForm({ ...form, check_size: e.target.value })} placeholder="e.g. ₹2–5Cr" data-testid="input-add-check-size" />
             </div>
           </div>
           <div className="space-y-2">
             <Label>Pipeline Stage</Label>
-            <Select value={form.stage} onValueChange={v => setForm({ ...form, stage: v })}>
+            <Select value={form.stage} onValueChange={v => setForm({ ...form, stage: v as BoardStage })}>
               <SelectTrigger data-testid="select-add-stage">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PIPELINE_COLUMNS.map(col => (
-                  <SelectItem key={col} value={col}>{col}</SelectItem>
+                {BOARD_STAGES.map(s => (
+                  <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.warm_intro} onChange={e => setForm({ ...form, warm_intro: e.target.checked })} data-testid="checkbox-add-warm" />
+            I have a warm intro
+          </label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleAdd} data-testid="button-save-add-investor">Add to Pipeline</Button>
+          <Button onClick={handleAdd} disabled={saving} data-testid="button-save-add-investor">{saving ? 'Adding…' : 'Add to Pipeline'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function InvestorDatabaseTab() {
+function InvestorDatabaseTab({ onAdd }: { onAdd: (body: { firm: string; stage: BoardStage }) => void }) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [regionFilter, setRegionFilter] = useState<string>('All Regions');
@@ -672,7 +705,7 @@ function InvestorDatabaseTab() {
                   variant="outline"
                   size="sm"
                   className="flex-1"
-                  onClick={() => toast({ title: 'Added to Pipeline', description: `${inv.name} added to Researching stage` })}
+                  onClick={() => onAdd({ firm: inv.name, stage: 'sourced' })}
                   data-testid={`button-add-to-pipeline-${inv.id}`}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1" /> Add to Pipeline
@@ -722,198 +755,36 @@ function InvestorDatabaseTab() {
   );
 }
 
-function AutomationsTab() {
-  const automations = [
-    {
-      id: 'cold-outreach', title: 'Cold Outreach Drip', status: 'active' as const,
-      description: 'Automated cold email sequence with personalization and social proof angles for investor outreach.',
-      steps: '4 steps over 14 days: Personalized cold email → Follow-up → Social proof angle → Break-up email',
-      sent: 156, metric: '38% open rate', metricColor: 'text-emerald-600'
-    },
-    {
-      id: 'warm-intro', title: 'Warm Intro Request', status: 'active' as const,
-      description: 'Generate intro blurbs and automate requests through your network connections.',
-      steps: '3 steps: Generate blurb → Send to connector → 5-day reminder',
-      sent: 42, metric: '62% success rate', metricColor: 'text-emerald-600'
-    },
-    {
-      id: 'post-meeting', title: 'Post-Meeting Follow-up', status: 'active' as const,
-      description: 'Automated follow-up sequence after investor meetings to maintain engagement and share materials.',
-      steps: '3 steps: 1hr thank you → 3 days data room → 1 week check-in',
-      sent: 28, metric: '71% reply rate', metricColor: 'text-emerald-600'
-    },
-    {
-      id: 'investor-update', title: 'Investor Update Newsletter', status: 'paused' as const,
-      description: 'Monthly newsletter that auto-pulls KPIs from your dashboard and sends updates to committed investors.',
-      steps: 'Monthly cadence',
-      sent: 6, metric: '6 editions sent', metricColor: 'text-muted-foreground'
-    },
-    {
-      id: 'dd-automation', title: 'Due Diligence Automation', status: 'active' as const,
-      description: 'Streamlines the DD process with automated data room access, checklists, and document reminders.',
-      steps: '4 steps: Auto data room → Checklist → Document reminders → Completion notification',
-      sent: null, metric: null, metricColor: ''
-    },
-    {
-      id: 'reengagement', title: 'Re-engagement Campaign', status: 'inactive' as const,
-      description: 'Re-engage investors who previously passed with traction updates and milestone announcements.',
-      steps: '2 steps: Traction update → Milestone announcement',
-      sent: null, metric: null, metricColor: ''
-    },
-  ];
-
-  const statusConfig = {
-    active: { badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200', icon: CheckCircle2, label: 'Active' },
-    paused: { badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200', icon: Pause, label: 'Paused' },
-    inactive: { badge: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400', icon: AlertCircle, label: 'Inactive' },
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Automations</h2>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {automations.map(auto => {
-          const config = statusConfig[auto.status];
-          const StatusIcon = config.icon;
-          return (
-            <Card key={auto.id} data-testid={`card-automation-${auto.id}`}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{auto.title}</CardTitle>
-                  <Badge className={config.badge} data-testid={`badge-automation-status-${auto.id}`}>
-                    <StatusIcon className="h-3 w-3 mr-1" />
-                    {config.label}
-                  </Badge>
-                </div>
-                <CardDescription>{auto.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span>{auto.steps}</span>
-                  </div>
-                  {(auto.sent !== null || auto.metric !== null) && (
-                    <div className="flex items-center gap-4">
-                      {auto.sent !== null && (
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <Send className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{auto.sent} sent</span>
-                        </div>
-                      )}
-                      {auto.metric !== null && (
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                          <span className={`font-medium ${auto.metricColor}`}>{auto.metric}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+const OUTREACH_PLAYBOOKS = [
+  { id: 'cold-outreach', title: 'Cold outreach', steps: 'Personalised first email → follow-up after 4 days → traction update → close the loop' },
+  { id: 'warm-intro', title: 'Warm intro request', steps: 'Write a 3-line forwardable blurb → send to your connector → nudge after 5 days' },
+  { id: 'post-meeting', title: 'After a meeting', steps: 'Thank-you within an hour → data room or deck in 3 days → check in after a week' },
+  { id: 'investor-update', title: 'Monthly investor update', steps: 'Revenue, burn, runway, wins, asks — same format every month' },
+  { id: 'reengagement', title: 'Re-engage investors who passed', steps: 'Share a milestone they cared about → ask if timing is better now' },
+];
 
 function OutreachTab() {
   return (
     <div className="space-y-4" data-testid="tab-content-outreach">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Outreach Sequences</h2>
+      <div>
+        <h2 className="text-lg font-semibold">Outreach playbooks</h2>
+        <p className="text-sm text-muted-foreground">
+          Proven sequences to follow by hand. FounderConsole doesn't send investor emails for you yet, so there are no open or reply rates here.
+        </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <Card data-testid="card-sequence-post-meeting">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Post-Meeting Follow-up</CardTitle>
-              <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" data-testid="badge-status-active-1">
-                <CheckCircle2 className="h-3 w-3 mr-1" />Active
-              </Badge>
-            </div>
-            <CardDescription>Automated follow-up sequence after investor meetings to maintain engagement and share materials.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" /><span>3 steps: 1hr thank you → 3 days data room → 1 week check-in</span>
+        {OUTREACH_PLAYBOOKS.map(p => (
+          <Card key={p.id} data-testid={`card-playbook-${p.id}`}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">{p.title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4 mt-0.5 shrink-0" /><span>{p.steps}</span>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5 text-sm">
-                  <Send className="h-4 w-4 text-muted-foreground" /><span className="font-medium" data-testid="text-sent-1">28 sent</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" /><span className="font-medium text-emerald-600" data-testid="text-reply-rate-1">71% reply rate</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-sequence-newsletter">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Investor Update Newsletter</CardTitle>
-              <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" data-testid="badge-status-paused">
-                <Pause className="h-3 w-3 mr-1" />Paused
-              </Badge>
-            </div>
-            <CardDescription>Monthly newsletter that auto-pulls KPIs from your dashboard and sends updates to committed investors.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" /><span>Monthly cadence</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-sm">
-                <Send className="h-4 w-4 text-muted-foreground" /><span className="font-medium" data-testid="text-editions-sent">6 editions sent</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-sequence-due-diligence">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Due Diligence Automation</CardTitle>
-              <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" data-testid="badge-status-active-2">
-                <CheckCircle2 className="h-3 w-3 mr-1" />Active
-              </Badge>
-            </div>
-            <CardDescription>Streamlines the due diligence process with automated data room access, checklists, and document reminders.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" /><span>4 steps: auto data room → checklist → document reminders → completion notification</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-sequence-reengagement">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Re-engagement Campaign</CardTitle>
-              <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" data-testid="badge-status-inactive">
-                <AlertCircle className="h-3 w-3 mr-1" />Inactive
-              </Badge>
-            </div>
-            <CardDescription>Re-engage investors who previously passed with traction updates and milestone announcements.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" /><span>2 steps: traction update → milestone announcement</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );
@@ -1023,6 +894,7 @@ export default function FundraisingPage() {
 
   const capTables = capTablesData?.cap_tables || [];
   const rounds = roundsData?.rounds || [];
+  const board = usePipelineBoard(selectedCompany?.id);
 
   if (!selectedCompany) {
     return (
@@ -1087,7 +959,7 @@ export default function FundraisingPage() {
       </div>
       </FadeIn>
 
-      <DashboardBanner />
+      <DashboardBanner entries={board.entries} rounds={rounds} currency={selectedCompany?.currency} isLoading={board.isLoading || roundsLoading} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex-wrap h-auto gap-1" data-testid="fundraising-tabs">
@@ -1112,16 +984,15 @@ export default function FundraisingPage() {
         </TabsList>
 
         <TabsContent value="pipeline" className="space-y-4" data-testid="tab-content-pipeline">
-          <PipelineTab />
+          <PipelineTab board={board} />
         </TabsContent>
 
         <TabsContent value="investor-db" className="space-y-4" data-testid="tab-content-investor-db">
-          <InvestorDatabaseTab />
+          <InvestorDatabaseTab onAdd={(body) => board.add.mutate(body)} />
         </TabsContent>
 
         <TabsContent value="outreach" className="space-y-4">
           <OutreachTab />
-          <AutomationsTab />
         </TabsContent>
 
         <TabsContent value="cap-table" className="space-y-4">

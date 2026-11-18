@@ -10,10 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Users, UserPlus, MoreVertical, Shield, Edit, Trash2, Mail, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Users, UserPlus, MoreVertical, Shield, Edit, Trash2, Mail, Clock, XCircle, AlertCircle, Link2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { parseServerDate } from '@/lib/teamInvites';
+import { copyToClipboard, inviteStatusLine, memberStatusLine } from '@/lib/teamInvites';
 
 export interface TeamMember {
   id: number;
@@ -42,11 +41,13 @@ interface TeamWorkspaceProps {
   isLoading: boolean;
   currentUserEmail: string;
   currentUserRole: string;
-  onInviteMember: (email: string, role: string) => Promise<void>;
+  /** Resolves with the invite's accept link when the server returns one. */
+  onInviteMember: (email: string, role: string) => Promise<string | void>;
   onUpdateRole: (memberId: number, role: string) => Promise<void>;
   onRemoveMember: (memberId: number) => Promise<void>;
   onRevokeInvite: (inviteId: number) => Promise<void>;
   onResendInvite: (inviteId: number) => Promise<void>;
+  onCopyInviteLink?: (inviteId: number) => Promise<void>;
 }
 
 const ROLE_DESCRIPTIONS = {
@@ -84,12 +85,25 @@ export function TeamWorkspace({
   onRemoveMember,
   onRevokeInvite,
   onResendInvite,
+  onCopyInviteLink,
 }: TeamWorkspaceProps) {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<string>('viewer');
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  // Set right after an invite is created, so the dialog can offer its link.
+  const [createdInvite, setCreatedInvite] = useState<{ email: string; url: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const closeInviteDialog = (open: boolean) => {
+    setInviteDialogOpen(open);
+    if (!open) {
+      setCreatedInvite(null);
+      setLinkCopied(false);
+      setInviteError(null);
+    }
+  };
 
   const canManageTeam = ['owner', 'admin'].includes(currentUserRole);
   const pendingInvites = invites.filter(i => i.status === 'pending');
@@ -101,8 +115,13 @@ export function TeamWorkspace({
     setInviteError(null);
     
     try {
-      await onInviteMember(inviteEmail, inviteRole);
-      setInviteDialogOpen(false);
+      const url = await onInviteMember(inviteEmail, inviteRole);
+      if (url) {
+        setCreatedInvite({ email: inviteEmail.trim(), url });
+        setLinkCopied(false);
+      } else {
+        setInviteDialogOpen(false);
+      }
       setInviteEmail('');
       setInviteRole('viewer');
     } catch (err: any) {
@@ -125,7 +144,7 @@ export function TeamWorkspace({
               </div>
             </div>
             {canManageTeam && (
-              <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+              <Dialog open={inviteDialogOpen} onOpenChange={closeInviteDialog}>
                 <DialogTrigger asChild>
                   <Button data-testid="button-invite-member">
                     <UserPlus className="h-4 w-4 mr-2" />
@@ -139,6 +158,39 @@ export function TeamWorkspace({
                       Send an invitation to join {companyName} workspace
                     </DialogDescription>
                   </DialogHeader>
+                  {createdInvite ? (
+                  <>
+                  <div className="space-y-3 py-4" data-testid="invite-created">
+                    <p className="text-sm">
+                      Invite created for <span className="font-medium">{createdInvite.email}</span>.
+                      Share this link with them. It only works for that email address and expires in 7 days.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={createdInvite.url}
+                        onFocus={(e) => e.currentTarget.select()}
+                        aria-label="Invite link"
+                        data-testid="input-invite-link"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={async () => setLinkCopied(await copyToClipboard(createdInvite.url))}
+                        data-testid="button-copy-new-invite-link"
+                      >
+                        {linkCopied ? <CheckCircle className="h-4 w-4 mr-2" /> : <Link2 className="h-4 w-4 mr-2" />}
+                        {linkCopied ? 'Copied' : 'Copy link'}
+                      </Button>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={() => closeInviteDialog(false)} data-testid="button-invite-done">
+                      Done
+                    </Button>
+                  </DialogFooter>
+                  </>
+                  ) : (
+                  <>
                   <div className="space-y-4 py-4">
                     {inviteError && (
                       <Alert variant="destructive">
@@ -190,7 +242,7 @@ export function TeamWorkspace({
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
+                    <Button variant="outline" onClick={() => closeInviteDialog(false)}>
                       Cancel
                     </Button>
                     <Button 
@@ -202,6 +254,8 @@ export function TeamWorkspace({
                       {isInviting ? 'Sending...' : 'Send Invite'}
                     </Button>
                   </DialogFooter>
+                  </>
+                  )}
                 </DialogContent>
               </Dialog>
             )}
@@ -240,10 +294,10 @@ export function TeamWorkspace({
                             <span className={cn('w-1.5 h-1.5 rounded-full', ROLE_COLORS[member.role])} />
                             {member.role}
                           </Badge>
-                          {member.joined_at && (
-                            <span className="flex items-center gap-1">
+                          {memberStatusLine(member) && (
+                            <span className="flex items-center gap-1" data-testid={`member-status-${member.id}`}>
                               <Clock className="h-3 w-3" />
-                              Joined {formatDistanceToNow(parseServerDate(member.joined_at), { addSuffix: true })}
+                              {memberStatusLine(member)}
                             </span>
                           )}
                         </div>
@@ -314,12 +368,24 @@ export function TeamWorkspace({
                           <span className={cn('w-1.5 h-1.5 rounded-full', ROLE_COLORS[invite.role])} />
                           {invite.role}
                         </Badge>
-                        <span>Invited {formatDistanceToNow(parseServerDate(invite.invited_at), { addSuffix: true })}</span>
+                        <span data-testid={`invite-status-${invite.id}`}>{inviteStatusLine(invite)}</span>
                       </div>
                     </div>
                   </div>
                   {canManageTeam && (
                     <div className="flex items-center gap-1 shrink-0">
+                      {onCopyInviteLink && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onCopyInviteLink(invite.id)}
+                          aria-label={`Copy invite link for ${invite.email}`}
+                          data-testid={`button-copy-invite-link-${invite.id}`}
+                        >
+                          <Link2 className="h-4 w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">Copy link</span>
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
