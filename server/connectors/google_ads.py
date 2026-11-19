@@ -221,11 +221,22 @@ class GoogleAdsConnector(BaseConnector):
             if not ids:
                 listed = await self._request("GET", "customers:listAccessibleCustomers")
                 ids = [str(n).split("/")[-1] for n in listed.get("resourceNames") or []]
+            skipped: List[str] = []
             for cid in ids:
-                rows = await self._search(
-                    cid,
-                    "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.manager FROM customer",
-                )
+                try:
+                    rows = await self._search(
+                        cid,
+                        "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.manager FROM customer",
+                    )
+                except GoogleAdsAuthError:
+                    raise
+                except GoogleAdsError as exc:
+                    # A login usually sees some accounts it can't read: closed or
+                    # cancelled ones, or ones only reachable through a manager.
+                    # One of those must not sink the whole connection.
+                    logger.warning("Google Ads: skipping customer %s: %s", cid, exc)
+                    skipped.append(f"{cid}: {exc}")
+                    continue
                 info = (rows[0].get("customer") if rows else {}) or {}
                 if info.get("manager"):
                     continue  # manager accounts hold no spend of their own
@@ -234,6 +245,7 @@ class GoogleAdsConnector(BaseConnector):
                     "name": info.get("descriptiveName") or cid,
                     "currency": (info.get("currencyCode") or "").upper() or None,
                 }
+            self.skipped_accounts = skipped
         except ValueError as exc:
             self.auth_error = str(exc)
             return False
@@ -245,6 +257,8 @@ class GoogleAdsConnector(BaseConnector):
             return False
         if not self.accounts:
             self.auth_error = "This Google login has no Google Ads accounts with spend (only manager accounts or none)."
+            if getattr(self, "skipped_accounts", None):
+                self.auth_error += " Couldn't read: " + "; ".join(self.skipped_accounts)[:300]
             return False
         self._authenticated = True
         return True

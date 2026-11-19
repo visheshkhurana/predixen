@@ -136,3 +136,44 @@ def test_sign_in_client_is_not_a_fallback(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "sign-in-client")
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "sign-in-secret")
     assert not google_ads.is_configured()
+
+
+def test_closed_account_does_not_sink_the_connection(configured):
+    """listAccessibleCustomers includes closed accounts; Google answers 403 for them."""
+    base = _fake_google([])
+
+    def handler(request):
+        if "/customers/9998887777/" in str(request.url):
+            return httpx.Response(403, json={"error": {"message": "The customer account can't be accessed because it is not yet enabled or has been deactivated."}})
+        return base(request)
+
+    c = _connector(handler)
+    assert asyncio.run(c.authenticate()) is True, c.auth_error
+    assert list(c.accounts) == ["1112223333"]
+    assert c.skipped_accounts and c.skipped_accounts[0].startswith("9998887777")
+
+
+def test_all_accounts_unreadable_explains_why(configured):
+    base = _fake_google([])
+
+    def handler(request):
+        if "/customers/" in str(request.url) and "listAccessibleCustomers" not in str(request.url):
+            return httpx.Response(403, json={"error": {"message": "deactivated"}})
+        return base(request)
+
+    c = _connector(handler)
+    assert asyncio.run(c.authenticate()) is False
+    assert "Couldn't read" in c.auth_error and "deactivated" in c.auth_error
+
+
+def test_expired_login_still_fails_fast(configured):
+    base = _fake_google([])
+
+    def handler(request):
+        if "googleAds:search" in str(request.url):
+            return httpx.Response(401, json={"error": {"message": "expired"}})
+        return base(request)
+
+    c = _connector(handler)
+    assert asyncio.run(c.authenticate()) is False
+    assert "expired" in c.auth_error.lower()

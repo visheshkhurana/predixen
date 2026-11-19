@@ -150,6 +150,8 @@ async def google_ads_oauth_callback(
         })
     refresh_token = res.json().get("refresh_token") if res.status_code == 200 else None
     if not refresh_token:
+        logger.warning("Google Ads OAuth: token exchange gave no refresh token (HTTP %s) for company %s",
+                       res.status_code, company_id)
         return _back(base, google_ads_error="Google didn't grant offline access. Try connecting again.")
 
     creds = {"refresh_token": refresh_token}
@@ -158,6 +160,7 @@ async def google_ads_oauth_callback(
     ))
     try:
         if not await connector.authenticate():
+            logger.warning("Google Ads OAuth: connect failed for company %s: %s", company_id, connector.auth_error)
             return _back(base, google_ads_error=connector.auth_error or "Couldn't read any Google Ads account.")
         accounts = list(connector.accounts.values())
     finally:
