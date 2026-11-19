@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.razorpay.com/v1"
 PAGE_SIZE = 100
-MAX_PAGES = 10
+MAX_PAGES = 100  # 10,000 records per list before the cap is logged
 
 PAYROLL_API_UNAVAILABLE = (
     "RazorpayX Payroll (Opfin) does not publish a company payroll or headcount API. "
@@ -288,6 +288,10 @@ class RazorpayXConnector(BaseConnector):
                 if len(batch) < PAGE_SIZE:
                     return items
                 skip += PAGE_SIZE
+            logger.warning(
+                f"RazorpayX {path}: stopped at {MAX_PAGES * PAGE_SIZE} records (page cap); "
+                "older records in this window were not synced"
+            )
             return items
 
     def _safe(self, message: str) -> str:

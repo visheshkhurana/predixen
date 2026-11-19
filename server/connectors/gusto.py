@@ -30,6 +30,27 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
+PAYROLL_PAGE_SIZE = 100  # documented maximum for GET /v1/companies/{id}/payrolls
+MAX_PAYROLL_PAGES = 50
+
+
+def _f(value: Any) -> float:
+    """Gusto returns money as strings."""
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _parse_ymd(value: Any) -> Optional[datetime]:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value[:10], "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
 GUSTO_ENVIRONMENTS = {
     "demo": "https://api.gusto-demo.com",
     "production": "https://api.gusto.com",
@@ -60,6 +81,7 @@ class GustoConnector(BaseConnector):
         env = config.settings.get("environment", "production")
         self._base_url = GUSTO_ENVIRONMENTS.get(env, GUSTO_ENVIRONMENTS["production"])
         self._client: Optional[httpx.AsyncClient] = None
+        self.auth_error: Optional[str] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -101,41 +123,48 @@ class GustoConnector(BaseConnector):
             logger.error(f"Gusto token refresh error: {e}")
             return False
 
-    async def authenticate(self) -> bool:
+    async def authenticate(self, _retried: bool = False) -> bool:
+        self.auth_error = None
         if not self._access_token:
             logger.warning("Gusto access token not provided")
+            self.auth_error = "Gusto is not connected. Reconnect with Gusto."
             return False
 
         try:
             client = await self._get_client()
-            response = await client.get("/v1/me")
+            response = await client.get("/v1/token_info")
 
             if response.status_code == 200:
+                resource = (response.json() or {}).get("resource") or {}
+                if not self._company_uuid and isinstance(resource, dict) and resource.get("type") == "Company":
+                    self._company_uuid = resource.get("uuid", "") or ""
+                if not self._company_uuid:
+                    self.auth_error = (
+                        "This Gusto token is not tied to a company. Reconnect with Gusto as a company admin."
+                    )
+                    return False
                 self._authenticated = True
-                data = response.json()
-                roles = data.get("roles", {})
-                payroll_admin = roles.get("payroll_admin", {})
-                companies = payroll_admin.get("companies", [])
-                if companies and not self._company_uuid:
-                    self._company_uuid = companies[0].get("uuid", "")
                 logger.info(f"Gusto authentication successful, company: {self._company_uuid}")
                 return True
-            elif response.status_code == 401:
+            elif response.status_code == 401 and not _retried:
                 logger.info("Gusto token expired, attempting refresh")
                 if await self._refresh_access_token():
-                    return await self.authenticate()
+                    return await self.authenticate(_retried=True)
+                self.auth_error = "Gusto sign-in expired. Reconnect with Gusto."
                 return False
             else:
                 logger.warning(f"Gusto auth failed: {response.status_code}")
+                self.auth_error = f"Gusto refused the token ({response.status_code}). Reconnect with Gusto."
                 return False
         except Exception as e:
             logger.error(f"Gusto authentication error: {e}")
+            self.auth_error = "Could not reach Gusto. Try again."
             return False
 
     async def test_connection(self) -> bool:
         try:
             client = await self._get_client()
-            response = await client.get("/v1/me")
+            response = await client.get("/v1/token_info")
             return response.status_code == 200
         except Exception:
             return False
@@ -157,7 +186,7 @@ class GustoConnector(BaseConnector):
             while True:
                 response = await client.get(
                     f"/v1/companies/{self._company_uuid}/employees",
-                    params={"page": page, "per": 100},
+                    params={"page": page, "per": 100, "include": "all_compensations"},
                 )
 
                 if response.status_code != 200:
@@ -169,10 +198,13 @@ class GustoConnector(BaseConnector):
                     break
 
                 for emp in data:
-                    jobs = emp.get("jobs", [])
-                    current_job = jobs[0] if jobs else {}
-                    compensations = current_job.get("compensations", [])
-                    current_comp = compensations[0] if compensations else {}
+                    jobs = emp.get("jobs") or []
+                    current_job = next((j for j in jobs if j.get("primary")), jobs[0] if jobs else {})
+                    compensations = current_job.get("compensations") or []
+                    current_comp = next(
+                        (c for c in compensations if c.get("uuid") and c.get("uuid") == current_job.get("current_compensation_uuid")),
+                        None,
+                    ) or (max(compensations, key=lambda c: c.get("effective_date") or "") if compensations else {})
 
                     salary = None
                     rate = current_comp.get("rate")
@@ -194,11 +226,7 @@ class GustoConnector(BaseConnector):
                             department=current_job.get("title", ""),
                             designation=current_job.get("title", ""),
                             salary=salary,
-                            join_date=(
-                                datetime.strptime(emp.get("date_of_birth", ""), "%Y-%m-%d")
-                                if emp.get("date_of_birth")
-                                else None
-                            ),
+                            join_date=_parse_ymd(emp.get("hired_at") or current_job.get("hire_date")),
                             status="active" if not emp.get("terminated", False) else "terminated",
                             metadata={
                                 "gusto_uuid": emp.get("uuid"),
@@ -233,48 +261,54 @@ class GustoConnector(BaseConnector):
         payroll_runs = []
         try:
             client = await self._get_client()
-            params: Dict[str, str] = {}
+            base_params: Dict[str, Any] = {"include": "totals", "per": PAYROLL_PAGE_SIZE}
             if start_date:
-                params["start_date"] = start_date.strftime("%Y-%m-%d")
+                base_params["start_date"] = start_date.strftime("%Y-%m-%d")
             if end_date:
-                params["end_date"] = end_date.strftime("%Y-%m-%d")
+                base_params["end_date"] = end_date.strftime("%Y-%m-%d")
 
-            response = await client.get(
-                f"/v1/companies/{self._company_uuid}/payrolls",
-                params=params,
-            )
+            payrolls: List[Dict[str, Any]] = []
+            for page in range(1, MAX_PAYROLL_PAGES + 1):
+                response = await client.get(
+                    f"/v1/companies/{self._company_uuid}/payrolls",
+                    params={**base_params, "page": page},
+                )
+                if response.status_code != 200:
+                    logger.error(f"Gusto payrolls error: {response.status_code}")
+                    break
+                batch = response.json() or []
+                if not isinstance(batch, list):
+                    break
+                payrolls.extend(batch)
+                if len(batch) < PAYROLL_PAGE_SIZE:
+                    break
+            else:
+                logger.warning(f"Gusto payrolls: stopped after {MAX_PAYROLL_PAGES} pages; results truncated")
 
-            if response.status_code != 200:
-                logger.error(f"Gusto payrolls error: {response.status_code}")
-                return []
-
-            data = response.json()
-
-            for payroll in data:
+            for payroll in payrolls:
                 if not payroll.get("processed", False):
                     continue
 
-                totals = payroll.get("totals", {})
-                employee_compensations = payroll.get("employee_compensations", [])
+                totals = payroll.get("totals") or {}
+                employee_compensations = payroll.get("employee_compensations") or []
 
-                gross = float(totals.get("company_debit", 0))
-                deductions = float(totals.get("employee_taxes", 0)) + float(totals.get("employee_benefits_deductions", 0))
-                net = float(totals.get("net_pay", 0))
-                employer_taxes = float(totals.get("employer_taxes", 0))
+                # gross_pay is wages before deductions; company_debit also includes
+                # employer taxes and benefits, so it is not "gross".
+                gross = _f(totals.get("gross_pay"))
+                employee_taxes = _f(totals.get("employee_taxes"))
+                employee_deductions = _f(totals.get("employee_benefits_deductions")) + _f(totals.get("other_deductions"))
+                deductions = employee_taxes + employee_deductions
+                net = _f(totals.get("net_pay"))
+                employer_taxes = _f(totals.get("employer_taxes"))
 
-                period_start = payroll.get("pay_period", {}).get("start_date", "")
-                period_end = payroll.get("pay_period", {}).get("end_date", "")
-
-                try:
-                    start_dt = datetime.strptime(period_start, "%Y-%m-%d") if period_start else datetime.now()
-                    end_dt = datetime.strptime(period_end, "%Y-%m-%d") if period_end else datetime.now()
-                except ValueError:
-                    start_dt = datetime.now()
-                    end_dt = datetime.now()
+                period_start = (payroll.get("pay_period") or {}).get("start_date", "")
+                period_end = (payroll.get("pay_period") or {}).get("end_date", "")
+                start_dt = _parse_ymd(period_start) or datetime.now()
+                end_dt = _parse_ymd(period_end) or datetime.now()
 
                 payroll_runs.append(
                     PayrollRunRecord(
-                        external_id=str(payroll.get("payroll_uuid", payroll.get("id", ""))),
+                        external_id=str(payroll.get("payroll_uuid") or payroll.get("uuid") or payroll.get("id", "")),
                         period_start=start_dt,
                         period_end=end_dt,
                         total_gross=gross,
@@ -282,19 +316,22 @@ class GustoConnector(BaseConnector):
                         total_net=net,
                         employee_count=len(employee_compensations),
                         currency="USD",
-                        status="completed" if payroll.get("processed") else "pending",
+                        status="completed",
                         breakdown={
                             "employer_taxes": employer_taxes,
-                            "employee_taxes": float(totals.get("employee_taxes", 0)),
-                            "benefits": float(totals.get("benefits", 0)),
-                            "employee_benefits_deductions": float(totals.get("employee_benefits_deductions", 0)),
+                            "employee_taxes": employee_taxes,
+                            "benefits": _f(totals.get("benefits")),
+                            "employee_benefits_deductions": _f(totals.get("employee_benefits_deductions")),
                             "net_pay": net,
-                            "check_amount": float(totals.get("check_amount", 0)),
+                            "check_amount": _f(totals.get("check_amount")),
+                            "company_debit": _f(totals.get("company_debit")),
+                            "reimbursements": _f(totals.get("reimbursements")),
                         },
                         metadata={
                             "payroll_deadline": payroll.get("payroll_deadline"),
                             "check_date": payroll.get("check_date"),
                             "processed_date": payroll.get("processed_date"),
+                            "off_cycle": payroll.get("off_cycle"),
                         },
                     )
                 )
@@ -342,7 +379,7 @@ class GustoConnector(BaseConnector):
                     success=False,
                     provider_id=self.PROVIDER_ID,
                     sync_type="full",
-                    errors=["Authentication failed - check access_token or OAuth credentials"],
+                    errors=[self.auth_error or "Authentication failed - reconnect with Gusto"],
                     sync_started=sync_started,
                 )
 

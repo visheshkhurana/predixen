@@ -310,7 +310,7 @@ class BaseConnector(ABC):
                     success=False,
                     provider_id=self.PROVIDER_ID,
                     sync_type="full",
-                    errors=["Authentication failed"],
+                    errors=[getattr(self, "auth_error", None) or "Authentication failed"],
                     sync_started=sync_started,
                 )
             
