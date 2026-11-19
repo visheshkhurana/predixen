@@ -762,12 +762,15 @@ async def sync_provider(
                 company_id, _record_provider_id(provider_id), connector.PROVIDER_NAME, financials, today
             )
 
-            # Validate financial record has meaningful data
+            # A brand-new or empty account has no figures yet. That's a
+            # successful sync with nothing to record, not an error: skip the
+            # row instead of failing the connection.
             if (financial_record.revenue is None and
                 financial_record.cash_balance is None and
                 financial_record.payroll is None and
                 financial_record.opex is None):
-                raise ValueError("Financial record must contain at least one financial metric (revenue, cash_balance, payroll, or opex)")
+                logger.info("Sync for %s company %s returned no figures; nothing to record", provider_id, company_id)
+                financial_record = None
 
         # STEP 4: All validations passed, now commit in single transaction
         try:
