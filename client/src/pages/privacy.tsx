@@ -5,11 +5,11 @@ import { useSEO } from '@/lib/seo';
 import { LegalEntityNotice, GrievanceOfficerText } from '@/components/marketing/LegalEntity';
 import { LEGAL_ENTITY_NAME, PRODUCT_OF_LINE } from '@/data/legal';
 
-function Section({ icon: Icon, title, children, testId }: {
-  icon: any; title: string; children: React.ReactNode; testId: string;
+function Section({ icon: Icon, title, children, testId, id }: {
+  icon: any; title: string; children: React.ReactNode; testId: string; id?: string;
 }) {
   return (
-    <Card data-testid={testId}>
+    <Card data-testid={testId} id={id} className="scroll-mt-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Icon className="h-5 w-5 text-indigo-400" />
@@ -36,7 +36,7 @@ export default function PrivacyPolicyPage() {
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 space-y-6">
         <div className="space-y-2 text-center mb-8" data-testid="privacy-header">
           <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
-          <p className="text-muted-foreground">Last updated: March 2026</p>
+          <p className="text-muted-foreground">Last updated: November 2026</p>
         </div>
 
         <p className="text-sm text-muted-foreground leading-relaxed">
@@ -50,6 +50,16 @@ export default function PrivacyPolicyPage() {
             <li><strong className="text-foreground">Company Financial Data:</strong> Revenue, expenses, cash balances, invoices, and other financial metrics you enter manually or sync through connected integrations (QuickBooks, Stripe, Gusto).</li>
             <li><strong className="text-foreground">Usage Data:</strong> Pages visited, features used, simulation runs, and interaction patterns to improve the platform.</li>
             <li><strong className="text-foreground">Authentication Data:</strong> OAuth tokens when you sign in via Google.</li>
+          </ul>
+        </Section>
+
+        <Section icon={Building2} title="Advertising Account Data (Meta Ads, Google Ads)" testId="section-ad-platform-data" id="ad-platform-data">
+          <p>If you choose to connect Meta Ads (Facebook and Instagram) or Google Ads, you sign in with that platform and grant FounderConsole <strong className="text-foreground">read-only</strong> access to your ad accounts (on Meta, the <code>ads_read</code> permission). We never create, edit, pause or spend on your ads.</p>
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li><strong className="text-foreground">What we read:</strong> the names, IDs and currency of the ad accounts you can access, and monthly totals per account: spend, impressions, clicks, and the purchases and purchase value the platform attributes to its ads.</li>
+            <li><strong className="text-foreground">What we do with it:</strong> show your marketing spend, CM3, MER and platform-reported ROAS on your own dashboard, and use it in your own forecasts and simulations. It is visible only to members of your company workspace.</li>
+            <li><strong className="text-foreground">What we never do:</strong> sell it, share it with other customers or advertisers, use it to target ads, or combine it with data from other FounderConsole customers.</li>
+            <li><strong className="text-foreground">Storage:</strong> the access token is stored encrypted; the monthly totals are stored with your company's financial data. Neither is sent to AI providers except as part of the analysis you ask for in your own workspace.</li>
           </ul>
         </Section>
 
@@ -76,6 +86,7 @@ export default function PrivacyPolicyPage() {
             <li><strong className="text-foreground">Stripe:</strong> Sync payment and revenue data when you connect your account.</li>
             <li><strong className="text-foreground">Razorpay:</strong> Subscription payment processing. We do not store your full card or bank details; Razorpay handles them under its own privacy policy.</li>
             <li><strong className="text-foreground">Gusto:</strong> Sync payroll data when you connect your account.</li>
+            <li><strong className="text-foreground">Meta Ads and Google Ads:</strong> Read-only ad spend and performance when you connect your ad accounts. See Advertising Account Data above.</li>
             <li><strong className="text-foreground">Resend:</strong> Transactional email delivery.</li>
             <li><strong className="text-foreground">OpenAI, Anthropic, Google Gemini:</strong> AI model providers for copilot and analysis features. Financial data may be sent to these providers to generate insights; data is not retained by them beyond the request.</li>
           </ul>
@@ -113,6 +124,15 @@ export default function PrivacyPolicyPage() {
             <li><strong className="text-foreground">Withdraw Consent:</strong> Disconnect integrations or opt out of analytics at any time.</li>
           </ul>
           <p>To exercise any of these rights, contact us at the email below.</p>
+        </Section>
+
+        <Section icon={Database} title="Deleting Your Data" testId="section-data-deletion" id="data-deletion">
+          <p>You can delete data FounderConsole received from a connected platform at any time:</p>
+          <ol className="list-decimal pl-5 space-y-1.5">
+            <li><strong className="text-foreground">Disconnect the integration:</strong> go to Integrations in FounderConsole and click <em>Disconnect</em> on the Meta Ads or Google Ads card. This immediately deletes the stored access token and every ad spend record that integration imported.</li>
+            <li><strong className="text-foreground">Remove our access on the platform:</strong> on Facebook, open Settings &amp; privacy, then Business Integrations, and remove FounderConsole; on Google, remove FounderConsole at myaccount.google.com/permissions.</li>
+            <li><strong className="text-foreground">Delete everything:</strong> email <a href="mailto:hello@founderconsole.ai" className="text-indigo-400 hover:underline">hello@founderconsole.ai</a> from your account email asking for deletion. We delete your account and all associated data, including data from Meta and Google, within 30 days and confirm by email.</li>
+          </ol>
         </Section>
 
         <Section icon={Cookie} title="Cookies" testId="section-cookies">
