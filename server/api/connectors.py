@@ -643,6 +643,24 @@ async def disconnect_provider(
     }
 
 
+def _persist_rotated_credentials(db: Session, company: Company, storage_id: str, connector: Any, connectors: Dict[str, Any]) -> None:
+    rotated_fn = getattr(connector, "rotated_credentials", None)
+    if not callable(rotated_fn):
+        return
+    try:
+        rotated = rotated_fn()
+    except Exception as e:  # never let bookkeeping break a sync
+        logger.warning("Could not read refreshed credentials for %s: %s", storage_id, e)
+        return
+    if not rotated:
+        return
+    row = dict(connectors.get(storage_id) or {})
+    row["credentials"] = encrypt_credentials(rotated)
+    connectors[storage_id] = row
+    save_metadata_value(db, company, ("connectors", storage_id), row)
+    logger.info("Saved refreshed credentials for %s (company %s)", storage_id, company.id)
+
+
 @router.post("/companies/{company_id}/sync/{provider_id}")
 async def sync_provider(
     company_id: int,
@@ -716,7 +734,12 @@ async def sync_provider(
 
     try:
         # STEP 1: Fetch data from connector (no DB changes yet)
-        result = await connector.sync_all()
+        try:
+            result = await connector.sync_all()
+        finally:
+            # A refreshed (and for some providers rotated) token is saved even
+            # when the sync itself fails, or the next attempt can't log in.
+            _persist_rotated_credentials(db, company, storage_id, connector, connectors)
 
         # STEP 2: Validate synced data BEFORE any DB commits
         if not result.success and result.errors:
