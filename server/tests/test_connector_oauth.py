@@ -237,3 +237,46 @@ def test_zoho_authenticate_hits_real_org_endpoint(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", Patched)
     assert _run(conn.authenticate()) is True
     assert seen == ["/books/v3/organizations/947"]
+
+
+def test_hubspot_oauth_connection_refreshes_before_auth(monkeypatch):
+    from server.connectors.hubspot import HubSpotConnector
+    conn = HubSpotConnector(ConnectorConfig(provider_id="hubspot", company_id=1, credentials={
+        "access_token": "stale", "refresh_token": "r", "client_id": "c", "client_secret": "s"}, settings={}))
+
+    def handler(request):
+        if request.url.path == "/oauth/v1/token":
+            return httpx.Response(200, json={"access_token": "fresh", "refresh_token": "r"})
+        assert request.headers["authorization"] == "Bearer fresh"
+        return httpx.Response(200, json={"results": []})
+
+    orig = httpx.AsyncClient
+
+    class Patched(orig):
+        def __init__(self, *a, **kw):
+            kw["transport"] = httpx.MockTransport(handler)
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(httpx, "AsyncClient", Patched)
+    assert _run(conn.authenticate()) is True
+    assert conn.rotated_credentials()["access_token"] == "fresh"
+
+
+def test_hubspot_private_app_token_still_works_without_refresh(monkeypatch):
+    from server.connectors.hubspot import HubSpotConnector
+    conn = HubSpotConnector(ConnectorConfig(provider_id="hubspot", company_id=1, credentials={
+        "access_token": "pat-na1-x"}, settings={}))
+
+    def handler(request):
+        assert request.url.path != "/oauth/v1/token"
+        return httpx.Response(200, json={"results": []})
+
+    orig = httpx.AsyncClient
+
+    class Patched(orig):
+        def __init__(self, *a, **kw):
+            kw["transport"] = httpx.MockTransport(handler)
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(httpx, "AsyncClient", Patched)
+    assert _run(conn.authenticate()) is True
