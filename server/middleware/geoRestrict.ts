@@ -76,6 +76,9 @@ const EXEMPT_EXACT = new Set([
   "/og-image.png",
   "/favicon.ico",
   "/favicon.png",
+  // App icon registered with Meta for the FounderConsole app (App Review
+  // fetches it from Meta's own infrastructure, not the visitor's).
+  "/app-icon-1024.png",
   // The IndexNow host-verification key served by #119. The file lands in
   // `client/public` when that PR merges; before then this path simply 404s,
   // which an exemption does not change. Listed now so the two are not coupled.
