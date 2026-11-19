@@ -19,7 +19,7 @@ import time
 import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, parse_qsl
 
 from .base import (
     BaseConnector,
@@ -61,11 +61,33 @@ class NetSuiteConnector(BaseConnector):
         self._base_url = f"https://{self._account_id.replace('_', '-')}.suitetalk.api.netsuite.com/services/rest/record/v1" if self._account_id else ""
         self._client: Optional[httpx.AsyncClient] = None
 
-    def _generate_oauth_header(self, method: str, url: str) -> str:
-        timestamp = str(int(time.time()))
-        nonce = uuid.uuid4().hex
+    def _generate_oauth_header(
+        self,
+        method: str,
+        url: str,
+        query_params: Optional[Dict[str, Any]] = None,
+        timestamp: Optional[str] = None,
+        nonce: Optional[str] = None,
+    ) -> str:
+        """
+        OAuth 1.0a (TBA) Authorization header, signed per RFC 5849 section 3.4.1.
 
-        params = {
+        The base-string URI is scheme://host/path with the query removed, and
+        every query parameter (from the URL and from `query_params`) joins the
+        oauth_* parameters in the normalized parameter string. Signing the URL
+        with its query left in, and leaving the query out of the parameters,
+        made NetSuite reject every request that carried `?limit=`.
+        """
+        timestamp = timestamp or str(int(time.time()))
+        nonce = nonce or uuid.uuid4().hex
+
+        def enc(v: Any) -> str:
+            return quote(str(v), safe="~")
+
+        parts = urlsplit(url)
+        base_uri = f"{parts.scheme.lower()}://{parts.netloc.lower()}{parts.path}"
+
+        oauth_params = {
             "oauth_consumer_key": self._consumer_key,
             "oauth_token": self._token_id,
             "oauth_signature_method": "HMAC-SHA256",
@@ -74,8 +96,17 @@ class NetSuiteConnector(BaseConnector):
             "oauth_version": "1.0",
         }
 
-        sorted_params = "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in sorted(params.items()))
-        base_string = f"{method.upper()}&{quote(url, safe='')}&{quote(sorted_params, safe='')}"
+        pairs = list(parse_qsl(parts.query, keep_blank_values=True))
+        for k, v in (query_params or {}).items():
+            if isinstance(v, (list, tuple)):
+                pairs.extend((k, item) for item in v)
+            elif v is not None:
+                pairs.append((k, v))
+        pairs.extend(oauth_params.items())
+
+        encoded = sorted((enc(k), enc(v)) for k, v in pairs)
+        sorted_params = "&".join(f"{k}={v}" for k, v in encoded)
+        base_string = f"{method.upper()}&{enc(base_uri)}&{enc(sorted_params)}"
         signing_key = f"{quote(self._consumer_secret, safe='')}&{quote(self._token_secret, safe='')}"
 
         signature = base64.b64encode(
@@ -110,7 +141,7 @@ class NetSuiteConnector(BaseConnector):
     async def _make_request(self, method: str, path: str, **kwargs) -> httpx.Response:
         client = await self._get_client()
         full_url = f"{self._base_url}{path}"
-        auth_header = self._generate_oauth_header(method, full_url)
+        auth_header = self._generate_oauth_header(method, full_url, kwargs.get("params"))
         headers = kwargs.pop("headers", {})
         headers["Authorization"] = auth_header
         return await getattr(client, method.lower())(path, headers=headers, **kwargs)

@@ -30,6 +30,54 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
+FRESHBOOKS_TOKEN_URL = "https://api.freshbooks.com/auth/oauth/token"
+
+# Invoice `v3_status` is a string (https://www.freshbooks.com/api/invoices).
+V3_STATUS_MAP = {
+    "created": "draft",
+    "draft": "draft",
+    "sent": "sent",
+    "viewed": "viewed",
+    "overdue": "overdue",
+    "failed": "pending",
+    "retry": "pending",
+    "success": "paid",
+    "autopaid": "paid",
+    "paid": "paid",
+    "partial": "partial",
+    "disputed": "disputed",
+    "resolved": "pending",
+    "deposit-partial": "partial",
+    "deposit-paid": "partial",
+    "declined": "voided",
+    "pending": "pending",
+}
+# The older numeric `status` field: 0 disputed, 1 draft, 2 sent, 3 viewed,
+# 4 paid, 5 auto-paid, 6 retry, 7 failed, 8 partial.
+NUMERIC_STATUS_MAP = {
+    "0": "disputed", "1": "draft", "2": "sent", "3": "viewed", "4": "paid",
+    "5": "paid", "6": "pending", "7": "pending", "8": "partial",
+}
+
+
+def freshbooks_invoice_status(inv: Dict[str, Any]) -> str:
+    v3 = inv.get("v3_status")
+    if isinstance(v3, str) and v3.strip():
+        return V3_STATUS_MAP.get(v3.strip().lower(), "pending")
+    status = inv.get("status")
+    if status is not None:
+        return NUMERIC_STATUS_MAP.get(str(status), "pending")
+    return "pending"
+
+
+def _money(value: Any) -> float:
+    if isinstance(value, dict):
+        value = value.get("amount", 0)
+    try:
+        return float(value or 0)
+    except (ValueError, TypeError):
+        return 0.0
+
 
 @ConnectorRegistry.register
 class FreshBooksConnector(BaseConnector):
@@ -48,8 +96,60 @@ class FreshBooksConnector(BaseConnector):
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
         self._access_token = config.credentials.get("access_token", "")
+        self._refresh_token = config.credentials.get("refresh_token", "")
+        self._client_id = config.credentials.get("client_id", "")
+        self._client_secret = config.credentials.get("client_secret", "")
+        self._redirect_uri = config.credentials.get("redirect_uri", "")
         self._account_id = config.credentials.get("account_id", "")
         self._client: Optional[httpx.AsyncClient] = None
+        self._refresh_attempted = False
+
+    async def _refresh_access_token(self) -> bool:
+        """
+        Exchange the refresh token for a new bearer token.
+
+        FreshBooks refresh tokens are one-time-use: a successful refresh
+        invalidates the old one, so the new refresh_token is kept on
+        `self._refresh_token`, where `BaseConnector.rotated_credentials`
+        picks it up to be saved.
+        """
+        if self._refresh_attempted:
+            return False
+        if not (self._refresh_token and self._client_id and self._client_secret):
+            return False
+        self._refresh_attempted = True
+        body = {
+            "grant_type": "refresh_token",
+            "client_id": self._client_id,
+            "client_secret": self._client_secret,
+            "refresh_token": self._refresh_token,
+        }
+        if self._redirect_uri:
+            body["redirect_uri"] = self._redirect_uri
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    FRESHBOOKS_TOKEN_URL,
+                    json=body,
+                    headers={"Content-Type": "application/json", "Api-Version": "alpha"},
+                )
+            if response.status_code != 200:
+                logger.warning(f"FreshBooks token refresh failed: {response.status_code}")
+                return False
+            data = response.json()
+            if not data.get("access_token"):
+                return False
+            self._access_token = data["access_token"]
+            if data.get("refresh_token"):
+                self._refresh_token = data["refresh_token"]
+            if self._client:
+                await self._client.aclose()
+                self._client = None
+            logger.info("FreshBooks token refreshed")
+            return True
+        except Exception as e:
+            logger.error(f"FreshBooks token refresh error: {e}")
+            return False
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -66,13 +166,19 @@ class FreshBooksConnector(BaseConnector):
         return self._client
 
     async def authenticate(self) -> bool:
-        if not self._access_token or not self._account_id:
+        if not self._account_id or not (self._access_token or self._refresh_token):
             logger.warning("FreshBooks credentials incomplete - need access_token and account_id")
             return False
 
         try:
+            if not self._access_token and not await self._refresh_access_token():
+                return False
             client = await self._get_client()
             response = await client.get("/users/clients?per_page=1")
+
+            if response.status_code == 401 and await self._refresh_access_token():
+                client = await self._get_client()
+                response = await client.get("/users/clients?per_page=1")
 
             if response.status_code == 200:
                 self._authenticated = True
@@ -214,8 +320,9 @@ class FreshBooksConnector(BaseConnector):
         invoices = []
 
         for inv in raw_invoices:
-            amount = float(inv.get("amount", {}).get("amount", 0))
-            total = float(inv.get("outstanding", {}).get("amount", 0)) or amount
+            amount = _money(inv.get("amount"))
+            outstanding = _money(inv.get("outstanding"))
+            total = amount
 
             date_str = inv.get("create_date", "")
             try:
@@ -234,8 +341,6 @@ class FreshBooksConnector(BaseConnector):
             except (ValueError, TypeError):
                 due_date = None
 
-            status_map = {"0": "draft", "1": "sent", "2": "viewed", "3": "paid", "4": "partial"}
-            fb_status = str(inv.get("v3_status", inv.get("status", "0")))
 
             invoices.append(
                 InvoiceRecord(
@@ -247,9 +352,11 @@ class FreshBooksConnector(BaseConnector):
                     tax=float(inv.get("tax_amount", {}).get("amount", 0) if isinstance(inv.get("tax_amount"), dict) else inv.get("tax_amount", 0)),
                     total=total,
                     currency=inv.get("currency_code", "USD"),
-                    status=status_map.get(fb_status, "pending"),
+                    status=freshbooks_invoice_status(inv),
                     metadata={
                         "invoice_number": inv.get("invoice_number", ""),
+                        "outstanding": outstanding,
+                        "v3_status": inv.get("v3_status"),
                         "source": "freshbooks",
                     },
                 )
@@ -312,7 +419,9 @@ class FreshBooksConnector(BaseConnector):
         if invoices:
             result["revenue"] = sum(inv.total for inv in invoices if inv.status == "paid")
             result["invoices_count"] = len(invoices)
-            result["outstanding"] = sum(inv.total for inv in invoices if inv.status != "paid")
+            result["outstanding"] = sum(
+                float(inv.metadata.get("outstanding", inv.total) or 0) for inv in invoices if inv.status != "paid"
+            )
 
         if ledger_entries:
             result["total_expenses"] = sum(e.debit for e in ledger_entries)

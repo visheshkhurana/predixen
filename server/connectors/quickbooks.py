@@ -36,6 +36,9 @@ from .registry import ConnectorRegistry
 logger = logging.getLogger(__name__)
 
 QB_OAUTH_TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
+# Intuit retired minor versions 1-74 on 1 Aug 2025; lower values are ignored and
+# answered as 75, so ask for 75 explicitly.
+QB_MINOR_VERSION = "75"
 
 QB_ENVIRONMENTS = {
     "sandbox": "https://sandbox-quickbooks.api.intuit.com/v3",
@@ -359,7 +362,7 @@ class QuickBooksConnector(BaseConnector):
             "start_date": start_str,
             "end_date": end_str,
             "accounting_method": "Accrual",
-            "minorversion": "65",
+            "minorversion": QB_MINOR_VERSION,
         })
 
         if pnl_data:
@@ -599,7 +602,7 @@ class QuickBooksConnector(BaseConnector):
             "start_date": start_str,
             "end_date": end_str,
             "accounting_method": "Accrual",
-            "minorversion": "65",
+            "minorversion": QB_MINOR_VERSION,
         })
 
         result = {
@@ -662,7 +665,7 @@ class QuickBooksConnector(BaseConnector):
         data = await self._api_get("reports/BalanceSheet", params={
             "date": date_str,
             "accounting_method": "Accrual",
-            "minorversion": "65",
+            "minorversion": QB_MINOR_VERSION,
         })
 
         result = {
@@ -678,36 +681,54 @@ class QuickBooksConnector(BaseConnector):
         if not data:
             return result
 
-        rows = data.get("Rows", {}).get("Row", [])
-        for section in rows:
+        # Report sections nest: TotalAssets > CurrentAssets > BankAccounts / AR,
+        # and TotalLiabilitiesAndEquity > Liabilities > CurrentLiabilities > AP,
+        # with Equity beside Liabilities. Each section's total is in
+        # Summary.ColData; leaf accounts are Data rows with their own ColData.
+        totals_by_group: Dict[str, float] = {}
+        for section in self._iter_sections(data.get("Rows", {}).get("Row", [])):
             group = (section.get("group", "") or "").lower().replace(" ", "")
-            summary = section.get("Summary", {})
-            col_data = summary.get("ColData", [])
-            section_total = self._extract_amount(col_data)
-
             header_label = ""
-            if "Header" in section:
-                hdr_cols = section["Header"].get("ColData", [])
-                if hdr_cols:
-                    header_label = (hdr_cols[0].get("value", "") or "").lower().replace(" ", "")
+            hdr_cols = section.get("Header", {}).get("ColData", [])
+            if hdr_cols:
+                header_label = (hdr_cols[0].get("value", "") or "").lower().replace(" ", "")
+            amount = self._extract_amount(section.get("Summary", {}).get("ColData", []))
+            for key in (group, header_label):
+                if key and key not in totals_by_group:
+                    totals_by_group[key] = amount
 
-            if group in ("asset", "assets", "totalassets", "totalcurrentassets") or header_label in ("assets", "totalassets"):
-                result["total_assets"] = section_total
-                breakdown = self._extract_row_breakdown(section)
-                for label, amount in breakdown.items():
-                    label_lower = label.lower()
-                    if any(kw in label_lower for kw in ["cash", "bank", "checking", "savings", "money market", "undeposited"]):
-                        result["cash_and_equivalents"] += amount
-                    elif any(kw in label_lower for kw in ["accounts receivable", "a/r"]):
-                        result["accounts_receivable"] += amount
-            elif group in ("liability", "liabilities", "totalliabilities", "totalcurrentliabilities") or header_label in ("liabilities", "totalliabilities"):
-                result["total_liabilities"] = section_total
-                breakdown = self._extract_row_breakdown(section)
-                for label, amount in breakdown.items():
-                    if any(kw in label.lower() for kw in ["accounts payable", "a/p"]):
-                        result["accounts_payable"] += amount
-            elif group in ("equity", "totalequity") or header_label in ("equity", "totalequity"):
-                result["total_equity"] = section_total
+        def pick(*keys: str) -> Optional[float]:
+            for k in keys:
+                if k in totals_by_group:
+                    return totals_by_group[k]
+            return None
+
+        result["total_assets"] = pick("totalassets", "assets") or 0.0
+        result["total_liabilities"] = pick("liabilities", "totalliabilities") or 0.0
+        result["total_equity"] = pick("equity", "totalequity") or 0.0
+
+        cash = pick("bankaccounts")
+        ar = pick("ar", "accountsreceivable")
+        ap = pick("ap", "accountspayable")
+
+        if cash is None or ar is None or ap is None:
+            # No account-group subtotals: fall back to the leaf account names.
+            kw_cash = kw_ar = kw_ap = 0.0
+            for label, amount in self._extract_row_breakdown(data).items():
+                ll = label.lower()
+                if any(kw in ll for kw in ["accounts receivable", "a/r"]):
+                    kw_ar += amount
+                elif any(kw in ll for kw in ["accounts payable", "a/p"]):
+                    kw_ap += amount
+                elif any(kw in ll for kw in ["cash", "bank", "checking", "savings", "money market", "undeposited"]):
+                    kw_cash += amount
+            cash = kw_cash if cash is None else cash
+            ar = kw_ar if ar is None else ar
+            ap = kw_ap if ap is None else ap
+
+        result["cash_and_equivalents"] = cash
+        result["accounts_receivable"] = ar
+        result["accounts_payable"] = ap
 
         logger.info(f"QuickBooks balance sheet: assets={result['total_assets']}, liabilities={result['total_liabilities']}, cash={result['cash_and_equivalents']}")
         return result
@@ -725,7 +746,7 @@ class QuickBooksConnector(BaseConnector):
         data = await self._api_get("reports/CashFlow", params={
             "start_date": start_date.strftime("%Y-%m-%d"),
             "end_date": end_date.strftime("%Y-%m-%d"),
-            "minorversion": "65",
+            "minorversion": QB_MINOR_VERSION,
         })
 
         result = {
@@ -778,23 +799,33 @@ class QuickBooksConnector(BaseConnector):
         except (ValueError, TypeError):
             return 0.0
 
+    def _iter_sections(self, rows: List[Dict[str, Any]]):
+        """Every Section row in a report, depth first (sections nest)."""
+        for row in rows or []:
+            if row.get("type") == "Section" or "Rows" in row or "Summary" in row:
+                yield row
+                yield from self._iter_sections(row.get("Rows", {}).get("Row", []))
+
     def _extract_row_breakdown(self, section: Dict[str, Any]) -> Dict[str, float]:
+        """
+        Leaf account amounts under a report section, keyed by account name.
+
+        Sub-sections are walked rather than read off their Header: a section
+        Header carries only the label (its amount column is blank), and the
+        amounts live in the Data rows' ColData underneath. The old one-level
+        read returned 0 for every parent account.
+        """
         breakdown: Dict[str, float] = {}
 
         for row in section.get("Rows", {}).get("Row", []):
-            if "Header" in row:
-                header = row["Header"]
-                col_data = header.get("ColData", [])
-                if col_data:
-                    label = col_data[0].get("value", "Unknown")
-                    amount = self._extract_amount(col_data)
-                    breakdown[label] = amount
+            if "Rows" in row or row.get("type") == "Section":
+                for label, amount in self._extract_row_breakdown(row).items():
+                    breakdown[label] = breakdown.get(label, 0.0) + amount
             elif "ColData" in row:
                 col_data = row["ColData"]
                 if col_data:
                     label = col_data[0].get("value", "Unknown")
-                    amount = self._extract_amount(col_data)
-                    breakdown[label] = amount
+                    breakdown[label] = breakdown.get(label, 0.0) + self._extract_amount(col_data)
 
         return breakdown
 

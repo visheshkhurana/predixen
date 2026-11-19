@@ -132,9 +132,15 @@ def test_tally_public_host_is_allowed_without_redirects(sent, dns):
     assert client.follow_redirects is False
 
 
-def test_tally_forms_client_does_not_follow_redirects(dns):
-    conn = TallyConnector(_config("tally", {"use_tally_forms": True, "api_key": "k"}))
+def test_tally_forms_flag_no_longer_calls_tally_so(dns):
+    # The "Tally Forms" mode called api.tally.so (an unrelated forms product).
+    # A stale flag in saved credentials must not route anywhere but tally_url.
+    with pytest.raises(UnsafeTargetError):
+        asyncio.run(TallyConnector(_config("tally", {"use_tally_forms": True, "api_key": "k"}))._get_client())
+    conn = TallyConnector(_config("tally", {
+        "use_tally_forms": True, "api_key": "k", "tally_url": "http://tally.example.com:9000"}))
     client = asyncio.run(conn._get_client())
+    assert str(client.base_url).startswith("http://tally.example.com:9000")
     assert client.follow_redirects is False
 
 

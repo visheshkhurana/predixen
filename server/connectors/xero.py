@@ -13,6 +13,7 @@ API Documentation: https://developer.xero.com/documentation/api/accounting/overv
 
 import httpx
 import logging
+import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
@@ -34,6 +35,75 @@ logger = logging.getLogger(__name__)
 XERO_API_URL = "https://api.xero.com/api.xro/2.0"
 XERO_IDENTITY_URL = "https://identity.xero.com"
 XERO_TOKEN_URL = "https://identity.xero.com/connect/token"
+XERO_MAX_PAGES = 50  # 100 rows a page
+
+
+def parse_xero_date(value: Any) -> Optional[datetime]:
+    """Parse a Xero date: ISO ("2024-05-01T00:00:00") or MS-JSON ("/Date(1714521600000+0000)/")."""
+    if not value or not isinstance(value, str):
+        return None
+    m = re.match(r"^/Date\((-?\d+)([+-]\d{4})?\)/$", value.strip())
+    if m:
+        return datetime.utcfromtimestamp(int(m.group(1)) / 1000)
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+    except (ValueError, TypeError):
+        return None
+
+
+def _xero_cell_number(value: Any) -> Any:
+    if value in (None, ""):
+        return 0.0
+    try:
+        return float(str(value).replace(",", ""))
+    except (ValueError, TypeError):
+        return value
+
+
+def parse_xero_report(report: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Flatten a Xero report (ProfitAndLoss / BalanceSheet) into sections and totals.
+
+    Xero nests every total as a `SummaryRow` *inside* a `Section` row, and the
+    headline figures ("Gross Profit", "Net Profit") sit in Sections with an empty
+    Title. Account lines are `Row`s, and a Section can contain nested Sections.
+    The first value column is read (the current period).
+    """
+    result: Dict[str, Any] = {
+        "report_name": report.get("ReportName", ""),
+        "report_date": report.get("ReportDate", ""),
+        "sections": {},
+        "totals": {},
+    }
+
+    def walk(rows: List[Dict[str, Any]], section_data: Optional[Dict[str, Any]]) -> None:
+        for row in rows or []:
+            row_type = row.get("RowType")
+            if row_type == "Section":
+                title = row.get("Title") or ""
+                if title:
+                    target = result["sections"].setdefault(title, {})
+                else:
+                    target = section_data
+                walk(row.get("Rows", []), target)
+                continue
+            cells = row.get("Cells", [])
+            if len(cells) < 2:
+                continue
+            label = cells[0].get("Value", "")
+            value = _xero_cell_number(cells[1].get("Value", "0"))
+            if row_type == "SummaryRow":
+                if label:
+                    result["totals"][label] = value
+                    # Kept at the top level too, where callers already read it.
+                    result[label] = value
+                if section_data is not None:
+                    section_data["Total"] = value
+            elif row_type == "Row" and section_data is not None and label:
+                section_data[label] = value
+
+    walk(report.get("Rows", []), None)
+    return result
 
 
 @ConnectorRegistry.register
@@ -276,68 +346,105 @@ class XeroConnector(BaseConnector):
 
         return invoices
 
+    async def _account_map(self, client: httpx.AsyncClient) -> Dict[str, Dict[str, str]]:
+        """AccountCode -> {name, type}, from GET /Accounts (accounting.settings.read)."""
+        try:
+            response = await client.get("/Accounts")
+            if response.status_code != 200:
+                return {}
+            return {
+                a.get("Code", ""): {"name": a.get("Name", ""), "type": a.get("Type", "")}
+                for a in response.json().get("Accounts", [])
+                if a.get("Code")
+            }
+        except Exception as e:
+            logger.warning(f"Xero accounts fetch error: {e}")
+            return {}
+
     async def fetch_ledger(
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[LedgerEntry]:
+        """
+        Ledger lines from /BankTransactions.
+
+        /Journals is not used: it needs the restricted `accounting.journals.read`
+        scope and accepts no `where` filter (only offset / If-Modified-Since), so
+        a date-filtered call to it was ignored or refused. BankTransactions is
+        covered by the standard transactions/banktransactions scopes, takes a
+        `where` filter and pages 100 at a time.
+        """
         if not self._authenticated:
             if not await self.authenticate():
                 return []
 
-        entries = []
+        entries: List[LedgerEntry] = []
         try:
             client = await self._get_client()
-            params: Dict[str, Any] = {}
+            accounts = await self._account_map(client)
             where_clauses = []
-
             if start_date:
                 where_clauses.append(f'Date >= DateTime({start_date.year},{start_date.month},{start_date.day})')
             if end_date:
                 where_clauses.append(f'Date <= DateTime({end_date.year},{end_date.month},{end_date.day})')
 
-            if where_clauses:
-                params["where"] = " AND ".join(where_clauses)
+            page = 1
+            while True:
+                params: Dict[str, Any] = {"page": page}
+                if where_clauses:
+                    params["where"] = " AND ".join(where_clauses)
+                response = await client.get("/BankTransactions", params=params)
+                if response.status_code != 200:
+                    logger.error(f"Xero bank transactions error: {response.status_code}")
+                    break
 
-            response = await client.get("/Journals", params=params)
+                txns = response.json().get("BankTransactions", [])
+                if not txns:
+                    break
 
-            if response.status_code != 200:
-                logger.error(f"Xero journals error: {response.status_code}")
-                return []
-
-            data = response.json()
-            journals = data.get("Journals", [])
-
-            for journal in journals:
-                journal_date_str = journal.get("JournalDate", "")
-                try:
-                    journal_date = datetime.fromisoformat(journal_date_str) if journal_date_str else datetime.now()
-                except (ValueError, TypeError):
-                    journal_date = datetime.now()
-
-                for line in journal.get("JournalLines", []):
-                    gross = float(line.get("GrossAmount", 0))
-                    entries.append(
-                        LedgerEntry(
-                            external_id=f"{journal.get('JournalID', '')}_{line.get('JournalLineID', '')}",
-                            date=journal_date,
-                            account_code=line.get("AccountCode", ""),
-                            account_name=line.get("AccountName", ""),
-                            debit=abs(gross) if gross > 0 else 0.0,
-                            credit=abs(gross) if gross < 0 else 0.0,
-                            description=line.get("Description", ""),
-                            category=line.get("AccountType", ""),
-                            metadata={
-                                "xero_journal_number": journal.get("JournalNumber"),
-                                "xero_source_type": journal.get("SourceType"),
-                                "tax_type": line.get("TaxType", ""),
-                                "tracking": line.get("TrackingCategories", []),
-                            },
-                        )
+                for txn in txns:
+                    if txn.get("Status") == "DELETED":
+                        continue
+                    txn_date = (
+                        parse_xero_date(txn.get("DateString"))
+                        or parse_xero_date(txn.get("Date"))
+                        or datetime.now()
                     )
+                    is_spend = str(txn.get("Type", "")).startswith("SPEND")
+                    for idx, line in enumerate(txn.get("LineItems", []) or []):
+                        try:
+                            amount = abs(float(line.get("LineAmount", 0) or 0))
+                        except (ValueError, TypeError):
+                            amount = 0.0
+                        code = line.get("AccountCode", "") or ""
+                        acct = accounts.get(code, {})
+                        entries.append(
+                            LedgerEntry(
+                                external_id=f"{txn.get('BankTransactionID', '')}_{line.get('LineItemID') or idx}",
+                                date=txn_date,
+                                account_code=code,
+                                account_name=acct.get("name", ""),
+                                debit=amount if is_spend else 0.0,
+                                credit=0.0 if is_spend else amount,
+                                description=line.get("Description") or (txn.get("Contact") or {}).get("Name", ""),
+                                category=acct.get("type") or None,
+                                metadata={
+                                    "xero_bank_transaction_type": txn.get("Type"),
+                                    "xero_reference": txn.get("Reference"),
+                                    "contact": (txn.get("Contact") or {}).get("Name"),
+                                    "bank_account": (txn.get("BankAccount") or {}).get("Name"),
+                                    "tax_type": line.get("TaxType", ""),
+                                },
+                            )
+                        )
+
+                if len(txns) < 100 or page >= XERO_MAX_PAGES:
+                    break
+                page += 1
 
         except Exception as e:
-            logger.error(f"Error fetching Xero journals: {e}")
+            logger.error(f"Error fetching Xero bank transactions: {e}")
 
         return entries
 
@@ -371,41 +478,7 @@ class XeroConnector(BaseConnector):
             if not reports:
                 return {}
 
-            report = reports[0]
-            result: Dict[str, Any] = {
-                "report_name": report.get("ReportName", ""),
-                "report_date": report.get("ReportDate", ""),
-                "sections": {},
-            }
-
-            for row in report.get("Rows", []):
-                if row.get("RowType") == "Section":
-                    section_title = row.get("Title", "Unknown")
-                    section_data: Dict[str, Any] = {}
-
-                    for detail_row in row.get("Rows", []):
-                        cells = detail_row.get("Cells", [])
-                        if len(cells) >= 2:
-                            label = cells[0].get("Value", "")
-                            value = cells[1].get("Value", "0")
-                            try:
-                                section_data[label] = float(value.replace(",", "")) if value else 0
-                            except (ValueError, TypeError):
-                                section_data[label] = value
-
-                    result["sections"][section_title] = section_data
-
-                elif row.get("RowType") == "SummaryRow":
-                    cells = row.get("Cells", [])
-                    if len(cells) >= 2:
-                        label = cells[0].get("Value", "")
-                        value = cells[1].get("Value", "0")
-                        try:
-                            result[label] = float(value.replace(",", "")) if value else 0
-                        except (ValueError, TypeError):
-                            result[label] = value
-
-            return result
+            return parse_xero_report(reports[0])
 
         except Exception as e:
             logger.error(f"Xero P&L fetch error: {e}")
@@ -438,31 +511,7 @@ class XeroConnector(BaseConnector):
             if not reports:
                 return {}
 
-            report = reports[0]
-            result: Dict[str, Any] = {
-                "report_name": report.get("ReportName", ""),
-                "report_date": report.get("ReportDate", ""),
-                "sections": {},
-            }
-
-            for row in report.get("Rows", []):
-                if row.get("RowType") == "Section":
-                    section_title = row.get("Title", "Unknown")
-                    section_data: Dict[str, Any] = {}
-
-                    for detail_row in row.get("Rows", []):
-                        cells = detail_row.get("Cells", [])
-                        if len(cells) >= 2:
-                            label = cells[0].get("Value", "")
-                            value = cells[1].get("Value", "0")
-                            try:
-                                section_data[label] = float(value.replace(",", "")) if value else 0
-                            except (ValueError, TypeError):
-                                section_data[label] = value
-
-                    result["sections"][section_title] = section_data
-
-            return result
+            return parse_xero_report(reports[0])
 
         except Exception as e:
             logger.error(f"Xero Balance Sheet fetch error: {e}")

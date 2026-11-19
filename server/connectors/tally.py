@@ -7,8 +7,9 @@ Integrates with Tally ERP via XML-over-HTTP for:
 - Stock items
 - Financial reports
 
-For on-premises Tally installations, data is exchanged via XML requests.
-For Tally Forms (SaaS), REST API is used.
+Tally Prime / ERP 9 exchange data via XML requests to the Tally server's
+HTTP port. (An earlier "Tally Forms" mode called api.tally.so, which belongs to
+an unrelated forms product, and has been removed.)
 
 Documentation: https://developers.tallysolutions.com/
 """
@@ -18,6 +19,7 @@ import logging
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 
 from .base import (
     BaseConnector,
@@ -133,6 +135,13 @@ def tally_reporting_window(today: Optional[datetime] = None) -> Tuple[datetime, 
     return start, end
 
 
+def indian_fy_bounds(today: Optional[datetime] = None) -> Tuple[datetime, datetime]:
+    """The Indian financial year (1 April - 31 March) containing `today`."""
+    today = today or datetime.utcnow()
+    start_year = today.year if today.month >= 4 else today.year - 1
+    return datetime(start_year, 4, 1), datetime(start_year + 1, 3, 31)
+
+
 # Tally's default parent groups, mapped to the buckets the sync route can store.
 _REVENUE_GROUPS = {
     "sales accounts", "direct incomes", "indirect incomes", "revenue", "income",
@@ -189,7 +198,7 @@ class TallyConnector(BaseConnector):
     """
     Tally ERP connector for syncing accounting data.
     
-    Supports both Tally Prime (on-prem via XML) and Tally Forms API.
+    Talks to Tally Prime / ERP 9 over its XML-over-HTTP interface.
     """
     
     PROVIDER_ID = "tally"
@@ -213,39 +222,28 @@ class TallyConnector(BaseConnector):
         # again, with DNS, before the first request.
         self._tally_url = (config.credentials.get("tally_url") or "").strip()
         self._company_name = config.credentials.get("company_name", "")
-        # For Tally Forms API
-        self._api_key = config.credentials.get("api_key", "")
-        self._use_tally_forms = config.credentials.get("use_tally_forms", False)
         self._client: Optional[httpx.AsyncClient] = None
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if not self._client:
-            if self._use_tally_forms:
-                self._client = httpx.AsyncClient(
-                    base_url="https://api.tally.so",
-                    headers={
-                        "Authorization": f"Bearer {self._api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=30.0,
-                    **SAFE_CLIENT_KWARGS,
-                )
-            else:
-                if not self._tally_url:
-                    raise UnsafeTargetError("Tally server URL is required")
-                await assert_public_url_before_request(self._tally_url)
-                self._client = httpx.AsyncClient(
-                    base_url=self._tally_url,
-                    headers={"Content-Type": "application/xml"},
-                    timeout=60.0,  # Tally can be slow
-                    **SAFE_CLIENT_KWARGS,
-                )
+            if not self._tally_url:
+                raise UnsafeTargetError("Tally server URL is required")
+            await assert_public_url_before_request(self._tally_url)
+            self._client = httpx.AsyncClient(
+                base_url=self._tally_url,
+                headers={"Content-Type": "application/xml"},
+                timeout=60.0,  # Tally can be slow
+                **SAFE_CLIENT_KWARGS,
+            )
         return self._client
     
     def _build_xml_request(self, request_type: str, filters: Dict[str, Any] = None) -> str:
         """Build XML request for Tally ERP."""
         filters = filters or {}
+        # Company names are free text ("Sharma & Sons Pvt Ltd"); an unescaped
+        # "&" or "<" makes the envelope invalid XML and Tally rejects it.
+        company = xml_escape(self._company_name or "")
         
         if request_type == "ledgers":
             return f'''
@@ -259,7 +257,7 @@ class TallyConnector(BaseConnector):
                 <BODY>
                     <DESC>
                         <STATICVARIABLES>
-                            <SVCURRENTCOMPANY>{self._company_name}</SVCURRENTCOMPANY>
+                            <SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>
                         </STATICVARIABLES>
                         <TDL>
                             <TDLMESSAGE>
@@ -275,8 +273,9 @@ class TallyConnector(BaseConnector):
             '''
         
         elif request_type == "vouchers":
-            from_date = filters.get("from_date", "01-Apr-2024")
-            to_date = filters.get("to_date", "31-Mar-2025")
+            fy_start, fy_end = indian_fy_bounds()
+            from_date = xml_escape(filters.get("from_date") or fy_start.strftime("%d-%b-%Y"))
+            to_date = xml_escape(filters.get("to_date") or fy_end.strftime("%d-%b-%Y"))
             
             return f'''
             <ENVELOPE>
@@ -289,7 +288,7 @@ class TallyConnector(BaseConnector):
                 <BODY>
                     <DESC>
                         <STATICVARIABLES>
-                            <SVCURRENTCOMPANY>{self._company_name}</SVCURRENTCOMPANY>
+                            <SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>
                             <SVFROMDATE>{from_date}</SVFROMDATE>
                             <SVTODATE>{to_date}</SVTODATE>
                         </STATICVARIABLES>
@@ -352,21 +351,13 @@ class TallyConnector(BaseConnector):
         """Verify connectivity to Tally."""
         try:
             client = await self._get_client()
-            
-            if self._use_tally_forms:
-                response = await client.get("/api/me")
-                if response.status_code == 200:
-                    self._authenticated = True
-                    return True
-            else:
-                # For on-prem, try a simple request
-                xml_request = self._build_xml_request("ledgers")
-                response = await client.post("/", content=xml_request)
-                
-                if response.status_code == 200 and "ENVELOPE" in response.text:
-                    self._authenticated = True
-                    logger.info("Tally ERP connection successful")
-                    return True
+            xml_request = self._build_xml_request("ledgers")
+            response = await client.post("/", content=xml_request)
+
+            if response.status_code == 200 and "ENVELOPE" in response.text:
+                self._authenticated = True
+                logger.info("Tally ERP connection successful")
+                return True
             
             return False
             
@@ -378,10 +369,7 @@ class TallyConnector(BaseConnector):
         """Quick connectivity test."""
         try:
             client = await self._get_client()
-            if self._use_tally_forms:
-                response = await client.get("/")
-            else:
-                response = await client.get("/")
+            response = await client.get("/")
             return response.status_code in [200, 400, 401, 403]
         except Exception:
             return False
