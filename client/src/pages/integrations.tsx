@@ -698,22 +698,51 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Zoho Books, QuickBooks, Xero, Gusto and Salesforce connect through the
+  // provider's own sign-in once the server has that provider's OAuth app.
+  const [oauthStarting, setOauthStarting] = useState<string | null>(null);
+  const { data: oauthProviders } = useQuery<Record<string, { name: string; configured: boolean }>>({
+    queryKey: ["/api/connectors/oauth/providers"],
+    staleTime: 5 * 60_000,
+  });
+  const oauthReady = (id: string) => !!oauthProviders?.[id]?.configured;
+
+  const startOAuth = async (providerId: string) => {
+    if (!companyId) return;
+    setOauthStarting(providerId);
+    try {
+      const res = await apiRequest("GET", `/api/connectors/companies/${companyId}/oauth/${providerId}/url`);
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch (error) {
+      setOauthStarting(null);
+      const name = oauthProviders?.[providerId]?.name ?? "the provider";
+      toast({ title: `Couldn't start ${name} sign-in`, description: getErrorMessage(error, "Try again"), variant: "destructive" });
+    }
+  };
+
   // Back from Google or Facebook: say what happened, then tidy the URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("connected");
     const gError = params.get("google_ads_error");
     const mError = params.get("meta_ads_error");
+    const oError = params.get("oauth_error");
     if (connected === "google_ads" || connected === "meta_ads") {
       const name = connected === "google_ads" ? "Google Ads" : "Meta Ads";
       toast({ title: `${name} connected`, description: "Run a sync to pull the last 3 months of spend." });
+      queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
+    } else if (connected) {
+      toast({ title: "Connected", description: "Run a sync to pull your data." });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
     } else if (gError) {
       toast({ title: "Google Ads not connected", description: gError, variant: "destructive" });
     } else if (mError) {
       toast({ title: "Meta Ads not connected", description: mError, variant: "destructive" });
+    } else if (oError) {
+      toast({ title: "Not connected", description: oError, variant: "destructive" });
     }
-    if (connected || gError || mError) window.history.replaceState(null, "", window.location.pathname);
+    if (connected || gError || mError || oError) window.history.replaceState(null, "", window.location.pathname);
   }, [companyId]);
 
   const spreadsheetIntegrations = getIntegrationsByCategory('spreadsheets');
@@ -1011,7 +1040,12 @@ export default function IntegrationsPage() {
                     Reconnect
                   </Button>
                 )}
-                {connectorInfo?.needs_reauth && provider.id !== "google_ads" && !(provider.id === "meta_ads" && metaAdsOAuth) && (
+                {connectorInfo?.needs_reauth && oauthReady(provider.id) && (
+                  <Button size="sm" variant="outline" onClick={() => startOAuth(provider.id)} disabled={oauthStarting === provider.id} data-testid={`button-reconnect-${provider.id}`}>
+                    Reconnect
+                  </Button>
+                )}
+                {connectorInfo?.needs_reauth && provider.id !== "google_ads" && !(provider.id === "meta_ads" && metaAdsOAuth) && !oauthReady(provider.id) && (
                   <ConnectDialog provider={provider} type={type as React.ComponentProps<typeof ConnectDialog>["type"]} companyId={companyId} triggerLabel="Reconnect" />
                 )}
                 <Button
@@ -1049,6 +1083,11 @@ export default function IntegrationsPage() {
                   <Button size="sm" onClick={startGoogleAds} disabled={googleAdsStarting} data-testid="button-connect-google_ads">
                     {googleAdsStarting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
                     Connect with Google
+                  </Button>
+                ) : oauthReady(provider.id) ? (
+                  <Button size="sm" onClick={() => startOAuth(provider.id)} disabled={oauthStarting === provider.id} data-testid={`button-connect-${provider.id}`}>
+                    {oauthStarting === provider.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
+                    Connect with {oauthProviders?.[provider.id]?.name}
                   </Button>
                 ) : provider.id === 'meta_ads' && metaAdsOAuth ? (
                   <Button size="sm" onClick={startMetaAds} disabled={metaAdsStarting} data-testid="button-connect-meta_ads">
@@ -1171,6 +1210,11 @@ export default function IntegrationsPage() {
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Connected
                       </Badge>
+                    ) : oauthReady(provider.id) ? (
+                      <Button size="sm" className="w-full" onClick={() => startOAuth(provider.id)} disabled={oauthStarting === provider.id}>
+                        <Link2 className="h-4 w-4 mr-2" />
+                        Connect with {oauthProviders?.[provider.id]?.name}
+                      </Button>
                     ) : (
                       <ConnectDialog
                         provider={provider}

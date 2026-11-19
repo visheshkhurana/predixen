@@ -51,7 +51,36 @@ class SalesforceConnector(BaseConnector):
         super().__init__(config)
         self._instance_url = config.credentials.get("instance_url", "").rstrip("/")
         self._access_token = config.credentials.get("access_token", "")
+        # Set by "Connect with Salesforce": lets the connector get a fresh
+        # access token (they last ~2 hours) instead of failing.
+        self._refresh_token = config.credentials.get("refresh_token", "")
+        self._client_id = config.credentials.get("client_id", "")
+        self._client_secret = config.credentials.get("client_secret", "")
         self._client: Optional[httpx.AsyncClient] = None
+
+    async def _refresh_access_token(self) -> bool:
+        if not (self._refresh_token and self._client_id and self._client_secret and self._instance_url):
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                res = await client.post(f"{self._instance_url}/services/oauth2/token", data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": self._refresh_token,
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                })
+            if res.status_code != 200 or not res.json().get("access_token"):
+                logger.warning(f"Salesforce token refresh failed: {res.status_code}")
+                return False
+            data = res.json()
+            self._access_token = data["access_token"]
+            if self._client:
+                await self._client.aclose()
+                self._client = None
+            return True
+        except Exception as e:
+            logger.error(f"Salesforce token refresh error: {e}")
+            return False
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -97,6 +126,8 @@ class SalesforceConnector(BaseConnector):
         return all_records
 
     async def authenticate(self) -> bool:
+        if self._refresh_token and not await self._refresh_access_token() and not self._access_token:
+            return False
         if not self._instance_url or not self._access_token:
             logger.warning("Salesforce credentials incomplete (need instance_url and access_token)")
             return False

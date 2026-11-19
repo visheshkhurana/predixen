@@ -13,6 +13,7 @@ Authentication: OAuth 2.0
 
 import httpx
 import logging
+import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -30,6 +31,25 @@ logger = logging.getLogger(__name__)
 
 ZOHO_API_BASE = "https://books.zoho.com/api/v3"
 ZOHO_AUTH_URL = "https://accounts.zoho.com/oauth/v2/token"
+
+# Zoho runs separate data centres; an org on zoho.in can only be reached
+# through the .in hosts. The OAuth callback tells us which one
+# (accounts-server); only these known domains are accepted.
+ZOHO_DC_DOMAINS = ("com", "in", "eu", "com.au", "jp", "ca", "sa", "uk", "com.cn")
+
+
+def zoho_dc_from_accounts_server(accounts_server: str) -> str:
+    """'https://accounts.zoho.in' -> 'in'; anything unknown -> 'com'."""
+    match = re.fullmatch(r"https://accounts\.zoho\.([a-z.]+)/?", (accounts_server or "").strip())
+    if match and match.group(1) in ZOHO_DC_DOMAINS:
+        return match.group(1)
+    return "com"
+
+
+def zoho_urls(dc: str) -> tuple:
+    """(token_url, books_api_base) for a data centre."""
+    dc = dc if dc in ZOHO_DC_DOMAINS else "com"
+    return f"https://accounts.zoho.{dc}/oauth/v2/token", f"https://www.zohoapis.{dc}/books/v3"
 
 
 @ConnectorRegistry.register
@@ -60,13 +80,20 @@ class ZohoBooksConnector(BaseConnector):
         self._access_token = config.credentials.get("access_token", "")
         self._organization_id = config.credentials.get("organization_id", "")
         self._client: Optional[httpx.AsyncClient] = None
+        # Connections made through "Connect with Zoho" record their data centre;
+        # older pasted-token connections keep the original .com hosts.
+        dc = (config.credentials.get("dc") or "").strip()
+        if dc:
+            self._token_url, self._api_base = zoho_urls(dc)
+        else:
+            self._token_url, self._api_base = ZOHO_AUTH_URL, ZOHO_API_BASE
     
     async def _refresh_access_token(self) -> bool:
         """Refresh the OAuth access token using refresh token."""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    ZOHO_AUTH_URL,
+                    self._token_url,
                     data={
                         "refresh_token": self._refresh_token,
                         "client_id": self._client_id,
@@ -77,7 +104,14 @@ class ZohoBooksConnector(BaseConnector):
                 
                 if response.status_code == 200:
                     data = response.json()
-                    self._access_token = data.get("access_token", "")
+                    token = data.get("access_token", "")
+                    if not token:
+                        # Zoho reports some failures as HTTP 200 + {"error": ...}
+                        logger.error(f"Token refresh failed: {data.get('error')}")
+                        return False
+                    self._access_token = token
+                    if self._client:
+                        self._client.headers["Authorization"] = f"Zoho-oauthtoken {token}"
                     logger.info("Zoho Books access token refreshed")
                     return True
                 else:
@@ -92,7 +126,7 @@ class ZohoBooksConnector(BaseConnector):
         """Get or create authenticated HTTP client."""
         if not self._client:
             self._client = httpx.AsyncClient(
-                base_url=ZOHO_API_BASE,
+                base_url=self._api_base,
                 headers={
                     "Authorization": f"Zoho-oauthtoken {self._access_token}",
                     "Content-Type": "application/json",
@@ -137,7 +171,7 @@ class ZohoBooksConnector(BaseConnector):
         """Quick connectivity test."""
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(ZOHO_API_BASE)
+                response = await client.get(self._api_base)
                 return response.status_code in [200, 401, 403]
         except Exception:
             return False

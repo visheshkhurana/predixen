@@ -166,6 +166,29 @@ class BaseConnector(ABC):
     @property
     def is_authenticated(self) -> bool:
         return self._authenticated
+
+    # Token fields a connector may refresh while it runs, and the attribute
+    # names connectors keep them under. QuickBooks, Xero and Gusto rotate the
+    # refresh token on every refresh, so the new one must be saved or the
+    # next sync fails with an invalid grant.
+    _ROTATING_TOKEN_ATTRS = {
+        "access_token": ("_access_token", "access_token"),
+        "refresh_token": ("_refresh_token", "refresh_token"),
+    }
+
+    def rotated_credentials(self) -> Optional[Dict[str, Any]]:
+        """Stored credentials with any token refreshed during this run, or None if unchanged."""
+        creds = dict(self.config.credentials or {})
+        changed = False
+        for key, attrs in self._ROTATING_TOKEN_ATTRS.items():
+            for attr in attrs:
+                value = self.__dict__.get(attr)
+                if isinstance(value, str) and value:
+                    if value != creds.get(key):
+                        creds[key] = value
+                        changed = True
+                    break
+        return creds if changed else None
     
     @abstractmethod
     async def authenticate(self) -> bool:
