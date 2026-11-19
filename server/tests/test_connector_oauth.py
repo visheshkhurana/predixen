@@ -59,6 +59,10 @@ def test_zoho_dc_parsing_only_accepts_known_hosts():
     assert zoho_dc_from_accounts_server("https://accounts.evil.example") == "com"
     assert zoho_dc_from_accounts_server("https://accounts.zoho.in.evil.example") == "com"
     assert zoho_urls("in") == ("https://accounts.zoho.in/oauth/v2/token", "https://www.zohoapis.in/books/v3")
+    assert zoho_dc_from_accounts_server("https://accounts.zoho.ae") == "ae"
+    assert zoho_dc_from_accounts_server("https://accounts.zoho.sg") == "sg"
+    assert zoho_dc_from_accounts_server("https://accounts.zohocloud.ca") == "ca"
+    assert zoho_urls("ca") == ("https://accounts.zohocloud.ca/oauth/v2/token", "https://www.zohoapis.ca/books/v3")
 
 
 def test_zoho_connector_uses_dc_hosts_and_rejects_200_error():
