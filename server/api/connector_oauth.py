@@ -175,6 +175,25 @@ async def _finalize_hubspot(client, token, params, app):
     }
 
 
+async def _finalize_google_analytics(client, token, params, app):
+    if not token.get("refresh_token"):
+        raise OAuthConnectError("Google didn't grant offline access. Try connecting again.")
+    # Pick the founder's first GA4 property (Admin API account summaries).
+    res = await client.get("https://analyticsadmin.googleapis.com/v1beta/accountSummaries",
+                           headers={"Authorization": f"Bearer {token['access_token']}"}, params={"pageSize": 200})
+    summaries = (res.json() or {}).get("accountSummaries", []) if res.status_code == 200 else []
+    props = [p for acc in summaries for p in acc.get("propertySummaries", []) or []]
+    if not props:
+        raise OAuthConnectError("This Google account has no Google Analytics 4 property.")
+    prop = props[0]
+    return {
+        "client_id": app["client_id"], "client_secret": app["client_secret"],
+        "access_token": token["access_token"], "refresh_token": token["refresh_token"],
+        "property_id": str(prop.get("property", "")).split("/")[-1],
+        "_hint": prop.get("displayName") or "Google Analytics",
+    }
+
+
 PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
     OAuthProvider(
         id="zoho_books", name="Zoho", env_prefix="ZOHO",
@@ -213,6 +232,14 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
         token_url="https://api.hubapi.com/oauth/v1/token",
         default_scopes="oauth crm.objects.deals.read crm.objects.contacts.read crm.objects.companies.read",
         finalize=_finalize_hubspot,
+    ),
+    OAuthProvider(
+        id="google_analytics", name="Google", env_prefix="GOOGLE_ANALYTICS",
+        authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
+        token_url="https://oauth2.googleapis.com/token",
+        default_scopes="https://www.googleapis.com/auth/analytics.readonly",
+        extra_auth_params={"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true"},
+        finalize=_finalize_google_analytics,
     ),
     OAuthProvider(
         id="salesforce", name="Salesforce", env_prefix="SALESFORCE",
