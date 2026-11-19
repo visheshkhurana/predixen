@@ -34,6 +34,8 @@ class RestAPIConnector(BaseConnector):
     PROVIDER_CATEGORY = ProviderCategory.CRM
     AUTH_TYPE = AuthType.API_KEY
     
+    ALLOWED_METHODS = ("GET", "POST")
+
     REQUIRED_CREDENTIALS = ["api_key"]
     OPTIONAL_CREDENTIALS = ["endpoint_url", "auth_header", "auth_param"]
     
@@ -44,7 +46,12 @@ class RestAPIConnector(BaseConnector):
         self.auth_param = config.settings.get("auth_param")
         self.response_path = config.settings.get("response_path")
         self.date_field = config.settings.get("date_field")
-        self.method = config.settings.get("method", "GET")
+        # Only read-style verbs: this connector imports data, and an arbitrary
+        # user-supplied method (DELETE, PUT...) must never be sent upstream.
+        method = str(config.settings.get("method") or "GET").upper()
+        self.method = method if method in self.ALLOWED_METHODS else "GET"
+        if method not in self.ALLOWED_METHODS:
+            logger.warning(f"REST API method {method!r} not allowed; using GET")
         self.headers = config.settings.get("headers", {})
     
     async def authenticate(self) -> bool:
@@ -123,6 +130,7 @@ class RestAPIConnector(BaseConnector):
                     self.method,
                     self.endpoint_url,
                     headers=headers,
+                    params=self._build_params(),
                     timeout=10.0
                 )
                 return 200 <= response.status_code < 300
@@ -177,11 +185,7 @@ class RestAPIConnector(BaseConnector):
                 json_data = response.json()
                 
                 if self.response_path:
-                    for key in self.response_path.split("."):
-                        if isinstance(json_data, dict):
-                            json_data = json_data.get(key, [])
-                        elif isinstance(json_data, list) and key.isdigit():
-                            json_data = json_data[int(key)]
+                    json_data = self._extract_path(json_data, self.response_path)
                 
                 if not isinstance(json_data, list):
                     json_data = [json_data]
@@ -208,6 +212,29 @@ class RestAPIConnector(BaseConnector):
             logger.error(f"Error fetching REST API data: {e}")
             raise
     
+    @staticmethod
+    def _extract_path(json_data: Any, response_path: str) -> Any:
+        """Follow a dotted `response_path` (dict keys, list indexes). A path
+        that does not match the response fails with a clear ValueError instead
+        of an IndexError/KeyError from deep inside the walk."""
+        for key in response_path.split("."):
+            if isinstance(json_data, dict):
+                json_data = json_data.get(key, [])
+            elif isinstance(json_data, list) and key.isdigit():
+                idx = int(key)
+                if idx >= len(json_data):
+                    raise ValueError(
+                        f"response_path {response_path!r}: index {idx} out of range "
+                        f"(list has {len(json_data)} items)"
+                    )
+                json_data = json_data[idx]
+            else:
+                raise ValueError(
+                    f"response_path {response_path!r}: cannot apply {key!r} to "
+                    f"{type(json_data).__name__}"
+                )
+        return json_data
+
     def _parse_date(self, value: Any) -> datetime:
         """Parse a date value from the response."""
         if isinstance(value, datetime):
