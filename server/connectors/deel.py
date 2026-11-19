@@ -1,18 +1,28 @@
 """
-Deel Global Payroll Connector - International payroll and contractor management.
+Deel Connector - International payroll and contractor management.
 
 Provides:
-- Contract records (employees and contractors)
-- Invoice data for contractor payments
-- People/team member records
-- Global payroll run data
+- People / team member records
+- Contracts (with compensation from the per-contract endpoint)
+- Paid invoices (what the company paid for its Deel workers), rolled up into
+  monthly payroll runs
 
-API Documentation: https://developer.deel.com/docs/
+API reference (https://developer.deel.com/):
+- Host:      https://api.letsdeel.com/rest   (Bearer API token)
+- People:    GET /people?limit=&offset=          page: {offset, total_rows, items_per_page}
+             https://developer.deel.com/api/reference/endpoints/people/get-people
+- Contracts: GET /contracts?limit=&after_cursor= page: {cursor, total_rows}; no compensation here
+             https://developer.deel.com/api/reference/endpoints/contracts/get-contracts
+             GET /contracts/{id} -> data.compensation_details {amount, currency_code, scale, frequency, gross_annual_salary}
+             https://developer.deel.com/api/reference/endpoints/contracts/get-contract
+- Invoices:  GET /invoices?issued_from_date=&issued_to_date=&limit=&offset= (paid only by default)
+             https://developer.deel.com/api/reference/endpoints/accounting/retrieve-invoices-v-2026-01-01
 """
 
 import httpx
 import logging
-from typing import List, Optional, Dict, Any
+from collections import defaultdict
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 
 from .base import (
@@ -20,7 +30,6 @@ from .base import (
     ConnectorConfig,
     AuthType,
     ProviderCategory,
-    LedgerEntry,
     InvoiceRecord,
     EmployeeRecord,
     PayrollRunRecord,
@@ -30,17 +39,69 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://api.deel.com/rest/v2"
+BASE_URL = "https://api.letsdeel.com/rest"
+PAGE_SIZE = 100
+MAX_PAGES = 100
+MAX_CONTRACT_DETAILS = 200
+DEFAULT_INVOICE_DAYS = 365
+ACTIVE_CONTRACT_STATUSES = {"in_progress", "active", "onboarding", "onboarded"}
+
+_ANNUALIZE = {
+    "annual": 1, "annually": 1, "yearly": 1, "year": 1,
+    "monthly": 12, "month": 12,
+    "semimonthly": 24, "semi_monthly": 24,
+    "biweekly": 26, "bi_weekly": 26,
+    "weekly": 52, "week": 52,
+    "daily": 260, "day": 260,
+    "hourly": 2080, "hour": 2080,
+}
+
+
+def _parse_date(value: Any) -> Optional[datetime]:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value[:10], "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _num(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def annual_compensation(details: Optional[Dict[str, Any]]) -> Optional[Tuple[float, str]]:
+    """(annual amount, currency) from a contract's compensation_details, or None."""
+    if not isinstance(details, dict):
+        return None
+    currency = details.get("currency_code") or details.get("currency") or "USD"
+    if details.get("gross_annual_salary"):
+        return _num(details["gross_annual_salary"]), currency
+    amount = _num(details.get("amount"))
+    if not amount:
+        return None
+    scale = str(details.get("frequency") or details.get("scale") or "monthly").lower()
+    return amount * _ANNUALIZE.get(scale, 12), currency
+
+
+def _primary_email(person: Dict[str, Any]) -> Optional[str]:
+    emails = person.get("emails") or []
+    values = [e for e in emails if isinstance(e, dict) and e.get("value")]
+    work = next((e["value"] for e in values if (e.get("type") or "").lower() == "work"), None)
+    return work or (values[0]["value"] if values else None) or person.get("email")
 
 
 @ConnectorRegistry.register
 class DeelConnector(BaseConnector):
     PROVIDER_ID = "deel"
     PROVIDER_NAME = "Deel"
-    PROVIDER_DESCRIPTION = "Global payroll and contractor management platform. Import contracts, invoices, team members, and international payroll data."
+    PROVIDER_DESCRIPTION = "Global payroll and contractor management platform. Import team members, contracts, and what you pay Deel workers each month."
     PROVIDER_CATEGORY = ProviderCategory.PAYROLL
     AUTH_TYPE = AuthType.API_KEY
-    DOCS_URL = "https://developer.deel.com/docs/"
+    DOCS_URL = "https://developer.deel.com/"
 
     SUPPORTS_EMPLOYEES = True
     SUPPORTS_PAYROLL = True
@@ -49,286 +110,312 @@ class DeelConnector(BaseConnector):
 
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
-        self._api_key = config.credentials.get("api_key", "")
+        self._api_key = (config.credentials.get("api_key") or "").strip()
         self._client: Optional[httpx.AsyncClient] = None
+        self._contract_details: Optional[Dict[str, Dict[str, Any]]] = None
+        self._invoice_cache: Optional[List[InvoiceRecord]] = None
+        self.auth_error: Optional[str] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
             self._client = httpx.AsyncClient(
                 base_url=BASE_URL,
                 timeout=30.0,
+                follow_redirects=False,
                 headers={
-                    "Content-Type": "application/json",
+                    "Accept": "application/json",
                     "Authorization": f"Bearer {self._api_key}",
                 },
             )
         return self._client
 
     async def authenticate(self) -> bool:
+        self.auth_error = None
         if not self._api_key:
-            logger.warning("Deel API key not provided")
+            self.auth_error = "Enter a Deel API token (Deel > More > Developer > Access tokens)."
             return False
 
         try:
             client = await self._get_client()
-            response = await client.get("/people?limit=1")
+            response = await client.get("/people", params={"limit": 1})
 
             if response.status_code == 200:
                 self._authenticated = True
                 logger.info("Deel authentication successful")
                 return True
+            logger.warning(f"Deel auth failed: {response.status_code}")
+            if response.status_code in (401, 403):
+                self.auth_error = (
+                    "Deel rejected the API token. Create an organization token with people:read, "
+                    "contracts:read and accounting:read scopes."
+                )
             else:
-                logger.warning(f"Deel auth failed: {response.status_code} - {response.text[:200]}")
-                return False
+                self.auth_error = f"Deel returned {response.status_code}."
+            return False
         except Exception as e:
             logger.error(f"Deel authentication error: {e}")
+            self.auth_error = "Could not reach Deel. Try again."
             return False
 
     async def test_connection(self) -> bool:
         try:
             client = await self._get_client()
-            response = await client.get("/people?limit=1")
+            response = await client.get("/people", params={"limit": 1})
             return response.status_code == 200
         except Exception:
             return False
 
-    async def get_contracts(self, limit: int = 100) -> List[Dict[str, Any]]:
-        if not self._authenticated:
-            if not await self.authenticate():
-                return []
+    async def _ensure_auth(self) -> bool:
+        return self._authenticated or await self.authenticate()
 
-        try:
-            client = await self._get_client()
-            all_contracts = []
-            page = 1
+    async def _get_offset_paged(self, path: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Offset paging: page = {offset, total_rows, items_per_page}."""
+        client = await self._get_client()
+        items: List[Dict[str, Any]] = []
+        offset = 0
+        for _ in range(MAX_PAGES):
+            response = await client.get(path, params={**(params or {}), "limit": PAGE_SIZE, "offset": offset})
+            if response.status_code != 200:
+                raise RuntimeError(f"Deel {path} returned {response.status_code}")
+            body = response.json() or {}
+            batch = body.get("data") or []
+            items.extend(b for b in batch if isinstance(b, dict))
+            total = int(_num((body.get("page") or {}).get("total_rows")))
+            offset += len(batch)
+            if not batch or offset >= total:
+                return items
+        logger.warning(f"Deel {path}: stopped after {MAX_PAGES} pages; results truncated")
+        return items
 
-            while True:
-                params = {"limit": min(limit, 100), "page": page}
-                response = await client.get("/contracts", params=params)
-
-                if response.status_code != 200:
-                    logger.error(f"Deel contracts error: {response.status_code}")
-                    break
-
-                data = response.json()
-                results = data.get("data", data if isinstance(data, list) else [])
-                all_contracts.extend(results)
-
-                total_pages = data.get("page", {}).get("total_pages", 1) if isinstance(data, dict) else 1
-                if page >= total_pages or len(all_contracts) >= limit:
-                    break
-                page += 1
-
-            return all_contracts
-
-        except Exception as e:
-            logger.error(f"Deel contracts fetch error: {e}")
+    async def get_contracts(self) -> List[Dict[str, Any]]:
+        """Cursor paging: after_cursor -> page.cursor."""
+        if not await self._ensure_auth():
             return []
+        client = await self._get_client()
+        contracts: List[Dict[str, Any]] = []
+        cursor: Optional[str] = None
+        for _ in range(MAX_PAGES):
+            params: Dict[str, Any] = {"limit": PAGE_SIZE}
+            if cursor:
+                params["after_cursor"] = cursor
+            response = await client.get("/contracts", params=params)
+            if response.status_code != 200:
+                logger.error(f"Deel contracts error: {response.status_code}")
+                break
+            body = response.json() or {}
+            batch = body.get("data") or []
+            contracts.extend(b for b in batch if isinstance(b, dict))
+            page = body.get("page") or {}
+            next_cursor = page.get("cursor")
+            total = int(_num(page.get("total_rows")))
+            if not batch or not next_cursor or next_cursor == cursor or (total and len(contracts) >= total):
+                break
+            cursor = next_cursor
+        return contracts
 
-    async def get_people(self, limit: int = 100) -> List[Dict[str, Any]]:
-        if not self._authenticated:
-            if not await self.authenticate():
-                return []
+    async def get_contract_details(self) -> Dict[str, Dict[str, Any]]:
+        """GET /contracts/{id} for active contracts (the list endpoint has no compensation)."""
+        if self._contract_details is not None:
+            return self._contract_details
+        details: Dict[str, Dict[str, Any]] = {}
+        contracts = [c for c in await self.get_contracts()
+                     if str(c.get("status") or "").lower() in ACTIVE_CONTRACT_STATUSES and c.get("id")]
+        if len(contracts) > MAX_CONTRACT_DETAILS:
+            logger.warning(f"Deel: {len(contracts)} active contracts, reading compensation for the first {MAX_CONTRACT_DETAILS}")
+        client = await self._get_client()
+        for contract in contracts[:MAX_CONTRACT_DETAILS]:
+            try:
+                response = await client.get(f"/contracts/{contract['id']}")
+            except httpx.HTTPError as e:
+                logger.warning(f"Deel contract detail failed: {e}")
+                continue
+            if response.status_code != 200:
+                continue
+            body = response.json() or {}
+            data = body.get("data") if isinstance(body.get("data"), dict) else body
+            details[str(contract["id"])] = {**contract, **data}
+        self._contract_details = details
+        return details
 
+    async def get_people(self) -> List[Dict[str, Any]]:
+        if not await self._ensure_auth():
+            return []
         try:
-            client = await self._get_client()
-            all_people = []
-            page = 1
-
-            while True:
-                params = {"limit": min(limit, 100), "page": page}
-                response = await client.get("/people", params=params)
-
-                if response.status_code != 200:
-                    logger.error(f"Deel people error: {response.status_code}")
-                    break
-
-                data = response.json()
-                results = data.get("data", data if isinstance(data, list) else [])
-                all_people.extend(results)
-
-                total_pages = data.get("page", {}).get("total_pages", 1) if isinstance(data, dict) else 1
-                if page >= total_pages or len(all_people) >= limit:
-                    break
-                page += 1
-
-            return all_people
-
+            return await self._get_offset_paged("/people")
         except Exception as e:
             logger.error(f"Deel people fetch error: {e}")
             return []
 
     async def fetch_employees(self) -> List[EmployeeRecord]:
-        people = await self.get_people(limit=500)
+        people = await self.get_people()
+        if not people:
+            return []
+
+        # Salary from contract compensation, matched by contract id (people.employments[].id)
+        # or by worker email.
+        by_contract: Dict[str, Tuple[float, str]] = {}
+        by_email: Dict[str, Tuple[float, str]] = {}
+        try:
+            for cid, detail in (await self.get_contract_details()).items():
+                comp = annual_compensation(detail.get("compensation_details"))
+                if not comp:
+                    continue
+                by_contract[cid] = comp
+                worker = detail.get("worker") or {}
+                email = (worker.get("email") or worker.get("expected_email") or "").lower()
+                if email:
+                    by_email[email] = comp
+        except Exception as e:
+            logger.info(f"Deel contract compensation unavailable: {e}")
+
         employees = []
-
         for person in people:
-            salary = None
-            compensation = person.get("compensation", {})
-            if compensation:
-                amount = compensation.get("amount") or compensation.get("rate")
-                if amount:
-                    salary = float(amount)
-                    scale = compensation.get("scale", "").lower()
-                    if scale == "monthly":
-                        salary = salary * 12
-                    elif scale == "hourly":
-                        salary = salary * 2080
+            email = _primary_email(person)
+            comp = None
+            for employment in person.get("employments") or []:
+                if isinstance(employment, dict) and str(employment.get("id")) in by_contract:
+                    comp = by_contract[str(employment.get("id"))]
+                    break
+            if comp is None and email:
+                comp = by_email.get(email.lower())
 
-            join_date = None
-            start_str = person.get("start_date") or person.get("hiring_date")
-            if start_str:
-                try:
-                    join_date = datetime.strptime(start_str[:10], "%Y-%m-%d")
-                except (ValueError, TypeError):
-                    pass
-
+            department = person.get("department")
+            hiring_status = str(person.get("hiring_status") or "").lower()
+            name = person.get("full_name") or " ".join(
+                p for p in (person.get("first_name"), person.get("last_name")) if p
+            )
             employees.append(
                 EmployeeRecord(
                     external_id=str(person.get("id", "")),
-                    name=f"{person.get('first_name', '')} {person.get('last_name', '')}".strip() or person.get("full_name", ""),
-                    email=person.get("email"),
-                    department=person.get("department", {}).get("name") if isinstance(person.get("department"), dict) else person.get("department"),
-                    designation=person.get("job_title") or person.get("title"),
-                    salary=salary,
-                    join_date=join_date,
-                    status="active" if person.get("status", "").lower() in ("active", "") else person.get("status", "inactive"),
+                    name=name or "",
+                    email=email,
+                    department=department.get("name") if isinstance(department, dict) else department,
+                    designation=person.get("job_title"),
+                    salary=comp[0] if comp else None,
+                    join_date=_parse_date(person.get("start_date")),
+                    status="active" if hiring_status in ("active", "onboarded", "") else hiring_status,
                     metadata={
                         "deel_id": person.get("id"),
-                        "contract_type": person.get("contract_type"),
+                        "hiring_type": person.get("hiring_type"),
                         "country": person.get("country"),
-                        "worker_type": person.get("worker_type"),
+                        "salary_currency": comp[1] if comp else None,
                     },
                 )
             )
-
         return employees
-
-    async def fetch_payroll_runs(
-        self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-    ) -> List[PayrollRunRecord]:
-        contracts = await self.get_contracts(limit=500)
-        payroll_runs = []
-
-        for contract in contracts:
-            compensation = contract.get("compensation", {})
-            if not compensation:
-                continue
-
-            amount = float(compensation.get("amount", 0))
-            currency = compensation.get("currency", "USD")
-            scale = compensation.get("scale", "monthly").lower()
-
-            period_start_str = contract.get("start_date", "")
-            period_end_str = contract.get("end_date", "")
-
-            try:
-                start_dt = datetime.strptime(period_start_str[:10], "%Y-%m-%d") if period_start_str else datetime.now()
-            except (ValueError, TypeError):
-                start_dt = datetime.now()
-
-            try:
-                end_dt = datetime.strptime(period_end_str[:10], "%Y-%m-%d") if period_end_str else datetime.now()
-            except (ValueError, TypeError):
-                end_dt = datetime.now()
-
-            if start_date and end_dt < start_date:
-                continue
-            if end_date and start_dt > end_date:
-                continue
-
-            payroll_runs.append(
-                PayrollRunRecord(
-                    external_id=str(contract.get("id", "")),
-                    period_start=start_dt,
-                    period_end=end_dt,
-                    total_gross=amount,
-                    total_deductions=0.0,
-                    total_net=amount,
-                    employee_count=1,
-                    currency=currency,
-                    status=contract.get("status", "active"),
-                    breakdown={
-                        "base_pay": amount,
-                        "scale": scale,
-                    },
-                    metadata={
-                        "contract_type": contract.get("type"),
-                        "contract_status": contract.get("status"),
-                        "country": contract.get("country"),
-                    },
-                )
-            )
-
-        return payroll_runs
 
     async def fetch_invoices(
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[InvoiceRecord]:
-        if not self._authenticated:
-            if not await self.authenticate():
-                return []
+        """Paid invoices for Deel workers. These are costs to the company, not revenue."""
+        if start_date is None and end_date is None and self._invoice_cache is not None:
+            return self._invoice_cache
+        if not await self._ensure_auth():
+            return []
 
-        invoices = []
+        start = start_date or (datetime.utcnow() - timedelta(days=DEFAULT_INVOICE_DAYS))
+        params: Dict[str, Any] = {"issued_from_date": start.strftime("%Y-%m-%d")}
+        if end_date:
+            params["issued_to_date"] = end_date.strftime("%Y-%m-%d")
+
+        invoices: List[InvoiceRecord] = []
         try:
-            client = await self._get_client()
-            params: Dict[str, Any] = {"limit": 100}
-            if start_date:
-                params["from_date"] = start_date.strftime("%Y-%m-%d")
-            if end_date:
-                params["to_date"] = end_date.strftime("%Y-%m-%d")
-
-            response = await client.get("/invoices", params=params)
-
-            if response.status_code != 200:
-                logger.error(f"Deel invoices error: {response.status_code}")
-                return []
-
-            data = response.json()
-            results = data.get("data", data if isinstance(data, list) else [])
-
-            for inv in results:
-                inv_date_str = inv.get("date") or inv.get("created_at", "")
-                due_date_str = inv.get("due_date", "")
-
-                try:
-                    inv_date = datetime.strptime(inv_date_str[:10], "%Y-%m-%d") if inv_date_str else datetime.now()
-                except (ValueError, TypeError):
-                    inv_date = datetime.now()
-
-                try:
-                    due_date = datetime.strptime(due_date_str[:10], "%Y-%m-%d") if due_date_str else None
-                except (ValueError, TypeError):
-                    due_date = None
-
-                amount = float(inv.get("amount", inv.get("total", 0)))
-
+            for inv in await self._get_offset_paged("/invoices", params):
+                issued = _parse_date(inv.get("issued_at") or inv.get("created_at")) or datetime.utcnow()
                 invoices.append(
                     InvoiceRecord(
                         external_id=str(inv.get("id", "")),
-                        date=inv_date,
-                        due_date=due_date,
-                        customer_name=inv.get("contractor_name") or inv.get("worker_name", ""),
-                        amount=amount,
-                        total=amount,
-                        currency=inv.get("currency", "USD"),
-                        status=inv.get("status", "pending"),
+                        date=issued,
+                        due_date=_parse_date(inv.get("due_date")),
+                        customer_name=None,
+                        amount=_num(inv.get("amount") if inv.get("amount") is not None else inv.get("total")),
+                        tax=_num(inv.get("vat_total")),
+                        total=_num(inv.get("total")),
+                        currency=inv.get("currency") or "USD",
+                        status=inv.get("status") or "paid",
                         metadata={
-                            "invoice_number": inv.get("invoice_number"),
+                            "label": inv.get("label"),
                             "contract_id": inv.get("contract_id"),
+                            "deel_fee": _num(inv.get("deel_fee")),
+                            "paid_at": inv.get("paid_at"),
                             "source": "deel_invoice",
                         },
                     )
                 )
-
         except Exception as e:
             logger.error(f"Error fetching Deel invoices: {e}")
 
+        if start_date is None and end_date is None:
+            self._invoice_cache = invoices
         return invoices
+
+    async def fetch_payroll_runs(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> List[PayrollRunRecord]:
+        """Monthly runs from paid worker invoices; falls back to contract compensation."""
+        invoices = await self.fetch_invoices(start_date, end_date)
+        buckets: Dict[Tuple[str, str], List[InvoiceRecord]] = defaultdict(list)
+        for inv in invoices:
+            if inv.status not in ("paid", "processing"):
+                continue
+            paid = _parse_date(inv.metadata.get("paid_at")) or inv.date
+            buckets[(paid.strftime("%Y-%m"), inv.currency)].append(inv)
+
+        runs: List[PayrollRunRecord] = []
+        for (month, currency), items in sorted(buckets.items()):
+            first = datetime.strptime(month + "-01", "%Y-%m-%d")
+            last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+            total = sum(i.total for i in items)
+            runs.append(PayrollRunRecord(
+                external_id=f"deel-{month}-{currency}",
+                period_start=first,
+                period_end=last,
+                total_gross=total,
+                total_deductions=0.0,
+                total_net=total,
+                employee_count=len({i.metadata.get("contract_id") for i in items if i.metadata.get("contract_id")}),
+                currency=currency,
+                status="completed",
+                breakdown={
+                    "worker_pay": sum(i.amount for i in items),
+                    "deel_fees": sum(i.metadata.get("deel_fee") or 0 for i in items),
+                    "vat": sum(i.tax for i in items),
+                },
+                metadata={"source": "deel_invoices", "invoice_count": len(items)},
+            ))
+        if runs:
+            return runs
+
+        # No paid invoices visible (new account or token without accounting:read):
+        # estimate this month's cost from active contract compensation.
+        monthly: Dict[str, float] = defaultdict(float)
+        heads: Dict[str, int] = defaultdict(int)
+        for detail in (await self.get_contract_details()).values():
+            comp = annual_compensation(detail.get("compensation_details"))
+            if comp:
+                monthly[comp[1]] += comp[0] / 12
+                heads[comp[1]] += 1
+        now = datetime.utcnow()
+        first = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        for currency, amount in monthly.items():
+            runs.append(PayrollRunRecord(
+                external_id=f"deel-estimate-{first.strftime('%Y-%m')}-{currency}",
+                period_start=first,
+                period_end=now,
+                total_gross=amount,
+                total_deductions=0.0,
+                total_net=amount,
+                employee_count=heads[currency],
+                currency=currency,
+                status="estimated",
+                breakdown={"base_pay": amount},
+                metadata={"source": "deel_contract_compensation"},
+            ))
+        return runs
 
     def map_to_financials(
         self,
@@ -339,7 +426,7 @@ class DeelConnector(BaseConnector):
     ) -> Dict[str, Any]:
         result = {
             "source_type": "connector_deel",
-            "extraction_summary": "Synced from Deel Global Payroll",
+            "extraction_summary": "Synced from Deel",
         }
 
         if employees:
@@ -350,13 +437,15 @@ class DeelConnector(BaseConnector):
             result["monthly_payroll"] = total_salary / 12 if total_salary > 0 else 0
 
         if payroll_runs:
+            months = {r.period_start.strftime("%Y-%m") for r in payroll_runs}
             total_payroll_cost = sum(run.total_gross for run in payroll_runs)
-            result["payroll"] = total_payroll_cost / max(len(payroll_runs), 1)
+            result["payroll"] = total_payroll_cost / max(len(months), 1)
             result["total_payroll_cost"] = total_payroll_cost
             result["payroll_runs_count"] = len(payroll_runs)
 
         if invoices:
-            result["revenue"] = sum(inv.total for inv in invoices)
+            # Deel invoices are what the company pays for its workers: a cost, never revenue.
+            result["contractor_invoices_total"] = sum(inv.total for inv in invoices)
             result["invoices_count"] = len(invoices)
 
         return result
@@ -369,13 +458,13 @@ class DeelConnector(BaseConnector):
                     success=False,
                     provider_id=self.PROVIDER_ID,
                     sync_type="full",
-                    errors=["Authentication failed - check api_key"],
+                    errors=[self.auth_error or "Authentication failed - check api_key"],
                     sync_started=sync_started,
                 )
 
             employees = await self.fetch_employees()
-            payroll_runs = await self.fetch_payroll_runs()
             invoices = await self.fetch_invoices()
+            payroll_runs = await self.fetch_payroll_runs()
             financials = self.map_to_financials(employees=employees, payroll_runs=payroll_runs, invoices=invoices)
 
             return SyncResult(

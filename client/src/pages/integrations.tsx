@@ -1591,7 +1591,7 @@ function SyncStatusDisplay({
   );
 }
 
-type CredentialField = { field: string; label: string; placeholder: string; optional?: boolean };
+type CredentialField = { field: string; label: string; placeholder: string; hint?: string; optional?: boolean };
 
 // Providers that accept one of several credential sets. The connect button
 // enables once every required field and at least one full set is filled.
@@ -1606,13 +1606,15 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "account_number", label: "Account number", placeholder: "Customer Identifier or current account number" },
   ],
   greythr: [
-    { field: "api_access_id", label: "API Access ID", placeholder: "Enter GreytHR Access ID" },
-    { field: "api_secret", label: "API Secret", placeholder: "Enter GreytHR API Secret" },
-    { field: "base_url", label: "Base URL", placeholder: "https://yourcompany.greythr.com" },
+    { field: "domain", label: "greytHR domain", placeholder: "acme or acme.greythr.com", hint: "The address you use to sign in to greytHR, e.g. acme.greythr.com." },
+    { field: "api_access_id", label: "API Access ID (user name)", placeholder: "API user name", hint: "greytHR Admin > Settings > API Details. Ask greytHR support to enable API access if you don't see it." },
+    { field: "api_secret", label: "API Secret (password)", placeholder: "API password", hint: "Shown next to the Access ID when the API user is created." },
   ],
   keka: [
-    { field: "api_key", label: "API Key", placeholder: "Enter Keka API Key" },
-    { field: "tenant_id", label: "Tenant ID", placeholder: "Enter your Keka Tenant ID" },
+    { field: "company", label: "Keka company", placeholder: "acme (from acme.keka.com)", hint: "The first part of your Keka address: acme for acme.keka.com." },
+    { field: "client_id", label: "Client ID", placeholder: "Keka API Client ID", hint: "Keka > Settings > Integrations > API access (needs Keka's API add-on)." },
+    { field: "client_secret", label: "Client Secret", placeholder: "Keka API Client Secret", hint: "Shown with the Client ID on the same API access page." },
+    { field: "api_key", label: "API Key", placeholder: "Keka API Key", hint: "Generate it on the API access page; give it HRIS and Payroll read access." },
   ],
   zoho_books: [
     { field: "client_id", label: "Client ID", placeholder: "Enter Zoho Client ID" },
@@ -1635,8 +1637,7 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "client_id", label: "Client ID", placeholder: "Enter Gusto Client ID" },
     { field: "client_secret", label: "Client Secret", placeholder: "Enter Gusto Client Secret" },
     { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
-    { field: "refresh_token", label: "Refresh Token", placeholder: "OAuth2 Refresh Token" },
-    { field: "company_uuid", label: "Company UUID", placeholder: "Gusto Company UUID" },
+    { field: "refresh_token", label: "Refresh Token", placeholder: "OAuth2 Refresh Token", hint: "Your company is detected from the token, no company UUID needed." },
   ],
   xero: [
     { field: "client_id", label: "Client ID", placeholder: "Enter Xero Client ID" },
@@ -1727,10 +1728,10 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "region", label: "Data Center (optional)", placeholder: "us (default) or eu", optional: true },
   ],
   rippling: [
-    { field: "api_key", label: "API Key", placeholder: "Enter Rippling API Key" },
+    { field: "api_key", label: "API Token", placeholder: "Rippling API token", hint: "Rippling > Tools > Developer > API Tokens. Give it the workers.read scope." },
   ],
   deel: [
-    { field: "api_key", label: "API Token", placeholder: "Enter Deel API Token" },
+    { field: "api_key", label: "API Token", placeholder: "Deel API token", hint: "Deel > More > Developer > Access tokens. Organization token with people, contracts and accounting read scopes." },
   ],
   netsuite: [
     { field: "account_id", label: "Account ID", placeholder: "Enter NetSuite Account ID" },
@@ -1948,6 +1949,7 @@ function ConnectDialog({
                       onChange={(e) => setCredentials(prev => ({ ...prev, [cf.field]: e.target.value }))}
                       data-testid={`input-${cf.field}`}
                     />
+                    {cf.hint && <p className="text-xs text-muted-foreground">{cf.hint}</p>}
                   </div>
                 ))}
               </div>
