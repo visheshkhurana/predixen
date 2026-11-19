@@ -137,3 +137,40 @@ def test_failed_sync_result_records_last_error_and_success_clears_it(client, mon
     assert row["last_error"] is None
     assert "last_error_at" not in row
     assert row["records_synced"] == 3
+
+
+def test_empty_account_syncs_ok_with_nothing_recorded(client, monkeypatch):
+    """A new account with no invoices/ledger yet is a successful sync, not an error."""
+    http, Session = client
+
+    async def _empty(self):
+        return SyncResult(success=True, provider_id="hubspot", sync_type="full", records_synced=0,
+                          metadata={"financials": {"revenue": None, "cash_balance": None}})
+
+    monkeypatch.setattr(HubSpotConnector, "sync_all", _empty)
+    company_id = _company(Session)
+    response = http.post(f"/connectors/companies/{company_id}/sync/hubspot")
+    assert response.status_code == 200, response.text
+    row = _hubspot_row(Session, company_id)
+    assert row["last_error"] is None and row["records_synced"] == 0
+    session = Session()
+    assert session.query(FinancialRecord).filter(FinancialRecord.company_id == company_id).count() == 0
+    session.close()
+
+
+def test_rotated_token_is_saved_by_the_sync_endpoint(client, monkeypatch):
+    http, Session = client
+    from server.core.encryption import decrypt_credentials
+
+    async def _rotating(self):
+        self._refreshed = "new-token"
+        return SyncResult(success=True, provider_id="hubspot", sync_type="full", records_synced=1)
+
+    monkeypatch.setattr(HubSpotConnector, "sync_all", _rotating)
+    monkeypatch.setattr(HubSpotConnector, "rotated_credentials",
+                        lambda self: {"access_token": "new-token"} if getattr(self, "_refreshed", None) else None)
+    company_id = _company(Session)
+    response = http.post(f"/connectors/companies/{company_id}/sync/hubspot")
+    assert response.status_code == 200, response.text
+    stored = _hubspot_row(Session, company_id)["credentials"]
+    assert decrypt_credentials(stored)["access_token"] == "new-token"
