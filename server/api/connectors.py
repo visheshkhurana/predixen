@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import logging
 import json
 
@@ -751,7 +751,7 @@ async def sync_provider(
             # Update sync status in metadata. RazorpayX rows also get any
             # plaintext account number moved into the encrypted blob.
             updated = _seal_razorpay_config(dict(connectors[storage_id]), storage_id)
-            updated["last_sync"] = datetime.utcnow().isoformat()
+            updated["last_sync"] = datetime.now(timezone.utc).isoformat()
             updated["records_synced"] = result.records_synced
             updated["last_error"] = None  # Clear previous errors on success
             updated.pop("last_error_at", None)

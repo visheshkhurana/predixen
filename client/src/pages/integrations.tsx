@@ -42,6 +42,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import { parseServerDate } from "@/lib/serverDate";
 
 import { IntegrationCard, ApiKeyConnectModal, StripeConnectModal, SlackLinkCard } from "@/components/integrations";
 import { useFounderStore } from "@/store/founderStore";
@@ -1485,7 +1486,7 @@ function SyncStatusDisplay({
           <div className="flex items-center gap-2 text-sm">
             <Clock className="h-4 w-4 text-muted-foreground" />
             <span className="text-muted-foreground">
-              Last synced: {lastSync ? formatDistanceToNow(new Date(lastSync), { addSuffix: true }) : "Never"}
+              Last synced: {lastSync ? formatDistanceToNow(parseServerDate(lastSync), { addSuffix: true }) : "Never"}
             </span>
           </div>
           {syncDetails && (
