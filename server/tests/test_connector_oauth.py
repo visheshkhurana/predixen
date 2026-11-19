@@ -280,3 +280,73 @@ def test_hubspot_private_app_token_still_works_without_refresh(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", Patched)
     assert _run(conn.authenticate()) is True
+
+
+def _zoho_conn():
+    conn = ZohoBooksConnector(ConnectorConfig(provider_id="zoho_books", company_id=1, credentials={
+        "client_id": "c", "client_secret": "s", "access_token": "a", "refresh_token": "r",
+        "organization_id": "947", "dc": "com"}, settings={}))
+    conn._authenticated = True
+    return conn
+
+
+def _patch_httpx(monkeypatch, handler):
+    orig = httpx.AsyncClient
+
+    class Patched(orig):
+        def __init__(self, *a, **kw):
+            kw["transport"] = httpx.MockTransport(handler)
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(httpx, "AsyncClient", Patched)
+
+
+def test_zoho_ledger_reads_lines_from_journal_detail(monkeypatch):
+    def handler(request):
+        path = request.url.path
+        if path.endswith("/chartofaccounts"):
+            return httpx.Response(200, json={"chartofaccounts": [{"account_id": "A1", "account_name": "Sales"}],
+                                             "page_context": {"has_more_page": False}})
+        if path.endswith("/journals"):
+            return httpx.Response(200, json={"journals": [{"journal_id": "J1", "journal_date": "2026-11-01"}],
+                                             "page_context": {"has_more_page": False}})
+        if path.endswith("/journals/J1"):
+            return httpx.Response(200, json={"journal": {"line_items": [
+                {"line_id": "L1", "account_id": "A1", "amount": 500, "debit_or_credit": "credit"},
+                {"line_id": "L2", "account_id": "A2", "amount": 500, "debit_or_credit": "debit"}]}})
+        return httpx.Response(404)
+
+    _patch_httpx(monkeypatch, handler)
+    entries = _run(_zoho_conn().fetch_ledger())
+    assert [(e.account_name, e.debit, e.credit) for e in entries] == [("Sales", 0.0, 500.0), ("", 500.0, 0.0)]
+
+
+def test_zoho_lists_are_paginated(monkeypatch):
+    pages = []
+
+    def handler(request):
+        page = int(request.url.params["page"])
+        pages.append(page)
+        rows = [{"expense_id": f"{page}-{i}"} for i in range(200 if page == 1 else 3)]
+        return httpx.Response(200, json={"expenses": rows, "page_context": {"has_more_page": page == 1}})
+
+    _patch_httpx(monkeypatch, handler)
+    assert len(_run(_zoho_conn().fetch_expenses())) == 203
+    assert pages == [1, 2]
+
+
+def test_zoho_repeated_401_stops_after_one_refresh(monkeypatch):
+    calls = {"refresh": 0, "org": 0}
+
+    def handler(request):
+        if request.url.path == "/oauth/v2/token":
+            calls["refresh"] += 1
+            return httpx.Response(200, json={"access_token": f"t{calls['refresh']}"})
+        calls["org"] += 1
+        return httpx.Response(401)
+
+    _patch_httpx(monkeypatch, handler)
+    conn = _zoho_conn()
+    conn._authenticated = False
+    assert _run(conn.authenticate()) is False
+    assert calls == {"refresh": 1, "org": 2}

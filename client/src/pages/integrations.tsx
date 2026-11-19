@@ -1741,7 +1741,7 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
 // Providers with a real server-side connector. Anything else has no backend to
 // connect to, so its card says "Coming Soon" instead of playing a fake
 // "authorizing" animation and accepting any key.
-export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"]);
+export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"]);
 
 const providerSetupHelp: Record<string, string> = {
   meta_ads:

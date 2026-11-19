@@ -65,6 +65,19 @@ def zoho_urls(dc: str) -> tuple:
     return f"https://{accounts}/oauth/v2/token", f"https://{api}/books/v3"
 
 
+PER_PAGE = 200
+MAX_PAGES = 50
+MAX_JOURNAL_DETAILS = 500  # one detail call per journal; cap a single sync
+
+
+def _zoho_line_amounts(line: Dict[str, Any]) -> tuple:
+    """(debit, credit) for a journal line. Documented shape: amount + debit_or_credit."""
+    if "debit_or_credit" in line:
+        amount = float(line.get("amount") or 0)
+        return (amount, 0.0) if line.get("debit_or_credit") == "debit" else (0.0, amount)
+    return float(line.get("debit_amount") or 0), float(line.get("credit_amount") or 0)
+
+
 @ConnectorRegistry.register
 class ZohoBooksConnector(BaseConnector):
     """
@@ -149,7 +162,7 @@ class ZohoBooksConnector(BaseConnector):
             )
         return self._client
     
-    async def authenticate(self) -> bool:
+    async def authenticate(self, _retried: bool = False) -> bool:
         """Verify authentication by testing API access."""
         try:
             # Refresh token if needed
@@ -167,11 +180,11 @@ class ZohoBooksConnector(BaseConnector):
                 return True
             elif response.status_code == 401:
                 # Try refreshing token
-                if await self._refresh_access_token():
-                    # Update client headers
+                # Refresh once; a second 401 (wrong org or data centre) is final.
+                if not _retried and await self._refresh_access_token():
                     if self._client:
                         self._client.headers["Authorization"] = f"Zoho-oauthtoken {self._access_token}"
-                    return await self.authenticate()
+                    return await self.authenticate(_retried=True)
                 return False
             else:
                 logger.warning(f"Zoho Books auth failed: {response.status_code}")
@@ -235,7 +248,9 @@ class ZohoBooksConnector(BaseConnector):
                         date=datetime.fromisoformat(inv["date"]) if inv.get("date") else datetime.now(),
                         due_date=datetime.fromisoformat(inv["due_date"]) if inv.get("due_date") else None,
                         customer_name=inv.get("customer_name"),
-                        amount=inv.get("sub_total", 0),
+                        # The list endpoint returns total/balance only; sub_total,
+                        # tax_total and line_items exist on GET /invoices/{id}.
+                        amount=inv.get("sub_total", inv.get("total", 0)),
                         tax=inv.get("tax_total", 0),
                         total=inv.get("total", 0),
                         currency=inv.get("currency_code", "INR"),
@@ -280,45 +295,43 @@ class ZohoBooksConnector(BaseConnector):
         try:
             client = await self._get_client()
             
-            # Fetch chart of accounts first
-            accounts_response = await client.get("/chartofaccounts")
-            accounts = {}
-            if accounts_response.status_code == 200:
-                for acc in accounts_response.json().get("chartofaccounts", []):
-                    accounts[acc.get("account_id")] = acc.get("account_name")
-            
-            # Fetch journal entries
-            params: Dict[str, Any] = {"per_page": 200}
+            # Chart of accounts (paginated)
+            accounts: Dict[str, str] = {}
+            for acc in await self._paged_list(client, "/chartofaccounts", "chartofaccounts", {}):
+                accounts[acc.get("account_id")] = acc.get("account_name")
+
+            # Journals: the list has summaries only; line items come from
+            # GET /journals/{id}, with `amount` + `debit_or_credit` per line.
+            params: Dict[str, Any] = {}
             if start_date:
                 params["date_start"] = start_date.strftime("%Y-%m-%d")
             if end_date:
                 params["date_end"] = end_date.strftime("%Y-%m-%d")
-            
-            response = await client.get("/journals", params=params)
-            
-            if response.status_code == 200:
-                data = response.json()
-                journals = data.get("journals", [])
-                
-                for journal in journals:
-                    # Each journal can have multiple line items
-                    for line in journal.get("line_items", []):
-                        entries.append(LedgerEntry(
-                            external_id=f"{journal.get('journal_id')}_{line.get('line_id', '')}",
-                            date=datetime.fromisoformat(journal["journal_date"]) if journal.get("journal_date") else datetime.now(),
-                            account_code=line.get("account_id", ""),
-                            account_name=accounts.get(line.get("account_id"), line.get("account_name", "")),
-                            debit=line.get("debit_amount", 0),
-                            credit=line.get("credit_amount", 0),
-                            description=line.get("description") or journal.get("notes"),
-                            category=line.get("account_type"),
-                            metadata={
-                                "journal_id": journal.get("journal_id"),
-                                "reference_number": journal.get("reference_number"),
-                            },
-                        ))
-                
-                logger.info(f"Fetched {len(entries)} ledger entries from Zoho Books")
+            journals = await self._paged_list(client, "/journals", "journals", params)
+
+            for journal in journals[:MAX_JOURNAL_DETAILS]:
+                lines = journal.get("line_items")
+                if lines is None and journal.get("journal_id"):
+                    detail = await client.get(f"/journals/{journal['journal_id']}")
+                    lines = (detail.json().get("journal") or {}).get("line_items", []) if detail.status_code == 200 else []
+                for line in lines or []:
+                    debit, credit = _zoho_line_amounts(line)
+                    entries.append(LedgerEntry(
+                        external_id=f"{journal.get('journal_id')}_{line.get('line_id', '')}",
+                        date=datetime.fromisoformat(journal["journal_date"]) if journal.get("journal_date") else datetime.now(),
+                        account_code=line.get("account_id", ""),
+                        account_name=accounts.get(line.get("account_id"), line.get("account_name", "")),
+                        debit=debit,
+                        credit=credit,
+                        description=line.get("description") or journal.get("notes"),
+                        category=line.get("account_type"),
+                        metadata={
+                            "journal_id": journal.get("journal_id"),
+                            "reference_number": journal.get("reference_number"),
+                        },
+                    ))
+
+            logger.info(f"Fetched {len(entries)} ledger entries from Zoho Books")
             
         except Exception as e:
             logger.error(f"Error fetching Zoho Books ledger: {e}")
@@ -339,17 +352,30 @@ class ZohoBooksConnector(BaseConnector):
         
         try:
             client = await self._get_client()
-            response = await client.get("/expenses", params={"per_page": 200})
-            
-            if response.status_code == 200:
-                expenses = response.json().get("expenses", [])
-                logger.info(f"Fetched {len(expenses)} expenses from Zoho Books")
+            expenses = await self._paged_list(client, "/expenses", "expenses", {})
+            logger.info(f"Fetched {len(expenses)} expenses from Zoho Books")
             
         except Exception as e:
             logger.error(f"Error fetching Zoho Books expenses: {e}")
         
         return expenses
     
+    async def _paged_list(self, client, path: str, key: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Every row of a Zoho list endpoint (page/per_page)."""
+        rows: List[Dict[str, Any]] = []
+        for page in range(1, MAX_PAGES + 1):
+            res = await client.get(path, params={**params, "page": page, "per_page": PER_PAGE})
+            if res.status_code != 200:
+                logger.warning(f"Zoho Books {path} page {page} failed: {res.status_code}")
+                break
+            data = res.json()
+            batch = data.get(key, []) or []
+            rows.extend(batch)
+            more = (data.get("page_context") or {}).get("has_more_page")
+            if not batch or more is False or (more is None and len(batch) < PER_PAGE):
+                break
+        return rows
+
     async def close(self):
         """Close the HTTP client."""
         if self._client:

@@ -48,7 +48,10 @@ class MySQLConnector(BaseConnector):
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
         self._host = config.credentials.get("host", "")
-        self._port = int(config.credentials.get("port", 3306))
+        try:
+            self._port = int(config.credentials.get("port", 3306) or 3306)
+        except (TypeError, ValueError):
+            self._port = 0  # reported by _validate_credentials, not a crash
         self._database = config.credentials.get("database", "")
         self._username = config.credentials.get("username", "")
         self._password = config.credentials.get("password", "")
@@ -73,13 +76,12 @@ class MySQLConnector(BaseConnector):
             logger.warning(f"MySQL credential validation failed: {', '.join(validation_errors)}")
             return False
 
-        try:
-            self._authenticated = True
-            logger.info(f"MySQL credentials validated for {self._username}@{self._host}:{self._port}/{self._database}")
-            return True
-        except Exception as e:
-            logger.error(f"MySQL authentication error: {e}")
-            return False
+        # This connector never opens a database connection yet, so reporting
+        # "connected" would show a source that can never have data. Refuse
+        # honestly until it is implemented (the card shows Coming Soon).
+        self.auth_error = "MySQL sync isn't available yet."
+        logger.info("MySQL connector is not implemented; refusing to report a connection")
+        return False
 
     async def test_connection(self) -> bool:
         validation_errors = self._validate_credentials()

@@ -181,7 +181,7 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
         authorize_url="https://accounts.zoho.com/oauth/v2/auth",
         token_url="",  # per data centre, see _finalize_zoho
         default_scopes=("ZohoBooks.settings.READ,ZohoBooks.invoices.READ,ZohoBooks.accountants.READ,"
-                        "ZohoBooks.expenses.READ,ZohoBooks.contacts.READ,ZohoBooks.banking.READ,ZohoBooks.reports.READ"),
+                        "ZohoBooks.expenses.READ,ZohoBooks.contacts.READ,ZohoBooks.banking.READ"),
         scope_separator=",",
         extra_auth_params={"access_type": "offline", "prompt": "consent"},
         finalize=_finalize_zoho,
