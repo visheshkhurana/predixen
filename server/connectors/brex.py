@@ -30,7 +30,9 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://platform.brexapis.com/v2"
+# Server listed in Brex's published OpenAPI specs (Transactions + Payments APIs).
+# Paths carry their own version: /v2/accounts, /v2/transactions, /v1/transfers.
+BASE_URL = "https://api.brex.com"
 
 
 @ConnectorRegistry.register
@@ -71,7 +73,11 @@ class BrexConnector(BaseConnector):
 
         try:
             client = await self._get_client()
-            response = await client.get("/accounts")
+            # There is no GET /v2/accounts; probe the cash accounts list, and the
+            # card accounts list for card-only tokens.
+            response = await client.get("/v2/accounts/cash")
+            if response.status_code in (401, 403, 404):
+                response = await client.get("/v2/accounts/card")
 
             if response.status_code == 200:
                 self._authenticated = True
@@ -87,7 +93,9 @@ class BrexConnector(BaseConnector):
     async def test_connection(self) -> bool:
         try:
             client = await self._get_client()
-            response = await client.get("/accounts")
+            response = await client.get("/v2/accounts/cash")
+            if response.status_code in (401, 403, 404):
+                response = await client.get("/v2/accounts/card")
             return response.status_code == 200
         except Exception:
             return False
@@ -99,12 +107,15 @@ class BrexConnector(BaseConnector):
 
         try:
             client = await self._get_client()
-            response = await client.get("/accounts")
-
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("items", [])
-            return []
+            accounts: List[Dict[str, Any]] = []
+            for path in ("/v2/accounts/cash", "/v2/accounts/card"):
+                response = await client.get(path)
+                if response.status_code == 200:
+                    data = response.json()
+                    items = data.get("items", data) if isinstance(data, dict) else data
+                    if isinstance(items, list):
+                        accounts.extend(items)
+            return accounts
         except Exception as e:
             logger.error(f"Brex accounts fetch error: {e}")
             return []
@@ -128,7 +139,7 @@ class BrexConnector(BaseConnector):
                     params["cursor"] = cursor
 
                 response = await client.get(
-                    "/transactions/card/primary",
+                    "/v2/transactions/card/primary",
                     params=params,
                 )
 
@@ -158,7 +169,7 @@ class BrexConnector(BaseConnector):
         try:
             client = await self._get_client()
             params: Dict[str, Any] = {"limit": min(limit, 100)}
-            response = await client.get("/transfers", params=params)
+            response = await client.get("/v1/transfers", params=params)
 
             if response.status_code == 200:
                 data = response.json()
@@ -180,11 +191,13 @@ class BrexConnector(BaseConnector):
         for txn in transactions:
             amount_data = txn.get("amount", {})
             amount = float(amount_data.get("amount", 0)) / 100
-            txn_date_str = txn.get("posted_at", "")
+            txn_date_str = txn.get("posted_at_date") or txn.get("initiated_at_date") or ""
             try:
-                txn_date = datetime.fromisoformat(txn_date_str.replace("Z", "+00:00")) if txn_date_str else datetime.now()
+                txn_date = datetime.fromisoformat(txn_date_str.replace("Z", "+00:00")).replace(tzinfo=None) if txn_date_str else datetime.now()
             except (ValueError, TypeError):
                 txn_date = datetime.now()
+            merchant = txn.get("merchant") or {}
+            merchant_name = merchant.get("raw_descriptor") if isinstance(merchant, dict) else None
 
             if start_date and txn_date < start_date:
                 continue
@@ -199,10 +212,10 @@ class BrexConnector(BaseConnector):
                     account_name="Brex Card",
                     debit=abs(amount) if amount > 0 else 0.0,
                     credit=abs(amount) if amount < 0 else 0.0,
-                    description=txn.get("merchant_name") or txn.get("description", ""),
-                    category=txn.get("category", "Uncategorized"),
+                    description=merchant_name or txn.get("description", ""),
+                    category=txn.get("category") or (merchant.get("mcc") if isinstance(merchant, dict) else None) or "Uncategorized",
                     metadata={
-                        "merchant_name": txn.get("merchant_name"),
+                        "merchant_name": merchant_name,
                         "card_id": txn.get("card_id"),
                         "type": "card_transaction",
                         "currency": amount_data.get("currency", "USD"),
@@ -213,9 +226,9 @@ class BrexConnector(BaseConnector):
         for transfer in transfers:
             amount_data = transfer.get("amount", {})
             amount = float(amount_data.get("amount", 0)) / 100
-            transfer_date_str = transfer.get("created_at", "")
+            transfer_date_str = transfer.get("process_date") or transfer.get("created_at") or ""
             try:
-                transfer_date = datetime.fromisoformat(transfer_date_str.replace("Z", "+00:00")) if transfer_date_str else datetime.now()
+                transfer_date = datetime.fromisoformat(transfer_date_str.replace("Z", "+00:00")).replace(tzinfo=None) if transfer_date_str else datetime.now()
             except (ValueError, TypeError):
                 transfer_date = datetime.now()
 

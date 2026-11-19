@@ -216,8 +216,13 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
         id="xero", name="Xero", env_prefix="XERO",
         authorize_url="https://login.xero.com/identity/connect/authorize",
         token_url="https://identity.xero.com/connect/token",
+        # Granular scopes: Xero apps created on/after 2 March 2026 cannot request
+        # the broad accounting.transactions / accounting.reports.read scopes
+        # (https://developer.xero.com/faq/granular-scopes). XERO_SCOPES overrides,
+        # e.g. for an older app still on the broad scopes.
         default_scopes=("offline_access accounting.settings.read accounting.contacts.read "
-                        "accounting.transactions.read accounting.reports.read"),
+                        "accounting.invoices.read accounting.banktransactions.read "
+                        "accounting.reports.profitandloss.read accounting.reports.balancesheet.read"),
         basic_auth=True, finalize=_finalize_xero,
     ),
     OAuthProvider(

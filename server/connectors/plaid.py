@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 PLAID_ENVIRONMENTS = {
     "sandbox": "https://sandbox.plaid.com",
-    "development": "https://development.plaid.com",
     "production": "https://production.plaid.com",
 }
 
@@ -57,8 +56,11 @@ class PlaidConnector(BaseConnector):
         self._client_id = config.credentials.get("client_id", "")
         self._secret = config.credentials.get("secret", "")
         self._access_token = config.credentials.get("access_token", "")
-        env = config.settings.get("environment", "sandbox")
-        self._base_url = PLAID_ENVIRONMENTS.get(env, PLAID_ENVIRONMENTS["sandbox"])
+        # Plaid has two environments, Sandbox and Production
+        # (https://plaid.com/docs/api/). The retired Development host maps to
+        # Production, where Plaid moved Development Items.
+        env = str(config.settings.get("environment") or "production").lower()
+        self._base_url = PLAID_ENVIRONMENTS.get(env, PLAID_ENVIRONMENTS["production"])
         self._client: Optional[httpx.AsyncClient] = None
         self._accounts: List[Dict[str, Any]] = []
 
@@ -146,10 +148,10 @@ class PlaidConnector(BaseConnector):
                         "official_name": acc.get("official_name", ""),
                         "type": acc.get("type", ""),
                         "subtype": acc.get("subtype", ""),
-                        "current": acc.get("balances", {}).get("current", 0),
-                        "available": acc.get("balances", {}).get("available", 0),
-                        "limit": acc.get("balances", {}).get("limit"),
-                        "currency": acc.get("balances", {}).get("iso_currency_code", "USD"),
+                        "current": (acc.get("balances") or {}).get("current"),
+                        "available": (acc.get("balances") or {}).get("available"),
+                        "limit": (acc.get("balances") or {}).get("limit"),
+                        "currency": (acc.get("balances") or {}).get("iso_currency_code") or "USD",
                     }
                     for acc in accounts
                 ]
@@ -259,11 +261,21 @@ class PlaidConnector(BaseConnector):
             "extraction_summary": f"Synced from Plaid ({len(self._accounts)} accounts)",
         }
 
-        total_cash = sum(
-            acc.get("balances", {}).get("current", 0)
-            for acc in self._accounts
-            if acc.get("type") in ("depository",)
-        )
+        # Plaid returns null for a balance it does not have (`current` and
+        # `available` are both nullable), so a missing figure counts as 0
+        # instead of raising TypeError in sum().
+        total_cash = 0.0
+        for acc in self._accounts:
+            if acc.get("type") not in ("depository",):
+                continue
+            balances = acc.get("balances") or {}
+            value = balances.get("current")
+            if value is None:
+                value = balances.get("available")
+            try:
+                total_cash += float(value or 0)
+            except (ValueError, TypeError):
+                continue
         result["cash_balance"] = total_cash
 
         if ledger_entries:

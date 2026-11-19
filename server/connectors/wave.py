@@ -134,111 +134,60 @@ class WaveConnector(BaseConnector):
         except Exception:
             return False
 
-    async def get_invoices_raw(self, page: int = 1, page_size: int = 50) -> List[Dict[str, Any]]:
+    async def get_invoices_raw(self, page: int = 1, page_size: int = 50, max_pages: int = 100) -> List[Dict[str, Any]]:
+        """All invoices, following `pageInfo.totalPages` (offset pagination)."""
         if not self._authenticated:
             if not await self.authenticate():
                 return []
 
-        try:
-            query = """
-            query($businessId: ID!, $page: Int!, $pageSize: Int!) {
-                business(id: $businessId) {
-                    invoices(page: $page, pageSize: $pageSize) {
-                        edges {
-                            node {
-                                id
-                                createdAt
-                                modifiedAt
-                                pdfUrl
-                                viewUrl
-                                status
-                                title
-                                subhead
-                                invoiceNumber
-                                invoiceDate
-                                poNumber
-                                dueDate
-                                amountDue {
-                                    value
-                                    currency { code }
-                                }
-                                amountPaid {
-                                    value
-                                    currency { code }
-                                }
-                                total {
-                                    value
-                                    currency { code }
-                                }
-                                customer {
-                                    id
-                                    name
-                                    email
-                                }
-                            }
+        query = """
+        query($businessId: ID!, $page: Int!, $pageSize: Int!) {
+            business(id: $businessId) {
+                invoices(page: $page, pageSize: $pageSize) {
+                    pageInfo { currentPage totalPages totalCount }
+                    edges {
+                        node {
+                            id
+                            createdAt
+                            modifiedAt
+                            pdfUrl
+                            viewUrl
+                            status
+                            title
+                            subhead
+                            invoiceNumber
+                            invoiceDate
+                            poNumber
+                            dueDate
+                            amountDue { value currency { code } }
+                            amountPaid { value currency { code } }
+                            total { value currency { code } }
+                            customer { id name email }
                         }
                     }
                 }
             }
-            """
-            variables = {
-                "businessId": self._business_id,
-                "page": page,
-                "pageSize": page_size,
-            }
-            data = await self._graphql_query(query, variables)
-            business = data.get("business", {})
-            invoices = business.get("invoices", {}).get("edges", [])
-            return [edge.get("node", {}) for edge in invoices]
-
+        }
+        """
+        nodes: List[Dict[str, Any]] = []
+        try:
+            current = page
+            for _ in range(max_pages):
+                data = await self._graphql_query(query, {
+                    "businessId": self._business_id,
+                    "page": current,
+                    "pageSize": page_size,
+                })
+                conn = (data.get("business") or {}).get("invoices") or {}
+                edges = conn.get("edges") or []
+                nodes.extend(edge.get("node", {}) for edge in edges)
+                total_pages = (conn.get("pageInfo") or {}).get("totalPages") or current
+                if not edges or current >= total_pages:
+                    break
+                current += 1
         except Exception as e:
             logger.error(f"Wave invoices fetch error: {e}")
-            return []
-
-    async def get_transactions_raw(self, page: int = 1, page_size: int = 50) -> List[Dict[str, Any]]:
-        if not self._authenticated:
-            if not await self.authenticate():
-                return []
-
-        try:
-            query = """
-            query($businessId: ID!, $page: Int!, $pageSize: Int!) {
-                business(id: $businessId) {
-                    transactions(page: $page, pageSize: $pageSize) {
-                        edges {
-                            node {
-                                id
-                                date
-                                description
-                                account {
-                                    id
-                                    name
-                                    type { name value }
-                                }
-                                amount {
-                                    value
-                                    currency { code }
-                                }
-                                direction
-                            }
-                        }
-                    }
-                }
-            }
-            """
-            variables = {
-                "businessId": self._business_id,
-                "page": page,
-                "pageSize": page_size,
-            }
-            data = await self._graphql_query(query, variables)
-            business = data.get("business", {})
-            transactions = business.get("transactions", {}).get("edges", [])
-            return [edge.get("node", {}) for edge in transactions]
-
-        except Exception as e:
-            logger.error(f"Wave transactions fetch error: {e}")
-            return []
+        return nodes
 
     async def get_accounts(self) -> List[Dict[str, Any]]:
         if not self._authenticated:
@@ -329,6 +278,7 @@ class WaveConnector(BaseConnector):
                     status=status_val,
                     metadata={
                         "invoice_number": inv.get("invoiceNumber", ""),
+                        "amount_paid": float((inv.get("amountPaid") or {}).get("value", 0) or 0),
                         "source": "wave",
                     },
                 )
@@ -341,46 +291,33 @@ class WaveConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[LedgerEntry]:
-        raw_transactions = await self.get_transactions_raw()
-        entries = []
+        """
+        Ledger lines derived from invoices: the amount paid on each invoice.
 
-        for txn in raw_transactions:
-            amount_obj = txn.get("amount", {})
-            amount = float(amount_obj.get("value", 0)) if amount_obj else 0.0
-            direction = txn.get("direction", "")
-
-            date_str = txn.get("date", "")
-            try:
-                date = datetime.strptime(date_str, "%Y-%m-%d") if date_str else datetime.now()
-            except (ValueError, TypeError):
-                date = datetime.now()
-
-            if start_date and date < start_date:
+        Wave's public GraphQL schema has no transaction listing (`Business`
+        exposes invoices, customers, accounts, vendors and products, but no
+        `transactions` field; transactions can only be created), so the old
+        `business.transactions` query failed validation on every sync.
+        """
+        invoices = await self.fetch_invoices(start_date, end_date)
+        entries: List[LedgerEntry] = []
+        for inv in invoices:
+            paid = float(inv.metadata.get("amount_paid", 0) or 0)
+            if paid <= 0:
                 continue
-            if end_date and date > end_date:
-                continue
-
-            account = txn.get("account", {}) or {}
-            account_type = account.get("type", {}) or {}
-
             entries.append(
                 LedgerEntry(
-                    external_id=str(txn.get("id", "")),
-                    date=date,
-                    account_code=str(account.get("id", "")),
-                    account_name=account.get("name", "Unknown"),
-                    debit=abs(amount) if direction == "DEBIT" else 0.0,
-                    credit=abs(amount) if direction == "CREDIT" else 0.0,
-                    description=txn.get("description", ""),
-                    category=account_type.get("name", ""),
-                    metadata={
-                        "direction": direction,
-                        "account_type": account_type.get("value", ""),
-                        "source": "wave",
-                    },
+                    external_id=f"{inv.external_id}_paid",
+                    date=inv.date,
+                    account_code="wave_invoice_payments",
+                    account_name="Invoice payments",
+                    debit=0.0,
+                    credit=paid,
+                    description=f"Payments on invoice {inv.metadata.get('invoice_number', '')}".strip(),
+                    category="Sales",
+                    metadata={"source": "wave_invoice", "customer": inv.customer_name},
                 )
             )
-
         return entries
 
     def map_to_financials(
@@ -424,7 +361,6 @@ class WaveConnector(BaseConnector):
                 )
 
             raw_invoices = await self.get_invoices_raw()
-            raw_transactions = await self.get_transactions_raw()
             accounts = await self.get_accounts()
             invoices = await self.fetch_invoices()
             ledger = await self.fetch_ledger()
@@ -434,13 +370,13 @@ class WaveConnector(BaseConnector):
                 success=True,
                 provider_id=self.PROVIDER_ID,
                 sync_type="full",
-                records_synced=len(raw_invoices) + len(raw_transactions) + len(accounts),
+                records_synced=len(raw_invoices) + len(accounts),
                 sync_started=sync_started,
                 sync_completed=datetime.utcnow(),
                 metadata={
                     "financials": financials,
                     "invoices_count": len(raw_invoices),
-                    "transactions_count": len(raw_transactions),
+                    "transactions_count": len(ledger),
                     "accounts_count": len(accounts),
                 },
             )

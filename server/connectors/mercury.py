@@ -131,7 +131,7 @@ class MercuryConnector(BaseConnector):
                 }
 
                 response = await client.get(
-                    f"/accounts/{account_id}/transactions",
+                    f"/account/{account_id}/transactions",  # singular, per docs.mercury.com/reference/listaccounttransactions
                     params=params,
                 )
 
