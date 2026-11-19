@@ -38,7 +38,7 @@ from .registry import ConnectorRegistry
 logger = logging.getLogger(__name__)
 
 # One place to bump when Meta deprecates a version (each lives ~2 years).
-GRAPH_API_VERSION = "v24.0"
+GRAPH_API_VERSION = "v26.0"
 GRAPH_HOST = "graph.facebook.com"
 BASE_URL = f"https://{GRAPH_HOST}/{GRAPH_API_VERSION}"
 
