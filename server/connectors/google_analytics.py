@@ -88,6 +88,7 @@ class GoogleAnalyticsConnector(BaseConnector):
         self._client_id = config.credentials.get("client_id", "")
         self._client_secret = config.credentials.get("client_secret", "")
         self._client: Optional[httpx.AsyncClient] = None
+        self._report_errors: List[str] = []
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -190,9 +191,11 @@ class GoogleAnalyticsConnector(BaseConnector):
                 return response.json()
             else:
                 logger.error(f"GA4 report error: {response.status_code} - {response.text[:200]}")
+                self._report_errors.append(f"GA4 report failed ({response.status_code})")
                 return {}
         except Exception as e:
             logger.error(f"GA4 report fetch error: {e}")
+            self._report_errors.append(f"GA4 report failed: {e}")
             return {}
 
     async def get_session_metrics(self, days: int = 30) -> Dict[str, Any]:
@@ -334,6 +337,7 @@ class GoogleAnalyticsConnector(BaseConnector):
                     sync_started=sync_started,
                 )
 
+            self._report_errors = []
             session_data = await self.get_session_metrics(days=30)
             conversion_data = await self.get_conversion_metrics(days=30)
             traffic_data = await self.get_traffic_sources(days=30)
@@ -344,8 +348,27 @@ class GoogleAnalyticsConnector(BaseConnector):
             conversion_rows = self._parse_report_rows(conversion_data)
             traffic_rows = self._parse_report_rows(traffic_data)
 
+            # A failed report used to come back as {} and the sync claimed
+            # success with 0 records. Report failures; flag empty properties.
+            report_errors = list(dict.fromkeys(self._report_errors))
+            if report_errors and not (ledger or traffic_rows or session_rows):
+                return SyncResult(
+                    success=False,
+                    provider_id=self.PROVIDER_ID,
+                    sync_type="full",
+                    errors=report_errors,
+                    sync_started=sync_started,
+                    sync_completed=datetime.utcnow(),
+                )
+            warnings = list(report_errors)
+            if not ledger and not traffic_rows:
+                warnings.append(
+                    f"Google Analytics property {self._property_id} has no data in the last 30 days."
+                )
+
             return SyncResult(
                 success=True,
+                warnings=warnings,
                 provider_id=self.PROVIDER_ID,
                 sync_type="full",
                 records_synced=len(ledger) + len(traffic_rows),

@@ -175,6 +175,42 @@ async def _finalize_hubspot(client, token, params, app):
     }
 
 
+GA4_PROPERTY_PROBE_LIMIT = 10
+
+
+async def _ga4_busiest_property(client, access_token, props):
+    """Pick the property with the most sessions in the last 30 days.
+
+    Accounts often hold old or test properties with no traffic; taking the
+    first one silently connects an empty property. Probe up to
+    GA4_PROPERTY_PROBE_LIMIT with a one-metric runReport and keep the busiest.
+    Falls back to the first property when there is one, or every probe fails.
+    """
+    if len(props) == 1:
+        return props[0]
+    best, best_sessions = props[0], -1.0
+    for prop in props[:GA4_PROPERTY_PROBE_LIMIT]:
+        pid = str(prop.get("property", "")).split("/")[-1]
+        if not pid:
+            continue
+        try:
+            res = await client.post(
+                f"https://analyticsdata.googleapis.com/v1beta/properties/{pid}:runReport",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"dateRanges": [{"startDate": "30daysAgo", "endDate": "today"}],
+                      "metrics": [{"name": "sessions"}]},
+            )
+            if res.status_code != 200:
+                continue
+            rows = (res.json() or {}).get("rows") or []
+            sessions = float(rows[0]["metricValues"][0]["value"]) if rows else 0.0
+        except Exception:
+            continue
+        if sessions > best_sessions:
+            best, best_sessions = prop, sessions
+    return best
+
+
 async def _finalize_google_analytics(client, token, params, app):
     if not token.get("refresh_token"):
         raise OAuthConnectError("Google didn't grant offline access. Try connecting again.")
@@ -185,7 +221,7 @@ async def _finalize_google_analytics(client, token, params, app):
     props = [p for acc in summaries for p in acc.get("propertySummaries", []) or []]
     if not props:
         raise OAuthConnectError("This Google account has no Google Analytics 4 property.")
-    prop = props[0]
+    prop = await _ga4_busiest_property(client, token["access_token"], props)
     return {
         "client_id": app["client_id"], "client_secret": app["client_secret"],
         "access_token": token["access_token"], "refresh_token": token["refresh_token"],
