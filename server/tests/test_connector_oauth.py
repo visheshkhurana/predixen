@@ -216,3 +216,24 @@ def test_salesforce_refreshes_before_auth(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", Patched)
     assert _run(conn.authenticate()) is True
     assert conn.rotated_credentials()["access_token"] == "fresh"
+
+
+def test_zoho_authenticate_hits_real_org_endpoint(monkeypatch):
+    conn = ZohoBooksConnector(ConnectorConfig(provider_id="zoho_books", company_id=1, credentials={
+        "client_id": "c", "client_secret": "s", "access_token": "a", "organization_id": "947", "dc": "com"}, settings={}))
+    seen = []
+
+    def handler(request):
+        seen.append(request.url.path)
+        return httpx.Response(200, json={"organization": {"organization_id": "947"}})
+
+    orig = httpx.AsyncClient
+
+    class Patched(orig):
+        def __init__(self, *a, **kw):
+            kw["transport"] = httpx.MockTransport(handler)
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(httpx, "AsyncClient", Patched)
+    assert _run(conn.authenticate()) is True
+    assert seen == ["/books/v3/organizations/947"]

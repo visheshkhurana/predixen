@@ -158,7 +158,8 @@ class ZohoBooksConnector(BaseConnector):
                     return False
             
             client = await self._get_client()
-            response = await client.get("/settings/organization")
+            # Books v3 has no /settings/organization; this was a 404 every time.
+            response = await client.get(f"/organizations/{self._organization_id}")
             
             if response.status_code == 200:
                 self._authenticated = True
