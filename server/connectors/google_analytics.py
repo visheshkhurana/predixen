@@ -31,6 +31,39 @@ from .registry import ConnectorRegistry
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://analyticsdata.googleapis.com/v1beta"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
+
+async def refresh_google_access_token(
+    client_id: str, client_secret: str, refresh_token: str
+) -> Optional[Dict[str, Any]]:
+    """Exchange a Google OAuth refresh token for a new access token.
+
+    https://developers.google.com/identity/protocols/oauth2/web-server#offline
+    Returns the token response ({"access_token", "expires_in", ...}) or None.
+    Shared with the Google Sheets connector.
+    """
+    if not (client_id and client_secret and refresh_token):
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": refresh_token,
+                },
+            )
+        if response.status_code != 200:
+            logger.warning(f"Google token refresh failed: HTTP {response.status_code}")
+            return None
+        data = response.json()
+        return data if data.get("access_token") else None
+    except Exception as e:
+        logger.error(f"Google token refresh error: {e}")
+        return None
 
 
 @ConnectorRegistry.register
@@ -51,6 +84,9 @@ class GoogleAnalyticsConnector(BaseConnector):
         super().__init__(config)
         self._property_id = config.credentials.get("property_id", "")
         self._access_token = config.credentials.get("access_token", "")
+        self._refresh_token = config.credentials.get("refresh_token", "")
+        self._client_id = config.credentials.get("client_id", "")
+        self._client_secret = config.credentials.get("client_secret", "")
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -65,21 +101,47 @@ class GoogleAnalyticsConnector(BaseConnector):
             )
         return self._client
 
+    def _can_refresh(self) -> bool:
+        return bool(self._refresh_token and self._client_id and self._client_secret)
+
+    async def _refresh_access_token(self) -> bool:
+        token = await refresh_google_access_token(self._client_id, self._client_secret, self._refresh_token)
+        if not token:
+            return False
+        # BaseConnector.rotated_credentials() persists these after the sync.
+        self._access_token = token["access_token"]
+        if token.get("refresh_token"):
+            self._refresh_token = token["refresh_token"]
+        if self._client:
+            self._client.headers["Authorization"] = f"Bearer {self._access_token}"
+        return True
+
+    async def _run_report_request(self, payload: Dict[str, Any]) -> httpx.Response:
+        """POST runReport; on 401 refresh the token once (when possible) and retry."""
+        client = await self._get_client()
+        url = f"/properties/{self._property_id}:runReport"
+        response = await client.post(url, json=payload)
+        if response.status_code == 401 and self._can_refresh() and await self._refresh_access_token():
+            response = await client.post(url, json=payload)
+        return response
+
     async def authenticate(self) -> bool:
-        if not self._property_id or not self._access_token:
-            logger.warning("Google Analytics credentials incomplete (need property_id and access_token)")
+        if not self._property_id or not (self._access_token or self._can_refresh()):
+            logger.warning(
+                "Google Analytics credentials incomplete (need property_id and access_token "
+                "or refresh_token + client_id + client_secret)"
+            )
             return False
 
         try:
-            client = await self._get_client()
+            if not self._access_token and not await self._refresh_access_token():
+                logger.warning("Google Analytics token refresh failed")
+                return False
             payload = {
                 "dateRanges": [{"startDate": "7daysAgo", "endDate": "today"}],
                 "metrics": [{"name": "sessions"}],
             }
-            response = await client.post(
-                f"/properties/{self._property_id}:runReport",
-                json=payload,
-            )
+            response = await self._run_report_request(payload)
 
             if response.status_code == 200:
                 self._authenticated = True
@@ -94,15 +156,11 @@ class GoogleAnalyticsConnector(BaseConnector):
 
     async def test_connection(self) -> bool:
         try:
-            client = await self._get_client()
             payload = {
                 "dateRanges": [{"startDate": "1daysAgo", "endDate": "today"}],
                 "metrics": [{"name": "sessions"}],
             }
-            response = await client.post(
-                f"/properties/{self._property_id}:runReport",
-                json=payload,
-            )
+            response = await self._run_report_request(payload)
             return response.status_code == 200
         except Exception:
             return False
@@ -119,7 +177,6 @@ class GoogleAnalyticsConnector(BaseConnector):
                 return {}
 
         try:
-            client = await self._get_client()
             payload: Dict[str, Any] = {
                 "dateRanges": [{"startDate": start_date, "endDate": end_date}],
                 "metrics": [{"name": m} for m in metrics],
@@ -127,10 +184,7 @@ class GoogleAnalyticsConnector(BaseConnector):
             if dimensions:
                 payload["dimensions"] = [{"name": d} for d in dimensions]
 
-            response = await client.post(
-                f"/properties/{self._property_id}:runReport",
-                json=payload,
-            )
+            response = await self._run_report_request(payload)
 
             if response.status_code == 200:
                 return response.json()
@@ -151,14 +205,14 @@ class GoogleAnalyticsConnector(BaseConnector):
     async def get_conversion_metrics(self, days: int = 30) -> Dict[str, Any]:
         start_date = f"{days}daysAgo"
         return await self.run_report(
-            metrics=["conversions", "totalRevenue", "transactions"],
+            metrics=["keyEvents", "totalRevenue", "transactions"],
             start_date=start_date,
         )
 
     async def get_traffic_sources(self, days: int = 30) -> Dict[str, Any]:
         start_date = f"{days}daysAgo"
         return await self.run_report(
-            metrics=["sessions", "totalUsers", "conversions"],
+            metrics=["sessions", "totalUsers", "keyEvents"],
             dimensions=["sessionSource", "sessionMedium"],
             start_date=start_date,
         )
@@ -166,7 +220,7 @@ class GoogleAnalyticsConnector(BaseConnector):
     async def get_daily_metrics(self, days: int = 30) -> Dict[str, Any]:
         start_date = f"{days}daysAgo"
         return await self.run_report(
-            metrics=["sessions", "totalUsers", "conversions", "totalRevenue"],
+            metrics=["sessions", "totalUsers", "keyEvents", "totalRevenue"],
             dimensions=["date"],
             start_date=start_date,
         )
@@ -217,7 +271,8 @@ class GoogleAnalyticsConnector(BaseConnector):
 
             sessions = float(row.get("sessions", 0))
             users = float(row.get("totalUsers", 0))
-            conversions = float(row.get("conversions", 0))
+            # GA4 replaced the `conversions` metric with `keyEvents`.
+            conversions = float(row.get("keyEvents", row.get("conversions", 0)))
             revenue = float(row.get("totalRevenue", 0))
 
             entries.append(
@@ -234,6 +289,7 @@ class GoogleAnalyticsConnector(BaseConnector):
                         "sessions": sessions,
                         "total_users": users,
                         "conversions": conversions,
+                        "key_events": conversions,
                         "revenue": revenue,
                         "source": "google_analytics_ga4",
                     },
