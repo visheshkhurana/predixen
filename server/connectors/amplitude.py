@@ -7,10 +7,14 @@ Provides:
 - Cohort definitions and membership
 - Retention analysis
 
-API Documentation: https://www.docs.developers.amplitude.com/analytics/apis/
+API Documentation: https://amplitude.com/docs/apis/analytics/dashboard-rest
+Cohorts: https://amplitude.com/docs/apis/analytics/behavioral-cohorts
+
+Credentials: api_key + secret_key; optional region ("eu" for the EU data centre).
 """
 
 import httpx
+import json
 import logging
 import base64
 from typing import List, Optional, Dict, Any
@@ -31,7 +35,48 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://amplitude.com/api/2"
+# REST hosts. EU projects use analytics.eu.amplitude.com (never analytics.amplitude.com, the web app).
+US_HOST = "https://amplitude.com"
+EU_HOST = "https://analytics.eu.amplitude.com"
+BASE_URL = US_HOST
+
+# Amplitude special event types: _active = "Any Active Event", _all = "Any Event".
+ACTIVE_EVENT = "_active"
+ALL_EVENTS = "_all"
+_LEGACY_EVENT_NAMES = {"any active event": ACTIVE_EVENT, "any event": ALL_EVENTS}
+
+
+def host_for_region(region: Optional[str]) -> str:
+    return EU_HOST if str(region or "").strip().lower() == "eu" else US_HOST
+
+
+def _event_param(event_type: str) -> str:
+    event_type = _LEGACY_EVENT_NAMES.get(str(event_type).strip().lower(), event_type)
+    return json.dumps({"event_type": event_type})
+
+
+def _parse_retention_date(label: str, start: datetime, end: datetime) -> Optional[datetime]:
+    """Retention cohort labels look like "Aug 14" (no year); some responses use YYYY-MM-DD."""
+    if not isinstance(label, str) or not label:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y%m%d"):
+        try:
+            return datetime.strptime(label, fmt)
+        except ValueError:
+            pass
+    try:
+        month_day = datetime.strptime(f"2000 {label.strip()}", "%Y %b %d")
+    except ValueError:
+        return None
+    # Pick the year that places the label inside the requested range (handles Dec->Jan).
+    for year in range(end.year, start.year - 2, -1):
+        try:
+            candidate = month_day.replace(year=year)
+        except ValueError:  # Feb 29 in a non-leap year
+            continue
+        if candidate.date() <= end.date():
+            return candidate
+    return None
 
 
 @ConnectorRegistry.register
@@ -52,6 +97,8 @@ class AmplitudeConnector(BaseConnector):
         super().__init__(config)
         self._api_key = config.credentials.get("api_key", "")
         self._secret_key = config.credentials.get("secret_key", "")
+        self._region = (config.credentials or {}).get("region") or (config.settings or {}).get("region") or ""
+        self._host = host_for_region(self._region)
         self._client: Optional[httpx.AsyncClient] = None
 
     def _basic_auth_header(self) -> str:
@@ -62,7 +109,7 @@ class AmplitudeConnector(BaseConnector):
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
             self._client = httpx.AsyncClient(
-                base_url=BASE_URL,
+                base_url=self._host,
                 timeout=30.0,
                 headers={
                     "Content-Type": "application/json",
@@ -81,10 +128,11 @@ class AmplitudeConnector(BaseConnector):
             end = datetime.now()
             start = end - timedelta(days=1)
             params = {
+                "e": _event_param(ACTIVE_EVENT),
                 "start": start.strftime("%Y%m%d"),
                 "end": end.strftime("%Y%m%d"),
             }
-            response = await client.get("/events/segmentation", params=params)
+            response = await client.get("/api/2/events/segmentation", params=params)
 
             if response.status_code == 200:
                 self._authenticated = True
@@ -106,10 +154,11 @@ class AmplitudeConnector(BaseConnector):
             end = datetime.now()
             start = end - timedelta(days=1)
             params = {
+                "e": _event_param(ACTIVE_EVENT),
                 "start": start.strftime("%Y%m%d"),
                 "end": end.strftime("%Y%m%d"),
             }
-            response = await client.get("/events/segmentation", params=params)
+            response = await client.get("/api/2/events/segmentation", params=params)
             return response.status_code == 200
         except Exception:
             return False
@@ -121,7 +170,7 @@ class AmplitudeConnector(BaseConnector):
 
         try:
             client = await self._get_client()
-            response = await client.get("/usersearch", params={"user": user_query})
+            response = await client.get("/api/2/usersearch", params={"user": user_query})
 
             if response.status_code == 200:
                 data = response.json()
@@ -133,7 +182,7 @@ class AmplitudeConnector(BaseConnector):
 
     async def get_event_segmentation(
         self,
-        event_type: str = "Any Active Event",
+        event_type: str = ACTIVE_EVENT,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
@@ -149,12 +198,12 @@ class AmplitudeConnector(BaseConnector):
         try:
             client = await self._get_client()
             params = {
-                "e": f'{{"event_type":"{event_type}"}}',
+                "e": _event_param(event_type),
                 "start": start_date.strftime("%Y%m%d"),
                 "end": end_date.strftime("%Y%m%d"),
                 "m": "uniques",
             }
-            response = await client.get("/events/segmentation", params=params)
+            response = await client.get("/api/2/events/segmentation", params=params)
 
             if response.status_code == 200:
                 return response.json()
@@ -170,7 +219,7 @@ class AmplitudeConnector(BaseConnector):
 
         try:
             client = await self._get_client()
-            response = await client.get("/cohorts")
+            response = await client.get("/api/3/cohorts")
 
             if response.status_code == 200:
                 data = response.json()
@@ -197,12 +246,13 @@ class AmplitudeConnector(BaseConnector):
         try:
             client = await self._get_client()
             params = {
-                "se": '{"event_type":"Any Active Event"}',
-                "re": '{"event_type":"Any Active Event"}',
+                # se accepts _new/_active; re accepts _all/_active.
+                "se": _event_param(ACTIVE_EVENT),
+                "re": _event_param(ACTIVE_EVENT),
                 "start": start_date.strftime("%Y%m%d"),
                 "end": end_date.strftime("%Y%m%d"),
             }
-            response = await client.get("/retention", params=params)
+            response = await client.get("/api/2/retention", params=params)
 
             if response.status_code == 200:
                 return response.json()
@@ -216,8 +266,13 @@ class AmplitudeConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[LedgerEntry]:
+        if not end_date:
+            end_date = datetime.now()
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+
         event_data = await self.get_event_segmentation(
-            event_type="Any Active Event",
+            event_type=ACTIVE_EVENT,
             start_date=start_date,
             end_date=end_date,
         )
@@ -251,49 +306,55 @@ class AmplitudeConnector(BaseConnector):
                         category="Product Metrics - Users",
                         metadata={
                             "metric_type": "dau",
-                            "event_type": "Any Active Event",
+                            "event_type": ACTIVE_EVENT,
                             "source": "amplitude",
                         },
                     )
                 )
 
         retention_data = await self.get_retention(start_date, end_date)
-        retention_counts = retention_data.get("data", {}).get("retentionCounts", [])
+        retention_series = (retention_data.get("data") or {}).get("series") or []
+        first_series = retention_series[0] if retention_series and isinstance(retention_series[0], dict) else {}
+        cohort_values = first_series.get("values") or {}
 
-        if retention_counts:
-            for i, cohort in enumerate(retention_counts):
-                date_str = cohort.get("date", "")
-                if not date_str:
-                    continue
+        retention_entries: List[LedgerEntry] = []
+        # values[date][0] = cohort size, [1] = Day 0, [2] = Day 1 (N+1 = N intervals out).
+        for label, buckets in cohort_values.items():
+            if not isinstance(buckets, list) or len(buckets) < 3:
+                continue
+            day1 = buckets[2] if isinstance(buckets[2], dict) else {}
+            if day1.get("incomplete"):
+                continue
+            cohort_date = _parse_retention_date(label, start_date, end_date)
+            if cohort_date is None:
+                continue
+            first = buckets[0] if isinstance(buckets[0], dict) else {}
+            count = float(first.get("count") or first.get("outof") or 0)
+            retained = float(day1.get("count") or 0)
+            retention_rate = (retained / count * 100) if count > 0 else 0
+            date_str = cohort_date.strftime("%Y-%m-%d")
 
-                try:
-                    cohort_date = datetime.strptime(date_str, "%Y-%m-%d")
-                except (ValueError, TypeError):
-                    continue
-
-                count = float(cohort.get("count", 0))
-                retained = float(cohort.get("retainedCount", 0))
-                retention_rate = (retained / count * 100) if count > 0 else 0
-
-                entries.append(
-                    LedgerEntry(
-                        external_id=f"amp-ret-{date_str}",
-                        date=cohort_date,
-                        account_code="5001",
-                        account_name="User Retention",
-                        debit=0.0,
-                        credit=retention_rate,
-                        description=f"Retention rate for cohort {date_str}: {retention_rate:.1f}%",
-                        category="Product Metrics - Retention",
-                        metadata={
-                            "metric_type": "retention",
-                            "cohort_size": count,
-                            "retained_count": retained,
-                            "source": "amplitude",
-                        },
-                    )
+            retention_entries.append(
+                LedgerEntry(
+                    external_id=f"amp-ret-{date_str}",
+                    date=cohort_date,
+                    account_code="5001",
+                    account_name="User Retention",
+                    debit=0.0,
+                    credit=retention_rate,
+                    description=f"Day 1 retention for cohort {date_str}: {retention_rate:.1f}%",
+                    category="Product Metrics - Retention",
+                    metadata={
+                        "metric_type": "retention",
+                        "cohort_size": count,
+                        "retained_count": retained,
+                        "source": "amplitude",
+                    },
                 )
+            )
 
+        # Cohorts arrive newest-first; keep oldest-first so [-1] is the latest.
+        entries.extend(sorted(retention_entries, key=lambda e: e.date))
         return entries
 
     def map_to_financials(

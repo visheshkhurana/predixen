@@ -7,10 +7,14 @@ Provides:
 - Retention cohort data
 - User engagement metrics
 
-API Documentation: https://developer.mixpanel.com/reference/overview
+API Documentation: https://docs.mixpanel.com/reference/query-api
+
+Credentials: project_id + api_secret (or service_account_user/secret); optional
+region (us/eu/in), bookmark_id (saved Insights report) and funnel_id.
 """
 
 import httpx
+import json
 import logging
 import base64
 from typing import List, Optional, Dict, Any
@@ -31,7 +35,30 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://mixpanel.com/api/2.0"
+# Query API servers: https://{regionAndDomain}.com/api/query (docs.mixpanel.com/reference/query-api)
+REGION_HOSTS = {
+    "us": "mixpanel.com",
+    "eu": "eu.mixpanel.com",
+    "in": "in.mixpanel.com",
+}
+BASE_URL = "https://mixpanel.com/api/query"
+
+
+def base_url_for_region(region: Optional[str]) -> str:
+    host = REGION_HOSTS.get(str(region or "us").strip().lower(), REGION_HOSTS["us"])
+    return f"https://{host}/api/query"
+
+
+def _parse_series_date(value: Any) -> Optional[datetime]:
+    """Insights returns ISO timestamps (2020-08-31T00:00:00-07:00); /events returns 2020-08-31."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    # Keep the report's local calendar date; ledger dates are naive.
+    return parsed.replace(tzinfo=None)
 
 
 @ConnectorRegistry.register
@@ -54,6 +81,13 @@ class MixpanelConnector(BaseConnector):
         self._api_secret = config.credentials.get("api_secret", "")
         self._service_account_user = config.credentials.get("service_account_user", "")
         self._service_account_secret = config.credentials.get("service_account_secret", "")
+        creds = config.credentials or {}
+        settings = config.settings or {}
+        self._region = creds.get("region") or settings.get("region") or "us"
+        self._base_url = base_url_for_region(self._region)
+        # Insights needs a saved report (bookmark_id); funnels need a saved funnel_id.
+        self._bookmark_id = str(creds.get("bookmark_id") or settings.get("bookmark_id") or "")
+        self._funnel_id = str(creds.get("funnel_id") or settings.get("funnel_id") or "")
         self._client: Optional[httpx.AsyncClient] = None
 
     def _auth_header(self) -> str:
@@ -68,7 +102,7 @@ class MixpanelConnector(BaseConnector):
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
             self._client = httpx.AsyncClient(
-                base_url=BASE_URL,
+                base_url=self._base_url,
                 timeout=30.0,
                 headers={
                     "Content-Type": "application/json",
@@ -77,6 +111,53 @@ class MixpanelConnector(BaseConnector):
                 },
             )
         return self._client
+
+    async def _probe(self) -> httpx.Response:
+        """Cheapest Query API call that needs no saved report: this month's top event names.
+
+        GET /events/names requires project_id and type; works with a service
+        account or the project api_secret (docs.mixpanel.com/reference/query-months-top-event-names).
+        """
+        client = await self._get_client()
+        return await client.get(
+            "/events/names",
+            params={"project_id": self._project_id, "type": "general", "limit": 1},
+        )
+
+    async def get_top_event_names(self, limit: int = 10) -> List[str]:
+        client = await self._get_client()
+        response = await client.get(
+            "/events/names",
+            params={"project_id": self._project_id, "type": "general", "limit": limit},
+        )
+        if response.status_code != 200:
+            logger.error(f"Mixpanel event names error: {response.status_code}")
+            return []
+        data = response.json()
+        return [str(n) for n in data] if isinstance(data, list) else []
+
+    async def get_event_counts(self, from_date: str, to_date: str, limit: int = 10) -> Dict[str, Any]:
+        """Aggregate daily counts for the top events (GET /events). Returns {"series": {event: {date: n}}}."""
+        names = await self.get_top_event_names(limit=limit)
+        if not names:
+            return {}
+        client = await self._get_client()
+        response = await client.get(
+            "/events",
+            params={
+                "project_id": self._project_id,
+                "event": json.dumps(names),
+                "type": "general",
+                "unit": "day",
+                "from_date": from_date,
+                "to_date": to_date,
+            },
+        )
+        if response.status_code != 200:
+            logger.error(f"Mixpanel event counts error: {response.status_code}")
+            return {}
+        values = (response.json().get("data") or {}).get("values") or {}
+        return {"series": values}
 
     async def authenticate(self) -> bool:
         has_secret = bool(self._api_secret)
@@ -87,16 +168,7 @@ class MixpanelConnector(BaseConnector):
             return False
 
         try:
-            client = await self._get_client()
-            today = datetime.now().strftime("%Y-%m-%d")
-            week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-
-            params = {
-                "project_id": self._project_id,
-                "from_date": week_ago,
-                "to_date": today,
-            }
-            response = await client.get("/insights", params=params)
+            response = await self._probe()
 
             if response.status_code == 200:
                 self._authenticated = True
@@ -114,16 +186,7 @@ class MixpanelConnector(BaseConnector):
 
     async def test_connection(self) -> bool:
         try:
-            client = await self._get_client()
-            today = datetime.now().strftime("%Y-%m-%d")
-            week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-
-            params = {
-                "project_id": self._project_id,
-                "from_date": week_ago,
-                "to_date": today,
-            }
-            response = await client.get("/insights", params=params)
+            response = await self._probe()
             return response.status_code == 200
         except Exception:
             return False
@@ -142,12 +205,15 @@ class MixpanelConnector(BaseConnector):
         if not from_date:
             from_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
 
+        if not self._bookmark_id:
+            # /insights only queries a saved report; without one, use aggregate event counts.
+            return await self.get_event_counts(from_date=from_date, to_date=to_date)
+
         try:
             client = await self._get_client()
             params = {
                 "project_id": self._project_id,
-                "from_date": from_date,
-                "to_date": to_date,
+                "bookmark_id": self._bookmark_id,
             }
             response = await client.get("/insights", params=params)
 
@@ -161,6 +227,10 @@ class MixpanelConnector(BaseConnector):
             return {}
 
     async def get_funnels(self, funnel_id: Optional[str] = None) -> Dict[str, Any]:
+        funnel_id = funnel_id or self._funnel_id
+        if not funnel_id:
+            # /funnels requires funnel_id (docs.mixpanel.com/reference/funnels-query).
+            return {}
         if not self._authenticated:
             if not await self.authenticate():
                 return {}
@@ -175,8 +245,7 @@ class MixpanelConnector(BaseConnector):
                 "from_date": month_ago,
                 "to_date": today,
             }
-            if funnel_id:
-                params["funnel_id"] = funnel_id
+            params["funnel_id"] = funnel_id
 
             response = await client.get("/funnels", params=params)
 
@@ -203,6 +272,9 @@ class MixpanelConnector(BaseConnector):
                 "project_id": self._project_id,
                 "from_date": start,
                 "to_date": today,
+                # Default "birth" retention requires a born_event; compounded
+                # (recurring) retention needs none.
+                "retention_type": "compounded",
             }
             response = await client.get("/retention", params=params)
 
@@ -237,16 +309,18 @@ class MixpanelConnector(BaseConnector):
                 continue
 
             for date_str, value in date_data.items():
-                try:
-                    entry_date = datetime.strptime(date_str, "%Y-%m-%d")
-                except (ValueError, TypeError):
+                entry_date = _parse_series_date(date_str)
+                if entry_date is None:
                     continue
+                day = entry_date.strftime("%Y-%m-%d")
 
-                event_count = float(value) if isinstance(value, (int, float)) else 0
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                event_count = float(value)
 
                 entries.append(
                     LedgerEntry(
-                        external_id=f"mixpanel_{self._project_id}_{event_name}_{date_str}",
+                        external_id=f"mixpanel_{self._project_id}_{event_name}_{day}",
                         date=entry_date,
                         account_code=f"mixpanel_{self._project_id}",
                         account_name="Mixpanel Analytics",
@@ -258,7 +332,7 @@ class MixpanelConnector(BaseConnector):
                             "event_name": event_name,
                             "event_count": event_count,
                             "project_id": self._project_id,
-                            "source": "mixpanel_insights",
+                            "source": "mixpanel_insights" if self._bookmark_id else "mixpanel_events",
                         },
                     )
                 )
@@ -298,7 +372,8 @@ class MixpanelConnector(BaseConnector):
                     sync_started=sync_started,
                 )
 
-            insights = await self.get_insights()
+            # fetch_ledger already runs the insights/event-count query; the Query API
+            # allows 60 queries/hour, so don't issue it twice.
             funnels = await self.get_funnels()
             retention = await self.get_retention(days=30)
             ledger = await self.fetch_ledger()
@@ -313,7 +388,7 @@ class MixpanelConnector(BaseConnector):
                 sync_completed=datetime.utcnow(),
                 metadata={
                     "financials": financials,
-                    "insights_available": bool(insights),
+                    "insights_available": bool(ledger),
                     "funnels_available": bool(funnels),
                     "retention_available": bool(retention),
                     "ledger_entries_count": len(ledger),
