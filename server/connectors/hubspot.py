@@ -50,7 +50,37 @@ class HubSpotConnector(BaseConnector):
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
         self._access_token = config.credentials.get("access_token", "")
+        # Set by "Connect with HubSpot": OAuth access tokens last 30 minutes,
+        # so refresh before each run. Private-app tokens have none of these.
+        self._refresh_token = config.credentials.get("refresh_token", "")
+        self._client_id = config.credentials.get("client_id", "")
+        self._client_secret = config.credentials.get("client_secret", "")
         self._client: Optional[httpx.AsyncClient] = None
+
+    async def _refresh_access_token(self) -> bool:
+        if not (self._refresh_token and self._client_id and self._client_secret):
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                res = await client.post(f"{BASE_URL}/oauth/v1/token", data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": self._refresh_token,
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                })
+            data = res.json() if res.status_code == 200 else {}
+            if not data.get("access_token"):
+                logger.warning(f"HubSpot token refresh failed: {res.status_code}")
+                return False
+            self._access_token = data["access_token"]
+            self._refresh_token = data.get("refresh_token", self._refresh_token)
+            if self._client:
+                await self._client.aclose()
+                self._client = None
+            return True
+        except Exception as e:
+            logger.error(f"HubSpot token refresh error: {e}")
+            return False
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -65,6 +95,8 @@ class HubSpotConnector(BaseConnector):
         return self._client
 
     async def authenticate(self) -> bool:
+        if self._refresh_token:
+            await self._refresh_access_token()
         if not self._access_token:
             logger.warning("HubSpot access token not provided")
             return False

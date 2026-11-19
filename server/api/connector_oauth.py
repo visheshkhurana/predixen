@@ -1,6 +1,6 @@
 """
 "Connect with <provider>" for OAuth connectors (Zoho Books, QuickBooks, Xero,
-Gusto, Salesforce). Founders sign in to the provider instead of pasting client
+Gusto, Salesforce, HubSpot). Founders sign in to the provider instead of pasting client
 secrets and tokens.
 
   GET /connectors/oauth/providers                       -> which providers are set up on this server
@@ -165,6 +165,16 @@ async def _finalize_salesforce(client, token, params, app):
     }
 
 
+async def _finalize_hubspot(client, token, params, app):
+    info = await client.get(f"https://api.hubapi.com/oauth/v1/access-tokens/{token['access_token']}")
+    hub = info.json() if info.status_code == 200 else {}
+    return {
+        "client_id": app["client_id"], "client_secret": app["client_secret"],
+        "access_token": token["access_token"], "refresh_token": token.get("refresh_token", ""),
+        "_hint": hub.get("hub_domain") or "HubSpot",
+    }
+
+
 PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
     OAuthProvider(
         id="zoho_books", name="Zoho", env_prefix="ZOHO",
@@ -196,6 +206,13 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
         authorize_url="https://api.gusto.com/oauth/authorize",
         token_url="https://api.gusto.com/oauth/token",
         default_scopes="", finalize=_finalize_gusto,
+    ),
+    OAuthProvider(
+        id="hubspot", name="HubSpot", env_prefix="HUBSPOT",
+        authorize_url="https://app.hubspot.com/oauth/authorize",
+        token_url="https://api.hubapi.com/oauth/v1/token",
+        default_scopes="oauth crm.objects.deals.read crm.objects.contacts.read crm.objects.companies.read",
+        finalize=_finalize_hubspot,
     ),
     OAuthProvider(
         id="salesforce", name="Salesforce", env_prefix="SALESFORCE",
