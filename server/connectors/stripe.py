@@ -34,6 +34,31 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
+# Pages of 100 balance transactions read per ledger sync (10,000 rows).
+MAX_LEDGER_PAGES = 100
+
+
+def _invoice_tax_cents(inv: Dict[str, Any]) -> int:
+    """Invoice tax in minor units.
+
+    API 2025-03-31.basil removed ``invoice.tax`` (and ``total_tax_amounts``)
+    in favour of ``total_taxes[].amount``. Older pinned versions still send
+    ``tax``, so fall back to it.
+    """
+    total_taxes = inv.get("total_taxes")
+    if isinstance(total_taxes, list) and total_taxes:
+        return sum(int(t.get("amount") or 0) for t in total_taxes if isinstance(t, dict))
+    return int(inv.get("tax") or 0)
+
+
+def _invoice_subscription(inv: Dict[str, Any]) -> Any:
+    """Subscription id; basil moved it to parent.subscription_details.subscription."""
+    if inv.get("subscription"):
+        return inv.get("subscription")
+    parent = inv.get("parent") or {}
+    details = parent.get("subscription_details") or {} if isinstance(parent, dict) else {}
+    return details.get("subscription") if isinstance(details, dict) else None
+
 
 @ConnectorRegistry.register
 class StripeConnector(BaseConnector):
@@ -115,7 +140,7 @@ class StripeConnector(BaseConnector):
                 data = response.json()
                 for inv in data.get("data", []):
                     amount = (inv.get("amount_paid", 0) or 0) / 100.0
-                    tax = (inv.get("tax", 0) or 0) / 100.0
+                    tax = _invoice_tax_cents(inv) / 100.0
                     total = (inv.get("total", 0) or 0) / 100.0
                     status_map = {"paid": "paid", "open": "pending", "void": "cancelled", "draft": "draft"}
                     invoices.append(InvoiceRecord(
@@ -128,7 +153,7 @@ class StripeConnector(BaseConnector):
                         total=total,
                         currency=(inv.get("currency") or "usd").upper(),
                         status=status_map.get(inv.get("status", ""), inv.get("status", "unknown")),
-                        metadata={"stripe_id": inv.get("id"), "subscription": inv.get("subscription")},
+                        metadata={"stripe_id": inv.get("id"), "subscription": _invoice_subscription(inv)},
                     ))
                 has_more = data.get("has_more", False)
                 if has_more and data.get("data"):
@@ -153,10 +178,15 @@ class StripeConnector(BaseConnector):
             params["created[lte]"] = int(end_date.timestamp())
 
         try:
-            response = await client.get("/balance_transactions", params=params)
-            if response.status_code == 200:
+            pages = 0
+            while True:
+                response = await client.get("/balance_transactions", params=params)
+                if response.status_code != 200:
+                    logger.warning(f"Stripe balance transactions fetch failed: {response.status_code}")
+                    break
                 data = response.json()
-                for txn in data.get("data", []):
+                txns = data.get("data", [])
+                for txn in txns:
                     amount = (txn.get("amount", 0) or 0) / 100.0
                     fee = (txn.get("fee", 0) or 0) / 100.0
                     net = (txn.get("net", 0) or 0) / 100.0
@@ -171,6 +201,13 @@ class StripeConnector(BaseConnector):
                         category="revenue",
                         metadata={"fee": fee, "net": net, "type": txn.get("type")},
                     ))
+                pages += 1
+                if not data.get("has_more") or not txns:
+                    break
+                if pages >= MAX_LEDGER_PAGES:
+                    logger.warning(f"Stripe balance transactions truncated at {pages * 100} rows")
+                    break
+                params["starting_after"] = txns[-1]["id"]
         except Exception as e:
             logger.error(f"Error fetching Stripe balance transactions: {e}")
         return entries

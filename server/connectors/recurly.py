@@ -31,6 +31,11 @@ from .registry import ConnectorRegistry
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://v3.recurly.com"
+# Recurly hosts EU-data-center sites on a separate API host. Mirrors the
+# official client (recurly-client-python base_client.API_HOSTS).
+API_HOSTS = {"us": "https://v3.recurly.com", "eu": "https://v3.eu.recurly.com"}
+# Safety cap on pages followed per list call.
+MAX_PAGES = 50
 
 
 @ConnectorRegistry.register
@@ -50,17 +55,21 @@ class RecurlyConnector(BaseConnector):
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
         self._api_key = config.credentials.get("api_key", "")
+        region = str(config.credentials.get("region") or "us").strip().lower()
+        self._base_url = API_HOSTS.get(region, BASE_URL)
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
+            # Recurly v3 uses HTTP Basic auth: API key as username, empty
+            # password (it does not accept Bearer tokens).
             self._client = httpx.AsyncClient(
-                base_url=BASE_URL,
+                base_url=self._base_url,
                 timeout=30.0,
+                auth=httpx.BasicAuth(self._api_key, ""),
                 headers={
                     "Accept": "application/vnd.recurly.v2021-02-25+json",
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self._api_key}",
                 },
             )
         return self._client
@@ -93,41 +102,37 @@ class RecurlyConnector(BaseConnector):
         except Exception:
             return False
 
+    async def _list_all(self, path: str, limit: int, label: str) -> List[Dict[str, Any]]:
+        """Follow Recurly list pagination.
+
+        ``next`` in a list response is a full path + query string (e.g.
+        ``/subscriptions?cursor=...&limit=200``) that must be requested as-is;
+        it is not a bare cursor value.
+        """
+        client = await self._get_client()
+        results: List[Dict[str, Any]] = []
+        response = await client.get(path, params={"limit": min(limit, 200)})
+        pages = 0
+        while True:
+            pages += 1
+            if response.status_code != 200:
+                logger.error(f"Recurly {label} error: {response.status_code}")
+                break
+            data = response.json()
+            results.extend(data.get("data", []))
+            next_path = data.get("next")
+            if not data.get("has_more") or not next_path or len(results) >= limit or pages >= MAX_PAGES:
+                break
+            response = await client.get(next_path)
+        return results[:limit]
+
     async def get_subscriptions(self, limit: int = 200) -> List[Dict[str, Any]]:
         if not self._authenticated:
             if not await self.authenticate():
                 return []
 
         try:
-            client = await self._get_client()
-            all_subscriptions = []
-            cursor = None
-
-            while True:
-                params: Dict[str, Any] = {"limit": min(limit, 200)}
-                if cursor:
-                    params["cursor"] = cursor
-
-                response = await client.get("/subscriptions", params=params)
-
-                if response.status_code != 200:
-                    logger.error(f"Recurly subscriptions error: {response.status_code}")
-                    break
-
-                data = response.json()
-                subs = data.get("data", [])
-                all_subscriptions.extend(subs)
-
-                if data.get("has_more"):
-                    cursor = data.get("next")
-                else:
-                    break
-
-                if len(all_subscriptions) >= limit:
-                    break
-
-            return all_subscriptions
-
+            return await self._list_all("/subscriptions", limit, "subscriptions")
         except Exception as e:
             logger.error(f"Recurly subscriptions fetch error: {e}")
             return []
@@ -138,35 +143,7 @@ class RecurlyConnector(BaseConnector):
                 return []
 
         try:
-            client = await self._get_client()
-            all_invoices = []
-            cursor = None
-
-            while True:
-                params: Dict[str, Any] = {"limit": min(limit, 200)}
-                if cursor:
-                    params["cursor"] = cursor
-
-                response = await client.get("/invoices", params=params)
-
-                if response.status_code != 200:
-                    logger.error(f"Recurly invoices error: {response.status_code}")
-                    break
-
-                data = response.json()
-                invs = data.get("data", [])
-                all_invoices.extend(invs)
-
-                if data.get("has_more"):
-                    cursor = data.get("next")
-                else:
-                    break
-
-                if len(all_invoices) >= limit:
-                    break
-
-            return all_invoices
-
+            return await self._list_all("/invoices", limit, "invoices")
         except Exception as e:
             logger.error(f"Recurly invoices fetch error: {e}")
             return []
@@ -194,35 +171,7 @@ class RecurlyConnector(BaseConnector):
                 return []
 
         try:
-            client = await self._get_client()
-            all_transactions = []
-            cursor = None
-
-            while True:
-                params: Dict[str, Any] = {"limit": min(limit, 200)}
-                if cursor:
-                    params["cursor"] = cursor
-
-                response = await client.get("/transactions", params=params)
-
-                if response.status_code != 200:
-                    logger.error(f"Recurly transactions error: {response.status_code}")
-                    break
-
-                data = response.json()
-                txns = data.get("data", [])
-                all_transactions.extend(txns)
-
-                if data.get("has_more"):
-                    cursor = data.get("next")
-                else:
-                    break
-
-                if len(all_transactions) >= limit:
-                    break
-
-            return all_transactions
-
+            return await self._list_all("/transactions", limit, "transactions")
         except Exception as e:
             logger.error(f"Recurly transactions fetch error: {e}")
             return []

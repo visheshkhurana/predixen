@@ -13,6 +13,7 @@ API Documentation: https://shopify.dev/docs/api/admin-rest
 import httpx
 import logging
 import os
+import time
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import date, datetime, timedelta
 
@@ -135,12 +136,98 @@ class ShopifyConnector(BaseConnector):
 
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
-        self._shop_domain = config.credentials.get("shop_domain", "")
-        self._access_token = config.credentials.get("access_token", "")
+        creds = config.credentials or {}
+        self._shop_domain = creds.get("shop_domain", "")
+        # Either a static Admin API token (legacy custom app, shpat_...) or a
+        # Dev Dashboard app's client_id + client_secret, exchanged for a
+        # ~24h token via the client credentials grant. The exchanged token is
+        # kept in _access_token so BaseConnector.rotated_credentials() saves it.
+        self._access_token = (creds.get("access_token") or "").strip()
+        self._client_id = (creds.get("client_id") or "").strip()
+        self._client_secret = (creds.get("client_secret") or "").strip()
+        self._token_expires_at: Optional[float] = None
+        self.auth_error: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
 
+    def _shop_subdomain(self) -> str:
+        domain = (self._shop_domain or "").strip().lower()
+        for prefix in ("https://", "http://"):
+            if domain.startswith(prefix):
+                domain = domain[len(prefix):]
+        return domain.split("/")[0].replace(".myshopify.com", "").strip()
+
+    @property
+    def _has_client_credentials(self) -> bool:
+        return bool(self._client_id and self._client_secret)
+
+    async def _exchange_client_credentials(self) -> bool:
+        """POST /admin/oauth/access_token with grant_type=client_credentials.
+
+        Only works when the Dev Dashboard app and the store belong to the
+        same Shopify organization. Tokens last 86399s.
+        """
+        url = f"https://{self._shop_subdomain()}.myshopify.com/admin/oauth/access_token"
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    data={
+                        "grant_type": "client_credentials",
+                        "client_id": self._client_id,
+                        "client_secret": self._client_secret,
+                    },
+                    headers={"Accept": "application/json"},
+                )
+        except Exception as e:
+            self.auth_error = f"Could not reach Shopify: {e}"
+            logger.error(f"Shopify token exchange error: {e}")
+            return False
+
+        if response.status_code != 200:
+            self.auth_error = (
+                "Shopify rejected the client ID / secret. The app must be created in the "
+                "Dev Dashboard under the same Shopify organization as this store and installed on it."
+            )
+            logger.warning(f"Shopify token exchange failed: {response.status_code} - {response.text[:200]}")
+            return False
+
+        try:
+            body = response.json()
+        except ValueError:
+            body = {}
+        token = body.get("access_token") if isinstance(body, dict) else None
+        if not token:
+            self.auth_error = "Shopify returned no access token."
+            return False
+        self._access_token = token
+        try:
+            expires_in = float(body.get("expires_in") or 86399)
+        except (TypeError, ValueError):
+            expires_in = 86399.0
+        self._token_expires_at = time.time() + expires_in
+        if self._client is not None:
+            self._client.headers["X-Shopify-Access-Token"] = token
+        return True
+
+    async def _ensure_token(self) -> bool:
+        if self._has_client_credentials:
+            expiring = self._token_expires_at is not None and time.time() > self._token_expires_at - 300
+            if not self._access_token or expiring:
+                return await self._exchange_client_credentials()
+        return bool(self._access_token)
+
+    async def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> httpx.Response:
+        """GET against the Admin API, re-exchanging an expired client-credentials token once on 401."""
+        await self._ensure_token()
+        client = await self._get_client()
+        response = await client.get(path, params=params)
+        if response.status_code == 401 and self._has_client_credentials:
+            if await self._exchange_client_credentials():
+                response = await client.get(path, params=params)
+        return response
+
     def _get_base_url(self) -> str:
-        domain = self._shop_domain.replace(".myshopify.com", "").strip()
+        domain = self._shop_subdomain()
         version = (os.getenv("SHOPIFY_API_VERSION") or DEFAULT_API_VERSION).strip()
         return f"https://{domain}.myshopify.com/admin/api/{version}"
 
@@ -157,19 +244,24 @@ class ShopifyConnector(BaseConnector):
         return self._client
 
     async def authenticate(self) -> bool:
-        if not self._shop_domain or not self._access_token:
-            logger.warning("Shopify shop_domain or access_token not provided")
+        self.auth_error = None
+        if not self._shop_domain or not (self._access_token or self._has_client_credentials):
+            self.auth_error = "Enter the shop domain and either an Admin API access token or a client ID and secret."
+            logger.warning("Shopify shop_domain or credentials not provided")
             return False
 
         try:
-            client = await self._get_client()
-            response = await client.get("/products.json", params={"limit": 1})
+            if not await self._ensure_token():
+                return False
+            # /shop.json needs no extra access scope, unlike /products.json.
+            response = await self._get("/shop.json")
 
             if response.status_code == 200:
                 self._authenticated = True
                 logger.info("Shopify authentication successful")
                 return True
             else:
+                self.auth_error = self.auth_error or f"Shopify returned {response.status_code} for /shop.json"
                 logger.warning(f"Shopify auth failed: {response.status_code} - {response.text[:200]}")
                 return False
         except Exception as e:
@@ -178,8 +270,7 @@ class ShopifyConnector(BaseConnector):
 
     async def test_connection(self) -> bool:
         try:
-            client = await self._get_client()
-            response = await client.get("/products.json", params={"limit": 1})
+            response = await self._get("/shop.json")
             return response.status_code == 200
         except Exception:
             return False
@@ -196,7 +287,6 @@ class ShopifyConnector(BaseConnector):
                 return []
 
         try:
-            client = await self._get_client()
             all_orders = []
             page_info = None
 
@@ -212,7 +302,7 @@ class ShopifyConnector(BaseConnector):
                 if page_info:
                     params = {"limit": min(limit, 250), "page_info": page_info}
 
-                response = await client.get("/orders.json", params=params)
+                response = await self._get("/orders.json", params=params)
 
                 if response.status_code != 200:
                     logger.error(f"Shopify orders error: {response.status_code}")
@@ -250,9 +340,8 @@ class ShopifyConnector(BaseConnector):
                 return []
 
         try:
-            client = await self._get_client()
             params: Dict[str, Any] = {"limit": min(limit, 250)}
-            response = await client.get("/products.json", params=params)
+            response = await self._get("/products.json", params=params)
 
             if response.status_code == 200:
                 return response.json().get("products", [])
@@ -267,9 +356,8 @@ class ShopifyConnector(BaseConnector):
                 return []
 
         try:
-            client = await self._get_client()
             params: Dict[str, Any] = {"limit": min(limit, 250)}
-            response = await client.get("/customers.json", params=params)
+            response = await self._get("/customers.json", params=params)
 
             if response.status_code == 200:
                 return response.json().get("customers", [])
@@ -463,7 +551,7 @@ class ShopifyConnector(BaseConnector):
                     success=False,
                     provider_id=self.PROVIDER_ID,
                     sync_type="full",
-                    errors=["Authentication failed - check shop_domain and access_token"],
+                    errors=[self.auth_error or "Authentication failed - check shop_domain and access token / client credentials"],
                     sync_started=sync_started,
                 )
 
