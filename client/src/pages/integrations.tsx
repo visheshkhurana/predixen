@@ -1591,7 +1591,15 @@ function SyncStatusDisplay({
   );
 }
 
-const providerCredentialFields: Record<string, { field: string; label: string; placeholder: string }[]> = {
+type CredentialField = { field: string; label: string; placeholder: string; optional?: boolean };
+
+// Providers that accept one of several credential sets. The connect button
+// enables once every required field and at least one full set is filled.
+const providerCredentialAlternatives: Record<string, string[][]> = {
+  shopify: [["access_token"], ["client_id", "client_secret"]],
+};
+
+const providerCredentialFields: Record<string, CredentialField[]> = {
   razorpayx: [
     { field: "api_key", label: "API Key", placeholder: "RazorpayX Key Id" },
     { field: "api_secret", label: "API Secret", placeholder: "RazorpayX Key Secret" },
@@ -1684,7 +1692,9 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
   ],
   shopify: [
     { field: "shop_domain", label: "Shop Domain", placeholder: "yourstore (without .myshopify.com)" },
-    { field: "access_token", label: "Admin API Token", placeholder: "shpat_..." },
+    { field: "access_token", label: "Admin API Token (legacy custom app)", placeholder: "shpat_... (or leave blank and use Client ID + Secret)", optional: true },
+    { field: "client_id", label: "Client ID (Dev Dashboard app) - or use the Admin API Token above", placeholder: "Dev Dashboard app Client ID", optional: true },
+    { field: "client_secret", label: "Client Secret (Dev Dashboard app)", placeholder: "Dev Dashboard app Client Secret", optional: true },
   ],
   woocommerce: [
     { field: "store_url", label: "Store URL", placeholder: "https://yourstore.com" },
@@ -1714,6 +1724,7 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
   ],
   recurly: [
     { field: "api_key", label: "API Key", placeholder: "Enter Recurly Private API Key" },
+    { field: "region", label: "Data Center (optional)", placeholder: "us (default) or eu", optional: true },
   ],
   rippling: [
     { field: "api_key", label: "API Key", placeholder: "Enter Rippling API Key" },
@@ -1775,9 +1786,14 @@ function ConnectDialog({
   const [oauthProgress, setOauthProgress] = useState(0);
   const [credentials, setCredentials] = useState<Record<string, string>>({});
 
-  const credentialFields = providerCredentialFields[provider.id] || [
+  const credentialFields: CredentialField[] = providerCredentialFields[provider.id] || [
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
+  const filled = (field: string) => Boolean((credentials[field] || "").trim());
+  const alternatives = providerCredentialAlternatives[provider.id];
+  const credentialsComplete =
+    credentialFields.every(cf => cf.optional || filled(cf.field)) &&
+    (!alternatives || alternatives.some(set => set.every(filled)));
   
 
   const benefits = integrationBenefits[provider.id] || {
@@ -1950,7 +1966,7 @@ function ConnectDialog({
               </Button>
               <Button
                 onClick={() => connectMutation.mutate()}
-                disabled={!credentialFields.every(cf => (credentials[cf.field] || "").trim()) || connectMutation.isPending}
+                disabled={!credentialsComplete || connectMutation.isPending}
                 data-testid="button-confirm-connect"
               >
                 {connectMutation.isPending ? (

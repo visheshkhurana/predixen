@@ -218,9 +218,16 @@ class ShiprocketConnector(BaseConnector):
             if res.status_code != 200:
                 raise RuntimeError(f"Shiprocket {path} returned {res.status_code}")
             body = res.json()
-            rows.extend(body.get("data") or [])
-            total_pages = (((body.get("meta") or {}).get("pagination") or {}).get("total_pages")) or 1
-            if page >= total_pages:
+            page_rows = body.get("data") or []
+            rows.extend(page_rows)
+            pagination = (body.get("meta") or {}).get("pagination") or {}
+            total_pages = pagination.get("total_pages")
+            if total_pages:
+                if page >= total_pages:
+                    return rows, False
+            elif len(page_rows) < PER_PAGE:
+                # Some endpoints (e.g. the wallet statement) send no
+                # meta.pagination: keep paging until a short page.
                 return rows, False
             page += 1
         return rows, True

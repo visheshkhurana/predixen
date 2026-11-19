@@ -31,6 +31,10 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
+# Upper bound on records read from one paginated list (100 per page, so 100
+# pages). Chargebee lists page with offset/next_offset.
+MAX_LIST_RECORDS = 10_000
+
 
 @ConnectorRegistry.register
 class ChargebeeConnector(BaseConnector):
@@ -51,6 +55,9 @@ class ChargebeeConnector(BaseConnector):
         self._site = config.credentials.get("site", "")
         self._api_key = config.credentials.get("api_key", "")
         self._client: Optional[httpx.AsyncClient] = None
+        # Full invoice list cached per connector instance: sync_all, fetch_invoices
+        # and fetch_ledger all need it and it can be many pages.
+        self._invoices_cache: Optional[List[Dict[str, Any]]] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -94,7 +101,7 @@ class ChargebeeConnector(BaseConnector):
         except Exception:
             return False
 
-    async def get_subscriptions(self, limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_subscriptions(self, limit: int = MAX_LIST_RECORDS) -> List[Dict[str, Any]]:
         if not self._authenticated:
             if not await self.authenticate():
                 return []
@@ -129,7 +136,7 @@ class ChargebeeConnector(BaseConnector):
             logger.error(f"Chargebee subscriptions fetch error: {e}")
             return []
 
-    async def get_invoices_raw(self, limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_invoices_raw(self, limit: int = MAX_LIST_RECORDS) -> List[Dict[str, Any]]:
         if not self._authenticated:
             if not await self.authenticate():
                 return []
@@ -164,6 +171,11 @@ class ChargebeeConnector(BaseConnector):
             logger.error(f"Chargebee invoices fetch error: {e}")
             return []
 
+    async def _all_invoices(self) -> List[Dict[str, Any]]:
+        if self._invoices_cache is None:
+            self._invoices_cache = await self.get_invoices_raw()
+        return self._invoices_cache
+
     async def get_customers(self, limit: int = 100) -> List[Dict[str, Any]]:
         if not self._authenticated:
             if not await self.authenticate():
@@ -183,6 +195,11 @@ class ChargebeeConnector(BaseConnector):
             return []
 
     async def get_plans(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Plans (Product Catalog 1.0) or item prices (Product Catalog 2.0).
+
+        PC 2.0 sites reject /plans with a 4xx ("API endpoint is incompatible
+        with the product catalog version"); fall back to /item_prices there.
+        """
         if not self._authenticated:
             if not await self.authenticate():
                 return []
@@ -195,6 +212,12 @@ class ChargebeeConnector(BaseConnector):
             if response.status_code == 200:
                 data = response.json()
                 return [e.get("plan", {}) for e in data.get("list", [])]
+            if 400 <= response.status_code < 500:
+                fallback = await client.get("/item_prices", params=params)
+                if fallback.status_code == 200:
+                    data = fallback.json()
+                    return [e.get("item_price", {}) for e in data.get("list", [])]
+                logger.error(f"Chargebee item_prices error: {fallback.status_code}")
             return []
         except Exception as e:
             logger.error(f"Chargebee plans fetch error: {e}")
@@ -205,7 +228,7 @@ class ChargebeeConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[InvoiceRecord]:
-        raw_invoices = await self.get_invoices_raw()
+        raw_invoices = await self._all_invoices()
         invoices = []
 
         for inv in raw_invoices:
@@ -260,7 +283,7 @@ class ChargebeeConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[LedgerEntry]:
-        raw_invoices = await self.get_invoices_raw()
+        raw_invoices = await self._all_invoices()
         entries = []
 
         for inv in raw_invoices:
@@ -336,7 +359,7 @@ class ChargebeeConnector(BaseConnector):
                 )
 
             subscriptions = await self.get_subscriptions()
-            raw_invoices = await self.get_invoices_raw()
+            raw_invoices = await self._all_invoices()
             customers = await self.get_customers()
             plans = await self.get_plans()
             invoices = await self.fetch_invoices()

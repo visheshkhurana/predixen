@@ -35,6 +35,11 @@ from server.core.url_safety import SAFE_CLIENT_KWARGS, assert_public_url_before_
 
 logger = logging.getLogger(__name__)
 
+HTTP_STORE_ERROR = (
+    "Your store URL must start with https://. WooCommerce only accepts API keys over "
+    "HTTPS (plain http:// needs OAuth 1.0a signing). Enable SSL on the store and use its https:// address."
+)
+
 
 @ConnectorRegistry.register
 class WooCommerceConnector(BaseConnector):
@@ -56,6 +61,7 @@ class WooCommerceConnector(BaseConnector):
         self._consumer_key = config.credentials.get("consumer_key", "")
         self._consumer_secret = config.credentials.get("consumer_secret", "")
         self._client: Optional[httpx.AsyncClient] = None
+        self.auth_error: Optional[str] = None
         self._validate_store_url()
 
     def _validate_store_url(self):
@@ -83,14 +89,15 @@ class WooCommerceConnector(BaseConnector):
             }
             params = {}
 
-            if self._is_https():
-                auth_string = base64.b64encode(
-                    f"{self._consumer_key}:{self._consumer_secret}".encode()
-                ).decode()
-                headers["Authorization"] = f"Basic {auth_string}"
-            else:
-                params["consumer_key"] = self._consumer_key
-                params["consumer_secret"] = self._consumer_secret
+            # WooCommerce accepts consumer key/secret (Basic auth) only over
+            # HTTPS; plain HTTP requires OAuth 1.0a signatures, which we do not
+            # implement. Never send the keys over plain HTTP.
+            if not self._is_https():
+                raise ValueError(HTTP_STORE_ERROR)
+            auth_string = base64.b64encode(
+                f"{self._consumer_key}:{self._consumer_secret}".encode()
+            ).decode()
+            headers["Authorization"] = f"Basic {auth_string}"
 
             # Construction only checked the URL's shape (a name that did not
             # resolve yet was let through). Resolve it now, before credentials
@@ -106,8 +113,14 @@ class WooCommerceConnector(BaseConnector):
         return self._client
 
     async def authenticate(self) -> bool:
+        self.auth_error = None
         if not self._store_url or not self._consumer_key or not self._consumer_secret:
+            self.auth_error = "Enter the store URL, consumer key and consumer secret."
             logger.warning("WooCommerce store_url, consumer_key, or consumer_secret not provided")
+            return False
+        if not self._is_https():
+            self.auth_error = HTTP_STORE_ERROR
+            logger.warning("WooCommerce store URL is not https; refusing to send keys")
             return False
 
         try:
@@ -119,6 +132,7 @@ class WooCommerceConnector(BaseConnector):
                 logger.info("WooCommerce authentication successful")
                 return True
             else:
+                self.auth_error = f"WooCommerce returned {response.status_code}. Check the consumer key and secret (Read access)."
                 logger.warning(f"WooCommerce auth failed: {response.status_code} - {response.text[:200]}")
                 return False
         except Exception as e:

@@ -71,7 +71,7 @@ class ProfitWellConnector(BaseConnector):
 
         try:
             client = await self._get_client()
-            response = await client.get("/metrics/monthly/", params={"month": datetime.now().strftime("%Y-%m")})
+            response = await client.get("/metrics/monthly/", params={"metrics": "recurring_revenue"})
 
             if response.status_code == 200:
                 self._authenticated = True
@@ -87,55 +87,47 @@ class ProfitWellConnector(BaseConnector):
     async def test_connection(self) -> bool:
         try:
             client = await self._get_client()
-            response = await client.get("/metrics/monthly/", params={"month": datetime.now().strftime("%Y-%m")})
+            response = await client.get("/metrics/monthly/", params={"metrics": "recurring_revenue"})
             return response.status_code == 200
         except Exception:
             return False
 
-    async def get_daily_metrics(
-        self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _trends(payload: Any) -> Dict[str, List[Dict[str, Any]]]:
+        """Return ``{trend_name: [{"date", "value"}, ...]}`` from a metrics response."""
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            return {k: v for k, v in payload["data"].items() if isinstance(v, list)}
+        return {}
+
+    async def get_daily_metrics(self, month: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """Daily trends for one month (``YYYY-MM``; API allows only the
+        current or previous month). Dates in the result are ``YYYY-MM-DD``."""
         if not self._authenticated:
             if not await self.authenticate():
-                return []
-
-        if not start_date:
-            start_date = datetime.now() - timedelta(days=30)
-        if not end_date:
-            end_date = datetime.now()
-
+                return {}
+        month = month or datetime.now().strftime("%Y-%m")
         try:
             client = await self._get_client()
-            all_metrics = []
-
-            current = start_date
-            while current <= end_date:
-                params = {"date": current.strftime("%Y-%m-%d")}
-                response = await client.get("/metrics/daily/", params=params)
-
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, dict):
-                        data["query_date"] = current.strftime("%Y-%m-%d")
-                        all_metrics.append(data)
-                    elif isinstance(data, list):
-                        all_metrics.extend(data)
-
-                current += timedelta(days=1)
-
-            return all_metrics
-
+            response = await client.get("/metrics/daily/", params={"month": month})
+            if response.status_code != 200:
+                logger.error(f"ProfitWell daily metrics error: {response.status_code} - {response.text[:200]}")
+                return {}
+            return self._trends(response.json())
         except Exception as e:
             logger.error(f"ProfitWell daily metrics fetch error: {e}")
-            return []
+            return {}
 
     async def get_monthly_metrics(
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
+        """One row per month: ``{"month": "YYYY-MM", <trend>: value, ...}``.
+
+        The monthly endpoint returns the full history in a single call (it
+        accepts only ``metrics``/``plan_id``); we filter to the window here.
+        Amount values are already in the account currency (not cents).
+        """
         if not self._authenticated:
             if not await self.authenticate():
                 return []
@@ -144,51 +136,67 @@ class ProfitWellConnector(BaseConnector):
             start_date = datetime.now() - timedelta(days=365)
         if not end_date:
             end_date = datetime.now()
+        lo, hi = start_date.strftime("%Y-%m"), end_date.strftime("%Y-%m")
 
         try:
             client = await self._get_client()
-            all_metrics = []
+            response = await client.get("/metrics/monthly/")
+            if response.status_code != 200:
+                logger.error(f"ProfitWell monthly metrics error: {response.status_code} - {response.text[:200]}")
+                return []
 
-            current = start_date.replace(day=1)
-            while current <= end_date:
-                params = {"month": current.strftime("%Y-%m")}
-                response = await client.get("/metrics/monthly/", params=params)
-
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, dict):
-                        data["query_month"] = current.strftime("%Y-%m")
-                        all_metrics.append(data)
-                    elif isinstance(data, list):
-                        all_metrics.extend(data)
-
-                if current.month == 12:
-                    current = current.replace(year=current.year + 1, month=1)
-                else:
-                    current = current.replace(month=current.month + 1)
-
-            return all_metrics
+            by_month: Dict[str, Dict[str, Any]] = {}
+            for trend, points in self._trends(response.json()).items():
+                for point in points:
+                    if not isinstance(point, dict):
+                        continue
+                    month = str(point.get("date") or "")[:7]
+                    if not month or month < lo or month > hi:
+                        continue
+                    by_month.setdefault(month, {"month": month})[trend] = point.get("value")
+            return [by_month[m] for m in sorted(by_month)]
 
         except Exception as e:
             logger.error(f"ProfitWell monthly metrics fetch error: {e}")
             return []
 
-    async def get_subscriptions(self, limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_customers(self, limit: int = 1000, per_page: int = 250) -> List[Dict[str, Any]]:
+        """Customers via ``GET /v2/customers/`` (page/per_page paging, max 250)."""
         if not self._authenticated:
             if not await self.authenticate():
                 return []
 
         try:
             client = await self._get_client()
-            response = await client.get("/subcriptions/", params={"limit": limit})
-
-            if response.status_code == 200:
+            customers: List[Dict[str, Any]] = []
+            page = 1
+            per_page = max(1, min(per_page, 250))
+            while len(customers) < limit:
+                response = await client.get("/customers/", params={"page": page, "per_page": per_page})
+                if response.status_code != 200:
+                    logger.error(f"ProfitWell customers error: {response.status_code}")
+                    break
                 data = response.json()
-                return data if isinstance(data, list) else data.get("data", data.get("subscriptions", []))
-            return []
+                rows = data if isinstance(data, list) else data.get("data", []) if isinstance(data, dict) else []
+                customers.extend(rows)
+                if len(rows) < per_page:
+                    break
+                page += 1
+            return customers[:limit]
         except Exception as e:
-            logger.error(f"ProfitWell subscriptions fetch error: {e}")
+            logger.error(f"ProfitWell customers fetch error: {e}")
             return []
+
+    # Back-compat alias: there is no list-subscriptions endpoint in API v2.
+    async def get_subscriptions(self, limit: int = 1000) -> List[Dict[str, Any]]:
+        return await self.get_customers(limit=limit)
+
+    @staticmethod
+    def _num(value: Any) -> float:
+        try:
+            return float(value) if value is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
 
     async def fetch_ledger(
         self,
@@ -199,13 +207,14 @@ class ProfitWellConnector(BaseConnector):
         entries = []
 
         for metric in monthly_metrics:
-            month_str = metric.get("query_month", datetime.now().strftime("%Y-%m"))
+            month_str = metric.get("month", datetime.now().strftime("%Y-%m"))
             try:
                 metric_date = datetime.strptime(month_str, "%Y-%m")
             except (ValueError, TypeError):
                 metric_date = datetime.now()
 
-            mrr = float(metric.get("recurring_revenue", metric.get("mrr", 0))) / 100.0
+            # Values are in account currency units (not cents).
+            mrr = self._num(metric.get("recurring_revenue"))
             if mrr > 0:
                 entries.append(
                     LedgerEntry(
@@ -224,7 +233,7 @@ class ProfitWellConnector(BaseConnector):
                     )
                 )
 
-            new_mrr = float(metric.get("new_recurring_revenue", metric.get("new_mrr", 0))) / 100.0
+            new_mrr = self._num(metric.get("new_recurring_revenue"))
             if new_mrr > 0:
                 entries.append(
                     LedgerEntry(
@@ -243,7 +252,7 @@ class ProfitWellConnector(BaseConnector):
                     )
                 )
 
-            churned = float(metric.get("churned_recurring_revenue", metric.get("churned_mrr", 0))) / 100.0
+            churned = abs(self._num(metric.get("churned_recurring_revenue")))
             if churned > 0:
                 entries.append(
                     LedgerEntry(
@@ -311,7 +320,7 @@ class ProfitWellConnector(BaseConnector):
                 )
 
             ledger = await self.fetch_ledger()
-            subscriptions = await self.get_subscriptions()
+            subscriptions = await self.get_customers()
             financials = self.map_to_financials(ledger_entries=ledger)
 
             return SyncResult(
@@ -324,7 +333,7 @@ class ProfitWellConnector(BaseConnector):
                 metadata={
                     "financials": financials,
                     "ledger_entries_count": len(ledger),
-                    "subscriptions_count": len(subscriptions),
+                    "customers_count": len(subscriptions),
                 },
             )
 
