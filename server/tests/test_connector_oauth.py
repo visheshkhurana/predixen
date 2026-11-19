@@ -350,3 +350,18 @@ def test_zoho_repeated_401_stops_after_one_refresh(monkeypatch):
     conn._authenticated = False
     assert _run(conn.authenticate()) is False
     assert calls == {"refresh": 1, "org": 2}
+
+
+def test_ga4_finalize_picks_first_property():
+    def handler(request):
+        assert request.url.host == "analyticsadmin.googleapis.com"
+        return httpx.Response(200, json={"accountSummaries": [
+            {"propertySummaries": [{"property": "properties/987654", "displayName": "Acme Web"}]}]})
+
+    async def go(token):
+        async with _client(handler) as c:
+            return await co._finalize_google_analytics(c, token, {}, APP)
+    creds = _run(go({"access_token": "a", "refresh_token": "r"}))
+    assert creds["property_id"] == "987654" and creds["_hint"] == "Acme Web" and creds["refresh_token"] == "r"
+    with pytest.raises(co.OAuthConnectError):
+        _run(go({"access_token": "a"}))  # no offline access
