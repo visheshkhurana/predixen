@@ -300,3 +300,24 @@ def test_sheets_401_without_client_creds_does_not_refresh(mock_http):
                                       {"spreadsheet_id": "abc"}))
     assert _run(conn.authenticate()) is False
     assert len(seen) == 1
+
+
+def test_ga4_sync_fails_loudly_when_reports_error(mock_http):
+    def handler(r):
+        body = json.loads(r.content)
+        if body["dateRanges"][0]["startDate"] == "7daysAgo":
+            return httpx.Response(200, json={})  # authenticate probe
+        return httpx.Response(400, json={"error": {"message": "bad metric"}})
+
+    mock_http(handler)
+    conn = GoogleAnalyticsConnector(_cfg("google_analytics", {"property_id": "123", "access_token": "a"}))
+    res = _run(conn.sync_all())
+    assert res.success is False and any("400" in e for e in res.errors)
+
+
+def test_ga4_sync_warns_when_property_is_empty(mock_http):
+    mock_http(lambda r: httpx.Response(200, json={}))
+    conn = GoogleAnalyticsConnector(_cfg("google_analytics", {"property_id": "123", "access_token": "a"}))
+    res = _run(conn.sync_all())
+    assert res.success is True and res.records_synced == 0
+    assert any("no data in the last 30 days" in w for w in res.warnings)

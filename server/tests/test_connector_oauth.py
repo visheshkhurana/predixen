@@ -365,3 +365,42 @@ def test_ga4_finalize_picks_first_property():
     assert creds["property_id"] == "987654" and creds["_hint"] == "Acme Web" and creds["refresh_token"] == "r"
     with pytest.raises(co.OAuthConnectError):
         _run(go({"access_token": "a"}))  # no offline access
+
+
+def test_ga4_finalize_picks_busiest_property_not_first():
+    probed = []
+
+    def handler(request):
+        if request.url.host == "analyticsadmin.googleapis.com":
+            return httpx.Response(200, json={"accountSummaries": [
+                {"propertySummaries": [{"property": "properties/111", "displayName": "Old test site"}]},
+                {"propertySummaries": [{"property": "properties/222", "displayName": "Live site"},
+                                       {"property": "properties/333", "displayName": "Broken"}]}]})
+        assert request.url.host == "analyticsdata.googleapis.com"
+        pid = request.url.path.split("/")[-1].split(":")[0]
+        probed.append(pid)
+        if pid == "111":
+            return httpx.Response(200, json={})  # no rows: no traffic
+        if pid == "333":
+            return httpx.Response(403, json={"error": {"code": 403}})
+        return httpx.Response(200, json={"rows": [{"metricValues": [{"value": "1520"}]}]})
+
+    async def go():
+        async with _client(handler) as c:
+            return await co._finalize_google_analytics(c, {"access_token": "a", "refresh_token": "r"}, {}, APP)
+    creds = _run(go())
+    assert creds["property_id"] == "222" and creds["_hint"] == "Live site"
+    assert probed == ["111", "222", "333"]
+
+
+def test_ga4_finalize_falls_back_to_first_when_probes_fail():
+    def handler(request):
+        if request.url.host == "analyticsadmin.googleapis.com":
+            return httpx.Response(200, json={"accountSummaries": [{"propertySummaries": [
+                {"property": "properties/1", "displayName": "A"}, {"property": "properties/2", "displayName": "B"}]}]})
+        return httpx.Response(500)
+
+    async def go():
+        async with _client(handler) as c:
+            return await co._finalize_google_analytics(c, {"access_token": "a", "refresh_token": "r"}, {}, APP)
+    assert _run(go())["property_id"] == "1"
