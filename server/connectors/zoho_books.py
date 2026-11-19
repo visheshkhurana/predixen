@@ -35,21 +35,34 @@ ZOHO_AUTH_URL = "https://accounts.zoho.com/oauth/v2/token"
 # Zoho runs separate data centres; an org on zoho.in can only be reached
 # through the .in hosts. The OAuth callback tells us which one
 # (accounts-server); only these known domains are accepted.
-ZOHO_DC_DOMAINS = ("com", "in", "eu", "com.au", "jp", "ca", "sa", "uk", "com.cn")
+# Data centre -> (accounts host, API host). Canada lives on zohocloud.ca.
+ZOHO_DCS = {
+    "com": ("accounts.zoho.com", "www.zohoapis.com"),
+    "in": ("accounts.zoho.in", "www.zohoapis.in"),
+    "eu": ("accounts.zoho.eu", "www.zohoapis.eu"),
+    "com.au": ("accounts.zoho.com.au", "www.zohoapis.com.au"),
+    "jp": ("accounts.zoho.jp", "www.zohoapis.jp"),
+    "uk": ("accounts.zoho.uk", "www.zohoapis.uk"),
+    "ae": ("accounts.zoho.ae", "www.zohoapis.ae"),
+    "sg": ("accounts.zoho.sg", "www.zohoapis.sg"),
+    "sa": ("accounts.zoho.sa", "www.zohoapis.sa"),
+    "ca": ("accounts.zohocloud.ca", "www.zohoapis.ca"),
+    "com.cn": ("accounts.zoho.com.cn", "www.zohoapis.com.cn"),
+}
+ZOHO_DC_DOMAINS = tuple(ZOHO_DCS)
+_ACCOUNTS_HOST_TO_DC = {hosts[0]: dc for dc, hosts in ZOHO_DCS.items()}
 
 
 def zoho_dc_from_accounts_server(accounts_server: str) -> str:
     """'https://accounts.zoho.in' -> 'in'; anything unknown -> 'com'."""
-    match = re.fullmatch(r"https://accounts\.zoho\.([a-z.]+)/?", (accounts_server or "").strip())
-    if match and match.group(1) in ZOHO_DC_DOMAINS:
-        return match.group(1)
-    return "com"
+    match = re.fullmatch(r"https://([a-z.]+)/?", (accounts_server or "").strip())
+    return _ACCOUNTS_HOST_TO_DC.get(match.group(1), "com") if match else "com"
 
 
 def zoho_urls(dc: str) -> tuple:
     """(token_url, books_api_base) for a data centre."""
-    dc = dc if dc in ZOHO_DC_DOMAINS else "com"
-    return f"https://accounts.zoho.{dc}/oauth/v2/token", f"https://www.zohoapis.{dc}/books/v3"
+    accounts, api = ZOHO_DCS.get(dc, ZOHO_DCS["com"])
+    return f"https://{accounts}/oauth/v2/token", f"https://{api}/books/v3"
 
 
 @ConnectorRegistry.register
@@ -145,7 +158,8 @@ class ZohoBooksConnector(BaseConnector):
                     return False
             
             client = await self._get_client()
-            response = await client.get("/settings/organization")
+            # Books v3 has no /settings/organization; this was a 404 every time.
+            response = await client.get(f"/organizations/{self._organization_id}")
             
             if response.status_code == 200:
                 self._authenticated = True
