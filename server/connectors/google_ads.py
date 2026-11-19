@@ -10,10 +10,18 @@ Auth is OAuth 2.0 with the adwords scope. The founder clicks "Connect with
 Google"; the callback (server/api/google_ads_oauth.py) stores the refresh
 token. The app-level secrets live in the environment, never with a company:
 
-  GOOGLE_ADS_DEVELOPER_TOKEN   from the Google Ads API Center (manager account)
-  GOOGLE_ADS_CLIENT_ID         OAuth client (falls back to GOOGLE_CLIENT_ID)
-  GOOGLE_ADS_CLIENT_SECRET     OAuth secret (falls back to GOOGLE_CLIENT_SECRET)
-  GOOGLE_ADS_LOGIN_CUSTOMER_ID optional manager account id, digits only
+  GOOGLE_ADS_CLIENT_ID         OAuth client from the Cloud project that holds
+                               the Google Ads API access level
+  GOOGLE_ADS_CLIENT_SECRET     its secret
+  GOOGLE_ADS_DEVELOPER_TOKEN   optional, legacy. Google retired developer tokens
+                               in Sept 2026: the access level now belongs to the
+                               Cloud project that owns the OAuth client, so the
+                               header is sent only when this is set.
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID optional manager account id, digits only. Leave
+                               unset when founders connect their own accounts.
+
+There is deliberately no fallback to the sign-in GOOGLE_CLIENT_ID: that client
+lives in a different Cloud project, and calls made with it run at Test level.
 
 API: REST googleAds:search with GAQL, segments.month.
 """
@@ -35,7 +43,7 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
-API_VERSION = "v21"
+API_VERSION = "v26"
 API_HOST = "https://googleads.googleapis.com"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 SCOPE = "https://www.googleapis.com/auth/adwords"
@@ -45,15 +53,15 @@ MAX_RETRIES = 3
 def app_config() -> Dict[str, str]:
     return {
         "developer_token": os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN", "").strip(),
-        "client_id": (os.getenv("GOOGLE_ADS_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID") or "").strip(),
-        "client_secret": (os.getenv("GOOGLE_ADS_CLIENT_SECRET") or os.getenv("GOOGLE_CLIENT_SECRET") or "").strip(),
+        "client_id": os.getenv("GOOGLE_ADS_CLIENT_ID", "").strip(),
+        "client_secret": os.getenv("GOOGLE_ADS_CLIENT_SECRET", "").strip(),
         "login_customer_id": re.sub(r"\D", "", os.getenv("GOOGLE_ADS_LOGIN_CUSTOMER_ID", "")),
     }
 
 
 def is_configured() -> bool:
     cfg = app_config()
-    return bool(cfg["developer_token"] and cfg["client_id"] and cfg["client_secret"])
+    return bool(cfg["client_id"] and cfg["client_secret"])
 
 
 def parse_customer_ids(raw: Any) -> List[str]:
@@ -159,10 +167,9 @@ class GoogleAdsConnector(BaseConnector):
         self._access_token = res.json().get("access_token")
 
     def _headers(self) -> Dict[str, str]:
-        headers = {
-            "Authorization": f"Bearer {self._access_token}",
-            "developer-token": self._app["developer_token"],
-        }
+        headers = {"Authorization": f"Bearer {self._access_token}"}
+        if self._app["developer_token"]:
+            headers["developer-token"] = self._app["developer_token"]
         if self._app["login_customer_id"]:
             headers["login-customer-id"] = self._app["login_customer_id"]
         return headers
