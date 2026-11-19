@@ -31,7 +31,7 @@ def _fake_google(calls, *, token_ok=True, manager_ids=()):
         url = str(request.url)
         if url == google_ads.TOKEN_URL:
             return httpx.Response(200, json={"access_token": "at"}) if token_ok else httpx.Response(400, json={"error": "invalid_grant"})
-        assert request.headers["developer-token"] == "dev-token-test"
+        assert request.headers.get("developer-token") in (None, "dev-token-test")
         if url.endswith("customers:listAccessibleCustomers"):
             return httpx.Response(200, json={"resourceNames": ["customers/1112223333", "customers/9998887777"]})
         cid = url.split("/customers/")[1].split("/")[0]
@@ -108,3 +108,31 @@ def test_oauth_state_is_signed_and_expires(monkeypatch):
         g._verify(state[:-1] + ("0" if state[-1] != "0" else "1"))
     with pytest.raises(HTTPException):
         g._verify(g._sign({"c": 1, "u": 2, "exp": 1}))
+
+
+def test_works_without_developer_token(configured, monkeypatch):
+    """Google retired developer tokens (Sept 2026): client id + secret is enough."""
+    monkeypatch.delenv("GOOGLE_ADS_DEVELOPER_TOKEN", raising=False)
+    assert google_ads.is_configured()
+    calls = []
+    c = _connector(_fake_google(calls))
+    result = asyncio.run(c.sync_all())
+    assert result.success, result.errors
+    api_calls = [r for r in calls if "googleads" in str(r.url)]
+    assert api_calls and all("developer-token" not in r.headers for r in api_calls)
+    assert all(f"/{google_ads.API_VERSION}/" in str(r.url) for r in api_calls)
+
+
+def test_legacy_developer_token_still_sent_when_set(configured):
+    calls = []
+    asyncio.run(_connector(_fake_google(calls)).sync_all())
+    assert all(r.headers["developer-token"] == "dev-token-test" for r in calls if "googleads" in str(r.url))
+
+
+def test_sign_in_client_is_not_a_fallback(monkeypatch):
+    """The sign-in client lives in another Cloud project and would run at Test level."""
+    for k in ENV:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "sign-in-client")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "sign-in-secret")
+    assert not google_ads.is_configured()
