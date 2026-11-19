@@ -7,7 +7,12 @@ Provides:
 - Organization records
 - Revenue metrics from won deals
 
-API Documentation: https://developers.pipedrive.com/docs/api/v1
+Deals, persons and organizations use API v2 (the v1 list endpoints went out of
+support on 2026-08-01):
+https://developers.pipedrive.com/changelog/post/deprecated-apiv1-endpoints-become-out-of-support
+https://pipedrive.readme.io/docs/pipedrive-api-v2-migration-guide
+`/v1/users/me` is not on the deprecated list and has no v2 equivalent, so the
+auth check stays on it. The token goes in the `x-api-token` header for both.
 """
 
 import httpx
@@ -38,7 +43,7 @@ class PipedriveConnector(BaseConnector):
     PROVIDER_DESCRIPTION = "CRM for sales pipeline management. Import deals, contacts, and organizations. Track deal values and revenue metrics."
     PROVIDER_CATEGORY = ProviderCategory.CRM
     AUTH_TYPE = AuthType.API_KEY
-    DOCS_URL = "https://developers.pipedrive.com/docs/api/v1"
+    DOCS_URL = "https://developers.pipedrive.com/docs/api/v2"
 
     SUPPORTS_EMPLOYEES = False
     SUPPORTS_PAYROLL = False
@@ -51,18 +56,21 @@ class PipedriveConnector(BaseConnector):
         self._company_domain = config.credentials.get("company_domain", "")
         self._client: Optional[httpx.AsyncClient] = None
 
+    # v2 cursor pagination allows up to 500 items per page.
+    PAGE_LIMIT = 500
+
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            base_url = f"https://{self._company_domain}.pipedrive.com/api/v1"
+            # Host only: paths carry their version (/api/v2/... or /api/v1/users/me).
             self._client = httpx.AsyncClient(
-                base_url=base_url,
+                base_url=f"https://{self._company_domain}.pipedrive.com",
                 timeout=30.0,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-token": self._api_token,
+                },
             )
         return self._client
-
-    def _auth_params(self) -> Dict[str, str]:
-        return {"api_token": self._api_token}
 
     async def authenticate(self) -> bool:
         if not self._api_token or not self._company_domain:
@@ -71,7 +79,7 @@ class PipedriveConnector(BaseConnector):
 
         try:
             client = await self._get_client()
-            response = await client.get("/users/me", params=self._auth_params())
+            response = await client.get("/api/v1/users/me")
 
             if response.status_code == 200:
                 data = response.json()
@@ -89,99 +97,73 @@ class PipedriveConnector(BaseConnector):
     async def test_connection(self) -> bool:
         try:
             client = await self._get_client()
-            response = await client.get("/users/me", params=self._auth_params())
+            response = await client.get("/api/v1/users/me")
             return response.status_code == 200 and response.json().get("success", False)
         except Exception:
             return False
+
+    async def _list_v2(
+        self,
+        path: str,
+        limit: int,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Walk a v2 collection with `cursor` + `limit` until
+        `additional_data.next_cursor` is null or `limit` items are collected."""
+        if not self._authenticated:
+            if not await self.authenticate():
+                return []
+
+        client = await self._get_client()
+        items: List[Dict[str, Any]] = []
+        cursor: Optional[str] = None
+
+        while len(items) < limit:
+            params: Dict[str, Any] = {"limit": min(limit - len(items), self.PAGE_LIMIT)}
+            if extra_params:
+                params.update(extra_params)
+            if cursor:
+                params["cursor"] = cursor
+
+            response = await client.get(path, params=params)
+            if response.status_code != 200:
+                logger.error(f"Pipedrive {path} error: {response.status_code}")
+                break
+
+            data = response.json()
+            if not data.get("success"):
+                break
+
+            items.extend(data.get("data") or [])
+            cursor = (data.get("additional_data") or {}).get("next_cursor")
+            if not cursor:
+                break
+
+        return items[:limit]
 
     async def get_deals(
         self,
         limit: int = 500,
         status: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        if not self._authenticated:
-            if not await self.authenticate():
-                return []
-
         try:
-            client = await self._get_client()
-            all_deals: List[Dict[str, Any]] = []
-            start = 0
-
-            while True:
-                params: Dict[str, Any] = {
-                    **self._auth_params(),
-                    "start": start,
-                    "limit": min(limit - len(all_deals), 100),
-                }
-                if status:
-                    params["status"] = status
-
-                response = await client.get("/deals", params=params)
-                if response.status_code != 200:
-                    logger.error(f"Pipedrive deals error: {response.status_code}")
-                    break
-
-                data = response.json()
-                if not data.get("success"):
-                    break
-
-                items = data.get("data") or []
-                all_deals.extend(items)
-
-                pagination = data.get("additional_data", {}).get("pagination", {})
-                if not pagination.get("more_items_in_collection") or len(all_deals) >= limit:
-                    break
-                start = pagination.get("next_start", start + len(items))
-
-            return all_deals
-
+            return await self._list_v2(
+                "/api/v2/deals", limit, {"status": status} if status else None
+            )
         except Exception as e:
             logger.error(f"Pipedrive deals fetch error: {e}")
             return []
 
     async def get_persons(self, limit: int = 200) -> List[Dict[str, Any]]:
-        if not self._authenticated:
-            if not await self.authenticate():
-                return []
-
         try:
-            client = await self._get_client()
-            params: Dict[str, Any] = {
-                **self._auth_params(),
-                "start": 0,
-                "limit": min(limit, 100),
-            }
-            response = await client.get("/persons", params=params)
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    return data.get("data") or []
-            return []
+            return await self._list_v2("/api/v2/persons", limit)
         except Exception as e:
             logger.error(f"Pipedrive persons fetch error: {e}")
             return []
 
     async def get_organizations(self, limit: int = 200) -> List[Dict[str, Any]]:
-        if not self._authenticated:
-            if not await self.authenticate():
-                return []
-
         try:
-            client = await self._get_client()
-            params: Dict[str, Any] = {
-                **self._auth_params(),
-                "start": 0,
-                "limit": min(limit, 100),
-            }
-            response = await client.get("/organizations", params=params)
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    return data.get("data") or []
-            return []
+            return await self._list_v2("/api/v2/organizations", limit)
         except Exception as e:
             logger.error(f"Pipedrive organizations fetch error: {e}")
             return []
@@ -193,6 +175,13 @@ class PipedriveConnector(BaseConnector):
     ) -> List[InvoiceRecord]:
         deals = await self.get_deals(limit=500, status="won")
         invoices = []
+
+        # v2 deals carry only `org_id` (no `org_name`), so resolve names from the
+        # organizations list. Best effort: an unresolved id leaves org_name "".
+        org_names: Dict[str, str] = {}
+        if any(d.get("org_id") for d in deals):
+            for org in await self.get_organizations(limit=5000):
+                org_names[str(org.get("id"))] = org.get("name") or ""
 
         for deal in deals:
             value = float(deal.get("value") or 0)
@@ -210,7 +199,7 @@ class PipedriveConnector(BaseConnector):
             if end_date and won_date > end_date:
                 continue
 
-            currency = deal.get("currency", "USD")
+            currency = deal.get("currency") or "USD"
 
             invoices.append(
                 InvoiceRecord(
@@ -224,7 +213,8 @@ class PipedriveConnector(BaseConnector):
                     metadata={
                         "pipeline_id": deal.get("pipeline_id", ""),
                         "stage_id": deal.get("stage_id", ""),
-                        "org_name": (deal.get("org_name") or {}).get("name", "") if isinstance(deal.get("org_name"), dict) else str(deal.get("org_name", "")),
+                        "org_id": deal.get("org_id"),
+                        "org_name": org_names.get(str(deal.get("org_id")), "") if deal.get("org_id") else "",
                         "source": "pipedrive_deal",
                     },
                 )
@@ -266,7 +256,6 @@ class PipedriveConnector(BaseConnector):
                     description=f"Organization: {org_name}",
                     category="CRM Organization",
                     metadata={
-                        "people_count": org.get("people_count", 0),
                         "open_deals_count": org.get("open_deals_count", 0),
                         "won_deals_count": org.get("won_deals_count", 0),
                         "address": org.get("address", ""),

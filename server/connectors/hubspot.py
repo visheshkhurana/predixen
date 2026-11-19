@@ -33,6 +33,27 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://api.hubapi.com"
 
 
+def _deal_is_closed_won(props: Dict[str, Any]) -> bool:
+    """`hs_is_closed_won` is HubSpot's calculated "Is Closed Won" property: true
+    for whichever stage a pipeline marks as won, so it works for custom
+    pipelines whose won stage is not the default `closedwon` id. Fall back to
+    the stage id only when the property is absent (e.g. caller asked for other
+    properties)."""
+    flag = props.get("hs_is_closed_won")
+    if flag is not None and flag != "":
+        return str(flag).lower() == "true"
+    return props.get("dealstage") == "closedwon"
+
+
+def _deal_is_closed(props: Dict[str, Any]) -> bool:
+    """`hs_is_closed` ("Is Deal Closed?") covers won and lost stages of any
+    pipeline; stage-id fallback as above."""
+    flag = props.get("hs_is_closed")
+    if flag is not None and flag != "":
+        return str(flag).lower() == "true"
+    return props.get("dealstage") in ("closedwon", "closedlost")
+
+
 @ConnectorRegistry.register
 class HubSpotConnector(BaseConnector):
     PROVIDER_ID = "hubspot"
@@ -138,6 +159,7 @@ class HubSpotConnector(BaseConnector):
                 "dealname", "amount", "dealstage", "pipeline",
                 "closedate", "createdate", "hs_lastmodifieddate",
                 "hs_deal_stage_probability", "hubspot_owner_id",
+                "hs_is_closed_won", "hs_is_closed", "deal_currency_code",
             ]
 
         try:
@@ -241,10 +263,10 @@ class HubSpotConnector(BaseConnector):
 
             pipeline["total_pipeline_value"] += amount
 
-            if stage == "closedwon":
+            if _deal_is_closed_won(props):
                 pipeline["closed_won_value"] += amount
                 pipeline["closed_won_count"] += 1
-            elif stage != "closedlost":
+            elif not _deal_is_closed(props):
                 pipeline["open_deals_value"] += amount
                 pipeline["open_deals_count"] += 1
 
@@ -263,7 +285,7 @@ class HubSpotConnector(BaseConnector):
             stage = props.get("dealstage", "")
             amount = float(props.get("amount") or 0)
 
-            if stage != "closedwon" or amount <= 0:
+            if not _deal_is_closed_won(props) or amount <= 0:
                 continue
 
             close_date_str = props.get("closedate", "")
@@ -284,7 +306,9 @@ class HubSpotConnector(BaseConnector):
                     customer_name=props.get("dealname", ""),
                     amount=amount,
                     total=amount,
-                    currency="USD",
+                    # Empty when the portal has a single currency; USD is the
+                    # previous behaviour for that case.
+                    currency=props.get("deal_currency_code") or "USD",
                     status="paid",
                     metadata={
                         "deal_stage": stage,
