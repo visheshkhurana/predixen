@@ -676,18 +676,44 @@ export default function IntegrationsPage() {
     }
   };
 
-  // Back from Google: say what happened, then tidy the URL.
+  // Meta Ads connects through Facebook Login for Business when the server has
+  // the Meta app set up; otherwise the card falls back to pasting a token.
+  const [metaAdsStarting, setMetaAdsStarting] = useState(false);
+  const { data: metaAdsConfig } = useQuery<{ configured: boolean }>({
+    queryKey: ["/api/connectors/meta-ads/config"],
+    staleTime: 5 * 60_000,
+  });
+  const metaAdsOAuth = !!metaAdsConfig?.configured;
+
+  const startMetaAds = async () => {
+    if (!companyId) return;
+    setMetaAdsStarting(true);
+    try {
+      const res = await apiRequest("GET", `/api/connectors/companies/${companyId}/meta-ads/oauth-url`);
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch (error) {
+      setMetaAdsStarting(false);
+      toast({ title: "Couldn't start Facebook sign-in", description: getErrorMessage(error, "Try again"), variant: "destructive" });
+    }
+  };
+
+  // Back from Google or Facebook: say what happened, then tidy the URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("connected");
     const gError = params.get("google_ads_error");
-    if (connected === "google_ads") {
-      toast({ title: "Google Ads connected", description: "Run a sync to pull the last 3 months of spend." });
+    const mError = params.get("meta_ads_error");
+    if (connected === "google_ads" || connected === "meta_ads") {
+      const name = connected === "google_ads" ? "Google Ads" : "Meta Ads";
+      toast({ title: `${name} connected`, description: "Run a sync to pull the last 3 months of spend." });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
     } else if (gError) {
       toast({ title: "Google Ads not connected", description: gError, variant: "destructive" });
+    } else if (mError) {
+      toast({ title: "Meta Ads not connected", description: mError, variant: "destructive" });
     }
-    if (connected || gError) window.history.replaceState(null, "", window.location.pathname);
+    if (connected || gError || mError) window.history.replaceState(null, "", window.location.pathname);
   }, [companyId]);
 
   const spreadsheetIntegrations = getIntegrationsByCategory('spreadsheets');
@@ -980,7 +1006,12 @@ export default function IntegrationsPage() {
                     Reconnect
                   </Button>
                 )}
-                {connectorInfo?.needs_reauth && provider.id !== "google_ads" && (
+                {connectorInfo?.needs_reauth && provider.id === "meta_ads" && metaAdsOAuth && (
+                  <Button size="sm" variant="outline" onClick={startMetaAds} disabled={metaAdsStarting} data-testid="button-reconnect-meta_ads">
+                    Reconnect
+                  </Button>
+                )}
+                {connectorInfo?.needs_reauth && provider.id !== "google_ads" && !(provider.id === "meta_ads" && metaAdsOAuth) && (
                   <ConnectDialog provider={provider} type={type as React.ComponentProps<typeof ConnectDialog>["type"]} companyId={companyId} triggerLabel="Reconnect" />
                 )}
                 <Button
@@ -1018,6 +1049,11 @@ export default function IntegrationsPage() {
                   <Button size="sm" onClick={startGoogleAds} disabled={googleAdsStarting} data-testid="button-connect-google_ads">
                     {googleAdsStarting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
                     Connect with Google
+                  </Button>
+                ) : provider.id === 'meta_ads' && metaAdsOAuth ? (
+                  <Button size="sm" onClick={startMetaAds} disabled={metaAdsStarting} data-testid="button-connect-meta_ads">
+                    {metaAdsStarting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
+                    Connect with Facebook
                   </Button>
                 ) : (
                   <ConnectDialog provider={provider} type={type} companyId={companyId} />
