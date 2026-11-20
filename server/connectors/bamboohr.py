@@ -23,6 +23,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+from .http import http_client
 
 from .base import (
     AuthType,
@@ -122,7 +123,7 @@ class BambooHRConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=API_TEMPLATE.format(domain=self._domain),
                 auth=(self._api_key, "x"),
                 headers={"Accept": "application/json"},

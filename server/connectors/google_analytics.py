@@ -11,6 +11,7 @@ API Documentation: https://developers.google.com/analytics/devguides/reporting/d
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -46,7 +47,7 @@ async def refresh_google_access_token(
     if not (client_id and client_secret and refresh_token):
         return None
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with http_client(timeout=15.0) as client:
             response = await client.post(
                 GOOGLE_TOKEN_URL,
                 data={
@@ -92,7 +93,7 @@ class GoogleAnalyticsConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=BASE_URL,
                 timeout=30.0,
                 headers={

@@ -36,6 +36,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+from .http import http_client
 
 from .base import AuthType, BaseConnector, ConnectorConfig, ProviderCategory, SyncResult
 from .meta_ads import DEFAULT_LOOKBACK_MONTHS, MAX_LOOKBACK_MONTHS, full_months
@@ -151,7 +152,7 @@ class GoogleAdsConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(timeout=60.0)
+            self._client = http_client(timeout=60.0)
         return self._client
 
     async def _refresh_access_token(self) -> None:

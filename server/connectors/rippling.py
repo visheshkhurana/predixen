@@ -14,6 +14,7 @@ The V1 platform API (api.rippling.com/platform/api/...) is legacy.
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -80,7 +81,7 @@ class RipplingConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=BASE_URL,
                 timeout=30.0,
                 follow_redirects=False,

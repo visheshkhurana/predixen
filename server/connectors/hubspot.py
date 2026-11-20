@@ -11,6 +11,7 @@ API Documentation: https://developers.hubspot.com/docs/api-reference/crm
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -96,7 +97,7 @@ class HubSpotConnector(BaseConnector):
         if not (self._refresh_token and self._client_id and self._client_secret):
             return False
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 # /oauth/v1/token is retired 16 Feb 2027.
                 res = await client.post(f"{BASE_URL}/oauth/2026-03/token", data={
                     "grant_type": "refresh_token",
@@ -120,7 +121,7 @@ class HubSpotConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=BASE_URL,
                 timeout=30.0,
                 headers={

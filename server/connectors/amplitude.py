@@ -14,6 +14,7 @@ Credentials: api_key + secret_key; optional region ("eu" for the EU data centre)
 """
 
 import httpx
+from .http import http_client
 import json
 import logging
 import base64
@@ -108,7 +109,7 @@ class AmplitudeConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._host,
                 timeout=30.0,
                 headers={

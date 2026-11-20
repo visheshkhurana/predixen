@@ -22,6 +22,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
+from .http import http_client
 
 from server.services import crm_pipeline
 
@@ -109,7 +110,7 @@ class ZohoCRMConnector(BaseConnector):
         if not self._refresh_token:
             return False
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 res = await client.post(self._token_url, data={
                     "refresh_token": self._refresh_token,
                     "client_id": self._client_id,
@@ -132,7 +133,7 @@ class ZohoCRMConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._api_base,
                 headers={"Authorization": f"Zoho-oauthtoken {self._access_token}"},
                 timeout=30.0,

@@ -16,6 +16,7 @@ auth check stays on it. The token goes in the `x-api-token` header for both.
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -95,7 +96,7 @@ class PipedriveConnector(BaseConnector):
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
             # Host only: paths carry their version (/api/v2/... or /api/v1/users/me).
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=f"https://{self._company_domain}.pipedrive.com",
                 timeout=30.0,
                 headers={

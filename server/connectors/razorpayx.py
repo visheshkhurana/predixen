@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
+from .http import http_client
 
 from server.core.encryption import mask_account_number
 
@@ -262,7 +263,7 @@ class RazorpayXConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=BASE_URL,
                 auth=(self._api_key, self._api_secret),
                 timeout=30.0,

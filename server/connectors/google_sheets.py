@@ -8,6 +8,7 @@ import logging
 import urllib.parse
 
 import httpx
+from .http import http_client
 
 from server.connectors.base import (
     BaseConnector, 
@@ -80,7 +81,7 @@ class GoogleSheetsConnector(BaseConnector):
 
     async def _get(self, url: str, timeout: float) -> httpx.Response:
         """GET with the bearer token; on 401 refresh once (when possible) and retry."""
-        async with httpx.AsyncClient() as client:
+        async with http_client() as client:
             response = await client.get(
                 url, headers={"Authorization": f"Bearer {self._access_token}"}, timeout=timeout
             )

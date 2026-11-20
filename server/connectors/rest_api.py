@@ -13,6 +13,7 @@ from server.connectors.base import (
     ProviderCategory,
 )
 from server.connectors.registry import ConnectorRegistry
+from server.connectors.http import http_client
 from server.models.raw_data_event import RawDataEvent
 
 logger = logging.getLogger(__name__)
@@ -83,9 +84,9 @@ class RestAPIConnector(BaseConnector):
             return False
 
         try:
-            import httpx
+            import httpx  # noqa: F401
 
-            async with httpx.AsyncClient() as client:
+            async with http_client() as client:
                 response = await client.request(
                     self.method,
                     self.endpoint_url,
@@ -124,7 +125,7 @@ class RestAPIConnector(BaseConnector):
             # httpx defaults follow_redirects to False; passing it keeps a
             # future default change from treating 302 -> /login as success.
             # A 3xx is `< 400`, which is what this method used to accept.
-            async with httpx.AsyncClient(follow_redirects=False) as client:
+            async with http_client(follow_redirects=False) as client:
                 headers = self._build_headers()
                 response = await client.request(
                     self.method,
@@ -170,7 +171,7 @@ class RestAPIConnector(BaseConnector):
         try:
             import httpx
             
-            async with httpx.AsyncClient() as client:
+            async with http_client() as client:
                 response = await client.request(
                     self.method,
                     self.endpoint_url,

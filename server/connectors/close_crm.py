@@ -11,6 +11,7 @@ API Documentation: https://developer.close.com/
 """
 
 import httpx
+from .http import http_client
 import logging
 import base64
 from typing import List, Optional, Dict, Any
@@ -59,7 +60,7 @@ class CloseCRMConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=BASE_URL,
                 timeout=30.0,
                 headers={

@@ -13,6 +13,7 @@ API Documentation: https://woocommerce.github.io/woocommerce-rest-api-docs/
 """
 
 import httpx
+from .http import http_client
 import logging
 import base64
 from urllib.parse import urlparse
@@ -103,7 +104,7 @@ class WooCommerceConnector(BaseConnector):
             # resolve yet was let through). Resolve it now, before credentials
             # are sent anywhere, and never follow a redirect off the store.
             await assert_public_url_before_request(self._store_url)
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._get_base_url(),
                 timeout=30.0,
                 params=params,
