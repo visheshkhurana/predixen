@@ -107,6 +107,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   razorpayx: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
   keka: <Users className="h-6 w-6" />,
+  bamboohr: <Users className="h-6 w-6" />,
   peoplestrong: <Users className="h-6 w-6" />,
   quikchex: <DollarSign className="h-6 w-6" />,
   deskera: <Database className="h-6 w-6" />,
@@ -322,6 +323,17 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
       "View attendance logs",
     ],
   },
+  bamboohr: {
+    dataImported: [
+      "Headcount, by department and employment type",
+      "Hires and exits in the last 30 and 90 days, and 90-day attrition",
+      "Monthly salary run-rate from current pay rates (salaried staff)",
+    ],
+    permissions: [
+      "A BambooHR API key: it reads what its user can see",
+      "Read-only: FounderConsole never changes employee records",
+    ],
+  },
   keka: {
     dataImported: [
       "Employee profiles",
@@ -410,6 +422,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   razorpayx: { setupTime: "~10 min", category: "hr" },
   greythr: { setupTime: "~10 min", category: "hr" },
   keka: { setupTime: "~10 min", category: "hr" },
+  bamboohr: { setupTime: "~5 min", category: "hr" },
   peoplestrong: { setupTime: "~15 min", category: "hr" },
   quikchex: { setupTime: "~10 min", category: "hr" },
   deskera: { setupTime: "~15 min", category: "accounting" },
@@ -492,6 +505,12 @@ const payrollProviders: IntegrationProvider[] = [
     name: "GreytHR",
     description: "Full-suite HRMS and payroll management",
     features: ["Employee Data", "Leave & Attendance", "Salary Structures", "Payroll Processing"],
+  },
+  {
+    id: "bamboohr",
+    name: "BambooHR",
+    description: "Headcount, hires and exits, and salary run-rate from BambooHR",
+    features: ["Headcount", "Hires & Exits", "Attrition", "Salary Run-rate"],
   },
   {
     id: "keka",
@@ -852,7 +871,7 @@ export default function IntegrationsPage() {
   });
   const sampleProviderIds = new Set((sampleProviders ?? []).map((p) => p.provider_id));
 
-  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm"];
+  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
@@ -966,7 +985,7 @@ export default function IntegrationsPage() {
     }
   };
   
-  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm"];
+  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -1641,6 +1660,10 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "api_access_id", label: "API Access ID (user name)", placeholder: "API user name", hint: "greytHR Admin > Settings > API Details. Ask greytHR support to enable API access if you don't see it." },
     { field: "api_secret", label: "API Secret (password)", placeholder: "API password", hint: "Shown next to the Access ID when the API user is created." },
   ],
+  bamboohr: [
+    { field: "company_domain", label: "BambooHR subdomain", placeholder: "acme (from acme.bamboohr.com)", hint: "The first part of your BambooHR address: acme for acme.bamboohr.com." },
+    { field: "api_key", label: "API Key", placeholder: "BambooHR API key", hint: "In BambooHR: your name (top right) > API Keys > Add New Key. Use an admin's key to see everyone." },
+  ],
   keka: [
     { field: "company", label: "Keka company", placeholder: "acme (from acme.keka.com)", hint: "The first part of your Keka address: acme for acme.keka.com." },
     { field: "client_id", label: "Client ID", placeholder: "Keka API Client ID", hint: "Keka > Settings > Integrations > API access (needs Keka's API add-on)." },
@@ -1790,7 +1813,7 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
 // Providers with a real server-side connector. Anything else has no backend to
 // connect to, so its card says "Coming Soon" instead of playing a fake
 // "authorizing" animation and accepting any key.
-export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "google_sheets", "rest_api"]);
+export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "google_sheets", "rest_api"]);
 
 const providerSetupHelp: Record<string, string> = {
   meta_ads:

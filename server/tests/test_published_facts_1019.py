@@ -125,7 +125,8 @@ def _registered_module_names() -> list[str]:
 # Move a connector out of here (and bump the published number) when it goes live.
 # 1Password: new 2026-11-20, not yet tested against a real Business account.
 # Zoho CRM: new 2026-11-20, waits on a live Zoho CRM org test.
-PENDING_SETUP = {"google_ads", "onepassword", "zoho_crm"}
+# BambooHR: new 2026-11-20, waits on a live BambooHR account test.
+PENDING_SETUP = {"google_ads", "onepassword", "zoho_crm", "bamboohr"}
 
 
 def test_registry_has_37_connectors():

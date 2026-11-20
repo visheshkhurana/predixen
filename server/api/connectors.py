@@ -755,7 +755,9 @@ async def sync_provider(
         # STEP 3: Build and validate financial records
         financial_record = None
         if result.success and result.metadata.get("financials"):
-            financials = result.metadata["financials"]
+            financials = _drop_foreign_currency_figures(
+                result.metadata["financials"], company.currency, result.warnings,
+            )
             today = datetime.utcnow().date()
             # Canonical id keeps source_type stable when the caller used an alias.
             financial_record = _build_financial_record(
@@ -1048,6 +1050,32 @@ def _declared_period(financials: Dict[str, Any]) -> Optional[Tuple[date, date]]:
         )
 
     return start, end
+
+
+# A connector that knows the currency of a figure says so as `<field>_currency`.
+_CURRENCY_TAGGED_FIELDS = ("revenue", "payroll", "opex", "cogs", "cash_balance")
+
+
+def _drop_foreign_currency_figures(financials: Dict[str, Any], company_currency: Optional[str], warnings: List[str]) -> Dict[str, Any]:
+    """Leave out a figure the connector tagged with a currency other than the company's.
+
+    FinancialRecord columns have no currency of their own: they are read in the
+    company's currency. A USD payroll written into an INR company would be read
+    as rupees. Untagged figures are unchanged (most connectors don't say).
+    """
+    company_cur = (company_currency or "").upper()
+    if not company_cur:
+        return financials
+    out = dict(financials)
+    for name in _CURRENCY_TAGGED_FIELDS:
+        cur = str(out.get(f"{name}_currency") or "").upper()
+        if out.get(name) is not None and cur and cur != company_cur:
+            warnings.append(
+                f"{name.replace('_', ' ').capitalize()} is in {cur} and the company currency is {company_cur}, "
+                f"so it was not recorded."
+            )
+            out.pop(name)
+    return out
 
 
 def _build_financial_record(company_id: int, provider_id: str, provider_name: str, financials: Dict[str, Any], today) -> FinancialRecord:
