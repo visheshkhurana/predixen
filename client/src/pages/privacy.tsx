@@ -63,6 +63,26 @@ export default function PrivacyPolicyPage() {
           </ul>
         </Section>
 
+        <Section icon={Shield} title="Google User Data" testId="section-google-user-data" id="google-user-data">
+          <p>When you choose to connect a Google product, you sign in with Google and approve only the read-only access that feature needs:</p>
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li><strong className="text-foreground">Google Ads</strong> (<code>https://www.googleapis.com/auth/adwords</code>): we read the names, IDs and currency of the ad accounts you can access and monthly totals per account (spend, impressions, clicks, conversions and conversion value). We never create, edit, pause or spend on campaigns, even though Google offers this permission only as a single scope.</li>
+            <li><strong className="text-foreground">Google Analytics</strong> (<code>https://www.googleapis.com/auth/analytics.readonly</code>): we read monthly traffic and conversion totals for the GA4 property you connect.</li>
+            <li><strong className="text-foreground">Google Sign-In:</strong> your name, email address and profile picture, to create and sign in to your account.</li>
+          </ul>
+          <p>We use this data only to show it on your own dashboard and in the forecasts, simulations and analysis you ask for in your workspace. It is visible only to members of your company workspace. We store the refresh token encrypted and delete it, together with the data it imported, when you click Disconnect or delete your account.</p>
+          <p>
+            <strong className="text-foreground">FounderConsole's use and transfer to any other app of information received from Google APIs will adhere to the{' '}
+            <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Google API Services User Data Policy</a>, including the Limited Use requirements.</strong>
+          </p>
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li>We do not sell Google user data, and we do not use or transfer it for advertising, retargeting, credit-worthiness or lending decisions.</li>
+            <li>We do not transfer it to others except as needed to provide the features you use (for example, sending figures to an AI provider to answer a question you asked in your workspace), to comply with law, or as part of a merger or acquisition with your notice.</li>
+            <li>We do not use Google user data to develop, improve or train generalized or non-personalized AI or machine-learning models, and our AI providers do not retain it beyond the request.</li>
+            <li>No person at FounderConsole reads it unless you ask us to for support, it is needed for security or to comply with law, or it is aggregated and anonymized for internal operations.</li>
+          </ul>
+        </Section>
+
         <Section icon={Database} title="How We Use Your Data" testId="section-data-use">
           <p>Your data is used to:</p>
           <ul className="list-disc pl-5 space-y-1.5">
@@ -70,7 +90,7 @@ export default function PrivacyPolicyPage() {
             <li>Run Monte Carlo simulations and scenario modeling on your financial data.</li>
             <li>Generate recommendations and risk assessments through our AI copilot.</li>
             <li>Send transactional emails (verification, password reset, alerts).</li>
-            <li>Improve the platform based on aggregate, anonymized usage patterns.</li>
+            <li>Improve the platform based on aggregate, anonymized usage patterns (data received from Google APIs is only ever used here in aggregated, anonymized form; see Google User Data above).</li>
           </ul>
           <p>We never sell your data to third parties. Your financial data is only used to provide services directly to you.</p>
         </Section>
