@@ -94,7 +94,7 @@ def test_llms_txt_worked_example_matches_the_calculator_defaults():
     ):
         assert fact in text, f"llms.txt lost: {fact!r}"
     # The published-facts guard still holds alongside the new section.
-    assert "37 read-only data connectors" in text
+    assert "38 read-only data connectors" in text
     lowered = text.lower()
     assert "public beta" not in lowered
     assert "no plan is charged yet" not in lowered

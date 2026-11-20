@@ -65,7 +65,7 @@ def test_copy_respects_published_facts():
     for phrase in ("$29", "$49", "$99", "30-day", "Start Free Trial"):
         assert phrase not in text, phrase
     for count in re.findall(r"(\d+) (?:read-only )?(?:data )?connectors", text):
-        assert count == "37"
+        assert count == "38"
     # Paid plans are live (2026-11-15): the only price claim is the Free plan,
     # which is true whether payments are on or off.
     assert "public beta" not in text.lower()

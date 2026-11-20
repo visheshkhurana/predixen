@@ -40,7 +40,7 @@ function costCard(paidEnabled: boolean) {
 
 const bulletsAfterFirst = [
   "Set up in under 5 minutes",
-  "37 data connectors incl. Stripe, QuickBooks, Mercury",
+  "38 data connectors incl. Stripe, QuickBooks, Mercury",
   "Monte Carlo P10/P50/P90 runway bands",
 ];
 

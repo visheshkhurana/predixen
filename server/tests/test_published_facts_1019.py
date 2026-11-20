@@ -44,6 +44,7 @@ COUNT_FILES = [
     ROOT / "client" / "src" / "data" / "blog-posts.ts",
     ROOT / "client" / "src" / "components" / "marketing" / "redesign" / "TwinDashboardDemo.tsx",
     ROOT / "server" / "services" / "notifications.py",
+    ROOT / "client" / "src" / "data" / "industry-pages.ts",
 ]
 
 # Every public marketing surface that carried the retired trial offer. The
@@ -106,6 +107,17 @@ STALE_COUNT_PHRASES = (
     "36 production connector",
     'value: 36, suffix: "+"',
     'value="36+"',
+    # 37 until Zoho CRM passed its live test (2026-11-20) and became the 38th.
+    "37 data connector",
+    "37 Data Connector",
+    "37 connectors",
+    "37 read-only",
+    "37 integrations",
+    "37 data integrations",
+    "37 real OAuth",
+    "37 production connector",
+    'value: 37, suffix: "+"',
+    'value="37+"',
 )
 
 
@@ -124,21 +136,22 @@ def _registered_module_names() -> list[str]:
 # credentials (Google Ads needs a developer token): see docs/connectors/google-ads.md.
 # Move a connector out of here (and bump the published number) when it goes live.
 # 1Password: new 2026-11-20, not yet tested against a real Business account.
-# Zoho CRM: new 2026-11-20, waits on a live Zoho CRM org test.
+# Zoho CRM left this list 2026-11-20 after a live connect + sync matched a
+# real Zoho CRM org's deals.
 # BambooHR: new 2026-11-20, waits on a live BambooHR account test.
-PENDING_SETUP = {"google_ads", "onepassword", "zoho_crm", "bamboohr"}
+PENDING_SETUP = {"google_ads", "onepassword", "bamboohr"}
 
 
-def test_registry_has_37_connectors():
+def test_registry_has_38_connectors():
     names = [n for n in _registered_module_names() if n not in PENDING_SETUP]
-    assert len(names) == 37, names
-    assert len(set(names)) == 37
+    assert len(names) == 38, names
+    assert len(set(names)) == 38
     connectors_pkg.load_all_connectors()
     registered = [p for p in ConnectorRegistry.get_available_providers() if p not in PENDING_SETUP]
-    assert len(registered) == 37, sorted(registered)
+    assert len(registered) == 38, sorted(registered)
 
 
-def test_llms_txt_prices_the_free_plan_and_counts_37_connectors():
+def test_llms_txt_prices_the_free_plan_and_counts_38_connectors():
     # Paid plans went live 2026-11-15. llms.txt is static (no billing gate),
     # so it states only what is true in both states: the Free plan, no card.
     text = LLMS.read_text()
@@ -152,8 +165,8 @@ def test_llms_txt_prices_the_free_plan_and_counts_37_connectors():
     assert "$29" not in text
     assert "$49" not in text
     assert "$99" not in text
-    assert "37 read-only data connectors" in text
-    assert "36 read-only" not in text
+    assert "38 read-only data connectors" in text
+    assert "37 read-only" not in text
 
 
 def test_sameas_does_not_cite_the_missing_github_org():
