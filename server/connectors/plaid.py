@@ -59,7 +59,12 @@ class PlaidConnector(BaseConnector):
         # Plaid has two environments, Sandbox and Production
         # (https://plaid.com/docs/api/). The retired Development host maps to
         # Production, where Plaid moved Development Items.
-        env = str(config.settings.get("environment") or "production").lower()
+        # Access tokens name their environment (access-sandbox-..., access-
+        # production-...). The form has no environment field, so a sandbox
+        # token used to be sent to the production host and fail.
+        token_env = next((e for e in PLAID_ENVIRONMENTS if self._access_token.startswith(f"access-{e}-")), None)
+        env = str(config.settings.get("environment") or config.credentials.get("environment")
+                  or token_env or "production").lower()
         self._base_url = PLAID_ENVIRONMENTS.get(env, PLAID_ENVIRONMENTS["production"])
         self._client: Optional[httpx.AsyncClient] = None
         self._accounts: List[Dict[str, Any]] = []

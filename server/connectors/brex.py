@@ -124,6 +124,7 @@ class BrexConnector(BaseConnector):
     async def get_card_transactions(
         self,
         limit: int = 100,
+        posted_at_start: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         if not self._authenticated:
             if not await self.authenticate():
@@ -138,6 +139,8 @@ class BrexConnector(BaseConnector):
                 params: Dict[str, Any] = {"limit": min(limit, 100)}
                 if cursor:
                     params["cursor"] = cursor
+                if posted_at_start:
+                    params["posted_at_start"] = posted_at_start.strftime("%Y-%m-%dT00:00:00Z")
 
                 response = await client.get(
                     "/v2/transactions/card/primary",
@@ -185,7 +188,17 @@ class BrexConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[LedgerEntry]:
-        transactions = await self.get_card_transactions(limit=500)
+        # Brex doesn't promise an order, so the first 500 rows could skip
+        # recent months; ask from a start date instead (docs suggest a day of
+        # overlap, de-duplicated by id).
+        since = (start_date or datetime.now() - timedelta(days=180)) - timedelta(days=1)
+        seen: set = set()
+        transactions = []
+        for txn in await self.get_card_transactions(limit=5000, posted_at_start=since):
+            if txn.get("id") in seen:
+                continue
+            seen.add(txn.get("id"))
+            transactions.append(txn)
         transfers = await self.get_transfers(limit=100)
         entries = []
 
