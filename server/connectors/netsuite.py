@@ -34,6 +34,30 @@ from .base import (
 )
 from .registry import ConnectorRegistry
 
+SUITEQL_PAGE_SIZE = 1000
+SUITEQL_MAX_ROWS = 10000
+
+
+def _f(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _parse_ns_date(value: Any) -> Optional[datetime]:
+    """Queries ask for TO_CHAR(..., 'YYYY-MM-DD'); other formats are a fallback
+    (the account's own date format, which is ambiguous for D/M vs M/D)."""
+    if not value:
+        return None
+    text = str(value)[:10]
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    return None
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,6 +78,7 @@ class NetSuiteConnector(BaseConnector):
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
         self._account_id = config.credentials.get("account_id", "")
+        self.query_errors: List[str] = []
         self._consumer_key = config.credentials.get("consumer_key", "")
         self._consumer_secret = config.credentials.get("consumer_secret", "")
         self._token_id = config.credentials.get("token_id", "")
@@ -204,6 +229,46 @@ class NetSuiteConnector(BaseConnector):
             logger.error(f"NetSuite vendors fetch error: {e}")
             return []
 
+    @property
+    def _suiteql_url(self) -> str:
+        return self._base_url.replace("/services/rest/record/v1", "/services/rest/query/v1/suiteql")
+
+    async def _suiteql(self, query: str, max_rows: int = SUITEQL_MAX_ROWS) -> Optional[List[Dict[str, Any]]]:
+        """Run a SuiteQL query, following hasMore/offset. None if the first
+        page fails (bad permissions or an unknown field), so a sync can say so
+        instead of reporting zero.
+
+        The REST record list endpoints (GET /record/v1/invoice) return only
+        `id` and `links` per item, which is why invoices used to come back as
+        0 dated "now" and journal entries had no lines.
+        https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_156414087576.html
+        """
+        client = await self._get_client()
+        rows: List[Dict[str, Any]] = []
+        offset = 0
+        while len(rows) < max_rows:
+            params = {"limit": SUITEQL_PAGE_SIZE, "offset": offset}
+            headers = {
+                "Authorization": self._generate_oauth_header("POST", self._suiteql_url, params),
+                "Prefer": "transient",
+            }
+            try:
+                res = await client.post(self._suiteql_url, params=params, headers=headers, json={"q": query})
+            except Exception as e:
+                logger.error(f"NetSuite SuiteQL error: {e}")
+                return rows or None
+            if res.status_code != 200:
+                logger.error(f"NetSuite SuiteQL {res.status_code}: {res.text[:300]}")
+                self.query_errors.append(f"NetSuite query failed (HTTP {res.status_code})")
+                return rows or None
+            body = res.json() or {}
+            items = body.get("items") or []
+            rows.extend(i for i in items if isinstance(i, dict))
+            if not body.get("hasMore") or not items:
+                break
+            offset += len(items)
+        return rows
+
     async def fetch_invoices(
         self,
         start_date: Optional[datetime] = None,
@@ -213,69 +278,53 @@ class NetSuiteConnector(BaseConnector):
             if not await self.authenticate():
                 return []
 
-        invoices = []
-        try:
-            params: Dict[str, Any] = {"limit": 100}
-            response = await self._make_request("GET", "/invoice", params=params)
-
-            if response.status_code != 200:
-                logger.error(f"NetSuite invoices error: {response.status_code}")
-                return []
-
-            data = response.json()
-            results = data.get("items", data if isinstance(data, list) else [])
-
-            for inv in results:
-                inv_date_str = inv.get("tranDate") or inv.get("createdDate", "")
-                due_date_str = inv.get("dueDate", "")
-
-                try:
-                    inv_date = datetime.strptime(inv_date_str[:10], "%Y-%m-%d") if inv_date_str else datetime.now()
-                except (ValueError, TypeError):
-                    inv_date = datetime.now()
-
-                if start_date and inv_date < start_date:
-                    continue
-                if end_date and inv_date > end_date:
-                    continue
-
-                try:
-                    due_date = datetime.strptime(due_date_str[:10], "%Y-%m-%d") if due_date_str else None
-                except (ValueError, TypeError):
-                    due_date = None
-
-                amount = float(inv.get("total", inv.get("amount", 0)))
-                tax = float(inv.get("taxTotal", inv.get("tax", 0)))
-
-                customer = inv.get("entity", {})
-                customer_name = customer.get("refName", "") if isinstance(customer, dict) else str(customer)
-
-                status_ref = inv.get("status", {})
-                status = status_ref.get("refName", "pending") if isinstance(status_ref, dict) else str(status_ref)
-
-                invoices.append(
-                    InvoiceRecord(
-                        external_id=str(inv.get("id", "")),
-                        date=inv_date,
-                        due_date=due_date,
-                        customer_name=customer_name,
-                        amount=amount - tax,
-                        tax=tax,
-                        total=amount,
-                        currency=inv.get("currency", {}).get("refName", "USD") if isinstance(inv.get("currency"), dict) else "USD",
-                        status=status.lower() if status else "pending",
-                        metadata={
-                            "tran_id": inv.get("tranId"),
-                            "memo": inv.get("memo"),
-                            "subsidiary": inv.get("subsidiary", {}).get("refName") if isinstance(inv.get("subsidiary"), dict) else None,
-                            "source": "netsuite_invoice",
-                        },
-                    )
+        start = (start_date or datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        end = (end_date or datetime.now()).strftime("%Y-%m-%d")
+        # foreigntotal is the invoice total in its own currency; currency.symbol
+        # is the ISO code.
+        query = (
+            "SELECT t.id, t.tranid, TO_CHAR(t.trandate, 'YYYY-MM-DD') AS trandate, "
+            "TO_CHAR(t.duedate, 'YYYY-MM-DD') AS duedate, t.foreigntotal, t.memo, "
+            "BUILTIN.DF(t.status) AS status_name, BUILTIN.DF(t.entity) AS customer, "
+            "BUILTIN.DF(t.subsidiary) AS subsidiary, c.symbol AS currency "
+            "FROM transaction t LEFT JOIN currency c ON c.id = t.currency "
+            "WHERE t.type = 'CustInvc' "
+            f"AND t.trandate >= TO_DATE('{start}', 'YYYY-MM-DD') "
+            f"AND t.trandate <= TO_DATE('{end}', 'YYYY-MM-DD') "
+            "ORDER BY t.trandate DESC"
+        )
+        rows = await self._suiteql(query) or []
+        invoices: List[InvoiceRecord] = []
+        for inv in rows:
+            inv_date = _parse_ns_date(inv.get("trandate")) or datetime.now()
+            total = _f(inv.get("foreigntotal"))
+            status_name = str(inv.get("status_name") or "").lower()
+            if "paid" in status_name:
+                status = "paid"
+            elif "void" in status_name or "rejected" in status_name:
+                status = "cancelled"
+            else:
+                status = "open"
+            invoices.append(
+                InvoiceRecord(
+                    external_id=str(inv.get("id", "")),
+                    date=inv_date,
+                    due_date=_parse_ns_date(inv.get("duedate")),
+                    customer_name=str(inv.get("customer") or ""),
+                    amount=total,
+                    tax=0.0,
+                    total=total,
+                    currency=str(inv.get("currency") or "USD").upper()[:3],
+                    status=status,
+                    metadata={
+                        "tran_id": inv.get("tranid"),
+                        "memo": inv.get("memo"),
+                        "subsidiary": inv.get("subsidiary"),
+                        "status_name": inv.get("status_name"),
+                        "source": "netsuite_invoice",
+                    },
                 )
-
-        except Exception as e:
-            logger.error(f"Error fetching NetSuite invoices: {e}")
-
+            )
         return invoices
 
     async def fetch_ledger(
@@ -287,62 +336,41 @@ class NetSuiteConnector(BaseConnector):
             if not await self.authenticate():
                 return []
 
-        entries = []
-        try:
-            params: Dict[str, Any] = {"limit": 100}
-            response = await self._make_request("GET", "/journalEntry", params=params)
-
-            if response.status_code != 200:
-                logger.error(f"NetSuite journal entries error: {response.status_code}")
-                return []
-
-            data = response.json()
-            results = data.get("items", data if isinstance(data, list) else [])
-
-            for je in results:
-                je_date_str = je.get("tranDate") or je.get("createdDate", "")
-                try:
-                    je_date = datetime.strptime(je_date_str[:10], "%Y-%m-%d") if je_date_str else datetime.now()
-                except (ValueError, TypeError):
-                    je_date = datetime.now()
-
-                if start_date and je_date < start_date:
-                    continue
-                if end_date and je_date > end_date:
-                    continue
-
-                lines = je.get("line", {}).get("items", []) if isinstance(je.get("line"), dict) else []
-
-                for line in lines:
-                    account = line.get("account", {})
-                    account_code = str(account.get("id", "")) if isinstance(account, dict) else str(account)
-                    account_name = account.get("refName", "") if isinstance(account, dict) else ""
-
-                    debit = float(line.get("debit", 0))
-                    credit = float(line.get("credit", 0))
-
-                    entries.append(
-                        LedgerEntry(
-                            external_id=f"{je.get('id', '')}-{line.get('line', '')}",
-                            date=je_date,
-                            account_code=account_code,
-                            account_name=account_name,
-                            debit=debit,
-                            credit=credit,
-                            description=line.get("memo") or je.get("memo", ""),
-                            category=account_name,
-                            metadata={
-                                "journal_id": je.get("id"),
-                                "tran_id": je.get("tranId"),
-                                "subsidiary": je.get("subsidiary", {}).get("refName") if isinstance(je.get("subsidiary"), dict) else None,
-                                "source": "netsuite_journal",
-                            },
-                        )
-                    )
-
-        except Exception as e:
-            logger.error(f"Error fetching NetSuite journal entries: {e}")
-
+        start = (start_date or datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        end = (end_date or datetime.now()).strftime("%Y-%m-%d")
+        query = (
+            "SELECT t.id, t.tranid, TO_CHAR(t.trandate, 'YYYY-MM-DD') AS trandate, "
+            "t.memo AS header_memo, tl.id AS line_id, tl.memo, "
+            "tl.debitforeignamount, tl.creditforeignamount, tl.expenseaccount AS account_id, "
+            "BUILTIN.DF(tl.expenseaccount) AS account_name, BUILTIN.DF(t.subsidiary) AS subsidiary "
+            "FROM transaction t JOIN transactionline tl ON tl.transaction = t.id "
+            "WHERE t.type = 'Journal' AND t.posting = 'T' "
+            f"AND t.trandate >= TO_DATE('{start}', 'YYYY-MM-DD') "
+            f"AND t.trandate <= TO_DATE('{end}', 'YYYY-MM-DD') "
+            "ORDER BY t.trandate DESC"
+        )
+        rows = await self._suiteql(query) or []
+        entries: List[LedgerEntry] = []
+        for line in rows:
+            account_name = str(line.get("account_name") or "")
+            entries.append(
+                LedgerEntry(
+                    external_id=f"{line.get('id', '')}-{line.get('line_id', '')}",
+                    date=_parse_ns_date(line.get("trandate")) or datetime.now(),
+                    account_code=str(line.get("account_id") or ""),
+                    account_name=account_name,
+                    debit=_f(line.get("debitforeignamount")),
+                    credit=_f(line.get("creditforeignamount")),
+                    description=line.get("memo") or line.get("header_memo") or "",
+                    category=account_name,
+                    metadata={
+                        "journal_id": line.get("id"),
+                        "tran_id": line.get("tranid"),
+                        "subsidiary": line.get("subsidiary"),
+                        "source": "netsuite_journal",
+                    },
+                )
+            )
         return entries
 
     def map_to_financials(
@@ -358,10 +386,24 @@ class NetSuiteConnector(BaseConnector):
         }
 
         if invoices:
-            paid_invoices = [inv for inv in invoices if inv.status in ("paid", "paidinfull", "completed")]
-            result["revenue"] = sum(inv.total for inv in paid_invoices)
+            # Invoiced this month (accrual), in the main currency. The old
+            # figure summed every paid invoice the list returned.
+            today = datetime.now().date()
+            month_start = today.replace(day=1)
+            live = [i for i in invoices if i.status != "cancelled"]
+            counts: Dict[str, int] = {}
+            for i in live:
+                counts[i.currency] = counts.get(i.currency, 0) + 1
+            main = max(counts, key=counts.get) if counts else None
+            month = [i for i in live if month_start <= i.date.date() <= today and i.currency == main]
+            result["revenue"] = round(sum(i.total for i in month), 2)
+            if main:
+                result["revenue_currency"] = main
+            result["period_start"] = month_start.isoformat()
+            result["period_end"] = today.isoformat()
             result["invoices_count"] = len(invoices)
-            result["accounts_receivable"] = sum(inv.total for inv in invoices if inv.status in ("open", "pending"))
+            result["accounts_receivable"] = round(
+                sum(i.total for i in live if i.status == "open" and i.currency == main), 2)
 
         if ledger_entries:
             total_debits = sum(e.debit for e in ledger_entries)
@@ -400,6 +442,7 @@ class NetSuiteConnector(BaseConnector):
                 success=True,
                 provider_id=self.PROVIDER_ID,
                 sync_type="full",
+                warnings=list(dict.fromkeys(self.query_errors)),
                 records_synced=len(invoices) + len(ledger) + len(accounts) + len(vendors),
                 sync_started=sync_started,
                 sync_completed=datetime.utcnow(),
