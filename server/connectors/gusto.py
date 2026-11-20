@@ -11,6 +11,7 @@ API Documentation: https://docs.gusto.com/app-integrations/
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -85,7 +86,7 @@ class GustoConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._base_url,
                 timeout=30.0,
                 headers={
@@ -100,7 +101,7 @@ class GustoConnector(BaseConnector):
             return False
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 response = await client.post(
                     f"{self._base_url}/oauth/token",
                     json={

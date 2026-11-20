@@ -11,6 +11,7 @@ API Documentation: https://developer.salesforce.com/docs/atlas.en-us.api_rest.me
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime, timedelta
@@ -81,7 +82,7 @@ class SalesforceConnector(BaseConnector):
         if not (self._refresh_token and self._client_id and self._client_secret and self._instance_url):
             return False
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 res = await client.post(f"{self._instance_url}/services/oauth2/token", data={
                     "grant_type": "refresh_token",
                     "refresh_token": self._refresh_token,
@@ -104,7 +105,7 @@ class SalesforceConnector(BaseConnector):
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
             base_url = f"{self._instance_url}/services/data/{API_VERSION}"
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=base_url,
                 timeout=30.0,
                 headers={

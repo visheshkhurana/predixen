@@ -20,6 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import httpx
+from .http import http_client
 
 from .base import AuthType, BaseConnector, ConnectorConfig, ProviderCategory, SyncResult
 from .registry import ConnectorRegistry
@@ -128,7 +129,7 @@ class RazorpayConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=BASE_URL, timeout=30.0, auth=(self._key_id, self._key_secret),
             )
         return self._client

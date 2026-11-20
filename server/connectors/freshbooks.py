@@ -11,6 +11,7 @@ API Documentation: https://www.freshbooks.com/api/start
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -127,7 +128,7 @@ class FreshBooksConnector(BaseConnector):
         if self._redirect_uri:
             body["redirect_uri"] = self._redirect_uri
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 response = await client.post(
                     FRESHBOOKS_TOKEN_URL,
                     json=body,
@@ -154,7 +155,7 @@ class FreshBooksConnector(BaseConnector):
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
             base_url = f"https://api.freshbooks.com/accounting/account/{self._account_id}"
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=base_url,
                 timeout=30.0,
                 headers={

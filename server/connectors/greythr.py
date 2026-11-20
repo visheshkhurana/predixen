@@ -16,6 +16,7 @@ API documentation (official Postman collection): https://api-docs.greythr.com/
 """
 
 import httpx
+from .http import http_client
 import logging
 import re
 import time
@@ -185,7 +186,7 @@ class GreytHRConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=API_BASE,
                 headers={"Accept": "application/json", "x-greythr-domain": self._domain},
                 timeout=30.0,

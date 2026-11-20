@@ -12,6 +12,7 @@ Authentication: OAuth 2.0
 """
 
 import httpx
+from .http import http_client
 import logging
 import re
 from typing import List, Optional, Dict, Any
@@ -117,7 +118,7 @@ class ZohoBooksConnector(BaseConnector):
     async def _refresh_access_token(self) -> bool:
         """Refresh the OAuth access token using refresh token."""
         try:
-            async with httpx.AsyncClient() as client:
+            async with http_client() as client:
                 response = await client.post(
                     self._token_url,
                     data={
@@ -151,7 +152,7 @@ class ZohoBooksConnector(BaseConnector):
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create authenticated HTTP client."""
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._api_base,
                 headers={
                     "Authorization": f"Zoho-oauthtoken {self._access_token}",
@@ -197,7 +198,7 @@ class ZohoBooksConnector(BaseConnector):
     async def test_connection(self) -> bool:
         """Quick connectivity test."""
         try:
-            async with httpx.AsyncClient() as client:
+            async with http_client() as client:
                 response = await client.get(self._api_base)
                 return response.status_code in [200, 401, 403]
         except Exception:

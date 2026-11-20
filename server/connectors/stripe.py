@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 import calendar
 import logging
 import httpx
+from .http import http_client
 import base64
 
 from .base import (
@@ -146,7 +147,7 @@ class StripeConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self.client is None or self.client.is_closed:
-            self.client = httpx.AsyncClient(
+            self.client = http_client(
                 base_url=self.base_url,
                 headers=self._get_auth_header(),
                 timeout=30.0,

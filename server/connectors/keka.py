@@ -21,6 +21,7 @@ returns a Bearer access_token (expires_in ~86400s).
 """
 
 import httpx
+from .http import http_client
 import logging
 import re
 from typing import List, Optional, Dict, Any
@@ -136,7 +137,7 @@ class KekaConnector(BaseConnector):
         return None
 
     async def _fetch_token(self) -> bool:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+        async with http_client(timeout=30.0, follow_redirects=False) as client:
             response = await client.post(
                 TOKEN_URL,
                 data={
@@ -168,7 +169,7 @@ class KekaConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._base_url,
                 headers={
                     "Accept": "application/json",

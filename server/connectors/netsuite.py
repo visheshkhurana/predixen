@@ -11,6 +11,7 @@ API Documentation: https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help
 """
 
 import httpx
+from .http import http_client
 import logging
 import hashlib
 import hmac
@@ -153,7 +154,7 @@ class NetSuiteConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._base_url,
                 timeout=30.0,
                 headers={

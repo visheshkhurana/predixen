@@ -15,6 +15,7 @@ Documentation: https://developers.tallysolutions.com/
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
@@ -230,7 +231,7 @@ class TallyConnector(BaseConnector):
             if not self._tally_url:
                 raise UnsafeTargetError("Tally server URL is required")
             await assert_public_url_before_request(self._tally_url)
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._tally_url,
                 headers={"Content-Type": "application/xml"},
                 timeout=60.0,  # Tally can be slow

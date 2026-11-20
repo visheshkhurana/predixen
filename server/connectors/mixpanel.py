@@ -14,6 +14,7 @@ region (us/eu/in), bookmark_id (saved Insights report) and funnel_id.
 """
 
 import httpx
+from .http import http_client
 import json
 import logging
 import base64
@@ -101,7 +102,7 @@ class MixpanelConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._base_url,
                 timeout=30.0,
                 headers={

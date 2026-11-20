@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
+from .http import http_client
 
 from .base import (
     AuthType,
@@ -216,7 +217,7 @@ class OnePasswordConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self.base_url,
                 timeout=30.0,
                 follow_redirects=False,

@@ -20,6 +20,7 @@ API reference (https://developer.deel.com/):
 """
 
 import httpx
+from .http import http_client
 import logging
 from collections import defaultdict
 from typing import List, Optional, Dict, Any, Tuple
@@ -121,7 +122,7 @@ class DeelConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=BASE_URL,
                 timeout=30.0,
                 follow_redirects=False,

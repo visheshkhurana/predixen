@@ -11,6 +11,7 @@ API Documentation: https://developers.recurly.com/api/v2021-02-25/
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import date as date_cls, datetime, timedelta
@@ -63,7 +64,7 @@ class RecurlyConnector(BaseConnector):
         if not self._client:
             # Recurly v3 uses HTTP Basic auth: API key as username, empty
             # password (it does not accept Bearer tokens).
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._base_url,
                 timeout=30.0,
                 auth=httpx.BasicAuth(self._api_key, ""),

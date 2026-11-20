@@ -11,6 +11,7 @@ API Documentation: https://shopify.dev/docs/api/admin-rest
 """
 
 import httpx
+from .http import http_client
 import logging
 import os
 import time
@@ -168,7 +169,7 @@ class ShopifyConnector(BaseConnector):
         """
         url = f"https://{self._shop_subdomain()}.myshopify.com/admin/oauth/access_token"
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 response = await client.post(
                     url,
                     data={
@@ -233,7 +234,7 @@ class ShopifyConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._get_base_url(),
                 timeout=30.0,
                 headers={

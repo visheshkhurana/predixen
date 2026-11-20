@@ -18,6 +18,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import logging
 import httpx
+from .http import http_client
 import base64
 
 from .base import (
@@ -94,7 +95,7 @@ class QuickBooksConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self.client is None or self.client.is_closed:
-            self.client = httpx.AsyncClient(
+            self.client = http_client(
                 headers=self._get_headers(),
                 timeout=30.0,
             )
@@ -107,7 +108,7 @@ class QuickBooksConnector(BaseConnector):
 
         try:
             basic = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
-            async with httpx.AsyncClient(timeout=15.0) as token_client:
+            async with http_client(timeout=15.0) as token_client:
                 resp = await token_client.post(
                     QB_OAUTH_TOKEN_URL,
                     headers={

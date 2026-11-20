@@ -11,6 +11,7 @@ API Documentation: https://apidocs.chargebee.com/docs/api
 """
 
 import httpx
+from .http import http_client
 import logging
 import base64
 from typing import List, Optional, Dict, Any
@@ -73,7 +74,7 @@ class ChargebeeConnector(BaseConnector):
         if not self._client:
             base_url = f"https://{self._site}.chargebee.com/api/v2"
             auth_string = base64.b64encode(f"{self._api_key}:".encode()).decode()
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=base_url,
                 timeout=30.0,
                 headers={

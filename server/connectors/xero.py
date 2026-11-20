@@ -12,6 +12,7 @@ API Documentation: https://developer.xero.com/documentation/api/accounting/overv
 """
 
 import httpx
+from .http import http_client
 import logging
 import re
 from typing import List, Optional, Dict, Any
@@ -139,7 +140,7 @@ class XeroConnector(BaseConnector):
             if self._tenant_id:
                 headers["Xero-Tenant-Id"] = self._tenant_id
 
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=XERO_API_URL,
                 timeout=30.0,
                 headers=headers,
@@ -151,7 +152,7 @@ class XeroConnector(BaseConnector):
             return False
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 response = await client.post(
                     XERO_TOKEN_URL,
                     data={
@@ -180,7 +181,7 @@ class XeroConnector(BaseConnector):
             return True
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 response = await client.get(
                     "https://api.xero.com/connections",
                     headers={"Authorization": f"Bearer {self._access_token}"},

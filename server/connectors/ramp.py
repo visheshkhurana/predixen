@@ -11,6 +11,7 @@ API Documentation: https://docs.ramp.com/reference
 """
 
 import httpx
+from .http import http_client
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -124,7 +125,7 @@ class RampConnector(BaseConnector):
             return False
         self._token_fetched = True
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with http_client(timeout=30.0) as client:
                 response = await client.post(
                     f"{self._base_url}/token",
                     auth=(self._client_id, self._client_secret),
@@ -148,7 +149,7 @@ class RampConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(
+            self._client = http_client(
                 base_url=self._base_url,
                 timeout=30.0,
                 headers={

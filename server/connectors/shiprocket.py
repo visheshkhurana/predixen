@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import httpx
+from .http import http_client
 
 from .base import AuthType, BaseConnector, ConnectorConfig, ProviderCategory, SyncResult
 from .registry import ConnectorRegistry
@@ -185,7 +186,7 @@ class ShiprocketConnector(BaseConnector):
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
-            self._client = httpx.AsyncClient(base_url=BASE_URL, timeout=30.0)
+            self._client = http_client(base_url=BASE_URL, timeout=30.0)
         return self._client
 
     async def authenticate(self) -> bool:
