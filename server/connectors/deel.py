@@ -83,7 +83,10 @@ def annual_compensation(details: Optional[Dict[str, Any]]) -> Optional[Tuple[flo
     amount = _num(details.get("amount"))
     if not amount:
         return None
-    scale = str(details.get("frequency") or details.get("scale") or "monthly").lower()
+    # `scale` is the unit of the rate (hourly, weekly, monthly...); `frequency`
+    # is the invoice cycle. A $50/hour contract invoiced monthly was being
+    # annualised as 50 x 12.
+    scale = str(details.get("scale") or details.get("frequency") or "monthly").lower()
     return amount * _ANNUALIZE.get(scale, 12), currency
 
 

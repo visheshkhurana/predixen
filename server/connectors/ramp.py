@@ -27,6 +27,17 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from .money import to_major
+
+
+def _card_holder_name(holder) -> Optional[str]:
+    """Ramp's card_holder has first_name/last_name, not full_name."""
+    if not isinstance(holder, dict):
+        return None
+    if holder.get("full_name"):
+        return holder["full_name"]
+    name = " ".join(p for p in (holder.get("first_name"), holder.get("last_name")) if p)
+    return name or None
 from server.services.software_spend import card_software_months
 
 logger = logging.getLogger(__name__)
@@ -53,7 +64,11 @@ def ramp_money(value: Any) -> float:
         return 0.0
     if isinstance(value, dict):
         raw = value.get("amount", value.get("value", 0))
-        rate = value.get("minor_unit_conversion_rate") or 100
+        rate = value.get("minor_unit_conversion_rate")
+        if not rate:
+            # Transaction entity_amount has no conversion rate; JPY and other
+            # zero-decimal currencies have no minor unit.
+            return to_major(raw, value.get("currency") or value.get("currency_code"))
         try:
             return float(raw or 0) / float(rate)
         except (ValueError, TypeError, ZeroDivisionError):
@@ -254,7 +269,7 @@ class RampConnector(BaseConnector):
                     category=txn.get("sk_category_name", "Uncategorized"),
                     metadata={
                         "merchant_name": txn.get("merchant_name"),
-                        "card_holder_name": (txn.get("card_holder") or {}).get("full_name"),
+                        "card_holder_name": _card_holder_name(txn.get("card_holder")),
                         "state": txn.get("state"),
                         "type": "card_transaction",
                     },
@@ -281,7 +296,7 @@ class RampConnector(BaseConnector):
                     category="Reimbursement",
                     metadata={
                         "type": "reimbursement",
-                        "user_name": (reimb.get("user") or {}).get("full_name"),
+                        "user_name": reimb.get("user_full_name") or (reimb.get("user") or {}).get("full_name"),
                         "status": reimb.get("state") or reimb.get("status"),
                     },
                 )

@@ -31,11 +31,68 @@ from .base import (
     PayrollRunRecord,
 )
 from .registry import ConnectorRegistry
+from .money import ZERO_DECIMAL_CURRENCIES, to_major  # noqa: F401 (re-exported)
 
 logger = logging.getLogger(__name__)
 
 # Pages of 100 balance transactions read per ledger sync (10,000 rows).
 MAX_LEDGER_PAGES = 100
+
+
+# Average periods per month for a recurring price's `interval`.
+_PER_MONTH = {"day": 365.0 / 12, "week": 52.0 / 12, "month": 1.0, "year": 1.0 / 12}
+
+
+def price_unit_minor(price: Dict[str, Any], qty: float) -> float:
+    """Total for `qty` units of a price, in minor units.
+
+    `unit_amount` is null for tiered prices (and can be for decimal ones), so
+    fall back to `unit_amount_decimal`, then to the expanded `tiers`.
+    """
+    if price.get("unit_amount") is not None:
+        return float(price["unit_amount"]) * qty
+    if price.get("unit_amount_decimal") not in (None, ""):
+        return float(price["unit_amount_decimal"]) * qty
+    tiers = price.get("tiers") or []
+    if not tiers:
+        return 0.0
+    def tier_cost(t: Dict[str, Any], units: float) -> float:
+        unit = t.get("unit_amount")
+        if unit is None:
+            unit = t.get("unit_amount_decimal") or 0
+        return float(unit) * units + float(t.get("flat_amount") or t.get("flat_amount_decimal") or 0)
+    if price.get("tiers_mode") == "volume":
+        for t in tiers:
+            if t.get("up_to") is None or qty <= t["up_to"]:
+                return tier_cost(t, qty)
+        return tier_cost(tiers[-1], qty)
+    # graduated
+    total, prev = 0.0, 0.0
+    for t in tiers:
+        cap = t.get("up_to")
+        units = (qty if cap is None else min(qty, cap)) - prev
+        if units <= 0:
+            break
+        total += tier_cost(t, units)
+        if cap is None or qty <= cap:
+            break
+        prev = cap
+    return total
+
+
+def subscription_item_mrr(item: Dict[str, Any]) -> float:
+    """Monthly recurring amount of one subscription item, in major units.
+    Honours recurring.interval_count: a quarterly price is interval=month,
+    interval_count=3, i.e. a third of its amount per month."""
+    price = item.get("price") or {}
+    recurring = price.get("recurring") or {}
+    per_month = _PER_MONTH.get(recurring.get("interval") or "month")
+    if per_month is None:
+        return 0.0
+    count = recurring.get("interval_count") or 1
+    qty = item.get("quantity") or 1
+    minor = price_unit_minor(price, qty)
+    return to_major(minor, price.get("currency")) * per_month / count
 
 
 def _invoice_tax_cents(inv: Dict[str, Any]) -> int:
@@ -139,9 +196,10 @@ class StripeConnector(BaseConnector):
                     break
                 data = response.json()
                 for inv in data.get("data", []):
-                    amount = (inv.get("amount_paid", 0) or 0) / 100.0
-                    tax = _invoice_tax_cents(inv) / 100.0
-                    total = (inv.get("total", 0) or 0) / 100.0
+                    cur = inv.get("currency")
+                    amount = to_major(inv.get("amount_paid"), cur)
+                    tax = to_major(_invoice_tax_cents(inv), cur)
+                    total = to_major(inv.get("total"), cur)
                     status_map = {"paid": "paid", "open": "pending", "void": "cancelled", "draft": "draft"}
                     invoices.append(InvoiceRecord(
                         external_id=inv.get("id", ""),
@@ -187,9 +245,10 @@ class StripeConnector(BaseConnector):
                 data = response.json()
                 txns = data.get("data", [])
                 for txn in txns:
-                    amount = (txn.get("amount", 0) or 0) / 100.0
-                    fee = (txn.get("fee", 0) or 0) / 100.0
-                    net = (txn.get("net", 0) or 0) / 100.0
+                    cur = txn.get("currency")
+                    amount = to_major(txn.get("amount"), cur)
+                    fee = to_major(txn.get("fee"), cur)
+                    net = to_major(txn.get("net"), cur)
                     entries.append(LedgerEntry(
                         external_id=txn.get("id", ""),
                         date=datetime.fromtimestamp(txn.get("created", 0)),
@@ -216,7 +275,12 @@ class StripeConnector(BaseConnector):
         client = await self._get_client()
         mrr = 0.0
         try:
-            params: Dict[str, Any] = {"status": "active", "limit": 100}
+            # Tiered prices carry no unit_amount; their tiers come only when
+            # expanded.
+            params: Dict[str, Any] = {
+                "status": "active", "limit": 100,
+                "expand[]": "data.items.data.price.tiers",
+            }
             has_more = True
             while has_more:
                 response = await client.get("/subscriptions", params=params)
@@ -226,16 +290,7 @@ class StripeConnector(BaseConnector):
                 data = response.json()
                 for sub in data.get("data", []):
                     for item in sub.get("items", {}).get("data", []):
-                        price = item.get("price", {})
-                        amount = (price.get("unit_amount", 0) or 0) / 100.0
-                        interval = price.get("recurring", {}).get("interval", "month")
-                        qty = item.get("quantity", 1) or 1
-                        if interval == "year":
-                            mrr += (amount * qty) / 12
-                        elif interval == "month":
-                            mrr += amount * qty
-                        elif interval == "week":
-                            mrr += amount * qty * 4.33
+                        mrr += subscription_item_mrr(item)
                 has_more = data.get("has_more", False)
                 if has_more and data.get("data"):
                     params["starting_after"] = data["data"][-1]["id"]
@@ -272,7 +327,7 @@ class StripeConnector(BaseConnector):
                     break
                 data = response.json()
                 for refund in data.get("data", []):
-                    total_refund_amount += (refund.get("amount", 0) or 0) / 100.0
+                    total_refund_amount += to_major(refund.get("amount"), refund.get("currency"))
                     refund_count += 1
                 has_more = data.get("has_more", False)
                 if has_more and data.get("data"):
@@ -427,7 +482,7 @@ class StripeConnector(BaseConnector):
                     data = response.json()
                     for charge in data.get("data", []):
                         if charge.get("paid") and not charge.get("refunded"):
-                            month_revenue += (charge.get("amount", 0) or 0) / 100.0
+                            month_revenue += to_major(charge.get("amount"), charge.get("currency"))
                             month_count += 1
                     has_more = data.get("has_more", False)
                     if has_more and data.get("data"):

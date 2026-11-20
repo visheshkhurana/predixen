@@ -106,7 +106,7 @@ class MercuryConnector(BaseConnector):
         account_id: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: int = 500,
+        limit: int = 10000,
     ) -> List[Dict[str, Any]]:
         if not self._authenticated:
             if not await self.authenticate():
@@ -124,7 +124,9 @@ class MercuryConnector(BaseConnector):
 
             while True:
                 params: Dict[str, Any] = {
-                    "limit": min(limit, 500),
+                    # Mercury pages up to 1000 rows; the old 500 total cap
+                    # silently truncated busy accounts.
+                    "limit": min(limit, 1000),
                     "offset": offset,
                     "start": start_date.strftime("%Y-%m-%dT00:00:00Z"),
                     "end": end_date.strftime("%Y-%m-%dT23:59:59Z"),
@@ -143,7 +145,7 @@ class MercuryConnector(BaseConnector):
                 transactions = data.get("transactions", [])
                 all_transactions.extend(transactions)
 
-                if len(transactions) < min(limit, 500):
+                if len(transactions) < min(limit, 1000):
                     break
 
                 offset += len(transactions)

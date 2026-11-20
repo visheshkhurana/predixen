@@ -200,10 +200,12 @@ def _greythr_handler(seen, token_status=200):
             page = int(q.get("page"))
             if q.get("size") == "1":
                 return httpx.Response(200, json={"data": [], "pages": {"totalPages": 1}})
+            # greytHR pages are 0-based (the docs' page=1 example is the
+            # second page).
             rows = {
-                1: [{"employeeId": 83, "name": "Nandish Shetty", "email": "n@acme.in", "employeeNo": "0001",
+                0: [{"employeeId": 83, "name": "Nandish Shetty", "email": "n@acme.in", "employeeNo": "0001",
                      "dateOfJoin": "2010-01-21", "leftorg": False, "status": 2}],
-                2: [{"employeeId": 16, "name": "S Rami Reddy", "email": "r@acme.in", "employeeNo": "5028",
+                1: [{"employeeId": 16, "name": "S Rami Reddy", "email": "r@acme.in", "employeeNo": "5028",
                      "dateOfJoin": "2015-03-14", "leftorg": True, "leavingDate": "2024-02-01", "status": 3}],
             }[page]
             return httpx.Response(200, json={"data": rows, "pages": {"totalPages": 2, "totalElements": 2}})

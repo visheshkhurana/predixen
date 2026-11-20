@@ -13,7 +13,7 @@ API Documentation: https://developer.salesforce.com/docs/atlas.en-us.api_rest.me
 import httpx
 import logging
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from .base import (
     BaseConnector,
@@ -27,10 +27,29 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from server.services import crm_pipeline
 
 logger = logging.getLogger(__name__)
 
 API_VERSION = "v58.0"
+
+
+def salesforce_opportunity_for_snapshot(opp: Dict[str, Any]) -> Dict[str, Any]:
+    if opp.get("IsWon"):
+        status = "won"
+    elif opp.get("IsClosed"):
+        status = "lost"
+    else:
+        status = "open"
+    return {
+        "amount": float(opp.get("Amount") or 0.0),
+        "currency": opp.get("CurrencyIsoCode"),
+        "stage": opp.get("StageName"),
+        "status": status,
+        "close_date": opp.get("CloseDate"),
+        # Opportunity.Probability is a percent (0..100).
+        "probability": crm_pipeline.probability(opp.get("Probability"), scale="percent"),
+    }
 
 
 @ConnectorRegistry.register
@@ -96,6 +115,12 @@ class SalesforceConnector(BaseConnector):
         return self._client
 
     async def _soql_query(self, query: str) -> List[Dict[str, Any]]:
+        return await self._soql_query_strict(query) or []
+
+    async def _soql_query_strict(self, query: str) -> Optional[List[Dict[str, Any]]]:
+        """Like _soql_query, but None when the first page fails (for example
+        INVALID_FIELD on CurrencyIsoCode in a single-currency org), so callers
+        can retry with another query instead of reading an error as no rows."""
         client = await self._get_client()
         all_records: List[Dict[str, Any]] = []
         params = {"q": query}
@@ -104,7 +129,7 @@ class SalesforceConnector(BaseConnector):
             response = await client.get("/query", params=params)
             if response.status_code != 200:
                 logger.error(f"Salesforce SOQL error: {response.status_code} - {response.text[:200]}")
-                return []
+                return None
 
             data = response.json()
             all_records.extend(data.get("records", []))
@@ -122,8 +147,24 @@ class SalesforceConnector(BaseConnector):
 
         except Exception as e:
             logger.error(f"Salesforce SOQL query error: {e}")
+            if not all_records:
+                return None
 
         return all_records
+
+    async def get_org_currency(self) -> Optional[str]:
+        """The org's corporate currency. Opportunity.Amount is in this currency
+        unless multi-currency is on, in which case each row has CurrencyIsoCode."""
+        if getattr(self, "_org_currency_loaded", False):
+            return self._org_currency
+        self._org_currency_loaded = True
+        self._org_currency = None
+        rows = await self._soql_query_strict("SELECT DefaultCurrencyIsoCode FROM Organization LIMIT 1")
+        if rows:
+            cur = rows[0].get("DefaultCurrencyIsoCode")
+            if isinstance(cur, str) and len(cur) == 3:
+                self._org_currency = cur.upper()
+        return self._org_currency
 
     async def authenticate(self) -> bool:
         if self._refresh_token and not await self._refresh_access_token() and not self._access_token:
@@ -164,14 +205,25 @@ class SalesforceConnector(BaseConnector):
             if not await self.authenticate():
                 return []
 
+        cache_key = (limit, closed_only)
+        cache = getattr(self, "_opp_cache", None)
+        if cache is None:
+            cache = self._opp_cache = {}
+        if cache_key in cache:
+            return cache[cache_key]
         where_clause = "WHERE IsWon = true" if closed_only else ""
-        query = (
-            f"SELECT Id, Name, Amount, StageName, CloseDate, CreatedDate, "
-            f"Probability, AccountId, OwnerId, Type, ForecastCategory "
-            f"FROM Opportunity {where_clause} "
-            f"ORDER BY CloseDate DESC LIMIT {limit}"
+        fields = (
+            "Id, Name, Amount, StageName, CloseDate, CreatedDate, Probability, "
+            "IsClosed, IsWon, AccountId, OwnerId, Type, ForecastCategory"
         )
-        return await self._soql_query(query)
+        tail = f"FROM Opportunity {where_clause} ORDER BY CloseDate DESC LIMIT {limit}"
+        # CurrencyIsoCode exists only in multi-currency orgs; elsewhere the
+        # field is invalid, so retry without it and use the org currency.
+        rows = await self._soql_query_strict(f"SELECT {fields}, CurrencyIsoCode {tail}")
+        if rows is None:
+            rows = await self._soql_query(f"SELECT {fields} {tail}")
+        cache[cache_key] = rows
+        return rows
 
     async def get_accounts(self, limit: int = 500) -> List[Dict[str, Any]]:
         if not self._authenticated:
@@ -215,6 +267,7 @@ class SalesforceConnector(BaseConnector):
         end_date: Optional[datetime] = None,
     ) -> List[InvoiceRecord]:
         opportunities = await self.get_opportunities(limit=500, closed_only=True)
+        org_currency = await self.get_org_currency()
         invoices = []
 
         for opp in opportunities:
@@ -240,7 +293,7 @@ class SalesforceConnector(BaseConnector):
                     customer_name=opp.get("Name", ""),
                     amount=amount,
                     total=amount,
-                    currency="USD",
+                    currency=(opp.get("CurrencyIsoCode") or org_currency or "USD").upper(),
                     status="paid",
                     metadata={
                         "stage": opp.get("StageName", ""),
@@ -312,8 +365,26 @@ class SalesforceConnector(BaseConnector):
         }
 
         if invoices:
-            result["revenue"] = sum(inv.total for inv in invoices)
-            result["deals_closed"] = len(invoices)
+            # Revenue for this month only: deals won in the current calendar
+            # month, in the main currency. Summing every won deal ever (up to
+            # 500) and calling it USD overstated revenue for any org with
+            # history and mislabelled non-USD orgs.
+            today = date.today()
+            month = [i for i in invoices if i.date.date() >= today.replace(day=1) and i.date.date() <= today]
+            result["period_start"] = today.replace(day=1).isoformat()
+            result["period_end"] = today.isoformat()
+            result["deals_closed"] = len(month)
+            counts: Dict[str, int] = {}
+            for inv in invoices:
+                counts[inv.currency] = counts.get(inv.currency, 0) + 1
+            main = getattr(self, "_org_currency", None) or (max(counts, key=counts.get) if counts else None)
+            in_main = [i for i in month if i.currency == main]
+            result["revenue"] = round(sum(i.total for i in in_main), 2)
+            if main:
+                result["revenue_currency"] = main
+            other = sorted({i.currency for i in month if i.currency != main})
+            if other:
+                result["revenue_other_currencies"] = other
 
         if ledger_entries:
             result["total_account_revenue"] = sum(e.credit for e in ledger_entries)
@@ -350,6 +421,11 @@ class SalesforceConnector(BaseConnector):
                 sync_completed=datetime.utcnow(),
                 metadata={
                     "financials": financials,
+                    "crm_pipeline": crm_pipeline.build_snapshot(
+                        [salesforce_opportunity_for_snapshot(o) for o in opportunities],
+                        await self.get_org_currency(),
+                        truncated=len(opportunities) >= 500,
+                    ),
                     "opportunities_count": len(opportunities),
                     "accounts_count": len(accounts),
                     "contacts_count": len(contacts),

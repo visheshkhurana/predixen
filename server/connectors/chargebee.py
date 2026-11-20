@@ -14,7 +14,7 @@ import httpx
 import logging
 import base64
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import date as date_cls, datetime, timedelta
 
 from .base import (
     BaseConnector,
@@ -28,12 +28,22 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from .money import to_major
 
 logger = logging.getLogger(__name__)
 
 # Upper bound on records read from one paginated list (100 per page, so 100
 # pages). Chargebee lists page with offset/next_offset.
 MAX_LIST_RECORDS = 10_000
+
+
+def _main_currency(codes) -> Optional[str]:
+    counts: Dict[str, int] = {}
+    for c in codes:
+        c = (c or "").upper()
+        if c:
+            counts[c] = counts.get(c, 0) + 1
+    return max(counts, key=counts.get) if counts else None
 
 
 @ConnectorRegistry.register
@@ -232,9 +242,10 @@ class ChargebeeConnector(BaseConnector):
         invoices = []
 
         for inv in raw_invoices:
-            amount = float(inv.get("total", 0)) / 100.0
-            sub_total = float(inv.get("sub_total", 0)) / 100.0
-            tax = float(inv.get("tax", 0)) / 100.0
+            cur = inv.get("currency_code")
+            amount = to_major(inv.get("total"), cur)
+            sub_total = to_major(inv.get("sub_total"), cur)
+            tax = to_major(inv.get("tax"), cur)
 
             date_ts = inv.get("date")
             try:
@@ -287,7 +298,7 @@ class ChargebeeConnector(BaseConnector):
         entries = []
 
         for inv in raw_invoices:
-            amount = float(inv.get("total", 0)) / 100.0
+            amount = to_major(inv.get("total"), inv.get("currency_code"))
             date_ts = inv.get("date")
             try:
                 date = datetime.utcfromtimestamp(date_ts) if date_ts else datetime.now()
@@ -327,19 +338,39 @@ class ChargebeeConnector(BaseConnector):
         payroll_runs=None,
         ledger_entries=None,
         invoices=None,
+        subscriptions=None,
     ) -> Dict[str, Any]:
-        result = {
+        result: Dict[str, Any] = {
             "source_type": "connector_chargebee",
             "extraction_summary": "Synced from Chargebee Subscription Billing",
         }
 
         if invoices:
-            result["revenue"] = sum(inv.total for inv in invoices if inv.status == "paid")
+            # This month's paid invoices in the main currency, not every paid
+            # invoice ever fetched.
+            today = date_cls.today()
+            start = today.replace(day=1)
+            paid = [i for i in invoices if i.status == "paid"]
+            main = _main_currency([i.currency for i in paid])
+            month = [i for i in paid if start <= i.date.date() <= today and i.currency == main]
+            result["revenue"] = round(sum(i.total for i in month), 2)
+            if main:
+                result["revenue_currency"] = main
+            result["period_start"] = start.isoformat()
+            result["period_end"] = today.isoformat()
             result["invoices_count"] = len(invoices)
-            result["mrr"] = sum(
-                inv.total for inv in invoices
-                if inv.status == "paid" and inv.metadata.get("recurring")
-            )
+
+        if subscriptions:
+            # Chargebee keeps each subscription's normalised monthly value in
+            # `mrr` (minor units). Summing paid recurring invoices instead
+            # added up every invoice ever fetched.
+            live = [s for s in subscriptions if s.get("status") in ("active", "non_renewing")]
+            main = _main_currency([s.get("currency_code") for s in live])
+            mrr = sum(to_major(s.get("mrr"), s.get("currency_code")) for s in live
+                      if (s.get("currency_code") or "").upper() == (main or ""))
+            result["mrr"] = round(mrr, 2)
+            if main:
+                result["mrr_currency"] = main
 
         if ledger_entries:
             result["total_subscription_revenue"] = sum(e.credit for e in ledger_entries)
@@ -364,7 +395,9 @@ class ChargebeeConnector(BaseConnector):
             plans = await self.get_plans()
             invoices = await self.fetch_invoices()
             ledger = await self.fetch_ledger()
-            financials = self.map_to_financials(invoices=invoices, ledger_entries=ledger)
+            financials = self.map_to_financials(
+                invoices=invoices, ledger_entries=ledger, subscriptions=subscriptions,
+            )
 
             return SyncResult(
                 success=True,

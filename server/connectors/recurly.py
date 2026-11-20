@@ -13,7 +13,7 @@ API Documentation: https://developers.recurly.com/api/v2021-02-25/
 import httpx
 import logging
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import date as date_cls, datetime, timedelta
 
 from .base import (
     BaseConnector,
@@ -256,6 +256,19 @@ class RecurlyConnector(BaseConnector):
             txn_type = txn.get("type", "")
             status = txn.get("status", "")
             is_successful = status in ("success", "completed")
+            is_failed = status in ("declined", "error", "failed")
+            is_refund = txn_type == "refund"
+            # A successful refund is money going back out; it used to be booked
+            # as collected revenue. Pending/processing/void rows move no money
+            # yet and were being counted as failed payments.
+            if is_successful and is_refund:
+                debit, credit, category = abs(amount), 0.0, "Refund"
+            elif is_successful and txn_type != "verify":
+                debit, credit, category = 0.0, abs(amount), "Subscription Revenue"
+            elif is_failed:
+                debit, credit, category = 0.0, 0.0, "Failed Payment"
+            else:
+                debit, credit, category = 0.0, 0.0, "Pending"
 
             entries.append(
                 LedgerEntry(
@@ -263,13 +276,15 @@ class RecurlyConnector(BaseConnector):
                     date=date,
                     account_code=txn.get("account", {}).get("code", "") if isinstance(txn.get("account"), dict) else "",
                     account_name="Subscription Revenue",
-                    debit=0.0 if is_successful else abs(amount),
-                    credit=abs(amount) if is_successful else 0.0,
+                    debit=debit,
+                    credit=credit,
                     description=f"Recurly {txn_type} - {txn.get('id', '')}",
-                    category="Subscription Revenue" if is_successful else "Failed Payment",
+                    category=category,
                     metadata={
                         "type": txn_type,
                         "status": status,
+                        "amount": abs(amount),
+                        "currency": txn.get("currency"),
                         "payment_method": txn.get("payment_method", {}).get("object", "") if isinstance(txn.get("payment_method"), dict) else "",
                         "source": "recurly",
                     },
@@ -291,13 +306,31 @@ class RecurlyConnector(BaseConnector):
         }
 
         if invoices:
-            result["revenue"] = sum(inv.total for inv in invoices if inv.status in ("paid", "collected"))
+            # This month's collected invoices in the main currency, not every
+            # paid invoice fetched.
+            today = date_cls.today()
+            start = today.replace(day=1)
+            paid = [i for i in invoices if i.status in ("paid", "collected")]
+            counts: Dict[str, int] = {}
+            for i in paid:
+                counts[i.currency] = counts.get(i.currency, 0) + 1
+            main = max(counts, key=counts.get) if counts else None
+            month = [i for i in paid if start <= i.date.date() <= today and i.currency == main]
+            result["revenue"] = round(sum(i.total for i in month), 2)
+            if main:
+                result["revenue_currency"] = main
+            result["period_start"] = start.isoformat()
+            result["period_end"] = today.isoformat()
             result["invoices_count"] = len(invoices)
             result["outstanding"] = sum(inv.total for inv in invoices if inv.status in ("pending", "past_due"))
 
         if ledger_entries:
-            result["total_collected"] = sum(e.credit for e in ledger_entries)
-            result["total_failed"] = sum(e.debit for e in ledger_entries)
+            refunded = sum(e.debit for e in ledger_entries if e.category == "Refund")
+            result["total_collected"] = sum(e.credit for e in ledger_entries) - refunded
+            result["total_refunded"] = refunded
+            result["total_failed"] = sum(
+                e.metadata.get("amount", 0) for e in ledger_entries if e.category == "Failed Payment"
+            )
             result["transactions_count"] = len(ledger_entries)
 
         return result
