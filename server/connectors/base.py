@@ -25,6 +25,7 @@ class ProviderCategory(str, Enum):
     ACCOUNTING = "accounting"
     CRM = "crm"
     HRIS = "hris"
+    SECURITY = "security"
 
 
 @dataclass

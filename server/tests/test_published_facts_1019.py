@@ -123,7 +123,8 @@ def _registered_module_names() -> list[str]:
 # Registered but not counted publicly until the production server has its app
 # credentials (Google Ads needs a developer token): see docs/connectors/google-ads.md.
 # Move a connector out of here (and bump the published number) when it goes live.
-PENDING_SETUP = {"google_ads"}
+# 1Password: new 2026-11-20, not yet tested against a real Business account.
+PENDING_SETUP = {"google_ads", "onepassword"}
 
 
 def test_registry_has_37_connectors():
