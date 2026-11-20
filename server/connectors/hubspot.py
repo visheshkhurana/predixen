@@ -97,7 +97,8 @@ class HubSpotConnector(BaseConnector):
             return False
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                res = await client.post(f"{BASE_URL}/oauth/v1/token", data={
+                # /oauth/v1/token is retired 16 Feb 2027.
+                res = await client.post(f"{BASE_URL}/oauth/2026-03/token", data={
                     "grant_type": "refresh_token",
                     "refresh_token": self._refresh_token,
                     "client_id": self._client_id,
