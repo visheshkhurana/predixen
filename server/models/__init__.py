@@ -1,6 +1,7 @@
 from server.models.user import User, UserRole
 from server.models.company import Company
 from server.models.d2c_month import D2CAdSpend, D2CMonth
+from server.models.software_spend import SoftwareSpend
 from server.models.dataset import Dataset
 from server.models.financial import (
     FinancialRecord,
@@ -90,6 +91,7 @@ from server.models.goal import CompanyGoal
 __all__ = [
     "RazorpaySubscription",
     "RazorpayWebhookEvent",
+    "SoftwareSpend",
     "User",
     "UserRole",
     "Company",

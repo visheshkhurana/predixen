@@ -402,6 +402,31 @@ class OnePasswordConnector(BaseConnector):
             },
         )
 
+    def software_spend_payload(self, ledger: List[LedgerEntry]) -> Dict[str, Any]:
+        """The seat cost as one 1Password line for its month (see services.software_spend)."""
+        seat = next((e for e in ledger if e.metadata.get("metric_type") == "seat_cost"), None)
+        if seat is None:
+            return {"months": []}
+        meta = seat.metadata
+        return {"months": [{
+            "period": seat.date.date().replace(day=1).isoformat(),
+            "vendors": [{
+                "vendor": "1Password",
+                "amount": seat.debit,
+                # 1Password bills Business plans in USD on its price list.
+                "currency": "USD",
+                "basis": "seats",
+                "seats": meta.get("seats"),
+                "active_users": meta.get("active_users"),
+                "details": {
+                    "seat_price_monthly": meta.get("seat_price_monthly"),
+                    "billing_basis": meta.get("billing_basis"),
+                    "unused_seats": meta.get("unused_seats"),
+                    "seat_utilization": meta.get("seat_utilization"),
+                },
+            }],
+        }]}
+
     async def fetch_ledger(
         self,
         start_date: Optional[datetime] = None,
@@ -481,7 +506,11 @@ class OnePasswordConnector(BaseConnector):
             warnings=warnings,
             sync_started=sync_started,
             sync_completed=datetime.utcnow(),
-            metadata={"financials": financials, "security": financials["security"]},
+            metadata={
+                "financials": financials,
+                "security": financials["security"],
+                "software_spend": self.software_spend_payload(ledger),
+            },
         )
 
     async def close(self):

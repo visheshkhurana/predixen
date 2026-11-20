@@ -47,6 +47,7 @@ import { parseServerDate } from "@/lib/serverDate";
 
 import { IntegrationCard, ApiKeyConnectModal, StripeConnectModal, SlackLinkCard } from "@/components/integrations";
 import { useFounderStore } from "@/store/founderStore";
+import { SoftwareSpendCard } from "@/components/SoftwareSpendCard";
 import { 
   IntegrationConfig, 
   getIntegrationsByCategory,
@@ -871,6 +872,7 @@ export default function IntegrationsPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/connectors/companies/${companyId}/software-spend`] });
       setSyncingProvider(null);
     },
     onError: (error: unknown) => {
@@ -1197,6 +1199,8 @@ export default function IntegrationsPage() {
       </div>
 
       <SlackLinkCard companyId={slackCompanyId} />
+
+      <SoftwareSpendCard companyId={companyId} />
 
       {/* Quick Setup Banner */}
       {recommendedProviders.length > 0 && (

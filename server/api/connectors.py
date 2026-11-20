@@ -835,6 +835,15 @@ async def sync_provider(
                             provider_id, month.get("accounts") or [],
                         )
 
+            # Software spend (1Password seats, Ramp/Brex software card spend)
+            # is kept in its own table, not opex: see models/software_spend.py.
+            software_spend = result.metadata.get("software_spend")
+            if software_spend:
+                from server.services import software_spend as software_spend_service
+                software_spend_service.store_payload(
+                    db, company_id, _record_provider_id(provider_id), software_spend,
+                )
+
             db.commit()
 
             try:
@@ -880,6 +889,24 @@ async def sync_provider(
         raise HTTPException(status_code=500, detail=safe_error)
     finally:
         await connector.close()
+
+
+@router.get("/companies/{company_id}/software-spend")
+async def get_software_spend(
+    company_id: int,
+    months: int = 6,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Software spend per month and vendor, from connectors that report it."""
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        company_access_clause(current_user),
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    from server.services import software_spend as software_spend_service
+    return software_spend_service.summary(db, company_id, months=min(max(months, 1), 24))
 
 
 @router.get("/companies/{company_id}/sync-history")
