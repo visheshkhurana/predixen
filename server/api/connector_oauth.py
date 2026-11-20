@@ -195,12 +195,20 @@ async def _finalize_salesforce(client, token, params, app):
 
 
 async def _finalize_hubspot(client, token, params, app):
-    info = await client.get(f"https://api.hubapi.com/oauth/v1/access-tokens/{token['access_token']}")
-    hub = info.json() if info.status_code == 200 else {}
+    # GET /oauth/v1/access-tokens/{token} is retired on 16 Feb 2027 and its
+    # replacement (POST /oauth/2026-03/token/introspect) doesn't return the
+    # portal, so read it from the account-info API instead.
+    # https://developers.hubspot.com/changelog/v1-oauth-api-deprecation
+    info = await client.get(
+        "https://api.hubapi.com/account-info/v3/details",
+        headers={"Authorization": f"Bearer {token['access_token']}"},
+    )
+    acct = info.json() if info.status_code == 200 else {}
+    portal = acct.get("portalId")
     return {
         "client_id": app["client_id"], "client_secret": app["client_secret"],
         "access_token": token["access_token"], "refresh_token": token.get("refresh_token", ""),
-        "_hint": hub.get("hub_domain") or "HubSpot",
+        "_hint": f"HubSpot portal {portal}" if portal else "HubSpot",
     }
 
 
@@ -309,7 +317,8 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
     OAuthProvider(
         id="hubspot", name="HubSpot", env_prefix="HUBSPOT",
         authorize_url="https://app.hubspot.com/oauth/authorize",
-        token_url="https://api.hubapi.com/oauth/v1/token",
+        # v1 token endpoint is retired 16 Feb 2027; same form body and response.
+        token_url="https://api.hubapi.com/oauth/2026-03/token",
         default_scopes="oauth crm.objects.deals.read crm.objects.contacts.read crm.objects.companies.read",
         finalize=_finalize_hubspot,
     ),

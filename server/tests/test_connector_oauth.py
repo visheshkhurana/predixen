@@ -245,7 +245,7 @@ def test_hubspot_oauth_connection_refreshes_before_auth(monkeypatch):
         "access_token": "stale", "refresh_token": "r", "client_id": "c", "client_secret": "s"}, settings={}))
 
     def handler(request):
-        if request.url.path == "/oauth/v1/token":
+        if request.url.path == "/oauth/2026-03/token":
             return httpx.Response(200, json={"access_token": "fresh", "refresh_token": "r"})
         assert request.headers["authorization"] == "Bearer fresh"
         return httpx.Response(200, json={"results": []})
@@ -268,7 +268,7 @@ def test_hubspot_private_app_token_still_works_without_refresh(monkeypatch):
         "access_token": "pat-na1-x"}, settings={}))
 
     def handler(request):
-        assert request.url.path != "/oauth/v1/token"
+        assert request.url.path not in ("/oauth/v1/token", "/oauth/2026-03/token")
         return httpx.Response(200, json={"results": []})
 
     orig = httpx.AsyncClient

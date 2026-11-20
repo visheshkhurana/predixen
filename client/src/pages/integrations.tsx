@@ -1662,6 +1662,7 @@ type CredentialField = { field: string; label: string; placeholder: string; hint
 // enables once every required field and at least one full set is filled.
 const providerCredentialAlternatives: Record<string, string[][]> = {
   shopify: [["access_token"], ["client_id", "client_secret"]],
+  mixpanel: [["service_account_user", "service_account_secret"], ["api_secret"]],
 };
 
 const providerCredentialFields: Record<string, CredentialField[]> = {
@@ -1700,7 +1701,7 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "access_token", label: "Access Token", placeholder: "access-sandbox-..." },
   ],
   hubspot: [
-    { field: "access_token", label: "Private App Token", placeholder: "pat-na1-..." },
+    { field: "access_token", label: "Private App Token", placeholder: "pat-na1-...", hint: "HubSpot stopped new legacy private apps in Oct 2026. An existing token still works; new HubSpot users should use Connect with HubSpot." },
   ],
   gusto: [
     { field: "client_id", label: "Client ID", placeholder: "Enter Gusto Client ID" },
@@ -1735,7 +1736,10 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
   ],
   mixpanel: [
     { field: "project_id", label: "Project ID", placeholder: "Enter Mixpanel Project ID" },
-    { field: "api_secret", label: "API Secret", placeholder: "Enter Mixpanel API Secret" },
+    { field: "service_account_user", label: "Service account username", placeholder: "name.123abc.mp-service-account", hint: "Mixpanel > Organization Settings > Service Accounts. New projects have no API Secret, and Mixpanel retires API Secrets on 3 March 2027.", optional: true },
+    { field: "service_account_secret", label: "Service account secret", placeholder: "Service account secret", optional: true },
+    { field: "api_secret", label: "API Secret (older projects only)", placeholder: "Leave blank if you use a service account", optional: true },
+    { field: "region", label: "Data residency (optional)", placeholder: "us (default), eu or in", optional: true },
   ],
   mercury: [
     { field: "api_token", label: "API Token", placeholder: "Enter Mercury API Token" },
@@ -1815,6 +1819,7 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
   amplitude: [
     { field: "api_key", label: "API Key", placeholder: "Enter Amplitude API Key" },
     { field: "secret_key", label: "Secret Key", placeholder: "Enter Amplitude Secret Key" },
+    { field: "region", label: "Data center (optional)", placeholder: "us (default) or eu", optional: true },
   ],
   onepassword: [
     { field: "bearer_token", label: "Events API token", placeholder: "Bearer token from Events Reporting", hint: "1Password > Integrations > Events Reporting. Add an integration with Sign-in attempts ticked and copy its token." },
@@ -1834,7 +1839,7 @@ const providerSetupHelp: Record<string, string> = {
   meta_ads:
     "In Meta Business Settings, open Users → System users, add a system user, assign it your ad accounts, then Generate token with the ads_read permission. Ad account IDs (act_…) are in Ads Manager's account menu.",
   shopify:
-    "In Shopify admin, open Settings → Apps and sales channels → Develop apps, create an app with read_orders access, install it and copy the Admin API access token.",
+    "Shopify stopped new admin-created custom apps on 1 Jan 2026. Create an app in the Shopify Dev Dashboard with read_orders, read_all_orders and read_products, install it on your store and paste its Client ID and Client Secret. An existing legacy app's Admin API token still works.",
   razorpay:
     "In the Razorpay Dashboard, open Account & Settings → API Keys and generate a key. FounderConsole only reads payments and settlements with it.",
 };
