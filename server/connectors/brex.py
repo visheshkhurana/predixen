@@ -27,6 +27,7 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from server.services.software_spend import card_software_months
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +312,7 @@ class BrexConnector(BaseConnector):
                     "financials": financials,
                     "accounts_count": len(accounts),
                     "transactions_count": len(ledger),
+                    "software_spend": card_software_months(ledger, default_currency="USD"),
                 },
             )
 

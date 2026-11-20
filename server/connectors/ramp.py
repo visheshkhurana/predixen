@@ -27,6 +27,7 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from server.services.software_spend import card_software_months
 
 logger = logging.getLogger(__name__)
 
@@ -402,6 +403,7 @@ class RampConnector(BaseConnector):
                     "transactions_count": len(transactions),
                     "reimbursements_count": len(reimbursements),
                     "bills_count": len(bills),
+                    "software_spend": card_software_months(ledger, default_currency="USD"),
                 },
             )
 

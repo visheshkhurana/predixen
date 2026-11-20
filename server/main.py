@@ -280,6 +280,13 @@ async def _run_deferred_startup():
             logger.warning(f"Could not ensure d2c_months table: {e}")
 
         try:
+            from server.models.software_spend import SoftwareSpend
+            SoftwareSpend.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured software_spend table exists")
+        except Exception as e:
+            logger.warning(f"Could not ensure d2c_months table: {e}")
+
+        try:
             from server.models.session_revocation import RevokedAccessToken, UserSessionCutoff
             Base.metadata.create_all(
                 bind=engine,
