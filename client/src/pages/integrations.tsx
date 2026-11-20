@@ -35,6 +35,7 @@ import {
   Truck,
   CreditCard,
   Megaphone,
+  KeyRound,
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiHubspot, SiStripe } from "react-icons/si";
 import { FaSalesforce } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
@@ -73,11 +74,11 @@ interface IntegrationStatus {
 
 interface ConnectorMetadata extends IntegrationProvider {
   setupTime: "~5 min" | "~10 min" | "~15 min";
-  category: "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "captable" | "other";
+  category: "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "captable" | "security" | "other";
   isRecommended?: boolean;
 }
 
-type ConnectorCategory = "all" | "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "captable" | "other";
+type ConnectorCategory = "all" | "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "captable" | "security" | "other";
 
 // Catalog id first. razorpayx_payroll is the old id; connections saved under it still resolve.
 const RAZORPAYX_IDS = ["razorpayx", "razorpayx_payroll"];
@@ -99,6 +100,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   razorpay: <CreditCard className="h-6 w-6" />,
   meta_ads: <Megaphone className="h-6 w-6" />,
   google_ads: <Megaphone className="h-6 w-6" />,
+  onepassword: <KeyRound className="h-6 w-6" />,
   razorpayx: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
   keka: <Users className="h-6 w-6" />,
@@ -142,6 +144,17 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
     permissions: [
       "Google's Google Ads access (it has no read-only option)",
       "FounderConsole only reads reports: it never creates, changes or pauses campaigns",
+    ],
+  },
+  onepassword: {
+    dataImported: [
+      "Active users in the last 30 days (people who signed in)",
+      "Sign-ins and failed sign-ins by reason (wrong password, MFA, firewall)",
+      "Seat utilization and monthly seat cost, if you enter your seat price",
+    ],
+    permissions: [
+      "An Events Reporting token with sign-in attempts access",
+      "Read-only: FounderConsole never sees vault items or passwords",
     ],
   },
   quickbooks: {
@@ -386,6 +399,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   razorpay: { setupTime: "~5 min", category: "revenue" },
   meta_ads: { setupTime: "~10 min", category: "analytics" },
   google_ads: { setupTime: "~5 min", category: "analytics" },
+  onepassword: { setupTime: "~5 min", category: "security" },
   brex: { setupTime: "~5 min", category: "revenue" },
   netsuite: { setupTime: "~15 min", category: "accounting" },
   wave: { setupTime: "~10 min", category: "accounting" },
@@ -417,6 +431,7 @@ const categoryLabels: Record<ConnectorCategory, { label: string; description: st
   analytics: { label: "Analytics", description: "Product and business analytics", icon: <TrendingUp className="h-4 w-4" /> },
   crm: { label: "CRM & Sales", description: "Customer relationship management", icon: <Briefcase className="h-4 w-4" /> },
   captable: { label: "Cap Table", description: "Cap table and equity management platforms", icon: <FileText className="h-4 w-4" /> },
+  security: { label: "Security & IT", description: "Seat usage and security signals next to your software spend", icon: <Shield className="h-4 w-4" /> },
   other: { label: "Other", description: "Additional data sources", icon: <Link2 className="h-4 w-4" /> },
 };
 
@@ -579,6 +594,15 @@ const paymentsProviders: IntegrationProvider[] = [
     name: "Google Ads",
     description: "Search, Shopping, Performance Max and YouTube ad spend per month, for CM3 and MER. Google's own conversion numbers are shown as platform-reported, not as revenue.",
     features: ["Monthly Ad Spend", "All Accounts You Can Access", "Sign in with Google", "Read-only"],
+  },
+];
+
+const securityProviders: IntegrationProvider[] = [
+  {
+    id: "onepassword",
+    name: "1Password",
+    description: "1Password Business seat usage and sign-in security: who's active, failed sign-ins, and what unused seats cost.",
+    features: ["Active Users", "Failed Sign-ins", "Seat Utilization", "Read-only"],
   },
 ];
 
@@ -828,7 +852,7 @@ export default function IntegrationsPage() {
   });
   const sampleProviderIds = new Set((sampleProviders ?? []).map((p) => p.provider_id));
 
-  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
@@ -940,7 +964,7 @@ export default function IntegrationsPage() {
     }
   };
   
-  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
+  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -1139,6 +1163,7 @@ export default function IntegrationsPage() {
       ...allCrmProviders,
       ...paymentsProviders,
       ...capTableProviders,
+      ...securityProviders,
     ];
 
     return allProviders.filter((p) => shouldShowConnector(p, category));
@@ -1234,7 +1259,7 @@ export default function IntegrationsPage() {
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Data Connectors</h2>
         <div className="flex flex-wrap gap-2">
-          {(["all", "recommended", "revenue", "accounting", "hr", "analytics", "crm", "captable"] as const).map((category) => (
+          {(["all", "recommended", "revenue", "accounting", "hr", "analytics", "crm", "captable", "security"] as const).map((category) => (
             <Button
               key={category}
               variant={selectedConnectorCategory === category ? "default" : "outline"}
@@ -1747,13 +1772,19 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "api_key", label: "API Key", placeholder: "Enter Amplitude API Key" },
     { field: "secret_key", label: "Secret Key", placeholder: "Enter Amplitude Secret Key" },
   ],
+  onepassword: [
+    { field: "bearer_token", label: "Events API token", placeholder: "Bearer token from Events Reporting", hint: "1Password > Integrations > Events Reporting. Add an integration with Sign-in attempts ticked and copy its token." },
+    { field: "region", label: "Account region (optional)", placeholder: "us (default), ent, ca or eu", hint: "Where you sign in: 1password.com = us, ent.1password.com = ent, 1password.ca = ca, 1password.eu = eu.", optional: true },
+    { field: "seat_price_monthly", label: "Price per seat per month (optional)", placeholder: "7.99", hint: "Adds 1Password to software spend as seats x price.", optional: true },
+    { field: "seats", label: "Paid seats (optional)", placeholder: "10", hint: "Used for seat utilization. Without it, cost is based on active users.", optional: true },
+  ],
 };
 
 
 // Providers with a real server-side connector. Anything else has no backend to
 // connect to, so its card says "Coming Soon" instead of playing a fake
 // "authorizing" animation and accepting any key.
-export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"]);
+export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "google_sheets", "rest_api"]);
 
 const providerSetupHelp: Record<string, string> = {
   meta_ads:
