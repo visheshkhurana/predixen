@@ -835,6 +835,15 @@ async def sync_provider(
                             provider_id, month.get("accounts") or [],
                         )
 
+            # CRM pipeline snapshot (open pipeline, stages, win rate): one row
+            # per CRM per day, so it builds a trend. See models/crm_pipeline.py.
+            crm_snapshot = result.metadata.get("crm_pipeline")
+            if crm_snapshot:
+                from server.services import crm_pipeline as crm_pipeline_service
+                crm_pipeline_service.store_snapshot(
+                    db, company_id, _record_provider_id(provider_id), crm_snapshot,
+                )
+
             # Software spend (1Password seats, Ramp/Brex software card spend)
             # is kept in its own table, not opex: see models/software_spend.py.
             software_spend = result.metadata.get("software_spend")
@@ -907,6 +916,23 @@ async def get_software_spend(
         raise HTTPException(status_code=404, detail="Company not found")
     from server.services import software_spend as software_spend_service
     return software_spend_service.summary(db, company_id, months=min(max(months, 1), 24))
+
+
+@router.get("/companies/{company_id}/crm-pipeline")
+async def get_crm_pipeline(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Latest pipeline snapshot per connected CRM, with a 90-day trend."""
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        company_access_clause(current_user),
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    from server.services import crm_pipeline as crm_pipeline_service
+    return crm_pipeline_service.summary(db, company_id)
 
 
 @router.get("/companies/{company_id}/sync-history")

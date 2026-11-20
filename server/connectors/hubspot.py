@@ -27,6 +27,7 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from server.services import crm_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,19 @@ def _deal_is_closed(props: Dict[str, Any]) -> bool:
     if flag is not None and flag != "":
         return str(flag).lower() == "true"
     return props.get("dealstage") in ("closedwon", "closedlost")
+
+
+def hubspot_deal_for_snapshot(deal: Dict[str, Any]) -> Dict[str, Any]:
+    props = deal.get("properties", {}) or {}
+    status = "won" if _deal_is_closed_won(props) else ("lost" if _deal_is_closed(props) else "open")
+    return {
+        "amount": float(props.get("amount") or 0.0),
+        "currency": props.get("deal_currency_code") or None,
+        "stage": props.get("dealstage"),
+        "status": status,
+        "close_date": props.get("closedate"),
+        "probability": crm_pipeline.probability(props.get("hs_deal_stage_probability")),
+    }
 
 
 @ConnectorRegistry.register
@@ -338,6 +352,16 @@ class HubSpotConnector(BaseConnector):
 
         return result
 
+    @staticmethod
+    def _portal_currency(deals: List[Dict[str, Any]]) -> Optional[str]:
+        """The most common deal currency; empty on single-currency portals (then USD)."""
+        counts: Dict[str, int] = {}
+        for d in deals:
+            cur = ((d.get("properties") or {}).get("deal_currency_code") or "").upper()
+            if cur:
+                counts[cur] = counts.get(cur, 0) + 1
+        return max(counts, key=counts.get) if counts else "USD"
+
     async def sync_all(self) -> SyncResult:
         sync_started = datetime.utcnow()
         try:
@@ -367,6 +391,9 @@ class HubSpotConnector(BaseConnector):
                 metadata={
                     "financials": financials,
                     "pipeline_summary": pipeline,
+                    "crm_pipeline": crm_pipeline.build_snapshot(
+                        [hubspot_deal_for_snapshot(d) for d in deals], self._portal_currency(deals),
+                    ),
                     "deals_count": len(deals),
                     "contacts_count": len(contacts),
                     "companies_count": len(companies),

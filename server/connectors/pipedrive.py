@@ -32,8 +32,32 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from server.services import crm_pipeline
 
 logger = logging.getLogger(__name__)
+
+
+def pipedrive_deal_for_snapshot(deal: Dict[str, Any], stage_names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    status = deal.get("status")
+    close = deal.get("won_time") if status == "won" else deal.get("lost_time") if status == "lost" else deal.get("expected_close_date")
+    return {
+        "amount": float(deal.get("value") or 0.0),
+        "currency": deal.get("currency"),
+        "stage": (stage_names or {}).get(str(deal.get("stage_id"))) or (
+            f"Stage {deal.get('stage_id')}" if deal.get("stage_id") is not None else None),
+        "status": status if status in ("open", "won", "lost") else "open",
+        "close_date": close or deal.get("close_time"),
+        "probability": crm_pipeline.probability(deal.get("probability")),
+    }
+
+
+def _main_currency(deals: List[Dict[str, Any]]) -> Optional[str]:
+    counts: Dict[str, int] = {}
+    for d in deals:
+        cur = (d.get("currency") or "").upper()
+        if cur:
+            counts[cur] = counts.get(cur, 0) + 1
+    return max(counts, key=counts.get) if counts else None
 
 
 @ConnectorRegistry.register
@@ -305,6 +329,12 @@ class PipedriveConnector(BaseConnector):
             invoices = await self.fetch_invoices()
             ledger = await self.fetch_ledger()
             financials = self.map_to_financials(invoices=invoices, ledger_entries=ledger)
+            stage_names: Dict[str, str] = {}
+            try:
+                for stage in await self._list_v2("/api/v2/stages", 500):
+                    stage_names[str(stage.get("id"))] = stage.get("name") or ""
+            except Exception:  # stage names are cosmetic; ids still group deals
+                pass
 
             return SyncResult(
                 success=True,
@@ -318,6 +348,10 @@ class PipedriveConnector(BaseConnector):
                     "deals_count": len(deals),
                     "persons_count": len(persons),
                     "organizations_count": len(organizations),
+                    "crm_pipeline": crm_pipeline.build_snapshot(
+                        [pipedrive_deal_for_snapshot(d, stage_names) for d in deals], _main_currency(deals),
+                        truncated=len(deals) >= 500,
+                    ),
                 },
             )
 
