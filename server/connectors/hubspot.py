@@ -64,7 +64,7 @@ def hubspot_deal_for_snapshot(deal: Dict[str, Any]) -> Dict[str, Any]:
         "stage": props.get("dealstage"),
         "status": status,
         "close_date": props.get("closedate"),
-        "probability": crm_pipeline.probability(props.get("hs_deal_stage_probability")),
+        "probability": crm_pipeline.probability(props.get("hs_deal_stage_probability"), scale="fraction"),
     }
 
 

@@ -56,7 +56,7 @@ def deal_status(deal: Dict[str, Any]) -> str:
     "Closed Lost" / "Closed-Lost to Competition" (0%); custom stages keep the
     probability, so 100% counts as won and a closed 0% stage as lost."""
     stage = str(deal.get("Stage") or "").lower()
-    prob = crm_pipeline.probability(deal.get("Probability"))
+    prob = crm_pipeline.probability(deal.get("Probability"), scale="percent")
     if "won" in stage and "closed" in stage:
         return "won"
     if "lost" in stage:
@@ -218,7 +218,7 @@ class ZohoCRMConnector(BaseConnector):
                 "stage": d.get("Stage"),
                 "status": deal_status(d),
                 "close_date": d.get("Closing_Date"),
-                "probability": crm_pipeline.probability(d.get("Probability")),
+                "probability": crm_pipeline.probability(d.get("Probability"), scale="percent"),
             }
             for d in deals
         ]

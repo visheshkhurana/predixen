@@ -37,8 +37,17 @@ from server.services import crm_pipeline
 logger = logging.getLogger(__name__)
 
 
-def pipedrive_deal_for_snapshot(deal: Dict[str, Any], stage_names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def pipedrive_deal_for_snapshot(
+    deal: Dict[str, Any],
+    stage_names: Optional[Dict[str, str]] = None,
+    stage_probabilities: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    # Deal-level `probability` is usually null; Pipedrive weights a deal by its
+    # stage's `deal_probability` (0..100) unless the deal overrides it.
     status = deal.get("status")
+    prob = deal.get("probability")
+    if prob in (None, ""):
+        prob = (stage_probabilities or {}).get(str(deal.get("stage_id")))
     close = deal.get("won_time") if status == "won" else deal.get("lost_time") if status == "lost" else deal.get("expected_close_date")
     return {
         "amount": float(deal.get("value") or 0.0),
@@ -47,7 +56,7 @@ def pipedrive_deal_for_snapshot(deal: Dict[str, Any], stage_names: Optional[Dict
             f"Stage {deal.get('stage_id')}" if deal.get("stage_id") is not None else None),
         "status": status if status in ("open", "won", "lost") else "open",
         "close_date": close or deal.get("close_time"),
-        "probability": crm_pipeline.probability(deal.get("probability")),
+        "probability": crm_pipeline.probability(prob, scale="percent"),
     }
 
 
@@ -330,9 +339,11 @@ class PipedriveConnector(BaseConnector):
             ledger = await self.fetch_ledger()
             financials = self.map_to_financials(invoices=invoices, ledger_entries=ledger)
             stage_names: Dict[str, str] = {}
+            stage_probs: Dict[str, Any] = {}
             try:
                 for stage in await self._list_v2("/api/v2/stages", 500):
                     stage_names[str(stage.get("id"))] = stage.get("name") or ""
+                    stage_probs[str(stage.get("id"))] = stage.get("deal_probability")
             except Exception:  # stage names are cosmetic; ids still group deals
                 pass
 
@@ -349,7 +360,7 @@ class PipedriveConnector(BaseConnector):
                     "persons_count": len(persons),
                     "organizations_count": len(organizations),
                     "crm_pipeline": crm_pipeline.build_snapshot(
-                        [pipedrive_deal_for_snapshot(d, stage_names) for d in deals], _main_currency(deals),
+                        [pipedrive_deal_for_snapshot(d, stage_names, stage_probs) for d in deals], _main_currency(deals),
                         truncated=len(deals) >= 500,
                     ),
                 },

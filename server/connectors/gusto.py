@@ -215,6 +215,8 @@ class GustoConnector(BaseConnector):
                             salary = rate_val
                         elif payment_unit == "Month":
                             salary = rate_val * 12
+                        elif payment_unit == "Week":
+                            salary = rate_val * 52
                         elif payment_unit == "Hour":
                             salary = rate_val * 2080
 
@@ -223,7 +225,7 @@ class GustoConnector(BaseConnector):
                             external_id=str(emp.get("uuid", emp.get("id", ""))),
                             name=f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip(),
                             email=emp.get("email"),
-                            department=current_job.get("title", ""),
+                            department=emp.get("department") or current_job.get("title", ""),
                             designation=current_job.get("title", ""),
                             salary=salary,
                             join_date=_parse_ymd(emp.get("hired_at") or current_job.get("hire_date")),
@@ -261,7 +263,12 @@ class GustoConnector(BaseConnector):
         payroll_runs = []
         try:
             client = await self._get_client()
-            base_params: Dict[str, Any] = {"include": "totals", "per": PAYROLL_PAGE_SIZE}
+            # Without payroll_types Gusto returns regular payrolls only, so
+            # bonuses and corrections (off-cycle) were missing from payroll cost.
+            base_params: Dict[str, Any] = {
+                "include": "totals", "per": PAYROLL_PAGE_SIZE,
+                "payroll_types": "regular,off_cycle",
+            }
             if start_date:
                 base_params["start_date"] = start_date.strftime("%Y-%m-%d")
             if end_date:

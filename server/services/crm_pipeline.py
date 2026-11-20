@@ -48,15 +48,21 @@ def parse_day(value: Any) -> Optional[date]:
             return None
 
 
-def probability(value: Any) -> Optional[float]:
-    """0..1 from a 0..1 fraction or a 0..100 percentage."""
+def probability(value: Any, scale: str = "auto") -> Optional[float]:
+    """0..1 from a CRM probability.
+
+    scale="percent" for CRMs that send 0..100 (Zoho CRM, Pipedrive, Salesforce),
+    scale="fraction" for 0..1 (HubSpot's hs_deal_stage_probability). "auto"
+    guesses from the value, which reads a 1% deal as 100%: connectors should
+    pass their scale.
+    """
     if value in (None, ""):
         return None
     try:
         p = float(value)
     except (TypeError, ValueError):
         return None
-    if p > 1:
+    if scale == "percent" or (scale == "auto" and p > 1):
         p = p / 100
     return max(0.0, min(1.0, p))
 

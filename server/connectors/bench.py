@@ -1,8 +1,9 @@
 """
 Bench Bookkeeping Connector - unavailable.
 
-Bench Accounting shut down on 27 December 2024 and never offered a public API
-(the old `api.bench.co/v2` base this connector called did not exist publicly).
+Bench Accounting shut down on 27 December 2024; Employer.com acquired it and
+it resumed operating in January 2025, but it still has no public API (the old
+`api.bench.co/v2` base this connector called did not exist publicly).
 The connector stays registered so saved connections still load and show a
 clear reason instead of a generic authentication failure, but it can no longer
 connect or sync. The integrations page no longer offers Bench as connectable.
@@ -25,9 +26,8 @@ from .registry import ConnectorRegistry
 logger = logging.getLogger(__name__)
 
 BENCH_SHUT_DOWN = (
-    "Bench has shut down (December 2024) and has no public API, so it can't be "
-    "connected. Export your books from Bench and upload them, or connect your "
-    "new accounting system instead."
+    "Bench has no public API, so it can't be connected. Export your books from "
+    "Bench and upload them, or connect your accounting system instead."
 )
 
 

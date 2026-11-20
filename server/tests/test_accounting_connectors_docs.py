@@ -442,9 +442,9 @@ def test_bench_reports_shutdown_and_makes_no_requests(mock_http):
     mock_http["handler"] = lambda req: (_ for _ in ()).throw(AssertionError("no request expected"))
     conn = BenchConnector(_cfg("bench", {"api_key": "k"}))
     assert _run(conn.authenticate()) is False
-    assert "Bench has shut down" in conn.auth_error
+    assert "Bench has no public API" in conn.auth_error
     result = _run(conn.sync_all())
-    assert result.success is False and "Bench has shut down" in result.errors[0]
+    assert result.success is False and "Bench has no public API" in result.errors[0]
     assert mock_http["requests"] == []
 
 

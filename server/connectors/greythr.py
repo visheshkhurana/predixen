@@ -261,8 +261,11 @@ class GreytHRConnector(BaseConnector):
     async def _get_paged(self, path: str, params: Optional[Dict[str, Any]] = None,
                          allow_missing: bool = False) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
-        page = 1
-        while page <= MAX_PAGES:
+        # greytHR pages are numbered from 0: the docs' "page=1" example comes
+        # back with pages.first=false. Starting at 1 skipped the first page of
+        # employees and of every salary statement.
+        page = 0
+        while page < MAX_PAGES:
             response = await self._get(path, {**(params or {}), "page": page, "size": PAGE_SIZE})
             if response.status_code != 200:
                 if allow_missing and response.status_code in (400, 404, 204):
@@ -273,7 +276,7 @@ class GreytHRConnector(BaseConnector):
             items.extend(b for b in batch if isinstance(b, dict))
             pages = body.get("pages") or {}
             total_pages = int(pages.get("totalPages") or 1)
-            if page >= total_pages or not batch:
+            if pages.get("last") is True or page + 1 >= total_pages or not batch:
                 return items
             page += 1
         logger.warning(f"greytHR {path}: stopped after {MAX_PAGES} pages; results truncated")
