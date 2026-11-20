@@ -263,6 +263,8 @@ class ZohoCRMConnector(BaseConnector):
         won = [i for i in (invoices or []) if not main or (i.currency or "").upper() == main]
         if won:
             result["revenue"] = round(sum(i.total for i in won), 2)
+            if main:
+                result["revenue_currency"] = main
             result["deals_won"] = len(won)
         return result
 
