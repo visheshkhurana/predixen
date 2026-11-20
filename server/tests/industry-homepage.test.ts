@@ -228,9 +228,9 @@ test("no planned prices, retired offers, stale counts or invented social proof",
   ];
   const copy = JSON.stringify(INDUSTRY_PAGES);
   for (const phrase of forbidden) assert.ok(!copy.includes(phrase), `config contains ${phrase}`);
-  // Any connector count stated is 37.
+  // Any connector count stated is 38.
   for (const m of copy.matchAll(/(\d+)\s+(?:read-only\s+)?(?:data\s+)?connectors/g)) {
-    assert.equal(m[1], "37", `connector count ${m[0]}`);
+    assert.equal(m[1], "38", `connector count ${m[0]}`);
   }
   // No "N founders/brands/companies/customers use ..." style counts.
   assert.doesNotMatch(copy, /\b\d[\d,.]*\+?\s*(founders|brands|companies|customers|startups|teams)\b/i);

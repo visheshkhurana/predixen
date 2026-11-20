@@ -29,5 +29,5 @@ via Razorpay, live since 2026-11-15. Currency follows the company currency.
    while /pricing and the same homepage say ₹3,000/month. Live site confirmed by GET.
 2. Pricing lists Free = **0 connectors**; the app does not enforce it (free users can connect).
 3. Onboarding "Connect apps" pitches Stripe/QuickBooks/Gusto "and 20+" to D2C founders; the app has
-   37 connectors incl. Shopify, Shiprocket, Razorpay, Meta Ads, Tally.
+   38 connectors incl. Shopify, Shiprocket, Razorpay, Meta Ads, Tally, Zoho CRM.
 4. Signup page ignores `?industry=d2c` and sells Monte Carlo to everyone.

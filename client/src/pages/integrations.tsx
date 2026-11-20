@@ -455,7 +455,6 @@ const additionalAccountingProviders: IntegrationProvider[] = [
     name: "NetSuite",
     description: "Oracle NetSuite ERP for enterprise accounting",
     features: ["Multi-subsidiary", "Revenue Recognition", "Advanced Reporting"],
-    comingSoon: true,
   },
   {
     id: "zoho_books",
@@ -475,9 +474,8 @@ const additionalCrmProviders: IntegrationProvider[] = [
   {
     id: "pipedrive",
     name: "Pipedrive",
-    description: "Sales-focused CRM for growing teams",
-    features: ["Pipeline Management", "Activity Tracking", "Revenue Forecasting"],
-    comingSoon: true,
+    description: "Deal pipeline from Pipedrive: open pipeline by stage, win rate, and deals won",
+    features: ["Pipeline by Stage", "Win Rate", "Won Deals", "Read-only"],
   },
   {
     id: "zoho_crm",
@@ -863,6 +861,23 @@ export default function IntegrationsPage() {
     queryKey: ["/api/connectors/companies", companyId, "status"],
     enabled: !!companyId,
   });
+
+  // Status tiles: the legacy /api/integrations status only knows the old
+  // QuickBooks/HubSpot/Stripe paths, so a connected Zoho CRM or Pipedrive
+  // showed "CRM: Not connected". Fall back to the connector registry.
+  const firstConnected = (ids: string[]) =>
+    connectorStatus?.connectors
+      ?.find((c) => ids.includes(c.provider_id) && c.connected)
+      ?.provider_id?.replace(/_/g, " ");
+  const accountingConnected =
+    status?.integrations.accounting.connected ||
+    firstConnected(["quickbooks", "xero", "freshbooks", "wave", "netsuite"]);
+  const crmConnected =
+    status?.integrations.crm.connected ||
+    firstConnected(["hubspot", "salesforce", "pipedrive", "close_crm", "zoho_crm"]);
+  const paymentsConnected =
+    status?.integrations.payments?.connected ||
+    firstConnected(["stripe", "razorpay", "chargebee", "recurly"]);
 
   // Only some providers have a sample to preview; offering the button on the
   // rest ended in a bare "400: Bad Request".
@@ -1459,7 +1474,7 @@ export default function IntegrationsPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
-                {status?.integrations.accounting.connected ? (
+                {accountingConnected ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
                   <XCircle className="h-5 w-5 text-muted-foreground" />
@@ -1468,14 +1483,14 @@ export default function IntegrationsPage() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium">Accounting</p>
                 <p className="text-sm text-muted-foreground truncate">
-                  {status?.integrations.accounting.connected || "Not connected"}
+                  {accountingConnected || "Not connected"}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
                 {connectorStatus?.connectors?.some(c => 
-                  ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
+                  ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto", "bamboohr", "rippling", "deel"].includes(c.provider_id) && c.connected
                 ) ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
@@ -1486,7 +1501,7 @@ export default function IntegrationsPage() {
                 <p className="font-medium">Payroll</p>
                 <p className="text-sm text-muted-foreground truncate">
                   {connectorStatus?.connectors?.find(c => 
-                    ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
+                    ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto", "bamboohr", "rippling", "deel"].includes(c.provider_id) && c.connected
                   )?.provider_id?.replace(/_/g, " ") || "Not connected"}
                 </p>
               </div>
@@ -1512,7 +1527,7 @@ export default function IntegrationsPage() {
             </div>
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
-                {status?.integrations.crm.connected ? (
+                {crmConnected ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
                   <XCircle className="h-5 w-5 text-muted-foreground" />
@@ -1521,13 +1536,13 @@ export default function IntegrationsPage() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium">CRM</p>
                 <p className="text-sm text-muted-foreground truncate">
-                  {status?.integrations.crm.connected || "Not connected"}
+                  {crmConnected || "Not connected"}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
-                {status?.integrations.payments?.connected ? (
+                {paymentsConnected ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
                   <XCircle className="h-5 w-5 text-muted-foreground" />
@@ -1536,7 +1551,7 @@ export default function IntegrationsPage() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium">Payments</p>
                 <p className="text-sm text-muted-foreground truncate">
-                  {status?.integrations.payments?.connected || "Not connected"}
+                  {paymentsConnected || "Not connected"}
                 </p>
               </div>
             </div>
