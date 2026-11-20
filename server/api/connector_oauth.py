@@ -121,6 +121,35 @@ async def _finalize_zoho(client, token, params, app):
     }
 
 
+async def _finalize_zoho_crm(client, token, params, app):
+    # Same Zoho OAuth client as Books, CRM scopes; redeemed at the user's data centre.
+    from server.connectors.zoho_crm import zoho_crm_urls
+
+    dc = zoho_dc_from_accounts_server(params.get("accounts-server", ""))
+    token_url, api_base = zoho_crm_urls(dc)
+    res = await client.post(token_url, data={
+        "grant_type": "authorization_code",
+        "code": params["code"],
+        "client_id": app["client_id"],
+        "client_secret": app["client_secret"],
+        "redirect_uri": params["redirect_uri"],
+    })
+    data = res.json() if res.status_code == 200 else {}
+    if not data.get("refresh_token"):
+        raise OAuthConnectError("Zoho didn't grant offline access. Try connecting again.")
+    org_res = await client.get(f"{api_base}/org",
+                               headers={"Authorization": f"Zoho-oauthtoken {data['access_token']}"})
+    if org_res.status_code != 200:
+        raise OAuthConnectError("This Zoho login has no Zoho CRM organization (or didn't allow CRM access).")
+    orgs = (org_res.json() or {}).get("org") or []
+    return {
+        "client_id": app["client_id"], "client_secret": app["client_secret"],
+        "refresh_token": data["refresh_token"], "access_token": data.get("access_token", ""),
+        "dc": dc,
+        "_hint": (orgs[0].get("company_name") if orgs else None) or "Zoho CRM",
+    }
+
+
 async def _finalize_quickbooks(client, token, params, app):
     realm = params.get("realmId", "")
     if not realm:
@@ -240,6 +269,16 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
         scope_separator=",",
         extra_auth_params={"access_type": "offline", "prompt": "consent"},
         finalize=_finalize_zoho,
+    ),
+    OAuthProvider(
+        id="zoho_crm", name="Zoho", env_prefix="ZOHO",
+        authorize_url="https://accounts.zoho.com/oauth/v2/auth",
+        token_url="",  # per data centre, see _finalize_zoho_crm
+        default_scopes=("ZohoCRM.org.READ,ZohoCRM.modules.deals.READ,"
+                        "ZohoCRM.modules.accounts.READ,ZohoCRM.modules.contacts.READ"),
+        scope_separator=",",
+        extra_auth_params={"access_type": "offline", "prompt": "consent"},
+        finalize=_finalize_zoho_crm,
     ),
     OAuthProvider(
         id="quickbooks", name="QuickBooks", env_prefix="QUICKBOOKS",

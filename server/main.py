@@ -281,7 +281,9 @@ async def _run_deferred_startup():
 
         try:
             from server.models.software_spend import SoftwareSpend
+            from server.models.crm_pipeline import CRMPipelineSnapshot
             SoftwareSpend.__table__.create(bind=engine, checkfirst=True)
+            CRMPipelineSnapshot.__table__.create(bind=engine, checkfirst=True)
             logger.info("Ensured software_spend table exists")
         except Exception as e:
             logger.warning(f"Could not ensure d2c_months table: {e}")

@@ -124,7 +124,8 @@ def _registered_module_names() -> list[str]:
 # credentials (Google Ads needs a developer token): see docs/connectors/google-ads.md.
 # Move a connector out of here (and bump the published number) when it goes live.
 # 1Password: new 2026-11-20, not yet tested against a real Business account.
-PENDING_SETUP = {"google_ads", "onepassword"}
+# Zoho CRM: new 2026-11-20, waits on a live Zoho CRM org test.
+PENDING_SETUP = {"google_ads", "onepassword", "zoho_crm"}
 
 
 def test_registry_has_37_connectors():

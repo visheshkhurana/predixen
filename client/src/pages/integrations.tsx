@@ -48,6 +48,7 @@ import { parseServerDate } from "@/lib/serverDate";
 import { IntegrationCard, ApiKeyConnectModal, StripeConnectModal, SlackLinkCard } from "@/components/integrations";
 import { useFounderStore } from "@/store/founderStore";
 import { SoftwareSpendCard } from "@/components/SoftwareSpendCard";
+import { CrmPipelineCard } from "@/components/CrmPipelineCard";
 import { 
   IntegrationConfig, 
   getIntegrationsByCategory,
@@ -94,6 +95,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   gusto: <DollarSign className="h-6 w-6" />,
   netsuite: <Database className="h-6 w-6" />,
   pipedrive: <Users className="h-6 w-6" />,
+  zoho_crm: <Briefcase className="h-6 w-6" />,
   zoho: <Users className="h-6 w-6" />,
   zoho_books: <FileText className="h-6 w-6" />,
   tally: <Database className="h-6 w-6" />,
@@ -242,18 +244,16 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
       "View activities",
     ],
   },
-  zoho: {
+  zoho_crm: {
     dataImported: [
-      "Sales pipeline",
-      "Lead & contact data",
-      "Revenue tracking",
-      "Deal analytics",
-      "Sales forecasts",
+      "Open pipeline by stage, and weighted pipeline",
+      "Deals won and lost in the last 30 days, 90-day win rate",
+      "Deals won this month (as this month's revenue from Zoho CRM)",
+      "Account and contact counts",
     ],
     permissions: [
-      "Read CRM modules",
-      "Access leads & contacts",
-      "View reports",
+      "Sign in with Zoho: read-only access to deals, accounts, contacts and org settings",
+      "FounderConsole never creates or edits CRM records",
     ],
   },
   stripe: {
@@ -390,7 +390,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   salesforce: { setupTime: "~15 min", category: "crm" },
   hubspot: { setupTime: "~10 min", category: "crm" },
   pipedrive: { setupTime: "~10 min", category: "crm" },
-  zoho: { setupTime: "~10 min", category: "crm" },
+  zoho_crm: { setupTime: "~5 min", category: "crm" },
   plaid: { setupTime: "~5 min", category: "revenue" },
   chargebee: { setupTime: "~10 min", category: "revenue" },
   paddle: { setupTime: "~10 min", category: "revenue" },
@@ -467,11 +467,10 @@ const additionalCrmProviders: IntegrationProvider[] = [
     comingSoon: true,
   },
   {
-    id: "zoho",
+    id: "zoho_crm",
     name: "Zoho CRM",
-    description: "Comprehensive CRM with sales automation",
-    features: ["Lead Management", "Sales Automation", "Analytics"],
-    comingSoon: true,
+    description: "Deal pipeline from Zoho CRM: open pipeline by stage, win rate, and deals won this month",
+    features: ["Pipeline by Stage", "Win Rate", "Won Deals", "Read-only"],
   },
 ];
 
@@ -853,7 +852,7 @@ export default function IntegrationsPage() {
   });
   const sampleProviderIds = new Set((sampleProviders ?? []).map((p) => p.provider_id));
 
-  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword"];
+  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
@@ -873,6 +872,7 @@ export default function IntegrationsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
       queryClient.invalidateQueries({ queryKey: [`/api/connectors/companies/${companyId}/software-spend`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/connectors/companies/${companyId}/crm-pipeline`] });
       setSyncingProvider(null);
     },
     onError: (error: unknown) => {
@@ -966,7 +966,7 @@ export default function IntegrationsPage() {
     }
   };
   
-  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword"];
+  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -1199,6 +1199,8 @@ export default function IntegrationsPage() {
       </div>
 
       <SlackLinkCard companyId={slackCompanyId} />
+
+      <CrmPipelineCard companyId={companyId} />
 
       <SoftwareSpendCard companyId={companyId} />
 
@@ -1788,7 +1790,7 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
 // Providers with a real server-side connector. Anything else has no backend to
 // connect to, so its card says "Coming Soon" instead of playing a fake
 // "authorizing" animation and accepting any key.
-export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "google_sheets", "rest_api"]);
+export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "google_sheets", "rest_api"]);
 
 const providerSetupHelp: Record<string, string> = {
   meta_ads:
