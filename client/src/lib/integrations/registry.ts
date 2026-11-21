@@ -105,7 +105,13 @@ export const mixpanelIntegration: IntegrationConfig = {
   apiKeyConfig: {
     fields: [
       { name: 'project_id', label: 'Project ID', type: 'text', required: true, placeholder: 'Your Mixpanel Project ID' },
-      { name: 'api_secret', label: 'API Secret', type: 'password', required: true, placeholder: 'Your API Secret' },
+      // New projects have no API Secret and Mixpanel retires secrets on
+      // 3 March 2027, so a service account is the main path. The server
+      // requires either the service account pair or the API Secret.
+      { name: 'service_account_user', label: 'Service account username', type: 'text', required: false, placeholder: 'name.123abc.mp-service-account', helpText: 'Mixpanel > Organization Settings > Service Accounts' },
+      { name: 'service_account_secret', label: 'Service account secret', type: 'password', required: false, placeholder: 'Service account secret' },
+      { name: 'api_secret', label: 'API Secret (older projects only)', type: 'password', required: false, placeholder: 'Leave blank if you use a service account' },
+      { name: 'region', label: 'Data residency (optional)', type: 'text', required: false, placeholder: 'us (default), eu or in' },
     ],
   },
   
@@ -121,6 +127,37 @@ export const mixpanelIntegration: IntegrationConfig = {
   syncConfig: {
     defaultInterval: 'daily',
     availableIntervals: ['hourly', 'daily'],
+    supportsRealtime: false,
+  },
+};
+
+export const amplitudeIntegration: IntegrationConfig = {
+  id: 'amplitude',
+  name: 'Amplitude',
+  description: 'Product analytics: active users, retention and cohorts.',
+  icon: 'amplitude',
+  category: 'analytics',
+  authType: 'api_key',
+  status: 'disconnected',
+  // Connects through POST /api/connectors/companies/:id/connect (server/connectors/amplitude.py).
+  connectorProviderId: 'amplitude',
+
+  apiKeyConfig: {
+    fields: [
+      { name: 'api_key', label: 'API Key', type: 'text', required: true, placeholder: 'Amplitude project API Key' },
+      { name: 'secret_key', label: 'Secret Key', type: 'password', required: true, placeholder: 'Amplitude project Secret Key' },
+      { name: 'region', label: 'Data center (optional)', type: 'text', required: false, placeholder: 'us (default) or eu' },
+    ],
+  },
+
+  dataPoints: [
+    { id: 'dau', name: 'Daily Active Users', description: 'Users active per day', dataType: 'number', category: 'users', refreshRate: 'daily' },
+    { id: 'retention', name: 'Retention', description: 'Cohort retention', dataType: 'percentage', category: 'retention', refreshRate: 'daily' },
+  ],
+
+  syncConfig: {
+    defaultInterval: 'daily',
+    availableIntervals: ['daily'],
     supportsRealtime: false,
   },
 };
@@ -384,6 +421,7 @@ export const integrationRegistry: IntegrationConfig[] = [
   googleSheetsIntegration,
   googleAnalyticsIntegration,
   mixpanelIntegration,
+  amplitudeIntegration,
   chartMogulIntegration,
   stripeIntegration,
   plaidIntegration,
