@@ -393,6 +393,14 @@ class GustoConnector(BaseConnector):
 
             employees = await self.fetch_employees()
             payroll_runs = await self.fetch_payroll_runs()
+            # The payrolls list doesn't include employee_compensations (only a
+            # single-payroll GET does), so the count read 0 on every run. Use
+            # today's active headcount and say so.
+            active = sum(1 for e in employees if e.status == "active")
+            for run in payroll_runs:
+                if not run.employee_count and active:
+                    run.employee_count = active
+                    run.metadata = {**(run.metadata or {}), "employee_count_source": "active_headcount"}
             financials = self.map_to_financials(employees=employees, payroll_runs=payroll_runs)
 
             return SyncResult(

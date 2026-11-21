@@ -2,7 +2,7 @@
 BambooHR Connector - headcount, hires and exits, and salary run-rate.
 
 API: https://documentation.bamboohr.com/reference
-- Base: https://api.bamboohr.com/api/gateway.php/{companyDomain}/v1
+- Base: https://{companyDomain}.bamboohr.com/api/v1
 - Auth: HTTP Basic, the API key as username and any password ("x").
 - GET  /meta/fields                  sign-in check
 - POST /reports/custom?format=JSON   one row per employee with the fields asked
@@ -37,7 +37,10 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
-API_TEMPLATE = "https://api.bamboohr.com/api/gateway.php/{domain}/v1"
+# BambooHR moved to {domain}.bamboohr.com/api/v1 on 2025-07-03; the old
+# api.bamboohr.com/api/gateway.php form still works but is the legacy one.
+# https://documentation.bamboohr.com/docs/past-changes-to-the-api
+API_TEMPLATE = "https://{domain}.bamboohr.com/api/v1"
 REPORT_FIELDS = [
     "id", "displayName", "firstName", "lastName", "workEmail", "department", "division",
     "jobTitle", "location", "employmentHistoryStatus", "status", "hireDate",
