@@ -417,6 +417,11 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   netsuite: { setupTime: "~15 min", category: "accounting" },
   wave: { setupTime: "~10 min", category: "accounting" },
   freshbooks: { setupTime: "~10 min", category: "accounting" },
+  mercury: { setupTime: "~5 min", category: "revenue" },
+  ramp: { setupTime: "~5 min", category: "revenue" },
+  recurly: { setupTime: "~5 min", category: "revenue" },
+  profitwell: { setupTime: "~5 min", category: "revenue" },
+  close_crm: { setupTime: "~5 min", category: "crm" },
   zoho_books: { setupTime: "~10 min", category: "accounting" },
   tally: { setupTime: "~15 min", category: "accounting" },
   razorpayx: { setupTime: "~10 min", category: "hr" },
@@ -451,6 +456,18 @@ const categoryLabels: Record<ConnectorCategory, { label: string; description: st
 
 const additionalAccountingProviders: IntegrationProvider[] = [
   {
+    id: "freshbooks",
+    name: "FreshBooks",
+    description: "Invoicing, expenses and payments for service businesses",
+    features: ["Invoices", "Expenses", "Payments", "Read-only"],
+  },
+  {
+    id: "wave",
+    name: "Wave",
+    description: "Invoices, accounts and transactions from Wave (Pro or Advisor plan)",
+    features: ["Invoices", "Chart of Accounts", "Transactions", "Read-only"],
+  },
+  {
     id: "netsuite",
     name: "NetSuite",
     description: "Oracle NetSuite ERP for enterprise accounting",
@@ -472,6 +489,12 @@ const additionalAccountingProviders: IntegrationProvider[] = [
 
 const additionalCrmProviders: IntegrationProvider[] = [
   {
+    id: "close_crm",
+    name: "Close",
+    description: "Leads and opportunities from Close CRM",
+    features: ["Opportunities", "Won Revenue", "Leads", "Read-only"],
+  },
+  {
     id: "pipedrive",
     name: "Pipedrive",
     description: "Deal pipeline from Pipedrive: open pipeline by stage, win rate, and deals won",
@@ -486,6 +509,18 @@ const additionalCrmProviders: IntegrationProvider[] = [
 ];
 
 const payrollProviders: IntegrationProvider[] = [
+  {
+    id: "rippling",
+    name: "Rippling",
+    description: "Workers, departments and compensation from Rippling",
+    features: ["Headcount", "Departments", "Compensation", "Read-only"],
+  },
+  {
+    id: "deel",
+    name: "Deel",
+    description: "Contractors and employees worldwide, with what Deel invoices you",
+    features: ["Headcount", "Worker Pay", "Deel Fees", "Read-only"],
+  },
   {
     id: "gusto",
     name: "Gusto",
@@ -564,6 +599,42 @@ const erpProviders: IntegrationProvider[] = [
 ];
 
 const paymentsProviders: IntegrationProvider[] = [
+  {
+    id: "mercury",
+    name: "Mercury",
+    description: "Startup bank balances and transactions from Mercury",
+    features: ["Cash Balance", "Transactions", "Multi-Account", "Read-only"],
+  },
+  {
+    id: "brex",
+    name: "Brex",
+    description: "Cash balances, card spend and transfers from Brex",
+    features: ["Cash Balance", "Card Spend", "Software Spend", "Read-only"],
+  },
+  {
+    id: "ramp",
+    name: "Ramp",
+    description: "Card transactions, reimbursements and bills from Ramp",
+    features: ["Card Spend", "Reimbursements", "Bills", "Software Spend"],
+  },
+  {
+    id: "chargebee",
+    name: "Chargebee",
+    description: "Subscription MRR and invoices from Chargebee",
+    features: ["MRR", "Paid Invoices", "Subscriptions", "Read-only"],
+  },
+  {
+    id: "recurly",
+    name: "Recurly",
+    description: "Subscriptions, invoices and collections from Recurly",
+    features: ["Subscriptions", "Collections", "Refunds", "Read-only"],
+  },
+  {
+    id: "profitwell",
+    name: "ProfitWell",
+    description: "MRR, churn and subscriber metrics from ProfitWell (Paddle)",
+    features: ["MRR", "Churn", "Customers", "Read-only"],
+  },
   {
     id: "stripe",
     name: "Stripe",
