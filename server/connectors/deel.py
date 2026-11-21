@@ -373,19 +373,22 @@ class DeelConnector(BaseConnector):
         for (month, currency), items in sorted(buckets.items()):
             first = datetime.strptime(month + "-01", "%Y-%m-%d")
             last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-            total = sum(i.total for i in items)
+            # Invoice `total` includes Deel's fee and VAT, so it isn't worker
+            # pay. Gross is the worker amount; the fee is added back as an
+            # employment cost in map_to_financials; VAT is kept apart.
+            worker_pay = sum(i.amount for i in items)
             runs.append(PayrollRunRecord(
                 external_id=f"deel-{month}-{currency}",
                 period_start=first,
                 period_end=last,
-                total_gross=total,
+                total_gross=worker_pay,
                 total_deductions=0.0,
-                total_net=total,
+                total_net=worker_pay,
                 employee_count=len({i.metadata.get("contract_id") for i in items if i.metadata.get("contract_id")}),
                 currency=currency,
                 status="completed",
                 breakdown={
-                    "worker_pay": sum(i.amount for i in items),
+                    "worker_pay": worker_pay,
                     "deel_fees": sum(i.metadata.get("deel_fee") or 0 for i in items),
                     "vat": sum(i.tax for i in items),
                 },
@@ -442,7 +445,8 @@ class DeelConnector(BaseConnector):
 
         if payroll_runs:
             months = {r.period_start.strftime("%Y-%m") for r in payroll_runs}
-            total_payroll_cost = sum(run.total_gross for run in payroll_runs)
+            # Worker pay plus Deel's fee (a cost of employing them); VAT excluded.
+            total_payroll_cost = sum(run.total_gross + float((run.breakdown or {}).get("deel_fees") or 0) for run in payroll_runs)
             result["payroll"] = total_payroll_cost / max(len(months), 1)
             result["total_payroll_cost"] = total_payroll_cost
             result["payroll_runs_count"] = len(payroll_runs)

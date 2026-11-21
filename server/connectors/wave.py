@@ -32,6 +32,7 @@ from .registry import ConnectorRegistry
 logger = logging.getLogger(__name__)
 
 WAVE_GRAPHQL_URL = "https://gql.waveapps.com/graphql/public"
+WAVE_TOKEN_URL = "https://api.waveapps.com/oauth2/token/"
 
 
 @ConnectorRegistry.register
@@ -52,7 +53,48 @@ class WaveConnector(BaseConnector):
         super().__init__(config)
         self._access_token = config.credentials.get("access_token", "")
         self._business_id = config.credentials.get("business_id", "")
+        # Set by "Connect with Wave": Wave access tokens expire (expires_in),
+        # so without these a connection stopped working after the first token.
+        self._refresh_token = config.credentials.get("refresh_token", "")
+        self._client_id = config.credentials.get("client_id", "")
+        self._client_secret = config.credentials.get("client_secret", "")
+        self._refresh_attempted = False
+        self.auth_error: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
+
+    async def _refresh_access_token(self) -> bool:
+        """POST /oauth2/token/ with grant_type=refresh_token (form body).
+        Wave rotates the refresh token; rotated_credentials() saves it.
+        A 403 here means the business has no Pro/Advisor subscription, which
+        Wave requires for third-party apps."""
+        if self._refresh_attempted or not (self._refresh_token and self._client_id and self._client_secret):
+            return False
+        self._refresh_attempted = True
+        try:
+            async with http_client(timeout=30.0) as client:
+                res = await client.post(WAVE_TOKEN_URL, data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": self._refresh_token,
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                })
+            if res.status_code == 403:
+                self.auth_error = ("Wave only lets outside apps read businesses on a Pro or "
+                                   "Wave Advisor subscription. Upgrade the business in Wave, then reconnect.")
+                return False
+            data = res.json() if res.status_code == 200 else {}
+            if not data.get("access_token"):
+                logger.warning(f"Wave token refresh failed: {res.status_code}")
+                return False
+            self._access_token = data["access_token"]
+            self._refresh_token = data.get("refresh_token", self._refresh_token)
+            if self._client:
+                await self._client.aclose()
+                self._client = None
+            return True
+        except Exception as e:
+            logger.error(f"Wave token refresh error: {e}")
+            return False
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
@@ -73,6 +115,9 @@ class WaveConnector(BaseConnector):
             payload["variables"] = variables
 
         response = await client.post("", json=payload)
+        if response.status_code == 401 and await self._refresh_access_token():
+            client = await self._get_client()
+            response = await client.post("", json=payload)
 
         if response.status_code != 200:
             logger.error(f"Wave GraphQL error: {response.status_code} - {response.text[:200]}")

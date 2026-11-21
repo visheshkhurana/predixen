@@ -101,7 +101,7 @@ def test_sync_reports_headcount_moves_and_basic_auth(mock_http):
     seen = mock_http(_handler())
     result = _run(_conn().sync_all())
     assert result.success, result.errors
-    assert all(r.url.host == "api.bamboohr.com" and "/gateway.php/acme/v1/" in r.url.path for r in seen)
+    assert all(r.url.host == "acme.bamboohr.com" and r.url.path.startswith("/api/v1/") for r in seen)
     assert seen[0].headers["Authorization"] == "Basic " + base64.b64encode(b"key123:x").decode()
     body = json.loads(seen[1].content)
     assert "payRate" in body["fields"] and seen[1].url.params["format"] == "JSON"

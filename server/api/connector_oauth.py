@@ -183,6 +183,46 @@ async def _finalize_gusto(client, token, params, app):
     }
 
 
+FRESHBOOKS_TOKEN_URL = "https://api.freshbooks.com/auth/oauth/token"
+
+
+async def _finalize_freshbooks(client, token, params, app):
+    # FreshBooks documents a JSON token body, so redeem the code here rather
+    # than with the generic form-encoded exchange.
+    res = await client.post(FRESHBOOKS_TOKEN_URL, json={
+        "grant_type": "authorization_code", "code": params.get("code", ""),
+        "client_id": app["client_id"], "client_secret": app["client_secret"],
+        "redirect_uri": params["redirect_uri"],
+    }, headers={"Content-Type": "application/json", "Api-Version": "alpha"})
+    tok = res.json() if res.status_code == 200 else {}
+    if not tok.get("access_token"):
+        raise OAuthConnectError("FreshBooks didn't complete the sign-in. Try connecting again.")
+    me = await client.get("https://api.freshbooks.com/auth/api/v1/users/me",
+                          headers={"Authorization": f"Bearer {tok['access_token']}", "Api-Version": "alpha"})
+    body = (me.json() or {}).get("response", {}) if me.status_code == 200 else {}
+    accounts = [m.get("business") or {} for m in body.get("business_memberships") or []]
+    accounts = [b for b in accounts if b.get("account_id")]
+    if not accounts:
+        raise OAuthConnectError("This FreshBooks login has no business with accounting access.")
+    biz = accounts[0]
+    return {
+        "client_id": app["client_id"], "client_secret": app["client_secret"],
+        "access_token": tok["access_token"], "refresh_token": tok.get("refresh_token", ""),
+        "redirect_uri": params["redirect_uri"], "account_id": biz["account_id"],
+        "_hint": biz.get("name") or "FreshBooks",
+    }
+
+
+async def _finalize_wave(client, token, params, app):
+    # Wave's token response names the business the user picked.
+    return {
+        "client_id": app["client_id"], "client_secret": app["client_secret"],
+        "access_token": token["access_token"], "refresh_token": token.get("refresh_token", ""),
+        "business_id": token.get("businessId") or "",
+        "_hint": token.get("businessName") or "Wave",
+    }
+
+
 async def _finalize_salesforce(client, token, params, app):
     instance = (token.get("instance_url") or "").rstrip("/")
     if not instance.startswith("https://"):
@@ -313,6 +353,21 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
         authorize_url="https://api.gusto.com/oauth/authorize",
         token_url="https://api.gusto.com/oauth/token",
         default_scopes="", finalize=_finalize_gusto,
+    ),
+    OAuthProvider(
+        id="freshbooks", name="FreshBooks", env_prefix="FRESHBOOKS",
+        authorize_url="https://auth.freshbooks.com/oauth/authorize",
+        token_url="",  # redeemed with a JSON body in _finalize_freshbooks
+        default_scopes=("user:profile:read user:invoices:read user:expenses:read "
+                        "user:payments:read user:clients:read user:bills:read user:reports:read"),
+        finalize=_finalize_freshbooks,
+    ),
+    OAuthProvider(
+        id="wave", name="Wave", env_prefix="WAVE",
+        authorize_url="https://api.waveapps.com/oauth2/authorize/",
+        token_url="https://api.waveapps.com/oauth2/token/",
+        default_scopes="business:read account:read invoice:read transaction:read user:read",
+        finalize=_finalize_wave,
     ),
     OAuthProvider(
         id="hubspot", name="HubSpot", env_prefix="HUBSPOT",

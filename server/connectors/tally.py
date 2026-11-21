@@ -247,6 +247,13 @@ class TallyConnector(BaseConnector):
         company = xml_escape(self._company_name or "")
         
         if request_type == "ledgers":
+            # Opening/closing balances are for the request's period: without
+            # SVFROMDATE/SVTODATE Tally answers for the company's current
+            # period, not the month fetch_ledger stores the movement under.
+            period = ""
+            if filters.get("from_date") and filters.get("to_date"):
+                period = (f"<SVFROMDATE>{xml_escape(filters['from_date'])}</SVFROMDATE>"
+                          f"<SVTODATE>{xml_escape(filters['to_date'])}</SVTODATE>")
             return f'''
             <ENVELOPE>
                 <HEADER>
@@ -259,6 +266,7 @@ class TallyConnector(BaseConnector):
                     <DESC>
                         <STATICVARIABLES>
                             <SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>
+                            {period}
                         </STATICVARIABLES>
                         <TDL>
                             <TDLMESSAGE>
@@ -390,15 +398,18 @@ class TallyConnector(BaseConnector):
         try:
             client = await self._get_client()
             
-            # Fetch ledger accounts
-            xml_request = self._build_xml_request("ledgers")
+            # Fetch ledger balances for the reporting window
+            window_start, window_end = tally_reporting_window(
+                end_date or start_date or None
+            )
+            xml_request = self._build_xml_request("ledgers", {
+                "from_date": window_start.strftime("%d-%b-%Y"),
+                "to_date": window_end.strftime("%d-%b-%Y"),
+            })
             response = await client.post("/", content=xml_request)
             
             if response.status_code == 200:
                 ledgers = self._parse_xml_response(response.text, "ledgers")
-                window_start, window_end = tally_reporting_window(
-                    end_date or start_date or None
-                )
 
                 for ledger in ledgers:
                     name = ledger.get("name", "")
