@@ -52,6 +52,13 @@ def _parse_ymd(value: Any) -> Optional[datetime]:
         return None
 
 
+# Pin the API version instead of inheriting the app's minimum, which Gusto
+# moves forward and then sunsets (older versions answer 406). v2026-06-15 is
+# the current stable version: payrolls paginate by default (we always send
+# page/per) and money fields are strings (_f parses them).
+# https://docs.gusto.com/app-integrations/docs/version-upgrade-guide
+GUSTO_API_VERSION = "2026-06-15"
+
 GUSTO_ENVIRONMENTS = {
     "demo": "https://api.gusto-demo.com",
     "production": "https://api.gusto.com",
@@ -92,6 +99,7 @@ class GustoConnector(BaseConnector):
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {self._access_token}",
+                    "X-Gusto-API-Version": GUSTO_API_VERSION,
                 },
             )
         return self._client
