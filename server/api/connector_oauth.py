@@ -76,6 +76,14 @@ class OAuthProvider:
     extra_auth_params: Dict[str, str] = field(default_factory=dict)
     # Build the stored credentials from the token response and callback params.
     finalize: Optional[Finalize] = None
+    # (authorize_url, token_url) for the provider's test environment, when the
+    # founder's org lives there (Salesforce sandboxes sign in at test.salesforce.com).
+    sandbox_urls: Optional[tuple] = None
+
+    def urls(self, sandbox: bool = False) -> tuple:
+        if sandbox and self.sandbox_urls:
+            return self.sandbox_urls
+        return self.authorize_url, self.token_url
 
     def app(self) -> Dict[str, str]:
         p = self.env_prefix
@@ -390,6 +398,10 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
         authorize_url="https://login.salesforce.com/services/oauth2/authorize",
         token_url="https://login.salesforce.com/services/oauth2/token",
         default_scopes="api refresh_token", pkce=True, finalize=_finalize_salesforce,
+        # Sandboxes sign in at test.salesforce.com; refreshes then go to the
+        # org's own instance_url, so only the first sign-in needs this host.
+        sandbox_urls=("https://test.salesforce.com/services/oauth2/authorize",
+                      "https://test.salesforce.com/services/oauth2/token"),
     ),
 ]}
 
@@ -415,7 +427,8 @@ def _pkce_pair() -> tuple:
     return verifier, challenge
 
 
-async def exchange_code(provider: OAuthProvider, code: str, redirect_uri: str, verifier: str = "") -> Dict[str, Any]:
+async def exchange_code(provider: OAuthProvider, code: str, redirect_uri: str, verifier: str = "",
+                        token_url: str = "") -> Dict[str, Any]:
     """Standard authorization_code exchange. Returns the token JSON or raises OAuthConnectError."""
     app = provider.app()
     data = {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri}
@@ -427,7 +440,7 @@ async def exchange_code(provider: OAuthProvider, code: str, redirect_uri: str, v
     if verifier:
         data["code_verifier"] = verifier
     async with httpx.AsyncClient(timeout=30.0) as client:
-        res = await client.post(provider.token_url, data=data, auth=auth, headers={"Accept": "application/json"})
+        res = await client.post(token_url or provider.token_url, data=data, auth=auth, headers={"Accept": "application/json"})
     token = res.json() if res.status_code == 200 else {}
     if not token.get("access_token"):
         logger.warning("%s OAuth: code exchange failed (HTTP %s)", provider.name, res.status_code)
@@ -437,7 +450,8 @@ async def exchange_code(provider: OAuthProvider, code: str, redirect_uri: str, v
 
 @router.get("/oauth/providers")
 async def oauth_providers(current_user: User = Depends(get_current_user)):
-    return {pid: {"name": p.name, "configured": p.configured()} for pid, p in PROVIDERS.items()}
+    return {pid: {"name": p.name, "configured": p.configured(), "sandbox": bool(p.sandbox_urls)}
+            for pid, p in PROVIDERS.items()}
 
 
 @router.get("/companies/{company_id}/oauth/{provider_id}/url")
@@ -445,10 +459,12 @@ async def oauth_url(
     company_id: int,
     provider_id: str,
     request: Request,
+    sandbox: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     provider = _provider(provider_id)
+    sandbox = sandbox and bool(provider.sandbox_urls)
     company = db.query(Company).filter(Company.id == company_id, company_access_clause(current_user)).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -461,6 +477,8 @@ async def oauth_url(
     app = provider.app()
     payload: Dict[str, Any] = {"c": company_id, "u": current_user.id, "p": provider_id,
                                "exp": int(time.time()) + STATE_TTL_SECONDS}
+    if sandbox:
+        payload["sb"] = 1
     params: Dict[str, str] = {
         "client_id": app["client_id"],
         "redirect_uri": f"{_base_url(request)}{_callback_path(provider_id)}",
@@ -474,7 +492,8 @@ async def oauth_url(
         payload["v"] = encrypt_credentials({"v": verifier})
         params.update(code_challenge=challenge, code_challenge_method="S256")
     params["state"] = _sign(payload)
-    return {"url": f"{provider.authorize_url}?{urlencode(params)}"}
+    authorize_url, _ = provider.urls(sandbox)
+    return {"url": f"{authorize_url}?{urlencode(params)}"}
 
 
 @router.get("/oauth/{provider_id}/callback")
@@ -511,8 +530,9 @@ async def oauth_callback(
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             token: Dict[str, Any] = {}
-            if provider.token_url:  # Zoho redeems the code inside its finalizer
-                token = await exchange_code(provider, code, redirect_uri, verifier)
+            _, token_url = provider.urls(bool(payload.get("sb")))
+            if token_url:  # Zoho redeems the code inside its finalizer
+                token = await exchange_code(provider, code, redirect_uri, verifier, token_url)
             creds = await provider.finalize(client, token, params, app)
     except OAuthConnectError as exc:
         return _back(base, oauth_error=str(exc), provider=provider_id)

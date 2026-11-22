@@ -404,3 +404,38 @@ def test_ga4_finalize_falls_back_to_first_when_probes_fail():
         async with _client(handler) as c:
             return await co._finalize_google_analytics(c, {"access_token": "a", "refresh_token": "r"}, {}, APP)
     assert _run(go())["property_id"] == "1"
+
+
+# --- Salesforce sandbox ------------------------------------------------------
+
+def test_salesforce_sandbox_uses_test_host_only_when_asked():
+    sf = co.PROVIDERS["salesforce"]
+    assert sf.urls() == (sf.authorize_url, sf.token_url)
+    assert sf.urls(sandbox=True) == ("https://test.salesforce.com/services/oauth2/authorize",
+                                     "https://test.salesforce.com/services/oauth2/token")
+    # Providers without a test environment ignore the flag.
+    xero = co.PROVIDERS["xero"]
+    assert xero.urls(sandbox=True) == (xero.authorize_url, xero.token_url)
+
+
+def test_exchange_code_honours_token_url_override(monkeypatch):
+    monkeypatch.setenv("SALESFORCE_CLIENT_ID", "sid")
+    monkeypatch.setenv("SALESFORCE_CLIENT_SECRET", "ssec")
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"access_token": "a", "refresh_token": "r",
+                                         "instance_url": "https://acme--dev.sandbox.my.salesforce.com"})
+
+    orig = httpx.AsyncClient
+
+    class Patched(orig):
+        def __init__(self, *a, **kw):
+            kw["transport"] = httpx.MockTransport(handler)
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(httpx, "AsyncClient", Patched)
+    sf = co.PROVIDERS["salesforce"]
+    _run(co.exchange_code(sf, "c", "https://app/cb", "v", sf.urls(sandbox=True)[1]))
+    assert seen["url"] == "https://test.salesforce.com/services/oauth2/token"
