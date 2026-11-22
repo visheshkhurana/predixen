@@ -813,17 +813,18 @@ export default function IntegrationsPage() {
   // Zoho Books, QuickBooks, Xero, Gusto and Salesforce connect through the
   // provider's own sign-in once the server has that provider's OAuth app.
   const [oauthStarting, setOauthStarting] = useState<string | null>(null);
-  const { data: oauthProviders } = useQuery<Record<string, { name: string; configured: boolean }>>({
+  const { data: oauthProviders } = useQuery<Record<string, { name: string; configured: boolean; sandbox?: boolean }>>({
     queryKey: ["/api/connectors/oauth/providers"],
     staleTime: 5 * 60_000,
   });
   const oauthReady = (id: string) => !!oauthProviders?.[id]?.configured;
 
-  const startOAuth = async (providerId: string) => {
+  const startOAuth = async (providerId: string, sandbox = false) => {
     if (!companyId) return;
     setOauthStarting(providerId);
     try {
-      const res = await apiRequest("GET", `/api/connectors/companies/${companyId}/oauth/${providerId}/url`);
+      const qs = sandbox ? "?sandbox=true" : "";
+      const res = await apiRequest("GET", `/api/connectors/companies/${companyId}/oauth/${providerId}/url${qs}`);
       const { url } = await res.json();
       window.location.href = url;
     } catch (error) {
@@ -1216,10 +1217,17 @@ export default function IntegrationsPage() {
                     Connect with Google
                   </Button>
                 ) : oauthReady(provider.id) ? (
-                  <Button size="sm" onClick={() => startOAuth(provider.id)} disabled={oauthStarting === provider.id} data-testid={`button-connect-${provider.id}`}>
-                    {oauthStarting === provider.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
-                    Connect with {oauthProviders?.[provider.id]?.name}
-                  </Button>
+                  <>
+                    <Button size="sm" onClick={() => startOAuth(provider.id)} disabled={oauthStarting === provider.id} data-testid={`button-connect-${provider.id}`}>
+                      {oauthStarting === provider.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
+                      Connect with {oauthProviders?.[provider.id]?.name}
+                    </Button>
+                    {oauthProviders?.[provider.id]?.sandbox && (
+                      <Button size="sm" variant="ghost" onClick={() => startOAuth(provider.id, true)} disabled={oauthStarting === provider.id} data-testid={`button-connect-sandbox-${provider.id}`}>
+                        Sandbox org
+                      </Button>
+                    )}
+                  </>
                 ) : provider.id === 'meta_ads' && metaAdsOAuth ? (
                   <Button size="sm" onClick={startMetaAds} disabled={metaAdsStarting} data-testid="button-connect-meta_ads">
                     {metaAdsStarting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
