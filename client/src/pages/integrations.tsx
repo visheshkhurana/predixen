@@ -1777,7 +1777,8 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
   plaid: [
     { field: "client_id", label: "Client ID", placeholder: "Enter Plaid Client ID" },
     { field: "secret", label: "Secret Key", placeholder: "Enter Plaid Secret" },
-    { field: "access_token", label: "Access Token", placeholder: "access-sandbox-..." },
+    { field: "access_token", label: "Access Token", placeholder: "access-production-... or access-sandbox-...", hint: "Sandbox or Production is read from the token's prefix." },
+    { field: "environment", label: "Environment (optional)", placeholder: "production (default) or sandbox", hint: "Only needed if your token doesn't start with access-production- or access-sandbox-.", optional: true },
   ],
   hubspot: [
     { field: "access_token", label: "Private App Token", placeholder: "pat-na1-...", hint: "HubSpot stopped new legacy private apps in Oct 2026. An existing token still works; new HubSpot users should use Connect with HubSpot." },
