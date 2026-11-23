@@ -170,3 +170,74 @@ def test_foreign_currency_figures_are_dropped_with_a_warning():
     assert "payroll" not in out and out["revenue"] == 10 and out["headcount"] == 4
     assert warnings == ["Payroll is in USD and the company currency is INR, so it was not recorded."]
     assert _drop_foreign_currency_figures({"payroll": 1, "payroll_currency": "USD"}, None, []) == {"payroll": 1, "payroll_currency": "USD"}
+
+
+# --- Datasets v2 fallback when /reports/custom is retired ---------------------
+
+def _dataset_row(emp):
+    amount, cur = emp["payRate"].split()
+    return {"fields": {
+        "eeid": emp["id"], "firstName": "Person", "lastName": emp["id"], "workEmail": emp["workEmail"],
+        "jobInformationDepartment": emp["department"], "employmentStatus": emp["employmentHistoryStatus"],
+        "status": emp["status"], "hireDate": emp["hireDate"], "terminationDate": emp["terminationDate"],
+        "compensationPayRate": float(amount), "compensationPayRateCurrencyCode": cur,
+        "compensationPayType": emp["payType"], "compensationPaidPer": emp["payPer"],
+    }}
+
+
+DATASET_FIELDS = ["eeid", "firstName", "lastName", "workEmail", "jobInformationDepartment", "employmentStatus",
+                  "status", "hireDate", "terminationDate", "compensationPayRate",
+                  "compensationPayRateCurrencyCode", "compensationPayType", "compensationPaidPer"]
+
+
+def _dataset_handler(employees=EMPLOYEES, fields_status=200, page_size=3):
+    def handler(req):
+        path = req.url.path
+        if path.endswith("/meta/fields"):
+            return httpx.Response(200, json=[{"id": 1}])
+        if path.endswith("/reports/custom"):
+            return httpx.Response(404)
+        if path == "/api/v1_2/datasets/employee/fields":
+            return httpx.Response(fields_status, json={
+                "fields": [{"name": n} for n in DATASET_FIELDS], "pagination": {"next_page": None}})
+        if path == "/api/v2/datasets/employee/data":
+            body = json.loads(req.content)
+            assert set(body["fields"]) <= set(DATASET_FIELDS)
+            page = body["page"]
+            chunk = employees[(page - 1) * page_size: page * page_size]
+            total = -(-len(employees) // page_size)
+            return httpx.Response(200, json={"data": [_dataset_row(e) for e in chunk],
+                                             "meta": {"page": page, "totalPages": total}})
+        return httpx.Response(404)
+    return handler
+
+
+def test_falls_back_to_datasets_when_report_is_retired(mock_http):
+    seen = mock_http(_dataset_handler())
+    result = _run(_conn().sync_all())
+    assert result.success, result.errors
+    hr = result.metadata["hr_summary"]
+    assert hr["headcount"] == 4
+    assert hr["by_department"] == {"Engineering": 2, "Sales": 2}
+    assert hr["salary_run_rate_monthly"] == 26000
+    pages = [json.loads(r.content)["page"] for r in seen if r.url.path.endswith("/employee/data")]
+    assert pages == [1, 2]  # 5 employees, 3 per page
+    assert all(r.url.host == "acme.bamboohr.com" for r in seen)
+
+
+def test_dataset_fallback_without_field_list_uses_documented_names(mock_http):
+    mock_http(_dataset_handler(fields_status=500, employees=EMPLOYEES[:2]))
+    conn = _conn()
+    assert _run(conn.authenticate())
+    emps = {e.external_id: e for e in _run(conn.fetch_employees())}
+    assert set(emps) == {"1", "2"} and emps["1"].department == "Engineering"
+
+
+def test_dataset_row_to_report_joins_rate_and_currency():
+    chosen = {"id": "eeid", "payRate": "compensationPayRate", "payRateCurrency": "compensationPayRateCurrencyCode"}
+    row = bamboohr.dataset_row_to_report({"fields": {"eeid": 7, "compensationPayRate": 85000,
+                                                     "compensationPayRateCurrencyCode": "INR"}}, chosen)
+    assert row == {"id": 7, "payRate": "85000 INR"}
+    assert bamboohr.parse_pay_rate(row["payRate"]) == (85000.0, "INR")
+    already = bamboohr.dataset_row_to_report({"fields": {"compensationPayRate": "100.00 USD"}}, chosen)
+    assert already["payRate"] == "100.00 USD"

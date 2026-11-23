@@ -6,6 +6,9 @@ API: https://documentation.bamboohr.com/reference
 - Auth: HTTP Basic, the API key as username and any password ("x").
 - GET  /meta/fields                  sign-in check
 - POST /reports/custom?format=JSON   one row per employee with the fields asked
+- Fallback if BambooHR retires that report (deprecated 2026-03-18, no sunset
+  date yet): Datasets v2, POST {domain}.bamboohr.com/api/v2/datasets/employee/data,
+  with field names discovered from GET /api/v1_2/datasets/employee/fields.
 
 Reports:
 - headcount (active employees), by department and employment type
@@ -46,6 +49,37 @@ REPORT_FIELDS = [
     "jobTitle", "location", "employmentHistoryStatus", "status", "hireDate",
     "terminationDate", "payRate", "payType", "payPer",
 ]
+# Datasets v2 names for each report field, best guess first. Only names the
+# account's employee dataset actually lists are requested, so a wrong guess is
+# skipped rather than failing the query (bad names are a 400).
+# https://documentation.bamboohr.com/reference/get-data-from-dataset-v2
+DATASET_CANDIDATES: Dict[str, List[str]] = {
+    "id": ["eeid", "employeeId", "id"],
+    "displayName": ["displayName", "fullName", "preferredName"],
+    "firstName": ["firstName"],
+    "lastName": ["lastName"],
+    "workEmail": ["workEmail", "email"],
+    "department": ["jobInformationDepartment", "department"],
+    "division": ["jobInformationDivision", "division"],
+    "jobTitle": ["jobInformationJobTitle", "jobTitle"],
+    "location": ["jobInformationLocation", "location"],
+    "employmentHistoryStatus": ["employmentStatus", "employmentHistoryStatus"],
+    "status": ["status"],
+    "hireDate": ["hireDate"],
+    "terminationDate": ["terminationDate"],
+    "payRate": ["compensationPayRate", "payRate"],
+    "payRateCurrency": ["compensationPayRateCurrencyCode"],
+    "payType": ["compensationPayType", "payType"],
+    "payPer": ["compensationPaidPer", "compensationPayPer", "payPer"],
+}
+# Names the docs show in the employee dataset; used if the field list can't be read.
+DATASET_KNOWN = {"eeid", "firstName", "lastName", "status", "employmentStatus", "hireDate",
+                 "jobInformationDepartment", "compensationPayRate", "compensationPayRateCurrencyCode"}
+DATASET_PAGE_SIZE = 1000  # documented maximum
+DATASET_MAX_PAGES = 50
+# Report statuses that mean the endpoint itself is gone, not a key problem.
+REPORT_RETIRED = (404, 405, 410)
+
 # Share of active employees that must have a salaried pay rate in the main
 # currency before the run-rate is used as payroll.
 PAYROLL_COVERAGE = 0.8
@@ -92,6 +126,17 @@ def monthly_salary(emp: Dict[str, Any]) -> Tuple[Optional[float], Optional[str]]
     if factor is None:
         return None, None
     return round(amount * factor, 2), currency
+
+
+def dataset_row_to_report(item: Dict[str, Any], chosen: Dict[str, str]) -> Dict[str, Any]:
+    """A Datasets v2 row ({"fields": {...}}) in the report's flat shape."""
+    values = item.get("fields") if isinstance(item.get("fields"), dict) else item
+    row = {key: values.get(name) for key, name in chosen.items()}
+    rate, currency = row.pop("payRate", None), row.pop("payRateCurrency", None)
+    if rate not in (None, ""):
+        # Report rows carry '85000.00 USD'; datasets split amount and currency.
+        row["payRate"] = f"{rate} {currency}".strip() if currency and not str(rate).strip()[-3:].isalpha() else str(rate)
+    return row
 
 
 class BambooHRError(Exception):
@@ -173,10 +218,56 @@ class BambooHRConnector(BaseConnector):
             "/reports/custom", params={"format": "JSON", "onlyCurrent": "true"},
             json={"title": "FounderConsole headcount", "fields": REPORT_FIELDS},
         )
+        if res.status_code in REPORT_RETIRED:
+            # authenticate() already proved the subdomain and key, so a 404
+            # here means the deprecated report endpoint is gone.
+            logger.warning("BambooHR /reports/custom returned %s; using Datasets v2", res.status_code)
+            self._rows = await self._dataset_rows()
+            return self._rows
         if res.status_code != 200:
             raise BambooHRError(self._explain(res.status_code))
         self._rows = list((res.json() or {}).get("employees") or [])
         return self._rows
+
+    def _site(self, path: str) -> str:
+        return f"https://{self._domain}.bamboohr.com{path}"
+
+    async def _dataset_field_names(self) -> set:
+        client = await self._get_client()
+        names: set = set()
+        for page in range(1, 11):
+            res = await client.get(self._site("/api/v1_2/datasets/employee/fields"),
+                                   params={"page": page, "page_size": 1000})
+            if res.status_code != 200:
+                return names or set(DATASET_KNOWN)
+            body = res.json() or {}
+            names.update(f.get("name") for f in body.get("fields") or [] if f.get("name"))
+            if not (body.get("pagination") or {}).get("next_page"):
+                break
+        return names or set(DATASET_KNOWN)
+
+    async def _dataset_rows(self) -> List[Dict[str, Any]]:
+        available = await self._dataset_field_names()
+        chosen: Dict[str, str] = {}
+        for key, candidates in DATASET_CANDIDATES.items():
+            name = next((c for c in candidates if c in available), None)
+            if name:
+                chosen[key] = name
+        fields = sorted(set(chosen.values()))
+        client = await self._get_client()
+        rows: List[Dict[str, Any]] = []
+        for page in range(1, DATASET_MAX_PAGES + 1):
+            res = await client.post(self._site("/api/v2/datasets/employee/data"),
+                                    json={"fields": fields, "page": page, "pageSize": DATASET_PAGE_SIZE})
+            if res.status_code != 200:
+                raise BambooHRError(self._explain(res.status_code))
+            body = res.json() or {}
+            for item in body.get("data") or []:
+                rows.append(dataset_row_to_report(item, chosen))
+            meta = body.get("meta") or {}
+            if page >= int(meta.get("totalPages") or 1):
+                break
+        return rows
 
     @staticmethod
     def _is_active(emp: Dict[str, Any], today: date) -> bool:
