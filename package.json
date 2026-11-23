@@ -72,7 +72,7 @@
     "fast-geoip": "^1.1.88",
     "framer-motion": "^11.18.2",
     "gsap": "^3.15.1",
-    "http-proxy-middleware": "^3.0.5",
+    "http-proxy-middleware": "^4.2.2",
     "input-otp": "^1.4.2",
     "jspdf": "^4.1.0",
     "lucide-react": "^0.453.0",
