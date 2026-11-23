@@ -486,6 +486,52 @@ async def get_connector_status(
     }
 
 
+NETSUITE_KEY_PATH = ("connector_keys", "netsuite")
+
+
+def _attach_netsuite_key(company: Company, creds: Dict[str, Any]) -> None:
+    """OAuth 2.0 M2M: add the company's stored private key to the NetSuite
+    credentials. The browser never sends or sees a private key."""
+    creds.pop("private_key", None)
+    if not (str(creds.get("client_id") or "").strip() and str(creds.get("certificate_id") or "").strip()):
+        return
+    stored = ((company.metadata_json or {}).get("connector_keys") or {}).get("netsuite") or {}
+    if stored.get("private_key"):
+        pem = (decrypt_credentials(stored["private_key"]) or {}).get("pem")
+        if pem:
+            creds["private_key"] = pem
+
+
+@router.post("/companies/{company_id}/netsuite/certificate")
+async def netsuite_certificate(
+    company_id: int,
+    rotate: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """The public certificate the founder uploads in NetSuite's OAuth 2.0
+    Client Credentials (M2M) Setup. Made once per company and reused, so
+    reopening the dialog doesn't invalidate an uploaded certificate;
+    rotate=true makes a new one."""
+    from server.connectors.netsuite_m2m import generate_keypair
+
+    company = db.query(Company).filter(Company.id == company_id, company_access_clause(current_user)).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    stored = ((company.metadata_json or {}).get("connector_keys") or {}).get("netsuite") or {}
+    if stored.get("certificate") and stored.get("private_key") and not rotate:
+        return {"certificate": stored["certificate"], "expires_at": stored.get("expires_at"), "created": False}
+    private_pem, cert_pem, expires = generate_keypair(f"FounderConsole {company.name or company_id}")
+    record = {
+        "private_key": encrypt_credentials({"pem": private_pem}),
+        "certificate": cert_pem,
+        "expires_at": expires.isoformat(),
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    save_metadata_value(db, company, NETSUITE_KEY_PATH, record)
+    return {"certificate": cert_pem, "expires_at": record["expires_at"], "created": True}
+
+
 @router.post("/companies/{company_id}/connect")
 async def connect_provider(
     company_id: int,
@@ -524,6 +570,9 @@ async def connect_provider(
         account_number = str(creds_to_store.get(_ACCOUNT_NUMBER_KEY) or settings_account or "").strip()
         if account_number:
             creds_to_store[_ACCOUNT_NUMBER_KEY] = account_number
+
+    if provider_id == "netsuite":
+        _attach_netsuite_key(company, creds_to_store)
 
     # Create connector and test authentication
     config = ConnectorConfig(
