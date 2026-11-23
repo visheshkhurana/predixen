@@ -103,6 +103,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   razorpay: <CreditCard className="h-6 w-6" />,
   meta_ads: <Megaphone className="h-6 w-6" />,
   google_ads: <Megaphone className="h-6 w-6" />,
+  google_analytics: <TrendingUp className="h-6 w-6" />,
   onepassword: <KeyRound className="h-6 w-6" />,
   razorpayx: <DollarSign className="h-6 w-6" />,
   greythr: <Users className="h-6 w-6" />,
@@ -148,6 +149,17 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
     permissions: [
       "Google's Google Ads access (it has no read-only option)",
       "FounderConsole only reads reports: it never creates, changes or pauses campaigns",
+    ],
+  },
+  google_analytics: {
+    dataImported: [
+      "Monthly sessions, users and new users from one GA4 property",
+      "Key events (GA4's conversions) per month",
+      "If you can see several properties, the busiest one is picked",
+    ],
+    permissions: [
+      "Google Analytics read-only access (analytics.readonly)",
+      "FounderConsole never changes Analytics settings, properties or users",
     ],
   },
   onepassword: {
@@ -412,6 +424,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   razorpay: { setupTime: "~5 min", category: "revenue" },
   meta_ads: { setupTime: "~10 min", category: "analytics" },
   google_ads: { setupTime: "~5 min", category: "analytics" },
+  google_analytics: { setupTime: "~5 min", category: "analytics" },
   onepassword: { setupTime: "~5 min", category: "security" },
   brex: { setupTime: "~5 min", category: "revenue" },
   netsuite: { setupTime: "~15 min", category: "accounting" },
@@ -682,6 +695,12 @@ const paymentsProviders: IntegrationProvider[] = [
     name: "Google Ads",
     description: "Search, Shopping, Performance Max and YouTube ad spend per month, for CM3 and MER. Google's own conversion numbers are shown as platform-reported, not as revenue.",
     features: ["Monthly Ad Spend", "All Accounts You Can Access", "Sign in with Google", "Read-only"],
+  },
+  {
+    id: "google_analytics",
+    name: "Google Analytics",
+    description: "Monthly sessions, users and key events from your GA4 property, shown next to revenue and ad spend. Read-only.",
+    features: ["Sessions & Users", "Key Events", "Busiest Property Picked", "Read-only"],
   },
 ];
 
