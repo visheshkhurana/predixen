@@ -321,3 +321,44 @@ def test_ga4_sync_warns_when_property_is_empty(mock_http):
     res = _run(conn.sync_all())
     assert res.success is True and res.records_synced == 0
     assert any("no data in the last 30 days" in w for w in res.warnings)
+
+
+def test_ga4_sync_reports_monthly_traffic_from_year_month(mock_http):
+    """Users aren't additive across days, so months come from GA4's yearMonth report."""
+    bodies = []
+
+    def handler(r):
+        body = json.loads(r.content)
+        bodies.append(body)
+        if body.get("dimensions") == [{"name": "yearMonth"}]:
+            return httpx.Response(200, json={
+                "dimensionHeaders": [{"name": "yearMonth"}],
+                "metricHeaders": [{"name": "sessions"}, {"name": "totalUsers"},
+                                  {"name": "newUsers"}, {"name": "keyEvents"}],
+                "rows": [
+                    {"dimensionValues": [{"value": "202611"}],
+                     "metricValues": [{"value": "50"}, {"value": "40"}, {"value": "30"}, {"value": "5"}]},
+                    {"dimensionValues": [{"value": "202610"}],
+                     "metricValues": [{"value": "120"}, {"value": "90"}, {"value": "70"}, {"value": "12.0"}]},
+                ]})
+        return httpx.Response(200, json=_ga_report())
+
+    mock_http(handler)
+    conn = GoogleAnalyticsConnector(_cfg("google_analytics", {"property_id": "123", "access_token": "a"}))
+    res = _run(conn.sync_all())
+    assert res.success is True
+    traffic = res.metadata["web_traffic"]
+    assert traffic["property_id"] == "123"
+    assert traffic["months"] == [
+        {"period": "2026-10", "sessions": 120, "users": 90, "new_users": 70, "key_events": 12},
+        {"period": "2026-11", "sessions": 50, "users": 40, "new_users": 30, "key_events": 5},
+    ]
+    monthly = [b for b in bodies if b.get("dimensions") == [{"name": "yearMonth"}]][0]
+    assert monthly["dateRanges"][0]["startDate"].endswith("-01")
+
+
+def test_monthly_traffic_rows_skips_bad_periods():
+    rows = [{"yearMonth": "2026-1"}, {"yearMonth": "202609", "sessions": "x"}]
+    assert GoogleAnalyticsConnector.monthly_traffic_rows(rows) == [
+        {"period": "2026-09", "sessions": 0, "users": 0, "new_users": 0, "key_events": 0},
+    ]
