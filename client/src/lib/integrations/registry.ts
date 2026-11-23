@@ -419,7 +419,9 @@ export const gustoIntegration: IntegrationConfig = {
 
 export const integrationRegistry: IntegrationConfig[] = [
   googleSheetsIntegration,
-  googleAnalyticsIntegration,
+  // Google Analytics is a real connector card on the Integrations page
+  // (provider id google_analytics, Connect with Google); this placeholder stays
+  // exported for integrationService but is not listed, to avoid a second card.
   mixpanelIntegration,
   amplitudeIntegration,
   chartMogulIntegration,
