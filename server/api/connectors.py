@@ -781,6 +781,11 @@ async def sync_provider(
             updated = _seal_razorpay_config(dict(connectors[storage_id]), storage_id)
             updated["last_sync"] = datetime.now(timezone.utc).isoformat()
             updated["records_synced"] = result.records_synced
+            # Analytics connectors report monthly traffic; keep the latest on
+            # the connection (GET .../web-traffic reads it).
+            web_traffic = result.metadata.get("web_traffic")
+            if isinstance(web_traffic, dict) and isinstance(web_traffic.get("months"), list):
+                updated["web_traffic"] = web_traffic
             updated["last_error"] = None  # Clear previous errors on success
             updated.pop("last_error_at", None)
             updated.pop("needs_reauth", None)
@@ -935,6 +940,33 @@ async def get_crm_pipeline(
         raise HTTPException(status_code=404, detail="Company not found")
     from server.services import crm_pipeline as crm_pipeline_service
     return crm_pipeline_service.summary(db, company_id)
+
+
+@router.get("/companies/{company_id}/web-traffic")
+async def get_web_traffic(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Monthly website traffic from the connected Google Analytics property."""
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        company_access_clause(current_user),
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    connectors = (company.metadata_json or {}).get("connectors", {}) or {}
+    storage_id = _connected_storage_id(connectors, "google_analytics")
+    row = connectors.get(storage_id) if storage_id else None
+    traffic = (row or {}).get("web_traffic") or {}
+    months = [m for m in traffic.get("months") or [] if isinstance(m, dict) and m.get("period")]
+    return {
+        "connected": bool(storage_id),
+        "source": "google_analytics",
+        "property_id": traffic.get("property_id"),
+        "synced_at": traffic.get("synced_at") or (row or {}).get("last_sync"),
+        "months": months[-12:],
+    }
 
 
 @router.get("/companies/{company_id}/sync-history")

@@ -49,6 +49,7 @@ import { IntegrationCard, ApiKeyConnectModal, StripeConnectModal, SlackLinkCard 
 import { useFounderStore } from "@/store/founderStore";
 import { SoftwareSpendCard } from "@/components/SoftwareSpendCard";
 import { CrmPipelineCard } from "@/components/CrmPipelineCard";
+import { WebTrafficCard } from "@/components/WebTrafficCard";
 import { 
   IntegrationConfig, 
   getIntegrationsByCategory,
@@ -1333,6 +1334,8 @@ export default function IntegrationsPage() {
       <SlackLinkCard companyId={slackCompanyId} />
 
       <CrmPipelineCard companyId={companyId} />
+
+      <WebTrafficCard companyId={companyId} />
 
       <SoftwareSpendCard companyId={companyId} />
 

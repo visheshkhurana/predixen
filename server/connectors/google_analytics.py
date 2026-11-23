@@ -221,6 +221,46 @@ class GoogleAnalyticsConnector(BaseConnector):
             start_date=start_date,
         )
 
+    async def get_monthly_traffic(self, months: int = 6) -> Dict[str, Any]:
+        """Sessions, users, new users and key events per calendar month.
+
+        Users are not additive across days, so months come from GA4 itself
+        (yearMonth dimension) instead of summing the daily report.
+        """
+        today = datetime.utcnow().date()
+        y, m = today.year, today.month - (months - 1)
+        while m <= 0:
+            m += 12
+            y -= 1
+        return await self.run_report(
+            metrics=["sessions", "totalUsers", "newUsers", "keyEvents"],
+            dimensions=["yearMonth"],
+            start_date=f"{y:04d}-{m:02d}-01",
+            end_date="today",
+        )
+
+    @staticmethod
+    def monthly_traffic_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """GA4 yearMonth rows -> [{period: 'YYYY-MM', sessions, users, new_users, key_events}], oldest first."""
+        out = []
+        for row in rows:
+            ym = str(row.get("yearMonth", ""))
+            if len(ym) != 6 or not ym.isdigit():
+                continue
+            def num(key):
+                try:
+                    return int(float(row.get(key, 0) or 0))
+                except (TypeError, ValueError):
+                    return 0
+            out.append({
+                "period": f"{ym[:4]}-{ym[4:]}",
+                "sessions": num("sessions"),
+                "users": num("totalUsers"),
+                "new_users": num("newUsers"),
+                "key_events": num("keyEvents"),
+            })
+        return sorted(out, key=lambda r: r["period"])
+
     async def get_daily_metrics(self, days: int = 30) -> Dict[str, Any]:
         start_date = f"{days}daysAgo"
         return await self.run_report(
@@ -343,6 +383,7 @@ class GoogleAnalyticsConnector(BaseConnector):
             conversion_data = await self.get_conversion_metrics(days=30)
             traffic_data = await self.get_traffic_sources(days=30)
             ledger = await self.fetch_ledger()
+            monthly = self.monthly_traffic_rows(self._parse_report_rows(await self.get_monthly_traffic()))
             financials = self.map_to_financials(ledger_entries=ledger)
 
             session_rows = self._parse_report_rows(session_data)
@@ -381,6 +422,12 @@ class GoogleAnalyticsConnector(BaseConnector):
                     "conversion_summary": conversion_rows[0] if conversion_rows else {},
                     "traffic_sources_count": len(traffic_rows),
                     "daily_entries_count": len(ledger),
+                    # Stored on the connection and shown in the Website traffic card.
+                    "web_traffic": {
+                        "property_id": self._property_id,
+                        "months": monthly,
+                        "synced_at": datetime.utcnow().isoformat(),
+                    },
                 },
             )
 
