@@ -34,6 +34,7 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from .netsuite_m2m import CLIENT_ASSERTION_TYPE, account_host, build_assertion, token_url
 
 SUITEQL_PAGE_SIZE = 1000
 SUITEQL_MAX_ROWS = 10000
@@ -62,6 +63,22 @@ def _parse_ns_date(value: Any) -> Optional[datetime]:
 logger = logging.getLogger(__name__)
 
 
+class NetSuiteAuthError(Exception):
+    """A sign-in failure the founder can act on."""
+
+
+def _m2m_error_text(err: str) -> str:
+    if err == "invalid_client":
+        return ("NetSuite didn't recognise the Client ID and certificate. Check the Client ID, and that the "
+                "certificate is mapped under OAuth 2.0 Client Credentials (M2M) Setup with that Certificate ID.")
+    if err == "invalid_grant":
+        return "NetSuite refused the sign-in. The certificate may be revoked or expired; upload a new one."
+    if err == "unauthorized_client":
+        return ("This integration record doesn't allow machine-to-machine sign-in. Tick 'Client Credentials "
+                "(Machine to Machine) Grant' and 'REST Web Services' on it.")
+    return f"NetSuite sign-in failed ({err})."
+
+
 @ConnectorRegistry.register
 class NetSuiteConnector(BaseConnector):
     PROVIDER_ID = "netsuite"
@@ -84,8 +101,48 @@ class NetSuiteConnector(BaseConnector):
         self._consumer_secret = config.credentials.get("consumer_secret", "")
         self._token_id = config.credentials.get("token_id", "")
         self._token_secret = config.credentials.get("token_secret", "")
-        self._base_url = f"https://{self._account_id.replace('_', '-')}.suitetalk.api.netsuite.com/services/rest/record/v1" if self._account_id else ""
+        # OAuth 2.0 client credentials (M2M), the replacement for TBA. The
+        # private key is FounderConsole's per-company key (see netsuite_m2m).
+        self._client_id = (config.credentials.get("client_id") or "").strip()
+        self._certificate_id = (config.credentials.get("certificate_id") or "").strip()
+        self._private_key = config.credentials.get("private_key") or ""
+        self._bearer: str = ""
+        self._bearer_expires: float = 0.0
+        self.auth_error: Optional[str] = None
+        self._base_url = f"https://{account_host(self._account_id)}.suitetalk.api.netsuite.com/services/rest/record/v1" if self._account_id else ""
         self._client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def uses_m2m(self) -> bool:
+        return bool(self._client_id and self._certificate_id and self._private_key)
+
+    @property
+    def uses_tba(self) -> bool:
+        return all([self._consumer_key, self._consumer_secret, self._token_id, self._token_secret])
+
+    async def _m2m_token(self) -> str:
+        """A 60-minute access token, re-signed a few minutes before it runs out."""
+        if self._bearer and time.time() < self._bearer_expires - 120:
+            return self._bearer
+        assertion = build_assertion(self._account_id, self._client_id, self._certificate_id, self._private_key)
+        async with http_client(timeout=30.0) as client:
+            res = await client.post(token_url(self._account_id), data={
+                "grant_type": "client_credentials",
+                "client_assertion_type": CLIENT_ASSERTION_TYPE,
+                "client_assertion": assertion,
+            }, headers={"Accept": "application/json"})
+        body = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
+        if res.status_code != 200 or not body.get("access_token"):
+            err = (body or {}).get("error") or f"HTTP {res.status_code}"
+            raise NetSuiteAuthError(_m2m_error_text(err))
+        self._bearer = body["access_token"]
+        self._bearer_expires = time.time() + float(body.get("expires_in") or 3600)
+        return self._bearer
+
+    async def _auth_header(self, method: str, url: str, query_params: Optional[Dict[str, Any]] = None) -> str:
+        if self.uses_m2m:
+            return f"Bearer {await self._m2m_token()}"
+        return self._generate_oauth_header(method, url, query_params)
 
     def _generate_oauth_header(
         self,
@@ -167,14 +224,20 @@ class NetSuiteConnector(BaseConnector):
     async def _make_request(self, method: str, path: str, **kwargs) -> httpx.Response:
         client = await self._get_client()
         full_url = f"{self._base_url}{path}"
-        auth_header = self._generate_oauth_header(method, full_url, kwargs.get("params"))
+        auth_header = await self._auth_header(method, full_url, kwargs.get("params"))
         headers = kwargs.pop("headers", {})
         headers["Authorization"] = auth_header
         return await getattr(client, method.lower())(path, headers=headers, **kwargs)
 
     async def authenticate(self) -> bool:
-        if not all([self._account_id, self._consumer_key, self._consumer_secret, self._token_id, self._token_secret]):
-            logger.warning("NetSuite credentials incomplete")
+        if not self._account_id:
+            self.auth_error = "Enter your NetSuite Account ID (Setup > Company > Company Information)."
+            return False
+        if not (self.uses_m2m or self.uses_tba):
+            if self._client_id and self._certificate_id:
+                self.auth_error = "Download the FounderConsole certificate and upload it in NetSuite before connecting."
+            else:
+                self.auth_error = "Enter the Client ID and Certificate ID from your NetSuite OAuth 2.0 setup."
             return False
 
         try:
@@ -184,11 +247,20 @@ class NetSuiteConnector(BaseConnector):
                 self._authenticated = True
                 logger.info("NetSuite authentication successful")
                 return True
+            logger.warning(f"NetSuite auth failed: {response.status_code} - {response.text[:200]}")
+            if response.status_code in (401, 403):
+                self.auth_error = ("NetSuite accepted the sign-in but the role can't read accounts. Give the mapped role "
+                                   "REST Web Services and Lists > Accounts (view) permissions.") if self.uses_m2m and self._bearer \
+                    else "NetSuite rejected these credentials."
             else:
-                logger.warning(f"NetSuite auth failed: {response.status_code} - {response.text[:200]}")
-                return False
+                self.auth_error = f"NetSuite returned HTTP {response.status_code}."
+            return False
+        except NetSuiteAuthError as e:
+            self.auth_error = str(e)
+            return False
         except Exception as e:
             logger.error(f"NetSuite authentication error: {e}")
+            self.auth_error = f"Couldn't reach NetSuite: {e}"
             return False
 
     async def test_connection(self) -> bool:
@@ -250,7 +322,7 @@ class NetSuiteConnector(BaseConnector):
         while len(rows) < max_rows:
             params = {"limit": SUITEQL_PAGE_SIZE, "offset": offset}
             headers = {
-                "Authorization": self._generate_oauth_header("POST", self._suiteql_url, params),
+                "Authorization": await self._auth_header("POST", self._suiteql_url, params),
                 "Prefer": "transient",
             }
             try:
@@ -429,7 +501,7 @@ class NetSuiteConnector(BaseConnector):
                     success=False,
                     provider_id=self.PROVIDER_ID,
                     sync_type="full",
-                    errors=["Authentication failed - check account_id, consumer_key, consumer_secret, token_id, token_secret"],
+                    errors=[self.auth_error or "NetSuite sign-in failed. Check the Account ID, Client ID and Certificate ID."],
                     sync_started=sync_started,
                 )
 

@@ -36,6 +36,7 @@ import {
   CreditCard,
   Megaphone,
   KeyRound,
+  Download,
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiHubspot, SiStripe } from "react-icons/si";
 import { FaSalesforce } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
@@ -1764,6 +1765,7 @@ type CredentialField = { field: string; label: string; placeholder: string; hint
 const providerCredentialAlternatives: Record<string, string[][]> = {
   shopify: [["access_token"], ["client_id", "client_secret"]],
   mixpanel: [["service_account_user", "service_account_secret"], ["api_secret"]],
+  netsuite: [["client_id", "certificate_id"], ["consumer_key", "consumer_secret", "token_id", "token_secret"]],
 };
 
 const providerCredentialFields: Record<string, CredentialField[]> = {
@@ -1909,11 +1911,13 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "api_key", label: "API Token", placeholder: "Deel API token", hint: "Deel > More > Developer > Access tokens. Organization token with people, contracts and accounting read scopes." },
   ],
   netsuite: [
-    { field: "account_id", label: "Account ID", placeholder: "Enter NetSuite Account ID" },
-    { field: "consumer_key", label: "Consumer Key", placeholder: "Enter Consumer Key" },
-    { field: "consumer_secret", label: "Consumer Secret", placeholder: "Enter Consumer Secret" },
-    { field: "token_id", label: "Token ID", placeholder: "Enter Token ID" },
-    { field: "token_secret", label: "Token Secret", placeholder: "Enter Token Secret" },
+    { field: "account_id", label: "Account ID", placeholder: "1234567 or 1234567_SB1", hint: "Setup > Company > Company Information > Account ID." },
+    { field: "client_id", label: "Client ID", placeholder: "From the integration record", hint: "Shown once when you save the integration record.", optional: true },
+    { field: "certificate_id", label: "Certificate ID", placeholder: "From OAuth 2.0 Client Credentials (M2M) Setup", hint: "NetSuite shows it after you upload the certificate above.", optional: true },
+    { field: "consumer_key", label: "Consumer Key (older TBA setup only)", placeholder: "Leave blank if you use the certificate", optional: true },
+    { field: "consumer_secret", label: "Consumer Secret (TBA)", placeholder: "Leave blank if you use the certificate", optional: true },
+    { field: "token_id", label: "Token ID (TBA)", placeholder: "Leave blank if you use the certificate", optional: true },
+    { field: "token_secret", label: "Token Secret (TBA)", placeholder: "Leave blank if you use the certificate", optional: true },
   ],
   profitwell: [
     { field: "api_token", label: "Private API Token", placeholder: "Enter ProfitWell API Token" },
@@ -1944,7 +1948,40 @@ const providerSetupHelp: Record<string, string> = {
     "Shopify stopped new admin-created custom apps on 1 Jan 2026. Create an app in the Shopify Dev Dashboard with read_orders, read_all_orders and read_products, install it on your store and paste its Client ID and Client Secret. An existing legacy app's Admin API token still works.",
   razorpay:
     "In the Razorpay Dashboard, open Account & Settings → API Keys and generate a key. FounderConsole only reads payments and settlements with it.",
+  netsuite:
+    "In NetSuite: 1) Setup > Integration > Manage Integrations > New: tick 'Client Credentials (Machine to Machine) Grant' and 'REST Web Services', save, and copy the Client ID. 2) Download the certificate below. 3) Setup > Integration > Manage Authentication > OAuth 2.0 Client Credentials (M2M) Setup > Create New: pick a user, a role that can read accounts, invoices and transactions, and that integration; upload the certificate and copy the Certificate ID.",
 };
+
+function NetSuiteCertificate({ companyId }: { companyId: number }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const download = async () => {
+    setBusy(true);
+    try {
+      const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/netsuite/certificate`);
+      const { certificate } = await res.json();
+      const url = URL.createObjectURL(new Blob([certificate], { type: "application/x-pem-file" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "founderconsole-netsuite.pem";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({ title: "Couldn't get the certificate", description: getErrorMessage(error, "Try again"), variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex items-center justify-between gap-3 p-3 border rounded-lg">
+      <p className="text-sm text-muted-foreground">Public certificate for NetSuite. Your company's private key stays encrypted with FounderConsole.</p>
+      <Button size="sm" variant="outline" onClick={download} disabled={busy} data-testid="button-netsuite-certificate">
+        {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+        Certificate
+      </Button>
+    </div>
+  );
+}
 
 function isSecretField(field: string): boolean {
   return /secret|key|password|token/i.test(field);
@@ -2117,6 +2154,7 @@ function ConnectDialog({
                   {providerSetupHelp[provider.id]}
                 </div>
               )}
+              {provider.id === "netsuite" && <NetSuiteCertificate companyId={companyId} />}
 
               <div className="space-y-4">
                 {credentialFields.map((cf) => (
