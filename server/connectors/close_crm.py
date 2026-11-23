@@ -29,10 +29,42 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from server.services import crm_pipeline
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.close.com/api/v1"
+OPP_PAGE_SIZE = 250  # documented maximum for API-key requests
+OPP_SNAPSHOT_LIMIT = 2000
+_CLOSE_STATUS = {"active": "open", "won": "won", "lost": "lost"}
+
+
+def close_opportunity_for_snapshot(opp: Dict[str, Any]) -> Dict[str, Any]:
+    """A Close opportunity in services.crm_pipeline's deal shape.
+
+    value is in cents in the org's currency (value_currency); confidence is
+    0..100 (100 when won, 0 when lost); date_won is the win date, or the
+    expected close date while active; date_lost is set when it's lost.
+    https://developer.close.com/api/resources/opportunities/list.md
+    """
+    status = _CLOSE_STATUS.get(str(opp.get("status_type") or "").lower(), "open")
+    return {
+        "amount": float(opp.get("value") or 0) / 100.0,
+        "currency": opp.get("value_currency"),
+        "stage": opp.get("status_display_name") or opp.get("status_label"),
+        "status": status,
+        "close_date": opp.get("date_lost") if status == "lost" else opp.get("date_won"),
+        "probability": crm_pipeline.probability(opp.get("confidence"), scale="percent"),
+    }
+
+
+def _main_currency(opps: List[Dict[str, Any]]) -> Optional[str]:
+    counts: Dict[str, int] = {}
+    for o in opps:
+        cur = (o.get("value_currency") or "").upper()
+        if cur:
+            counts[cur] = counts.get(cur, 0) + 1
+    return max(counts, key=counts.get) if counts else None
 
 
 @ConnectorRegistry.register
@@ -133,7 +165,7 @@ class CloseCRMConnector(BaseConnector):
             logger.error(f"Close CRM leads fetch error: {e}")
             return []
 
-    async def get_opportunities(self, limit: int = 200) -> List[Dict[str, Any]]:
+    async def get_opportunities(self, limit: int = 200, order_by: Optional[str] = None) -> List[Dict[str, Any]]:
         if not self._authenticated:
             if not await self.authenticate():
                 return []
@@ -146,8 +178,10 @@ class CloseCRMConnector(BaseConnector):
             while True:
                 params: Dict[str, Any] = {
                     "_skip": skip,
-                    "_limit": min(limit - len(all_opps), 100),
+                    "_limit": min(limit - len(all_opps), OPP_PAGE_SIZE),
                 }
+                if order_by:
+                    params["_order_by"] = order_by
                 response = await client.get("/opportunity/", params=params)
 
                 if response.status_code != 200:
@@ -208,7 +242,7 @@ class CloseCRMConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> List[InvoiceRecord]:
-        opportunities = await self.get_opportunities(limit=500)
+        opportunities = await self._recent_opportunities()
         invoices = []
 
         for opp in opportunities:
@@ -319,6 +353,13 @@ class CloseCRMConnector(BaseConnector):
 
         return result
 
+    async def _recent_opportunities(self) -> List[Dict[str, Any]]:
+        # Most recently changed first, so open deals and recent wins/losses are
+        # read even when an org has more than the cap. Read once per sync.
+        if getattr(self, "_opps_cache", None) is None:
+            self._opps_cache = await self.get_opportunities(limit=OPP_SNAPSHOT_LIMIT, order_by="-date_updated")
+        return self._opps_cache
+
     async def sync_all(self) -> SyncResult:
         sync_started = datetime.utcnow()
         try:
@@ -332,7 +373,7 @@ class CloseCRMConnector(BaseConnector):
                 )
 
             leads = await self.get_leads(limit=200)
-            opportunities = await self.get_opportunities(limit=200)
+            opportunities = await self._recent_opportunities()
             activities = await self.get_activities(limit=200)
             invoices = await self.fetch_invoices()
             ledger = await self.fetch_ledger()
@@ -350,6 +391,10 @@ class CloseCRMConnector(BaseConnector):
                     "leads_count": len(leads),
                     "opportunities_count": len(opportunities),
                     "activities_count": len(activities),
+                    "crm_pipeline": crm_pipeline.build_snapshot(
+                        [close_opportunity_for_snapshot(o) for o in opportunities], _main_currency(opportunities),
+                        truncated=len(opportunities) >= OPP_SNAPSHOT_LIMIT,
+                    ),
                 },
             )
 
