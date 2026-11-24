@@ -14,14 +14,27 @@ from server.models.d2c_month import D2CAdSpend, D2CMonth
 INPUT_FIELDS = tuple(f.name for f in fields(D2CPeriodInputs))
 MANUAL = "manual"
 
-# Fields where one connector knows better than another. Shopify counts orders
-# placed; the shipping partner counts what actually shipped and what came
-# back, so its numbers are kept even if a Shopify sync runs later.
-PREFERRED_SOURCE = {
-    "orders_shipped": "shiprocket",
-    "rto_orders": "shiprocket",
-    "cod_share": "shiprocket",
+# Fields where one connector knows better than another, best first. An order
+# management system (Unicommerce, EasyEcom) sees every sales channel: the
+# website, Amazon, Flipkart, Myntra and quick commerce. Shopify sees only the
+# website, and Shiprocket only what it shipped. So an OMS value is kept over
+# theirs, and Shiprocket's shipped/RTO/COD counts over Shopify's placed orders,
+# whatever order the syncs run in. A source not listed for a field ranks last.
+OMS_SOURCES = ("unicommerce", "easyecom")
+PREFERRED_SOURCES = {
+    "orders_shipped": OMS_SOURCES + ("shiprocket",),
+    "rto_orders": OMS_SOURCES + ("shiprocket",),
+    "cod_share": OMS_SOURCES + ("shiprocket",),
+    "gross_sales": OMS_SOURCES,
+    "discounts": OMS_SOURCES,
+    "customer_returns_value": OMS_SOURCES,
+    "customer_returns_orders": OMS_SOURCES,
 }
+
+
+def _rank(name: str, source: Optional[str]) -> int:
+    order = PREFERRED_SOURCES.get(name, ())
+    return order.index(source) if source in order else len(order)
 
 
 def month_start(value: date) -> date:
@@ -59,8 +72,7 @@ def upsert_month(
             current = sources.get(name)
             if value is None or current == MANUAL:
                 continue
-            preferred = PREFERRED_SOURCE.get(name)
-            if preferred and current == preferred and source != preferred:
+            if current is not None and _rank(name, current) < _rank(name, source):
                 continue
         setattr(row, name, value)
         if value is None:

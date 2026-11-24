@@ -37,6 +37,7 @@ import {
   Megaphone,
   KeyRound,
   Download,
+  Boxes,
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiHubspot, SiStripe } from "react-icons/si";
 import { FaSalesforce } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
@@ -103,6 +104,9 @@ const providerIcons: Record<string, React.ReactNode> = {
   tally: <Database className="h-6 w-6" />,
   shiprocket: <Truck className="h-6 w-6" />,
   razorpay: <CreditCard className="h-6 w-6" />,
+  cashfree: <CreditCard className="h-6 w-6" />,
+  unicommerce: <Boxes className="h-6 w-6" />,
+  easyecom: <Boxes className="h-6 w-6" />,
   meta_ads: <Megaphone className="h-6 w-6" />,
   google_ads: <Megaphone className="h-6 w-6" />,
   google_analytics: <TrendingUp className="h-6 w-6" />,
@@ -120,6 +124,39 @@ const providerIcons: Record<string, React.ReactNode> = {
 };
 
 const integrationBenefits: Record<string, { dataImported: string[]; permissions: string[] }> = {
+  cashfree: {
+    dataImported: [
+      "Successful payments for the last full month (India time)",
+      "Cashfree's service charge, excluding the GST on it",
+      "Refunds and payment-method mix (UPI, card, netbanking, wallet)",
+    ],
+    permissions: [
+      "Read access to payment reconciliation with your Payment Gateway App ID and Secret Key",
+      "Read-only: FounderConsole never creates orders, refunds or payouts",
+    ],
+  },
+  unicommerce: {
+    dataImported: [
+      "Last full month's orders across every channel: website, Amazon, Flipkart, Myntra, Nykaa, quick commerce",
+      "Orders shipped, RTO, customer returns and COD share, ex-GST",
+      "A per-channel breakdown of orders, sales and returns",
+    ],
+    permissions: [
+      "A Uniware user login (a dedicated API user is best): it reads what that user can see",
+      "Read-only: FounderConsole never changes orders or inventory",
+    ],
+  },
+  easyecom: {
+    dataImported: [
+      "Last full month's orders across every marketplace you sell on",
+      "Orders shipped, RTO, customer returns and COD share, ex-GST",
+      "A per-marketplace breakdown of orders, sales and returns",
+    ],
+    permissions: [
+      "Your EasyEcom login, API key and primary location key",
+      "Read-only: FounderConsole never changes orders or inventory",
+    ],
+  },
   razorpay: {
     dataImported: [
       "Captured payments for the last full month (India time)",
@@ -424,6 +461,9 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   woocommerce: { setupTime: "~10 min", category: "revenue" },
   shiprocket: { setupTime: "~5 min", category: "revenue" },
   razorpay: { setupTime: "~5 min", category: "revenue" },
+  cashfree: { setupTime: "~5 min", category: "revenue" },
+  unicommerce: { setupTime: "~10 min", category: "revenue" },
+  easyecom: { setupTime: "~10 min", category: "revenue" },
   meta_ads: { setupTime: "~10 min", category: "analytics" },
   google_ads: { setupTime: "~5 min", category: "analytics" },
   google_analytics: { setupTime: "~5 min", category: "analytics" },
@@ -685,6 +725,24 @@ const paymentsProviders: IntegrationProvider[] = [
     name: "Razorpay",
     description: "Payment gateway fees for Indian D2C: what Razorpay kept from last month's prepaid orders, for CM2 on the Profit screen",
     features: ["Gateway Fee %", "Fees ex-GST", "Refunds", "UPI/Card Mix"],
+  },
+  {
+    id: "cashfree",
+    name: "Cashfree Payments",
+    description: "Payment gateway fees for Indian D2C: what Cashfree kept from last month's prepaid orders, for CM2 on the Profit screen",
+    features: ["Gateway Fee %", "Fees ex-GST", "Refunds", "UPI/Card Mix"],
+  },
+  {
+    id: "unicommerce",
+    name: "Unicommerce",
+    description: "Every sales channel in one connection: website, Amazon, Flipkart, Myntra, Nykaa and quick commerce orders, RTO and returns from Uniware",
+    features: ["All-Channel Orders", "RTO & Returns", "COD Share", "Per-Channel Sales"],
+  },
+  {
+    id: "easyecom",
+    name: "EasyEcom",
+    description: "Every marketplace in one connection: orders, RTO, customer returns and COD share across your website and marketplaces from EasyEcom",
+    features: ["All-Channel Orders", "RTO & Returns", "COD Share", "Per-Marketplace Sales"],
   },
   {
     id: "meta_ads",
@@ -979,7 +1037,7 @@ export default function IntegrationsPage() {
   });
   const sampleProviderIds = new Set((sampleProviders ?? []).map((p) => p.provider_id));
 
-  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr"];
+  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
@@ -1093,7 +1151,7 @@ export default function IntegrationsPage() {
     }
   };
   
-  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr"];
+  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -1864,6 +1922,22 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "key_id", label: "Key ID", placeholder: "rzp_live_... (Razorpay Dashboard > Account & Settings > API Keys)" },
     { field: "key_secret", label: "Key Secret", placeholder: "Shown once when the key is generated" },
   ],
+  cashfree: [
+    { field: "client_id", label: "App ID", placeholder: "Cashfree Dashboard > Developers > API Keys (Payment Gateway)" },
+    { field: "client_secret", label: "Secret Key", placeholder: "Payment Gateway secret key (not the Payouts key)" },
+  ],
+  unicommerce: [
+    { field: "tenant", label: "Uniware account", placeholder: "acme (from acme.unicommerce.com)", hint: "The first part of your Uniware login address." },
+    { field: "username", label: "Username", placeholder: "A Uniware user login; a dedicated API user is best" },
+    { field: "password", label: "Password", placeholder: "That user's password" },
+    { field: "facility", label: "Facility codes (optional)", placeholder: "Leave empty for all warehouses, or e.g. WH1, WH2" },
+  ],
+  easyecom: [
+    { field: "email", label: "Login email", placeholder: "Your EasyEcom login email" },
+    { field: "password", label: "Password", placeholder: "Your EasyEcom password" },
+    { field: "api_key", label: "API Key (x-api-key)", placeholder: "Account Settings > Change credentials > Generate X-API-KEY" },
+    { field: "location_key", label: "Location Key", placeholder: "Primary location's key from Location Master" },
+  ],
   meta_ads: [
     { field: "access_token", label: "Access Token (ads_read)", placeholder: "System user token from Meta Business Settings" },
     { field: "ad_account_ids", label: "Ad Account IDs", placeholder: "act_1234567890, act_2345678901" },
@@ -1939,7 +2013,7 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
 // Providers with a real server-side connector. Anything else has no backend to
 // connect to, so its card says "Coming Soon" instead of playing a fake
 // "authorizing" animation and accepting any key.
-export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "google_sheets", "rest_api"]);
+export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom", "google_sheets", "rest_api"]);
 
 const providerSetupHelp: Record<string, string> = {
   meta_ads:
@@ -1948,6 +2022,12 @@ const providerSetupHelp: Record<string, string> = {
     "Shopify stopped new admin-created custom apps on 1 Jan 2026. Create an app in the Shopify Dev Dashboard with read_orders, read_all_orders and read_products, install it on your store and paste its Client ID and Client Secret. An existing legacy app's Admin API token still works.",
   razorpay:
     "In the Razorpay Dashboard, open Account & Settings → API Keys and generate a key. FounderConsole only reads payments and settlements with it.",
+  cashfree:
+    "In the Cashfree Merchant Dashboard, open Developers → API Keys and copy the Payment Gateway App ID and Secret Key (production). Payouts keys are a different set and won't work. FounderConsole only reads payment reconciliation with them.",
+  unicommerce:
+    "Use your Uniware account name (acme for acme.unicommerce.com) and a Uniware user login. Best practice: in Uniware, create a separate user for FounderConsole with read access to sale orders. Brands with more than 5,000 orders a month get counts only after we raise the per-sync limit.",
+  easyecom:
+    "Log in to your primary EasyEcom account. Generate the API key under Account Settings → Change credentials → Generate X-API-KEY, and copy the primary location's key from Location Master: returns are read per location, so the primary key covers the most.",
   netsuite:
     "In NetSuite: 1) Setup > Integration > Manage Integrations > New: tick 'Client Credentials (Machine to Machine) Grant' and 'REST Web Services', save, and copy the Client ID. 2) Download the certificate below. 3) Setup > Integration > Manage Authentication > OAuth 2.0 Client Credentials (M2M) Setup > Create New: pick a user, a role that can read accounts, invoices and transactions, and that integration; upload the certificate and copy the Certificate ID.",
 };

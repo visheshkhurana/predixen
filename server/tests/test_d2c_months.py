@@ -56,6 +56,33 @@ def test_connector_none_does_not_erase_but_manual_none_clears(Session):
     assert row.orders_shipped is None and "orders_shipped" not in row.field_sources
 
 
+def test_oms_outranks_shopify_and_shiprocket_in_any_sync_order(Session):
+    """Unicommerce/EasyEcom see every channel, so their counts win; Shiprocket
+    still beats Shopify; a field no one ranks is last-writer-wins."""
+    period = date(2026, 10, 1)
+    db = Session()
+    d2c_months.upsert_month(db, 1, period, {"orders_shipped": 900, "gross_sales": 1_000_000, "payment_gateway_pct": 0.02}, source="shopify")
+    d2c_months.upsert_month(db, 1, period, {"orders_shipped": 950, "rto_orders": 80}, source="shiprocket")
+    row = d2c_months.upsert_month(db, 1, period, {"orders_shipped": 2_400, "gross_sales": 3_100_000, "rto_orders": 210}, source="unicommerce")
+    assert (row.orders_shipped, row.gross_sales, row.rto_orders) == (2_400, 3_100_000, 210)
+    # Later syncs of the website-only sources do not undo the all-channel numbers.
+    d2c_months.upsert_month(db, 1, period, {"orders_shipped": 990, "rto_orders": 90}, source="shiprocket")
+    row = d2c_months.upsert_month(db, 1, period, {"orders_shipped": 1_000, "gross_sales": 1_100_000, "payment_gateway_pct": 0.021}, source="shopify")
+    assert (row.orders_shipped, row.gross_sales, row.rto_orders) == (2_400, 3_100_000, 210)
+    assert row.field_sources["orders_shipped"] == "unicommerce"
+    assert row.payment_gateway_pct == 0.021  # unranked field: newest wins
+    # Shiprocket over Shopify still holds when there is no OMS.
+    other = date(2026, 9, 1)
+    d2c_months.upsert_month(db, 1, other, {"orders_shipped": 950}, source="shiprocket")
+    row = d2c_months.upsert_month(db, 1, other, {"orders_shipped": 1_000}, source="shopify")
+    assert row.orders_shipped == 950
+    # A manual value still beats every connector.
+    d2c_months.upsert_month(db, 1, period, {"orders_shipped": 2_000}, source="manual")
+    row = d2c_months.upsert_month(db, 1, period, {"orders_shipped": 2_500}, source="easyecom")
+    assert row.orders_shipped == 2_000
+    db.close()
+
+
 def test_shopify_mapping():
     values = d2c_months.shopify_values({"orders": 601, "net_sales_ex_gst": 601_000.0, "refunds": 2_000.0, "cod_share": 0.6})
     assert values == {
