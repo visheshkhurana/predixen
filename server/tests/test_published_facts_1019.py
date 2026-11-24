@@ -139,7 +139,9 @@ def _registered_module_names() -> list[str]:
 # Zoho CRM left this list 2026-11-20 after a live connect + sync matched a
 # real Zoho CRM org's deals.
 # BambooHR: new 2026-11-20, waits on a live BambooHR account test.
-PENDING_SETUP = {"google_ads", "onepassword", "bamboohr"}
+# Cashfree, Unicommerce, EasyEcom: new 2026-11-24, built from the vendors'
+# API docs; each waits on a live account connect + sync before it is counted.
+PENDING_SETUP = {"google_ads", "onepassword", "bamboohr", "cashfree", "unicommerce", "easyecom"}
 
 
 def test_registry_has_38_connectors():
