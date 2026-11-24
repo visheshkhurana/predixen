@@ -94,6 +94,14 @@ class SalesforceConnector(BaseConnector):
                 return False
             data = res.json()
             self._access_token = data["access_token"]
+            # Salesforce external client apps enforce refresh token rotation:
+            # each refresh returns a new refresh_token and retires the old one.
+            # Keep it on self._refresh_token so BaseConnector.rotated_credentials()
+            # saves it, or the next sync fails with invalid_grant.
+            if data.get("refresh_token"):
+                self._refresh_token = data["refresh_token"]
+            if data.get("instance_url"):
+                self._instance_url = data["instance_url"].rstrip("/")
             if self._client:
                 await self._client.aclose()
                 self._client = None
