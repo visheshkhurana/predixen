@@ -863,6 +863,11 @@ async def sync_provider(
                 updated["channel_sales"] = merge_channel_sales(
                     updated.get("channel_sales"), channel_sales
                 )
+            # Prepaid shipping wallets (Shiprocket): a point-in-time balance,
+            # not a monthly figure, so it lives on the connection.
+            wallet = result.metadata.get("wallet")
+            if isinstance(wallet, dict) and isinstance(wallet.get("balance"), (int, float)):
+                updated["wallet"] = wallet
             updated["last_error"] = None  # Clear previous errors on success
             updated.pop("last_error_at", None)
             updated.pop("needs_reauth", None)
@@ -1077,6 +1082,30 @@ async def get_channel_sales(
             "months": months[-CHANNEL_MONTHS_KEPT:],
         })
     return {"channels": channels}
+
+
+@router.get("/companies/{company_id}/shipping-wallet")
+async def get_shipping_wallet(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Latest prepaid shipping wallet balance from connected logistics accounts."""
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        company_access_clause(current_user),
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    connectors = (company.metadata_json or {}).get("connectors", {}) or {}
+    wallets = []
+    for storage_id, row in connectors.items():
+        if not isinstance(row, dict) or not row.get("connected"):
+            continue
+        wallet = row.get("wallet")
+        if isinstance(wallet, dict) and isinstance(wallet.get("balance"), (int, float)):
+            wallets.append({**wallet, "provider_id": storage_id})
+    return {"wallets": wallets}
 
 
 @router.get("/companies/{company_id}/sync-history")

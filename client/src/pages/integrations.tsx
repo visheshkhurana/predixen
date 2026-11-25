@@ -53,6 +53,7 @@ import { SoftwareSpendCard } from "@/components/SoftwareSpendCard";
 import { CrmPipelineCard } from "@/components/CrmPipelineCard";
 import { WebTrafficCard } from "@/components/WebTrafficCard";
 import { ChannelSalesCard } from "@/components/ChannelSalesCard";
+import { ShippingWalletCard } from "@/components/ShippingWalletCard";
 import { 
   IntegrationConfig, 
   getIntegrationsByCategory,
@@ -1417,6 +1418,8 @@ export default function IntegrationsPage() {
       <WebTrafficCard companyId={companyId} />
 
       <ChannelSalesCard companyId={companyId} />
+
+      <ShippingWalletCard companyId={companyId} />
 
       <SoftwareSpendCard companyId={companyId} />
 

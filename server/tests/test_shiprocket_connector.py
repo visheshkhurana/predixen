@@ -126,3 +126,96 @@ def test_shiprocket_counts_win_over_a_later_shopify_sync():
     assert row.gross_sales == 1e5, "Shopify still owns sales"
     d2c_months.upsert_month(db, 1, date(2026, 10, 1), {"orders_shipped": 90}, source="manual")
     assert db.query(D2CMonth).one().orders_shipped == 90, "the founder beats everyone"
+
+
+# --- wallet balance -----------------------------------------------------------
+
+@pytest.mark.parametrize("body,expected", [
+    ({"data": {"balance_amount": "-291539.83"}}, -291539.83),
+    ({"data": {"balance_amount": "1,250.5"}}, 1250.5),
+    ({"data": {"balance_amount": 400}}, 400.0),
+    ({"data": {"balance_amount": ""}}, None),
+    ({"data": {}}, None),
+    ({"data": {"balance_amount": "n/a"}}, None),
+    ([], None),
+])
+def test_wallet_from_response(body, expected):
+    assert shiprocket.wallet_from_response(body) == expected
+
+
+def _wallet_conn(wallet_response):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/auth/login"):
+            return httpx.Response(200, json={"token": "t"})
+        if path.endswith("/wallet-balance"):
+            assert request.headers["authorization"] == "Bearer t"
+            return wallet_response
+        return httpx.Response(200, json={"data": [], "meta": {"pagination": {"total_pages": 1}}})
+
+    conn = shiprocket.ShiprocketConnector(ConnectorConfig(
+        provider_id="shiprocket", company_id=1, credentials={"email": "api@brand.in", "password": "p"}))
+    conn._client = httpx.AsyncClient(base_url=shiprocket.BASE_URL, transport=httpx.MockTransport(handler))
+    return conn
+
+
+def test_sync_reports_wallet_balance():
+    result = asyncio.run(_wallet_conn(httpx.Response(200, json={"data": {"balance_amount": "-1200.00"}})).sync_all())
+    assert result.success
+    wallet = result.metadata["wallet"]
+    assert wallet["balance"] == -1200.0 and wallet["currency"] == "INR" and wallet["as_of"]
+    assert result.warnings == []
+
+
+def test_wallet_failure_does_not_fail_sync():
+    result = asyncio.run(_wallet_conn(httpx.Response(500, json={})).sync_all())
+    assert result.success
+    assert "wallet" not in result.metadata
+    assert any("wallet" in w for w in result.warnings)
+
+
+def test_route_stores_wallet_and_view_reads_it(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.api import connectors as connectors_api
+    from server.connectors.base import SyncResult
+    from server.core.db import get_db
+    from server.core.security import get_current_user
+    from server.models.financial import FinancialRecord
+    from server.models.workspace import WorkspaceMember
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    User.metadata.create_all(engine, tables=[User.__table__, Company.__table__, WorkspaceMember.__table__,
+                                             D2CMonth.__table__, FinancialRecord.__table__])
+    db = sessionmaker(bind=engine)()
+    owner = User(email="owner@brand.in", is_active=True)
+    db.add(owner)
+    db.flush()
+    db.add(Company(id=1, name="Brand", user_id=owner.id, currency="INR", metadata_json={"connectors": {
+        "shiprocket": {"connected": True, "credentials": {"email": "api@brand.in", "password": "p"}}}}))
+    db.commit()
+
+    wallet = {"provider": "shiprocket", "balance": -500.0, "currency": "INR", "as_of": "2026-11-25T08:00:00Z"}
+
+    async def fake_sync(self):
+        return SyncResult(success=True, provider_id="shiprocket", sync_type="full", records_synced=0,
+                          metadata={"wallet": wallet})
+
+    async def fake_close(self):
+        return None
+
+    monkeypatch.setattr(shiprocket.ShiprocketConnector, "sync_all", fake_sync)
+    monkeypatch.setattr(shiprocket.ShiprocketConnector, "close", fake_close)
+    app = FastAPI()
+    app.include_router(connectors_api.router, prefix="/api")
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: db.query(User).one()
+    client = TestClient(app)
+
+    assert client.get("/api/connectors/companies/1/shipping-wallet").json() == {"wallets": []}
+    res = client.post("/api/connectors/companies/1/sync/shiprocket")
+    assert res.status_code == 200, res.text
+    view = client.get("/api/connectors/companies/1/shipping-wallet").json()
+    assert view["wallets"] == [{**wallet, "provider_id": "shiprocket"}]
+    assert client.get("/api/connectors/companies/999/shipping-wallet").status_code == 404

@@ -163,6 +163,19 @@ def month_values(summary: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def wallet_from_response(body: Any) -> Optional[float]:
+    """Wallet balance in rupees. Shiprocket sends it as a string and it goes
+    negative when the brand owes Shiprocket for shipping."""
+    data = body.get("data") if isinstance(body, dict) else None
+    raw = data.get("balance_amount") if isinstance(data, dict) else None
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        return round(float(str(raw).replace(",", "")), 2)
+    except ValueError:
+        return None
+
+
 @ConnectorRegistry.register
 class ShiprocketConnector(BaseConnector):
     PROVIDER_ID = "shiprocket"
@@ -233,6 +246,23 @@ class ShiprocketConnector(BaseConnector):
             page += 1
         return rows, True
 
+    async def _wallet(self) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+        """Current wallet balance. A failure here never fails the sync."""
+        try:
+            client = await self._get_client()
+            res = await client.get("/account/details/wallet-balance",
+                                   headers={"Authorization": f"Bearer {self._token}"})
+            if res.status_code != 200:
+                return None, [f"Couldn't read the Shiprocket wallet balance ({res.status_code})"]
+            balance = wallet_from_response(res.json())
+            if balance is None:
+                return None, ["Shiprocket returned no wallet balance"]
+            return {"provider": "shiprocket", "balance": balance, "currency": "INR",
+                    "as_of": datetime.utcnow().isoformat() + "Z"}, []
+        except Exception as e:
+            logger.warning(f"Shiprocket wallet balance failed: {e}")
+            return None, ["Couldn't read the Shiprocket wallet balance"]
+
     async def sync_all(self) -> SyncResult:
         sync_started = datetime.utcnow()
         try:
@@ -248,6 +278,7 @@ class ShiprocketConnector(BaseConnector):
             statement, statement_truncated = await self._paged("/account/details/statement", window)
             summary = summarize_shipments(orders, statement)
             truncated = orders_truncated or statement_truncated
+            wallet, warnings = await self._wallet()
 
             return SyncResult(
                 success=True,
@@ -257,9 +288,11 @@ class ShiprocketConnector(BaseConnector):
                 sync_started=sync_started,
                 sync_completed=datetime.utcnow(),
                 errors=["Row limit reached; the month is incomplete"] if truncated else [],
+                warnings=warnings,
                 metadata={
                     "d2c_month": {"period": period_start.isoformat(), "values": month_values(summary)},
                     "shiprocket": summary,
+                    **({"wallet": wallet} if wallet else {}),
                 },
             )
         except Exception as e:
