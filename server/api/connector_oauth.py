@@ -1,6 +1,6 @@
 """
 "Connect with <provider>" for OAuth connectors (Zoho Books, QuickBooks, Xero,
-Gusto, Salesforce, HubSpot). Founders sign in to the provider instead of pasting client
+Gusto, Salesforce, HubSpot, Amazon Seller Central). Founders sign in to the provider instead of pasting client
 secrets and tokens.
 
   GET /connectors/oauth/providers                       -> which providers are set up on this server
@@ -79,6 +79,13 @@ class OAuthProvider:
     # (authorize_url, token_url) for the provider's test environment, when the
     # founder's org lives there (Salesforce sandboxes sign in at test.salesforce.com).
     sandbox_urls: Optional[tuple] = None
+    # Query parameter the provider puts the authorization code in.
+    code_param: str = "code"
+    # Replaces the standard client_id/response_type/scope consent parameters
+    # (Amazon's consent page takes an application_id instead).
+    authorize_params: Optional[Callable[[Dict[str, str]], Dict[str, str]]] = None
+    # Extra env vars that must be set besides <PREFIX>_CLIENT_ID/_SECRET.
+    required_env: tuple = ()
 
     def urls(self, sandbox: bool = False) -> tuple:
         if sandbox and self.sandbox_urls:
@@ -95,7 +102,8 @@ class OAuthProvider:
 
     def configured(self) -> bool:
         a = self.app()
-        return bool(a["client_id"] and a["client_secret"])
+        return bool(a["client_id"] and a["client_secret"]
+                    and all(os.getenv(name, "").strip() for name in self.required_env))
 
 
 # ---------------------------------------------------------------- finalizers
@@ -315,6 +323,41 @@ async def _finalize_google_analytics(client, token, params, app):
     }
 
 
+AMAZON_SELLER_CENTRAL = "https://sellercentral.amazon.in"
+
+
+def _amazon_authorize_params(app: Dict[str, str]) -> Dict[str, str]:
+    # https://developer-docs.amazon.com/sp-api/docs/website-authorization-workflow
+    # version=beta authorizes a draft (unpublished) app; set AMAZON_SP_PUBLISHED=1
+    # once the app is listed on the Appstore.
+    params = {"application_id": os.getenv("AMAZON_SP_APP_ID", "").strip()}
+    if os.getenv("AMAZON_SP_PUBLISHED", "").strip().lower() not in ("1", "true", "yes"):
+        params["version"] = "beta"
+    return params
+
+
+async def _finalize_amazon(client, token, params, app):
+    from server.connectors.amazon import SP_API_HOSTS, marketplaces_from_participations
+
+    if not token.get("refresh_token"):
+        raise OAuthConnectError("Amazon didn't grant ongoing access. Try connecting again.")
+    seller = params.get("selling_partner_id", "")
+    # India sellers are on the EU endpoint; try it first, then the others.
+    for region in ("eu", "na", "fe"):
+        res = await client.get(f"{SP_API_HOSTS[region]}/sellers/v1/marketplaceParticipations",
+                               headers={"x-amz-access-token": token["access_token"]})
+        if res.status_code == 200:
+            marketplaces = marketplaces_from_participations(res.json() or {})
+            if marketplaces:
+                return {
+                    "client_id": app["client_id"], "client_secret": app["client_secret"],
+                    "refresh_token": token["refresh_token"], "selling_partner_id": seller,
+                    "region": region, "marketplace_ids": marketplaces,
+                    "_hint": f"Amazon seller {seller}" if seller else "Amazon Seller Central",
+                }
+    raise OAuthConnectError("This Amazon login has no active seller marketplace.")
+
+
 PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
     OAuthProvider(
         id="zoho_books", name="Zoho", env_prefix="ZOHO",
@@ -403,6 +446,16 @@ PROVIDERS: Dict[str, OAuthProvider] = {p.id: p for p in [
         sandbox_urls=("https://test.salesforce.com/services/oauth2/authorize",
                       "https://test.salesforce.com/services/oauth2/token"),
     ),
+    OAuthProvider(
+        # Login with Amazon client (AMAZON_SP_CLIENT_ID/SECRET) plus the SP-API
+        # app id (AMAZON_SP_APP_ID, amzn1.sp.solution...) for the consent page.
+        id="amazon", name="Amazon", env_prefix="AMAZON_SP",
+        authorize_url=f"{AMAZON_SELLER_CENTRAL}/apps/authorize/consent",
+        token_url="https://api.amazon.com/auth/o2/token",
+        default_scopes="", code_param="spapi_oauth_code",
+        authorize_params=_amazon_authorize_params, required_env=("AMAZON_SP_APP_ID",),
+        finalize=_finalize_amazon,
+    ),
 ]}
 
 
@@ -479,13 +532,17 @@ async def oauth_url(
                                "exp": int(time.time()) + STATE_TTL_SECONDS}
     if sandbox:
         payload["sb"] = 1
-    params: Dict[str, str] = {
-        "client_id": app["client_id"],
-        "redirect_uri": f"{_base_url(request)}{_callback_path(provider_id)}",
-        "response_type": "code",
-        **provider.extra_auth_params,
-    }
-    if app["scopes"]:
+    redirect_uri = f"{_base_url(request)}{_callback_path(provider_id)}"
+    if provider.authorize_params:
+        params: Dict[str, str] = {**provider.authorize_params(app), "redirect_uri": redirect_uri}
+    else:
+        params = {
+            "client_id": app["client_id"],
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            **provider.extra_auth_params,
+        }
+    if app["scopes"] and not provider.authorize_params:
         params["scope"] = app["scopes"] if provider.scope_separator == " " else app["scopes"]
     if provider.pkce:
         verifier, challenge = _pkce_pair()
@@ -508,6 +565,7 @@ async def oauth_callback(
 ):
     provider = _provider(provider_id)
     base = _base_url(request)
+    code = code or request.query_params.get(provider.code_param, "")
     if error or not code:
         return _back(base, oauth_error=f"{provider.name} sign-in was cancelled.", provider=provider_id)
     payload = _verify(state)

@@ -19,7 +19,7 @@ _CONNECTOR_MODULES = [
     "bench", "chargebee", "recurly", "rippling", "deel",
     "netsuite", "profitwell", "amplitude", "woocommerce", "shiprocket",
     "meta_ads", "razorpay", "google_ads", "onepassword", "zoho_crm", "bamboohr",
-    "cashfree", "unicommerce", "easyecom",
+    "cashfree", "unicommerce", "easyecom", "amazon",
 ]
 
 _connectors_loaded = False

@@ -40,7 +40,7 @@ import {
   Boxes,
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiHubspot, SiStripe } from "react-icons/si";
-import { FaSalesforce } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
+import { FaSalesforce, FaAmazon } from "react-icons/fa"; // simple-icons dropped the Salesforce mark in react-icons 5.7
 import { apiRequest } from "@/lib/queryClient";
 import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
@@ -107,6 +107,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   cashfree: <CreditCard className="h-6 w-6" />,
   unicommerce: <Boxes className="h-6 w-6" />,
   easyecom: <Boxes className="h-6 w-6" />,
+  amazon: <FaAmazon className="h-6 w-6" />,
   meta_ads: <Megaphone className="h-6 w-6" />,
   google_ads: <Megaphone className="h-6 w-6" />,
   google_analytics: <TrendingUp className="h-6 w-6" />,
@@ -133,6 +134,17 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
     permissions: [
       "Read access to payment reconciliation with your Payment Gateway App ID and Secret Key",
       "Read-only: FounderConsole never creates orders, refunds or payouts",
+    ],
+  },
+  amazon: {
+    dataImported: [
+      "Last full month's Amazon.in shipped orders and units",
+      "Sales and refunds ex-GST, promotions and GST collected",
+      "Everything Amazon kept: referral, closing, FBA and shipping fees, with a breakdown",
+    ],
+    permissions: [
+      "You approve FounderConsole in Seller Central; you can revoke it there any time",
+      "Read-only: FounderConsole never changes listings, prices or orders",
     ],
   },
   unicommerce: {
@@ -464,6 +476,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   cashfree: { setupTime: "~5 min", category: "revenue" },
   unicommerce: { setupTime: "~10 min", category: "revenue" },
   easyecom: { setupTime: "~10 min", category: "revenue" },
+  amazon: { setupTime: "~5 min", category: "revenue" },
   meta_ads: { setupTime: "~10 min", category: "analytics" },
   google_ads: { setupTime: "~5 min", category: "analytics" },
   google_analytics: { setupTime: "~5 min", category: "analytics" },
@@ -743,6 +756,12 @@ const paymentsProviders: IntegrationProvider[] = [
     name: "EasyEcom",
     description: "Every marketplace in one connection: orders, RTO, customer returns and COD share across your website and marketplaces from EasyEcom",
     features: ["All-Channel Orders", "RTO & Returns", "COD Share", "Per-Marketplace Sales"],
+  },
+  {
+    id: "amazon",
+    name: "Amazon Seller Central",
+    description: "Your Amazon.in channel: shipped orders, sales and refunds ex-GST, and every fee Amazon kept, as a share of sales",
+    features: ["Amazon Fee %", "Sales ex-GST", "Refunds", "Fee Breakdown"],
   },
   {
     id: "meta_ads",
@@ -1037,7 +1056,7 @@ export default function IntegrationsPage() {
   });
   const sampleProviderIds = new Set((sampleProviders ?? []).map((p) => p.provider_id));
 
-  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom"];
+  const connectorSyncIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom", "amazon"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable"; provider: string }) => {
@@ -1151,7 +1170,7 @@ export default function IntegrationsPage() {
     }
   };
   
-  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom"];
+  const connectorBackedIds = ["razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "google_ads", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom", "amazon"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -1938,6 +1957,11 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
     { field: "api_key", label: "API Key (x-api-key)", placeholder: "Account Settings > Change credentials > Generate X-API-KEY" },
     { field: "location_key", label: "Location Key", placeholder: "Primary location's key from Location Master" },
   ],
+  amazon: [
+    { field: "client_id", label: "LWA Client ID", placeholder: "amzn1.application-oa2-client... (your own private SP-API app)" },
+    { field: "client_secret", label: "LWA Client Secret", placeholder: "From Developer Central > your app > View LWA credentials" },
+    { field: "refresh_token", label: "Refresh Token", placeholder: "Atzr|... from Authorize app in Developer Central" },
+  ],
   meta_ads: [
     { field: "access_token", label: "Access Token (ads_read)", placeholder: "System user token from Meta Business Settings" },
     { field: "ad_account_ids", label: "Ad Account IDs", placeholder: "act_1234567890, act_2345678901" },
@@ -2013,7 +2037,7 @@ const providerCredentialFields: Record<string, CredentialField[]> = {
 // Providers with a real server-side connector. Anything else has no backend to
 // connect to, so its card says "Coming Soon" instead of playing a fake
 // "authorizing" animation and accepting any key.
-export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom", "google_sheets", "rest_api"]);
+export const CONNECTOR_BACKED_PROVIDERS = new Set(["google_ads", "razorpayx", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "shiprocket", "razorpay", "meta_ads", "freshbooks", "wave", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "onepassword", "zoho_crm", "bamboohr", "cashfree", "unicommerce", "easyecom", "amazon", "google_sheets", "rest_api"]);
 
 const providerSetupHelp: Record<string, string> = {
   meta_ads:
@@ -2028,6 +2052,8 @@ const providerSetupHelp: Record<string, string> = {
     "Use your Uniware account name (acme for acme.unicommerce.com) and a Uniware user login. Best practice: in Uniware, create a separate user for FounderConsole with read access to sale orders. Brands with more than 5,000 orders a month get counts only after we raise the per-sync limit.",
   easyecom:
     "Log in to your primary EasyEcom account. Generate the API key under Account Settings → Change credentials → Generate X-API-KEY, and copy the primary location's key from Location Master: returns are read per location, so the primary key covers the most.",
+  amazon:
+    "Click Connect with Amazon and approve FounderConsole in Seller Central (Amazon.in). If you run your own private SP-API app instead, paste its LWA client ID, client secret and a refresh token from Developer Central > Authorize app. FounderConsole only reads financial events.",
   netsuite:
     "In NetSuite: 1) Setup > Integration > Manage Integrations > New: tick 'Client Credentials (Machine to Machine) Grant' and 'REST Web Services', save, and copy the Client ID. 2) Download the certificate below. 3) Setup > Integration > Manage Authentication > OAuth 2.0 Client Credentials (M2M) Setup > Create New: pick a user, a role that can read accounts, invoices and transactions, and that integration; upload the certificate and copy the Certificate ID.",
 };
