@@ -52,6 +52,7 @@ import { useFounderStore } from "@/store/founderStore";
 import { SoftwareSpendCard } from "@/components/SoftwareSpendCard";
 import { CrmPipelineCard } from "@/components/CrmPipelineCard";
 import { WebTrafficCard } from "@/components/WebTrafficCard";
+import { ChannelSalesCard } from "@/components/ChannelSalesCard";
 import { 
   IntegrationConfig, 
   getIntegrationsByCategory,
@@ -1414,6 +1415,8 @@ export default function IntegrationsPage() {
       <CrmPipelineCard companyId={companyId} />
 
       <WebTrafficCard companyId={companyId} />
+
+      <ChannelSalesCard companyId={companyId} />
 
       <SoftwareSpendCard companyId={companyId} />
 
