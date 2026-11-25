@@ -835,6 +835,12 @@ async def sync_provider(
             web_traffic = result.metadata.get("web_traffic")
             if isinstance(web_traffic, dict) and isinstance(web_traffic.get("months"), list):
                 updated["web_traffic"] = web_traffic
+            # Marketplace channels (e.g. Amazon) report the month's channel
+            # sales and fees; kept on the connection, not in the blended D2C
+            # month, so they can't overwrite the website's figures.
+            channel_sales = result.metadata.get("channel_sales")
+            if isinstance(channel_sales, dict) and isinstance(channel_sales.get("months"), list):
+                updated["channel_sales"] = channel_sales
             updated["last_error"] = None  # Clear previous errors on success
             updated.pop("last_error_at", None)
             updated.pop("needs_reauth", None)
