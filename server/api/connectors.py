@@ -155,6 +155,26 @@ def _connected_storage_id(connectors: Dict[str, Any], provider_id: str) -> Optio
     return None
 
 
+CHANNEL_MONTHS_KEPT = 12
+
+
+def merge_channel_sales(existing: Any, incoming: Dict[str, Any]) -> Dict[str, Any]:
+    """Add a sync's months to the saved ones, newest period winning.
+
+    Each Amazon sync reports one month, so replacing the block would leave
+    only the latest month on screen."""
+    by_period: Dict[str, Dict[str, Any]] = {}
+    old_months = existing.get("months") if isinstance(existing, dict) else None
+    for month in list(old_months or []) + list(incoming.get("months") or []):
+        if isinstance(month, dict) and month.get("period"):
+            by_period[str(month["period"])[:7]] = month
+    months = [by_period[k] for k in sorted(by_period)][-CHANNEL_MONTHS_KEPT:]
+    merged = dict(incoming)
+    merged["months"] = months
+    merged["synced_at"] = datetime.now(timezone.utc).isoformat()
+    return merged
+
+
 def _status_config(connectors: Dict[str, Any], provider_id: str) -> Dict[str, Any]:
     storage_id = _connected_storage_id(connectors, provider_id)
     if storage_id:
@@ -840,7 +860,9 @@ async def sync_provider(
             # month, so they can't overwrite the website's figures.
             channel_sales = result.metadata.get("channel_sales")
             if isinstance(channel_sales, dict) and isinstance(channel_sales.get("months"), list):
-                updated["channel_sales"] = channel_sales
+                updated["channel_sales"] = merge_channel_sales(
+                    updated.get("channel_sales"), channel_sales
+                )
             updated["last_error"] = None  # Clear previous errors on success
             updated.pop("last_error_at", None)
             updated.pop("needs_reauth", None)
@@ -1022,6 +1044,39 @@ async def get_web_traffic(
         "synced_at": traffic.get("synced_at") or (row or {}).get("last_sync"),
         "months": months[-12:],
     }
+
+
+@router.get("/companies/{company_id}/channel-sales")
+async def get_channel_sales(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Monthly marketplace sales and fees (e.g. Amazon), one entry per channel."""
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        company_access_clause(current_user),
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    connectors = (company.metadata_json or {}).get("connectors", {}) or {}
+    channels = []
+    for storage_id, row in connectors.items():
+        if not isinstance(row, dict) or not row.get("connected"):
+            continue
+        block = row.get("channel_sales")
+        if not isinstance(block, dict):
+            continue
+        months = [m for m in block.get("months") or [] if isinstance(m, dict) and m.get("period")]
+        if not months:
+            continue
+        channels.append({
+            "channel": block.get("channel") or storage_id,
+            "provider_id": storage_id,
+            "synced_at": block.get("synced_at") or row.get("last_sync"),
+            "months": months[-CHANNEL_MONTHS_KEPT:],
+        })
+    return {"channels": channels}
 
 
 @router.get("/companies/{company_id}/sync-history")
