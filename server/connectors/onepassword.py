@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 1Password Business connector - seat usage and sign-in security signals.
 

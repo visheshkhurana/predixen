@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Union
 """Competition-tracking models: competitors a founder watches, and the signals
 (news / blog posts / social mentions) collected about them."""
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON

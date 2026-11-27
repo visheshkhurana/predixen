@@ -7,6 +7,7 @@ These tests verify that:
 3. Input hash is computed deterministically
 4. Provenance tracking is maintained across operations
 """
+from __future__ import annotations
 import pytest
 from server.schemas.canonical import (
     compute_hash,

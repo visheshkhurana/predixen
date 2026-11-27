@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Competition-tracking API: manage competitors a founder watches and collect
 signals (news / blog posts / social mentions) about them via web search."""
 from fastapi import APIRouter, Depends, HTTPException

@@ -2,6 +2,7 @@
 
 It used to answer unauthenticated, and on failure it returned str(e).
 """
+from __future__ import annotations
 
 from unittest.mock import patch
 

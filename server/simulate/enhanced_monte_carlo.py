@@ -1,3 +1,4 @@
+from __future__ import annotations
 from server.lib.lazy_imports import np
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field, replace

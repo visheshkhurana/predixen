@@ -30,6 +30,9 @@ Run: /Users/visheshkhurana/predixen/.venv/bin/python -m pytest \
         server/tests/test_rest_api_authenticate.py -o addopts="" -p no:cacheprovider -q
 """
 
+
+
+from __future__ import annotations
 import asyncio
 from typing import Any, Dict
 from unittest.mock import patch

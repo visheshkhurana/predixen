@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Cap Table Engine - Compute dilution and economics across fundraising scenarios.
 

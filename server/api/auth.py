@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Union
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session

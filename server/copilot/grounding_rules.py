@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Strict Grounding Rules for Copilot Agents.
 

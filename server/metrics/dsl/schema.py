@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Metric DSL Schema definitions using Pydantic.
 Defines the structure of YAML metric definitions.

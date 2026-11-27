@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Canonical Data Types for Decision-Trust System.
 
@@ -309,4 +310,5 @@ class CopilotResponseToken(BaseModel):
 
 
 # Union type for all possible Copilot response envelopes
-CopilotEnvelope = CopilotResponseNarrative | CopilotResponseJson | CopilotResponseToken
+from typing import Union
+CopilotEnvelope = Union[CopilotResponseNarrative, CopilotResponseJson, CopilotResponseToken]

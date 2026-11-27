@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Keep the truth scan from going stale on its own.
 
 Every derived number a founder sees — data confidence, ARPU, customer count,

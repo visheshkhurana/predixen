@@ -5,6 +5,7 @@ Narrowed port of #138's /health change. The fields the deploy probe
 including "startup_error":null on a clean start; only the exception text is
 withheld.
 """
+from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
