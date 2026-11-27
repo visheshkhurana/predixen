@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Send detailed simulation explainer email v8 to 4 recipients.
 Transactional-style: minimal HTML, plain-text companion, personal sender.

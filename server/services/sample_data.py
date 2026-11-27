@@ -6,6 +6,7 @@ Keep the latest-month snapshot in lockstep with
 ``GET /metrics/computed`` uses: expenses = payroll + opex + other + cogs +
 marketing; burn = expenses − revenue; runway = cash / burn.
 """
+from __future__ import annotations
 from datetime import datetime, timedelta
 import logging
 from typing import Any

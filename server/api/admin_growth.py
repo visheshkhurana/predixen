@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Growth analytics dashboard for admin."""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Software spend: one row per (company, month, source connector, vendor).
 
 Why its own table and not opex: a seat-cost connector (1Password) knows one

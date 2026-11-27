@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Founder-set goals (targets with an optional deadline) for a company."""
 from datetime import datetime
 

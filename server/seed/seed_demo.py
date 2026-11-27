@@ -1,3 +1,4 @@
+from __future__ import annotations
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import json

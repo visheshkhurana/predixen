@@ -1,3 +1,4 @@
+from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from server.core.company_access import company_access_clause
 from server.core.uploads import read_upload_capped
